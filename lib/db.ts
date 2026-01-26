@@ -17,7 +17,8 @@ let db: Database.Database | null = null;
 export function getDb(): Database.Database {
   if (!db) {
     db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
+    // Usar DELETE mode em vez de WAL para evitar problemas de sincronização entre processos
+    db.pragma('journal_mode = DELETE');
     db.pragma('foreign_keys = ON');
   }
   return db;
@@ -44,6 +45,11 @@ export function execute(sql: string, params: unknown[] = []): Database.RunResult
 // Helper para executar múltiplos statements (usado no schema)
 export function executeMany(sql: string): void {
   getDb().exec(sql);
+}
+
+// Forçar checkpoint do WAL para sincronizar com outros processos
+export function checkpoint(): void {
+  getDb().pragma('wal_checkpoint(FULL)');
 }
 
 // Fechar conexão (usar em cleanup)

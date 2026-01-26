@@ -96,7 +96,7 @@ export async function GET(
     );
     
     const totalPagoResult = queryOne<SumResult>(
-      'SELECT SUM(valor) as total FROM pagamentos WHERE atendimento_id = ?',
+      'SELECT SUM(valor_pago) as total FROM itens_atendimento WHERE atendimento_id = ?',
       [parseInt(id)]
     );
     
@@ -262,17 +262,18 @@ function validarTransicao(
     }
   }
   
-  // Aguardando Pagamento → Em Execução: precisa ter pagamento
+  // Aguardando Pagamento → Em Execução: precisa ter pelo menos 1 procedimento pago
   if (statusAtual === 'aguardando_pagamento' && novoStatus === 'em_execucao') {
-    const pagamentos = queryOne<SumResult>(
-      'SELECT SUM(valor) as total FROM pagamentos WHERE atendimento_id = ?',
+    const itensPagos = queryOne<CountResult>(
+      `SELECT COUNT(*) as count FROM itens_atendimento 
+       WHERE atendimento_id = ? AND status = 'pago'`,
       [atendimentoId]
     );
     
-    if (!pagamentos || !pagamentos.total || pagamentos.total <= 0) {
+    if (!itensPagos || itensPagos.count === 0) {
       return {
         valido: false,
-        mensagem: 'É necessário registrar pelo menos um pagamento',
+        mensagem: 'É necessário ter pelo menos um procedimento totalmente pago para liberar',
       };
     }
   }

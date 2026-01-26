@@ -64,7 +64,8 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { valor, metodo, parcelas, observacoes } = body;
+    const { valor, metodo, parcelas, observacoes, itens } = body;
+    // itens = [{ item_id: number, valor_aplicado: number }]
     
     // Verifica se atendimento existe
     const atendimento = queryOne<Atendimento>(
@@ -110,8 +111,18 @@ export async function POST(
       );
     }
     
+    // Valida itens se fornecidos
+    if (itens && itens.length > 0) {
+      const totalAplicado = itens.reduce((sum: number, item: any) => sum + item.valor_aplicado, 0);
+      if (Math.abs(totalAplicado - valor) > 0.01) {
+        return NextResponse.json(
+          { error: 'A soma dos valores aplicados deve ser igual ao valor do pagamento' },
+          { status: 400 }
+        );
+      }
+    }
+    
     // TODO: Pegar usuário logado do contexto de autenticação
-    // Por enquanto, usando o primeiro usuário disponível
     const usuario = queryOne<{ id: number }>('SELECT id FROM usuarios LIMIT 1');
     const recebidoPorId = usuario?.id || 1;
     
@@ -122,10 +133,36 @@ export async function POST(
       [parseInt(id), recebidoPorId, valor, metodo, parcelas || 1, observacoes || null]
     );
     
+    const pagamentoId = result.lastInsertRowid;
+    
+    // Se itens foram especificados, vincula e atualiza valor_pago
+    if (itens && itens.length > 0) {
+      for (const item of itens) {
+        // Insere na tabela de vínculo
+        execute(
+          `INSERT INTO pagamentos_itens (pagamento_id, item_atendimento_id, valor_aplicado)
+           VALUES (?, ?, ?)`,
+          [pagamentoId, item.item_id, item.valor_aplicado]
+        );
+        
+        // Atualiza valor_pago do item
+        execute(
+          `UPDATE itens_atendimento 
+           SET valor_pago = valor_pago + ?,
+               status = CASE 
+                 WHEN valor_pago + ? >= valor THEN 'pago'
+                 ELSE status
+               END
+           WHERE id = ?`,
+          [item.valor_aplicado, item.valor_aplicado, item.item_id]
+        );
+      }
+    }
+    
     // Retorna o pagamento criado
     const novoPagamento = queryOne<Pagamento>(
       'SELECT * FROM pagamentos WHERE id = ?',
-      [result.lastInsertRowid]
+      [pagamentoId]
     );
     
     return NextResponse.json(novoPagamento, { status: 201 });

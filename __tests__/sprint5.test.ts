@@ -8,7 +8,7 @@
  * - Operações de banco de dados
  */
 
-import { query, queryOne, execute, closeDb } from '../lib/db';
+import { query, queryOne, execute, closeDb, checkpoint } from '../lib/db';
 import fs from 'fs';
 import path from 'path';
 
@@ -265,12 +265,12 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
       expect(content).toContain('pelo menos um procedimento');
     });
 
-    test('pagamento→execução deve exigir pagamento', () => {
+    test('pagamento→execução deve exigir procedimento pago', () => {
       const content = fs.readFileSync(
         path.join(process.cwd(), 'app', 'api', 'atendimentos', '[id]', 'route.ts'),
         'utf-8'
       );
-      expect(content).toContain('registrar pelo menos um pagamento');
+      expect(content).toContain('pelo menos um procedimento totalmente pago');
     });
 
     test('execução→finalizado deve exigir tudo concluído e pago', () => {

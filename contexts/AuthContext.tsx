@@ -6,7 +6,7 @@ import { Usuario, UserRole } from '@/lib/types';
 interface AuthContextType {
   user: Usuario | null;
   isLoading: boolean;
-  login: (email: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, senha: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
 }
@@ -32,13 +32,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  // Login: busca usuário pelo email
-  const login = async (email: string): Promise<{ success: boolean; error?: string }> => {
+  // Login: autentica usuário com email e senha
+  const login = async (email: string, senha: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, senha }),
       });
 
       const data = await response.json();

@@ -72,6 +72,7 @@ export interface ItemAtendimento {
   executor_id: number | null;
   criado_por_id: number;
   valor: number;
+  valor_pago: number;
   status: ItemStatus;
   observacoes: string | null;
   created_at: string;
@@ -91,6 +92,14 @@ export interface Pagamento {
 
 export interface PagamentoCompleto extends Pagamento {
   recebido_por_nome: string;
+}
+
+export interface PagamentoItem {
+  id: number;
+  pagamento_id: number;
+  item_atendimento_id: number;
+  valor_aplicado: number;
+  created_at: string;
 }
 
 // Tipos com joins para exibição

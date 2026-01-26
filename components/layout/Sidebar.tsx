@@ -15,6 +15,7 @@ interface MenuItem {
 // Menu com controle de acesso por role
 const menuItems: MenuItem[] = [
   { href: '/', label: 'Início', icon: '🏠' },
+  { href: '/dashboard', label: 'Dashboard', icon: '📊', roles: ['admin'] },
   { href: '/clientes', label: 'Clientes', icon: '👥', roles: ['admin', 'atendente'] },
   { href: '/atendimentos', label: 'Atendimentos', icon: '📋', roles: ['admin', 'atendente'] },
   { href: '/avaliacao', label: 'Fila Avaliação', icon: '🔍', roles: ['admin', 'avaliador'] },
@@ -22,6 +23,8 @@ const menuItems: MenuItem[] = [
   { href: '/pagamentos', label: 'Pagamentos', icon: '💰', roles: ['admin', 'atendente'] },
   { href: '/procedimentos', label: 'Procedimentos', icon: '📑', roles: ['admin'] },
   { href: '/usuarios', label: 'Usuários', icon: '👤', roles: ['admin'] },
+  { href: '/comissoes', label: 'Comissões', icon: '💵', roles: ['admin'] },
+  { href: '/minhas-comissoes', label: 'Minhas Comissões', icon: '💰', roles: ['avaliador', 'executor'] },
 ];
 
 export default function Sidebar() {
@@ -36,7 +39,7 @@ export default function Sidebar() {
   });
 
   return (
-    <aside className="w-64 bg-gray-800 text-white min-h-screen flex flex-col">
+    <aside className="hidden md:flex w-64 bg-stone-800 text-white min-h-screen flex-col">
       <nav className="py-4 flex-1">
         <ul className="space-y-1">
           {visibleMenuItems.map((item) => {
@@ -48,10 +51,10 @@ export default function Sidebar() {
                 <Link
                   href={item.href}
                   className={`
-                    flex items-center gap-3 px-6 py-3 transition-colors
+                    flex items-center gap-3 px-6 py-3 transition-all border-l-4
                     ${isActive 
-                      ? 'bg-blue-600 text-white' 
-                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                      ? 'bg-orange-500/20 text-orange-400 border-orange-500 font-medium' 
+                      : 'text-gray-300 hover:bg-stone-700 hover:text-orange-300 border-transparent'
                     }
                   `}
                 >
@@ -65,10 +68,13 @@ export default function Sidebar() {
       </nav>
 
       {/* Rodapé da Sidebar */}
-      <div className="p-4 border-t border-gray-700">
-        <p className="text-xs text-gray-500 text-center">
-          Sorria Leste MVP v0.1
-        </p>
+      <div className="p-4 border-t border-stone-700">
+        <div className="flex items-center justify-center gap-2">
+          <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+          <p className="text-xs text-stone-400">
+            Sorria Leste v1.0
+          </p>
+        </div>
       </div>
     </aside>
   );

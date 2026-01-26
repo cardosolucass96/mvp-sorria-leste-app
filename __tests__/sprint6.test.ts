@@ -3,7 +3,7 @@
  * Testes para o workflow de avaliação do dentista
  */
 
-import { query, queryOne, execute } from '../lib/db';
+import { query, queryOne, execute, checkpoint } from '../lib/db';
 import fs from 'fs';
 import path from 'path';
 
@@ -88,6 +88,9 @@ describe('Sprint 6 - Avaliação', () => {
       `);
       const result = queryOne<IdResult>('SELECT id FROM atendimentos WHERE observacoes = ? ORDER BY id DESC LIMIT 1', ['TESTE_SPRINT6']);
       atendimentoId = result!.id;
+      
+      // Forçar sync do WAL para que o servidor veja as alterações
+      checkpoint();
     });
 
     afterAll(() => {
@@ -208,6 +211,9 @@ describe('Sprint 6 - Avaliação', () => {
       `);
       const result = queryOne<IdResult>('SELECT id FROM atendimentos WHERE observacoes = ? ORDER BY id DESC LIMIT 1', ['TESTE_REGRAS']);
       atendimentoId = result!.id;
+      
+      // Forçar sync do WAL para que o servidor veja as alterações
+      checkpoint();
     });
 
     afterEach(() => {
@@ -332,6 +338,9 @@ describe('Sprint 6 - Avaliação', () => {
       `);
       const res2 = queryOne<IdResult>('SELECT id FROM atendimentos WHERE observacoes = ? ORDER BY id DESC LIMIT 1', ['TESTE_FILA_AVALIACAO']);
       atendimentoAvaliacao = res2!.id;
+      
+      // Forçar sync do WAL para que o servidor veja as alterações
+      checkpoint();
     });
 
     afterAll(() => {
@@ -368,6 +377,9 @@ describe('Sprint 6 - Avaliação', () => {
       `);
       const result = queryOne<IdResult>('SELECT id FROM atendimentos WHERE observacoes = ? ORDER BY id DESC LIMIT 1', ['TESTE_WORKFLOW']);
       atendimentoId = result!.id;
+      
+      // Forçar sync do WAL para que o servidor veja as alterações
+      checkpoint();
     });
 
     afterAll(() => {
@@ -476,6 +488,9 @@ describe('Sprint 6 - Avaliação', () => {
         const result = queryOne<IdResult>('SELECT id FROM atendimentos WHERE observacoes = ? ORDER BY id DESC LIMIT 1', ['TESTE_PRIVACIDADE']);
         createdId = result!.id;
         atend = result;
+        
+        // Forçar sync do WAL para que o servidor veja as alterações
+        checkpoint();
       }
       
       const res = await fetch(`http://localhost:3000/api/atendimentos/${atend!.id}`);
@@ -511,6 +526,9 @@ describe('Sprint 6 - Avaliação', () => {
       `);
       const atend = queryOne<IdResult>('SELECT id FROM atendimentos WHERE observacoes = ? ORDER BY id DESC LIMIT 1', ['TESTE_EXECUTOR_NULL']);
       const atendId = atend!.id;
+      
+      // Forçar sync do WAL para que o servidor veja as alterações
+      checkpoint();
       
       const proc = queryOne<ProcedimentoResult>(
         'SELECT id, valor FROM procedimentos WHERE ativo = 1 LIMIT 1'

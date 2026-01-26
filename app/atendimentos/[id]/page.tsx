@@ -69,6 +69,12 @@ export default function AtendimentoDetalhePage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [mudandoStatus, setMudandoStatus] = useState(false);
+  const [finalizando, setFinalizando] = useState(false);
+  const [comissoesGeradas, setComissoesGeradas] = useState<{
+    venda: number;
+    execucao: number;
+    total: number;
+  } | null>(null);
 
   useEffect(() => {
     carregarAtendimento();
@@ -113,6 +119,34 @@ export default function AtendimentoDetalhePage({
       setError(err instanceof Error ? err.message : 'Erro ao mudar status');
     } finally {
       setMudandoStatus(false);
+    }
+  };
+
+  const handleFinalizar = async () => {
+    if (!atendimento) return;
+    
+    setFinalizando(true);
+    setError('');
+    
+    try {
+      const res = await fetch(`/api/atendimentos/${id}/finalizar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao finalizar atendimento');
+      }
+      
+      // Salvar comissões geradas para exibir
+      setComissoesGeradas(data.comissoes);
+      await carregarAtendimento();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao finalizar');
+    } finally {
+      setFinalizando(false);
     }
   };
 
@@ -177,20 +211,53 @@ export default function AtendimentoDetalhePage({
         </div>
         
         {/* Ações de Status */}
-        {proximoStatus && (
-          <button
-            onClick={() => handleMudarStatus(proximoStatus)}
-            disabled={mudandoStatus}
-            className="btn btn-primary"
-          >
-            {mudandoStatus ? 'Processando...' : `Avançar para ${STATUS_CONFIG[proximoStatus].label}`}
-          </button>
-        )}
+        <div className="flex gap-2">
+          {atendimento.status === 'em_execucao' && (
+            <button
+              onClick={handleFinalizar}
+              disabled={finalizando}
+              className="btn bg-green-600 text-white hover:bg-green-700"
+            >
+              {finalizando ? 'Finalizando...' : '✅ Finalizar Atendimento'}
+            </button>
+          )}
+          {proximoStatus && atendimento.status !== 'em_execucao' && (
+            <button
+              onClick={() => handleMudarStatus(proximoStatus)}
+              disabled={mudandoStatus}
+              className="btn btn-primary"
+            >
+              {mudandoStatus ? 'Processando...' : `Avançar para ${STATUS_CONFIG[proximoStatus].label}`}
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
         <div className="p-4 bg-red-50 text-red-700 rounded-lg">
           {error}
+        </div>
+      )}
+
+      {/* Comissões Geradas (após finalização) */}
+      {comissoesGeradas && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+          <h3 className="font-semibold text-green-800 mb-2">✅ Atendimento Finalizado!</h3>
+          <p className="text-sm text-green-700 mb-2">Comissões geradas:</p>
+          <div className="flex gap-4">
+            <div>
+              <span className="text-xs text-green-600">Venda:</span>
+              <span className="ml-1 font-semibold">{formatarMoeda(comissoesGeradas.venda)}</span>
+            </div>
+            <div>
+              <span className="text-xs text-green-600">Execução:</span>
+              <span className="ml-1 font-semibold">{formatarMoeda(comissoesGeradas.execucao)}</span>
+            </div>
+            <div>
+              <span className="text-xs text-green-600">Total:</span>
+              <span className="ml-1 font-bold">{formatarMoeda(comissoesGeradas.total)}</span>
+            </div>
+          </div>
         </div>
       )}
 

@@ -8,7 +8,13 @@ interface ItemAtendimento {
   id: number;
   procedimento_nome: string;
   valor: number;
+  valor_pago: number;
   status: string;
+}
+
+interface ItemPagamento {
+  item_id: number;
+  valor_aplicado: number;
 }
 
 interface Pagamento {
@@ -66,6 +72,7 @@ export default function PagamentoPage({
   const [valorPagamento, setValorPagamento] = useState('');
   const [metodoPagamento, setMetodoPagamento] = useState('pix');
   const [observacoesPagamento, setObservacoesPagamento] = useState('');
+  const [itensSelecionados, setItensSelecionados] = useState<{ [key: number]: number }>({});
   const [registrando, setRegistrando] = useState(false);
   
   // Form de parcela
@@ -110,6 +117,25 @@ export default function PagamentoPage({
     e.preventDefault();
     if (!valorPagamento) return;
     
+    // Constrói array de itens com valores aplicados
+    const itens = Object.entries(itensSelecionados)
+      .filter(([_, valor]) => valor > 0)
+      .map(([item_id, valor_aplicado]) => ({
+        item_id: parseInt(item_id),
+        valor_aplicado
+      }));
+    
+    if (itens.length === 0) {
+      setError('Selecione pelo menos um procedimento para aplicar o pagamento');
+      return;
+    }
+    
+    const totalAplicado = itens.reduce((sum, item) => sum + item.valor_aplicado, 0);
+    if (Math.abs(totalAplicado - parseFloat(valorPagamento)) > 0.01) {
+      setError(`Total aplicado (${totalAplicado.toFixed(2)}) deve ser igual ao valor do pagamento (${parseFloat(valorPagamento).toFixed(2)})`);
+      return;
+    }
+    
     setRegistrando(true);
     setError('');
     
@@ -121,6 +147,7 @@ export default function PagamentoPage({
           valor: parseFloat(valorPagamento),
           metodo: metodoPagamento,
           observacoes: observacoesPagamento || null,
+          itens
         }),
       });
       
@@ -132,6 +159,7 @@ export default function PagamentoPage({
       // Limpa form e recarrega
       setValorPagamento('');
       setObservacoesPagamento('');
+      setItensSelecionados({});
       await carregarDados();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao registrar');
@@ -245,6 +273,54 @@ export default function PagamentoPage({
       minute: '2-digit',
     });
   };
+  
+  // Funções auxiliares para itens selecionados
+  const handleItemChange = (itemId: number, valor: string) => {
+    const valorNum = parseFloat(valor) || 0;
+    setItensSelecionados(prev => ({
+      ...prev,
+      [itemId]: valorNum
+    }));
+  };
+  
+  const distribuirValorProporcional = () => {
+    if (!atendimento || !valorPagamento) return;
+    
+    const valor = parseFloat(valorPagamento);
+    const itensPendentes = atendimento.itens.filter(item => {
+      const saldoDevedor = item.valor - item.valor_pago;
+      return saldoDevedor > 0;
+    });
+    
+    if (itensPendentes.length === 0) return;
+    
+    // Calcula o total devido pendente
+    const totalDevido = itensPendentes.reduce((sum, item) => 
+      sum + (item.valor - item.valor_pago), 0
+    );
+    
+    // Distribui proporcionalmente
+    const novosItens: { [key: number]: number } = {};
+    let restante = valor;
+    
+    itensPendentes.forEach((item, index) => {
+      const saldoDevedor = item.valor - item.valor_pago;
+      
+      if (index === itensPendentes.length - 1) {
+        // Último item recebe o restante para evitar erro de arredondamento
+        novosItens[item.id] = Math.min(restante, saldoDevedor);
+      } else {
+        const proporcao = saldoDevedor / totalDevido;
+        const valorAplicado = Math.min(valor * proporcao, saldoDevedor);
+        novosItens[item.id] = Math.round(valorAplicado * 100) / 100;
+        restante -= novosItens[item.id];
+      }
+    });
+    
+    setItensSelecionados(novosItens);
+  };
+  
+  const totalAplicado = Object.values(itensSelecionados).reduce((sum, val) => sum + val, 0);
 
   if (loading) {
     return (
@@ -269,8 +345,11 @@ export default function PagamentoPage({
   const totalParcelas = parcelas.reduce((acc, p) => acc + p.valor, 0);
   const parcelasPagas = parcelas.filter(p => p.pago).reduce((acc, p) => acc + p.valor, 0);
   const parcelasPendentes = parcelas.filter(p => !p.pago);
-  const saldoDevedor = atendimento.total - totalPago;
-  const temEntrada = totalPago > 0;
+  const saldoDevedor = atendimento.total - atendimento.total_pago;
+  
+  // Verifica se tem pelo menos 1 procedimento totalmente pago
+  const itensPagos = atendimento.itens.filter(item => item.status === 'pago' || item.valor_pago >= item.valor);
+  const temProcedimentoPago = itensPagos.length > 0;
 
   return (
     <div className="space-y-6">
@@ -365,7 +444,7 @@ export default function PagamentoPage({
           </div>
           
           {/* Botão Avançar */}
-          {atendimento.status === 'aguardando_pagamento' && temEntrada && (
+          {atendimento.status === 'aguardando_pagamento' && temProcedimentoPago && (
             <div className="mt-6 pt-4 border-t">
               <button
                 onClick={handleAvancarStatus}
@@ -375,17 +454,17 @@ export default function PagamentoPage({
                 {avancando ? 'Avançando...' : '✓ Liberar para Execução'}
               </button>
               <p className="text-xs text-gray-500 mt-2 text-center">
-                Cliente pagou entrada. Parcelas serão cobradas depois.
+                {itensPagos.length} procedimento(s) pago(s) e pronto(s) para execução
               </p>
             </div>
           )}
           
-          {atendimento.status === 'aguardando_pagamento' && !temEntrada && (
+          {atendimento.status === 'aguardando_pagamento' && !temProcedimentoPago && (
             <div className="mt-6 pt-4 border-t">
               <div className="p-3 bg-yellow-50 rounded-lg text-center">
-                <p className="text-yellow-800 font-medium">⚠️ Entrada necessária</p>
+                <p className="text-yellow-800 font-medium">⚠️ Pagamento necessário</p>
                 <p className="text-yellow-600 text-sm">
-                  Registre pelo menos um pagamento para liberar
+                  Pague pelo menos 1 procedimento completo para liberar
                 </p>
               </div>
             </div>
@@ -452,6 +531,63 @@ export default function PagamentoPage({
                 className="input"
               />
             </div>
+            
+            {/* Distribuição do Pagamento */}
+            {valorPagamento && parseFloat(valorPagamento) > 0 && (
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Distribuir entre procedimentos *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={distribuirValorProporcional}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    📊 Distribuir Proporcional
+                  </button>
+                </div>
+                
+                <div className="space-y-2 max-h-60 overflow-y-auto bg-gray-50 p-3 rounded">
+                  {atendimento.itens.map((item) => {
+                    const saldoDevedor = item.valor - item.valor_pago;
+                    if (saldoDevedor <= 0) return null;
+                    
+                    return (
+                      <div key={item.id} className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">{item.procedimento_nome}</p>
+                          <p className="text-xs text-gray-500">
+                            Saldo devedor: {formatarMoeda(saldoDevedor)}
+                          </p>
+                        </div>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max={saldoDevedor}
+                          value={itensSelecionados[item.id] || ''}
+                          onChange={(e) => handleItemChange(item.id, e.target.value)}
+                          placeholder="0,00"
+                          className="input w-32"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <div className="mt-3 p-3 bg-blue-50 rounded flex justify-between items-center">
+                  <span className="text-sm font-medium text-blue-900">Total aplicado:</span>
+                  <span className={`font-bold text-lg ${
+                    Math.abs(totalAplicado - parseFloat(valorPagamento)) < 0.01
+                      ? 'text-green-600'
+                      : 'text-red-600'
+                  }`}>
+                    {formatarMoeda(totalAplicado)} / {formatarMoeda(parseFloat(valorPagamento))}
+                  </span>
+                </div>
+              </div>
+            )}
             
             <button
               type="submit"
@@ -523,7 +659,7 @@ export default function PagamentoPage({
 
       {/* Procedimentos */}
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">🦷 Procedimentos</h2>
+        <h2 className="text-lg font-semibold mb-4">🦷 Procedimentos e Pagamentos</h2>
         
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -532,7 +668,13 @@ export default function PagamentoPage({
                 Procedimento
               </th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                Valor
+                Valor Total
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                Já Pago
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                Saldo Devedor
               </th>
               <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                 Status
@@ -540,31 +682,52 @@ export default function PagamentoPage({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {atendimento.itens.map((item) => (
-              <tr key={item.id}>
-                <td className="px-4 py-3 font-medium text-gray-900">
-                  {item.procedimento_nome}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {formatarMoeda(item.valor)}
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <span className={`text-sm ${
-                    item.status === 'concluido' ? 'text-green-600' : 'text-gray-500'
+            {atendimento.itens.map((item) => {
+              const saldoDevedor = item.valor - item.valor_pago;
+              return (
+                <tr key={item.id} className={saldoDevedor === 0 ? 'bg-green-50' : ''}>
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    {item.procedimento_nome}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {formatarMoeda(item.valor)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-green-600 font-medium">
+                    {formatarMoeda(item.valor_pago)}
+                  </td>
+                  <td className={`px-4 py-3 text-right font-medium ${
+                    saldoDevedor > 0 ? 'text-red-600' : 'text-green-600'
                   }`}>
-                    {item.status === 'pendente' ? 'Pendente' :
-                     item.status === 'executando' ? 'Executando' :
-                     item.status === 'concluido' ? 'Concluído' : item.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
+                    {formatarMoeda(saldoDevedor)}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`text-sm px-2 py-1 rounded ${
+                      item.status === 'concluido' ? 'bg-green-100 text-green-700' :
+                      item.status === 'pago' ? 'bg-blue-100 text-blue-700' :
+                      item.status === 'executando' ? 'bg-purple-100 text-purple-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {item.status === 'pendente' ? 'Pendente' :
+                       item.status === 'pago' ? 'Pago' :
+                       item.status === 'executando' ? 'Executando' :
+                       item.status === 'concluido' ? 'Concluído' : item.status}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot className="bg-gray-50">
             <tr>
               <td className="px-4 py-3 font-semibold">Total</td>
               <td className="px-4 py-3 text-right font-bold text-lg">
                 {formatarMoeda(atendimento.total)}
+              </td>
+              <td className="px-4 py-3 text-right font-bold text-lg text-green-600">
+                {formatarMoeda(atendimento.total_pago)}
+              </td>
+              <td className="px-4 py-3 text-right font-bold text-lg text-red-600">
+                {formatarMoeda(atendimento.total - atendimento.total_pago)}
               </td>
               <td></td>
             </tr>

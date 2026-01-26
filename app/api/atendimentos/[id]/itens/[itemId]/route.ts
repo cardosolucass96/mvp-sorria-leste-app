@@ -24,7 +24,7 @@ export async function PUT(
   try {
     const { id, itemId } = await params;
     const body = await request.json();
-    const { executor_id, valor, status } = body;
+    const { executor_id, valor, status, usuario_id } = body;
     
     // Verifica se atendimento existe
     const atendimento = queryOne<Atendimento>(
@@ -50,6 +50,16 @@ export async function PUT(
         { error: 'Item não encontrado' },
         { status: 404 }
       );
+    }
+    
+    // Validação: apenas o executor pode marcar como executando/concluído
+    if (status && ['executando', 'concluido'].includes(status)) {
+      if (usuario_id && item.executor_id && usuario_id !== item.executor_id) {
+        return NextResponse.json(
+          { error: 'Apenas o executor designado pode alterar o status deste procedimento' },
+          { status: 403 }
+        );
+      }
     }
     
     // Monta update
