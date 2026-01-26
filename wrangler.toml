@@ -14,7 +14,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "sorria-leste-db"
-database_id = "SUA_DATABASE_ID_AQUI" # Será substituído após criar o banco
+database_id = "1a32c7e9-c5e7-4c53-89f0-3169d2ba7e4f"
 
 # Self-reference para middleware
 [[services]]
