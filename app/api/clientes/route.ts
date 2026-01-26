@@ -12,14 +12,14 @@ export async function GET(request: NextRequest) {
 
     if (busca) {
       // Busca por nome, CPF, telefone ou email
-      clientes = query<Cliente>(
+      clientes = await query<Cliente>(
         `SELECT * FROM clientes 
          WHERE nome LIKE ? OR cpf LIKE ? OR telefone LIKE ? OR email LIKE ?
          ORDER BY nome`,
         [`%${busca}%`, `%${busca}%`, `%${busca}%`, `%${busca}%`]
       );
     } else {
-      clientes = query<Cliente>('SELECT * FROM clientes ORDER BY nome');
+      clientes = await query<Cliente>('SELECT * FROM clientes ORDER BY nome');
     }
 
     return NextResponse.json(clientes);
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     // Verifica se CPF já existe (se informado)
     if (cpf) {
-      const existing = query<Cliente>(
+      const existing = await query<Cliente>(
         'SELECT id FROM clientes WHERE cpf = ?',
         [cpf.trim()]
       );
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const result = execute(
+    const result = await execute(
       `INSERT INTO clientes (nome, cpf, telefone, email, data_nascimento, endereco, origem, observacoes) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    const novoCliente = query<Cliente>(
+    const novoCliente = await query<Cliente>(
       'SELECT * FROM clientes WHERE id = ?',
       [result.lastInsertRowid]
     );

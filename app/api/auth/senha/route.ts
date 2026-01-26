@@ -41,7 +41,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Buscar usuário
-    const usuario = queryOne<Usuario>(
+    const usuario = await queryOne<Usuario>(
       'SELECT id, senha FROM usuarios WHERE id = ? AND ativo = 1',
       [usuario_id]
     );
@@ -62,7 +62,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Atualizar senha
-    execute(
+    await execute(
       'UPDATE usuarios SET senha = ? WHERE id = ?',
       [nova_senha, usuario_id]
     );

@@ -19,7 +19,7 @@ export async function GET(
   try {
     const { id } = await params;
     
-    const procedimento = queryOne<Procedimento>(
+    const procedimento = await queryOne<Procedimento>(
       'SELECT * FROM procedimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -52,7 +52,7 @@ export async function PUT(
     const { nome, valor, comissao_venda, comissao_execucao, ativo } = body;
     
     // Verifica se existe
-    const existe = queryOne<Procedimento>(
+    const existe = await queryOne<Procedimento>(
       'SELECT * FROM procedimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -127,12 +127,12 @@ export async function PUT(
     
     updateParams.push(parseInt(id));
     
-    execute(
+    await execute(
       `UPDATE procedimentos SET ${updates.join(', ')} WHERE id = ?`,
       updateParams
     );
     
-    const atualizado = queryOne<Procedimento>(
+    const atualizado = await queryOne<Procedimento>(
       'SELECT * FROM procedimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -156,7 +156,7 @@ export async function DELETE(
     const { id } = await params;
     
     // Verifica se existe
-    const existe = queryOne<Procedimento>(
+    const existe = await queryOne<Procedimento>(
       'SELECT * FROM procedimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -169,7 +169,7 @@ export async function DELETE(
     }
     
     // Soft delete - apenas desativa
-    execute(
+    await execute(
       'UPDATE procedimentos SET ativo = 0 WHERE id = ?',
       [parseInt(id)]
     );

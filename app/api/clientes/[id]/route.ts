@@ -10,7 +10,7 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const cliente = queryOne<Cliente>(
+    const cliente = await queryOne<Cliente>(
       'SELECT * FROM clientes WHERE id = ?',
       [id]
     );
@@ -40,7 +40,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const { nome, cpf, telefone, email, data_nascimento, endereco, origem, observacoes } = body;
 
     // Verifica se cliente existe
-    const existing = queryOne<Cliente>(
+    const existing = await queryOne<Cliente>(
       'SELECT * FROM clientes WHERE id = ?',
       [id]
     );
@@ -73,7 +73,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Verifica duplicidade de CPF
     if (cpf && cpf !== existing.cpf) {
-      const cpfExists = query<Cliente>(
+      const cpfExists = await query<Cliente>(
         'SELECT id FROM clientes WHERE cpf = ? AND id != ?',
         [cpf.trim(), id]
       );
@@ -87,7 +87,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // Atualiza
-    execute(
+    await execute(
       `UPDATE clientes SET 
         nome = COALESCE(?, nome),
         cpf = ?,
@@ -111,7 +111,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       ]
     );
 
-    const updated = queryOne<Cliente>(
+    const updated = await queryOne<Cliente>(
       'SELECT * FROM clientes WHERE id = ?',
       [id]
     );
@@ -131,7 +131,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     
-    const existing = queryOne<Cliente>(
+    const existing = await queryOne<Cliente>(
       'SELECT * FROM clientes WHERE id = ?',
       [id]
     );
@@ -144,7 +144,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     // Verifica se tem atendimentos vinculados
-    const atendimentos = query<{ count: number }>(
+    const atendimentos = await query<{ count: number }>(
       'SELECT COUNT(*) as count FROM atendimentos WHERE cliente_id = ?',
       [id]
     );
@@ -156,7 +156,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    execute('DELETE FROM clientes WHERE id = ?', [id]);
+    await execute('DELETE FROM clientes WHERE id = ?', [id]);
 
     return NextResponse.json({ message: 'Cliente excluído com sucesso' });
   } catch (error) {

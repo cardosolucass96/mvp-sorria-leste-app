@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
       FROM pagamentos p
       WHERE 1=1 ${filtroDataPag}
     `;
-    const faturamento = queryOne<FaturamentoResult>(faturamentoQuery, paramsPag);
+    const faturamento = await queryOne<FaturamentoResult>(faturamentoQuery, paramsPag);
 
     // 2. A Receber (valor dos itens - valor pago)
     const aReceberQuery = `
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
       INNER JOIN atendimentos a ON i.atendimento_id = a.id
       WHERE i.valor_pago < i.valor AND a.status != 'finalizado'
     `;
-    const aReceber = queryOne<FaturamentoResult>(aReceberQuery);
+    const aReceber = await queryOne<FaturamentoResult>(aReceberQuery);
 
     // 3. Parcelas Vencidas
     const vencidasQuery = `
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
       FROM parcelas
       WHERE pago = 0 AND data_vencimento < DATE('now')
     `;
-    const vencidas = queryOne<FaturamentoResult & CountResult>(vencidasQuery);
+    const vencidas = await queryOne<FaturamentoResult & CountResult>(vencidasQuery);
 
     // 4. Atendimentos por Status
     const statusQuery = `
@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
           WHEN 'finalizado' THEN 5
         END
     `;
-    const porStatus = query<StatusResult>(statusQuery, params);
+    const porStatus = await query<StatusResult>(statusQuery, params);
 
     // 5. Faturamento por Canal de Aquisição
     const canaisQuery = `
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
       GROUP BY c.origem
       ORDER BY total DESC
     `;
-    const porCanal = query<CanalResult>(canaisQuery);
+    const porCanal = await query<CanalResult>(canaisQuery);
 
     // 6. Top 10 Procedimentos mais Realizados
     const procedimentosQuery = `
@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
       ORDER BY total DESC
       LIMIT 10
     `;
-    const topProcedimentos = query<ProcedimentoResult>(procedimentosQuery, params);
+    const topProcedimentos = await query<ProcedimentoResult>(procedimentosQuery, params);
 
     // 7. Faturamento Mensal (últimos 6 meses)
     const mensalQuery = `
@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
       GROUP BY strftime('%Y-%m', p.created_at)
       ORDER BY mes ASC
     `;
-    const faturamentoMensal = query<MensalResult>(mensalQuery);
+    const faturamentoMensal = await query<MensalResult>(mensalQuery);
 
     // 8. Total de Atendimentos
     const totalAtendimentosQuery = `
@@ -165,11 +165,11 @@ export async function GET(request: NextRequest) {
       FROM atendimentos a
       WHERE 1=1 ${filtroData}
     `;
-    const totalAtendimentos = queryOne<CountResult>(totalAtendimentosQuery, params);
+    const totalAtendimentos = await queryOne<CountResult>(totalAtendimentosQuery, params);
 
     // 9. Total de Clientes
     const totalClientesQuery = `SELECT COUNT(*) as count FROM clientes`;
-    const totalClientes = queryOne<CountResult>(totalClientesQuery);
+    const totalClientes = await queryOne<CountResult>(totalClientesQuery);
 
     // 10. Ticket Médio
     const ticketMedioQuery = `
@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
         GROUP BY a.id
       )
     `;
-    const ticketMedio = queryOne<FaturamentoResult>(ticketMedioQuery);
+    const ticketMedio = await queryOne<FaturamentoResult>(ticketMedioQuery);
 
     // 11. Top Vendedores (por comissão de venda)
     const topVendedoresQuery = `
@@ -197,7 +197,7 @@ export async function GET(request: NextRequest) {
       ORDER BY total DESC
       LIMIT 5
     `;
-    const topVendedores = query<ComissaoResult>(topVendedoresQuery);
+    const topVendedores = await query<ComissaoResult>(topVendedoresQuery);
 
     // 12. Top Executores (por comissão de execução)
     const topExecutoresQuery = `
@@ -212,7 +212,7 @@ export async function GET(request: NextRequest) {
       ORDER BY total DESC
       LIMIT 5
     `;
-    const topExecutores = query<ComissaoResult>(topExecutoresQuery);
+    const topExecutores = await query<ComissaoResult>(topExecutoresQuery);
 
     // 13. Taxa de Conversão (finalizados / total)
     const finalizadosQuery = `
@@ -220,7 +220,7 @@ export async function GET(request: NextRequest) {
       FROM atendimentos a
       WHERE status = 'finalizado' ${filtroData}
     `;
-    const finalizados = queryOne<CountResult>(finalizadosQuery, params);
+    const finalizados = await queryOne<CountResult>(finalizadosQuery, params);
     const taxaConversao = totalAtendimentos?.count 
       ? ((finalizados?.count || 0) / totalAtendimentos.count * 100).toFixed(1)
       : '0';
@@ -230,7 +230,7 @@ export async function GET(request: NextRequest) {
       SELECT COALESCE(SUM(valor_comissao), 0) as total
       FROM comissoes
     `;
-    const comissoesTotal = queryOne<FaturamentoResult>(comissoesTotalQuery);
+    const comissoesTotal = await queryOne<FaturamentoResult>(comissoesTotalQuery);
 
     // Labels para origem
     const origemLabels: Record<string, string> = {

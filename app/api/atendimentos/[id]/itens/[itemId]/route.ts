@@ -27,7 +27,7 @@ export async function PUT(
     const { executor_id, valor, status, usuario_id } = body;
     
     // Verifica se atendimento existe
-    const atendimento = queryOne<Atendimento>(
+    const atendimento = await queryOne<Atendimento>(
       'SELECT * FROM atendimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -40,7 +40,7 @@ export async function PUT(
     }
     
     // Verifica se item existe
-    const item = queryOne<ItemAtendimento>(
+    const item = await queryOne<ItemAtendimento>(
       'SELECT * FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
       [parseInt(itemId), parseInt(id)]
     );
@@ -95,13 +95,13 @@ export async function PUT(
     
     updateParams.push(parseInt(itemId));
     
-    execute(
+    await execute(
       `UPDATE itens_atendimento SET ${updates.join(', ')} WHERE id = ?`,
       updateParams
     );
     
     // Retorna item atualizado
-    const atualizado = queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null }>(
+    const atualizado = await queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null }>(
       `SELECT 
         i.*,
         p.nome as procedimento_nome,

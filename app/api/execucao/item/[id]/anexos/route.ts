@@ -24,7 +24,7 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const anexos = query<Anexo>(
+    const anexos = await query<Anexo>(
       `SELECT a.*, u.nome as usuario_nome
        FROM anexos_execucao a
        INNER JOIN usuarios u ON a.usuario_id = u.id
@@ -105,7 +105,7 @@ export async function POST(
     await writeFile(caminhoCompleto, buffer);
 
     // Registrar no banco
-    const result = execute(
+    const result = await execute(
       `INSERT INTO anexos_execucao 
         (item_atendimento_id, usuario_id, nome_arquivo, tipo_arquivo, caminho, tamanho, descricao)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,

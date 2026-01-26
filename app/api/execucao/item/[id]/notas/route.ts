@@ -18,7 +18,7 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const notas = query<Nota>(
+    const notas = await query<Nota>(
       `SELECT n.*, u.nome as usuario_nome
        FROM notas_execucao n
        INNER JOIN usuarios u ON n.usuario_id = u.id
@@ -60,7 +60,7 @@ export async function POST(
       );
     }
 
-    const result = execute(
+    const result = await execute(
       `INSERT INTO notas_execucao (item_atendimento_id, usuario_id, texto)
        VALUES (?, ?, ?)`,
       [parseInt(id), usuario_id, texto.trim()]

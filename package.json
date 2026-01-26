@@ -7,20 +7,27 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:seed": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' lib/seed.ts",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "d1:create": "wrangler d1 create sorria-leste-db",
+    "d1:migrate": "wrangler d1 execute sorria-leste-db --file=lib/schema.sql",
+    "d1:migrate:local": "wrangler d1 execute sorria-leste-db --local --file=lib/schema.sql",
+    "d1:seed": "wrangler d1 execute sorria-leste-db --file=lib/seed.sql",
+    "d1:seed:local": "wrangler d1 execute sorria-leste-db --local --file=lib/seed.sql"
   },
   "dependencies": {
-    "better-sqlite3": "^12.6.2",
     "next": "16.1.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.7.0"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.15.1",
     "@tailwindcss/postcss": "^4",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -31,6 +38,7 @@
     "tailwindcss": "^4",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.60.0"
   }
 }

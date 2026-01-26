@@ -27,7 +27,7 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const itens = query<ItemAtendimento>(
+    const itens = await query<ItemAtendimento>(
       `SELECT 
         i.id,
         i.atendimento_id,

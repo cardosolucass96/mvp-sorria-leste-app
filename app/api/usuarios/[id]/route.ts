@@ -10,7 +10,7 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const usuario = queryOne<Usuario>(
+    const usuario = await queryOne<Usuario>(
       'SELECT * FROM usuarios WHERE id = ?',
       [id]
     );
@@ -40,7 +40,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const { nome, email, role, ativo } = body;
 
     // Verifica se usuário existe
-    const existing = queryOne<Usuario>(
+    const existing = await queryOne<Usuario>(
       'SELECT * FROM usuarios WHERE id = ?',
       [id]
     );
@@ -65,7 +65,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Verifica duplicidade de email
     if (email && email !== existing.email) {
-      const emailExists = query<Usuario>(
+      const emailExists = await query<Usuario>(
         'SELECT id FROM usuarios WHERE email = ? AND id != ?',
         [email.toLowerCase().trim(), id]
       );
@@ -79,7 +79,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // Atualiza
-    execute(
+    await execute(
       `UPDATE usuarios SET 
         nome = COALESCE(?, nome),
         email = COALESCE(?, email),
@@ -95,7 +95,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       ]
     );
 
-    const updated = queryOne<Usuario>(
+    const updated = await queryOne<Usuario>(
       'SELECT * FROM usuarios WHERE id = ?',
       [id]
     );
@@ -115,7 +115,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     
-    const existing = queryOne<Usuario>(
+    const existing = await queryOne<Usuario>(
       'SELECT * FROM usuarios WHERE id = ?',
       [id]
     );
@@ -128,7 +128,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     // Soft delete - apenas marca como inativo
-    execute(
+    await execute(
       'UPDATE usuarios SET ativo = 0 WHERE id = ?',
       [id]
     );

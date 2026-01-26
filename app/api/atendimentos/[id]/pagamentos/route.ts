@@ -25,7 +25,7 @@ export async function GET(
     const { id } = await params;
     
     // Verifica se atendimento existe
-    const atendimento = queryOne<Atendimento>(
+    const atendimento = await queryOne<Atendimento>(
       'SELECT * FROM atendimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -37,7 +37,7 @@ export async function GET(
       );
     }
     
-    const pagamentos = query(
+    const pagamentos = await query(
       `SELECT p.*, u.nome as recebido_por_nome 
        FROM pagamentos p
        LEFT JOIN usuarios u ON p.recebido_por_id = u.id
@@ -68,7 +68,7 @@ export async function POST(
     // itens = [{ item_id: number, valor_aplicado: number }]
     
     // Verifica se atendimento existe
-    const atendimento = queryOne<Atendimento>(
+    const atendimento = await queryOne<Atendimento>(
       'SELECT * FROM atendimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -123,11 +123,11 @@ export async function POST(
     }
     
     // TODO: Pegar usuário logado do contexto de autenticação
-    const usuario = queryOne<{ id: number }>('SELECT id FROM usuarios LIMIT 1');
+    const usuario = await queryOne<{ id: number }>('SELECT id FROM usuarios LIMIT 1');
     const recebidoPorId = usuario?.id || 1;
     
     // Insere pagamento
-    const result = execute(
+    const result = await execute(
       `INSERT INTO pagamentos (atendimento_id, recebido_por_id, valor, metodo, parcelas, observacoes)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [parseInt(id), recebidoPorId, valor, metodo, parcelas || 1, observacoes || null]
@@ -139,14 +139,14 @@ export async function POST(
     if (itens && itens.length > 0) {
       for (const item of itens) {
         // Insere na tabela de vínculo
-        execute(
+        await execute(
           `INSERT INTO pagamentos_itens (pagamento_id, item_atendimento_id, valor_aplicado)
            VALUES (?, ?, ?)`,
           [pagamentoId, item.item_id, item.valor_aplicado]
         );
         
         // Atualiza valor_pago do item
-        execute(
+        await execute(
           `UPDATE itens_atendimento 
            SET valor_pago = valor_pago + ?,
                status = CASE 
@@ -160,7 +160,7 @@ export async function POST(
     }
     
     // Retorna o pagamento criado
-    const novoPagamento = queryOne<Pagamento>(
+    const novoPagamento = await queryOne<Pagamento>(
       'SELECT * FROM pagamentos WHERE id = ?',
       [pagamentoId]
     );

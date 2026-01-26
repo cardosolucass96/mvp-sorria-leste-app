@@ -1,0 +1,30 @@
+#:schema node_modules/wrangler/config-schema.json
+
+name = "sorria-leste-app"
+main = ".open-next/worker.js"
+compatibility_date = "2024-12-30"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+# Diretório de assets estáticos
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+# Binding do D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "sorria-leste-db"
+database_id = "SUA_DATABASE_ID_AQUI" # Será substituído após criar o banco
+
+# Self-reference para middleware
+[[services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "sorria-leste-app"
+
+# Configuração para desenvolvimento local
+[dev]
+port = 8788
+
+# Variáveis de ambiente
+[vars]
+ENVIRONMENT = "production"

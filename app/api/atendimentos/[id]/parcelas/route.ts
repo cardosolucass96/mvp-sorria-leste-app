@@ -27,7 +27,7 @@ export async function GET(
     const { id } = await params;
     
     // Verifica se atendimento existe
-    const atendimento = queryOne<Atendimento>(
+    const atendimento = await queryOne<Atendimento>(
       'SELECT * FROM atendimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -39,7 +39,7 @@ export async function GET(
       );
     }
     
-    const parcelas = query<Parcela>(
+    const parcelas = await query<Parcela>(
       `SELECT * FROM parcelas 
        WHERE atendimento_id = ? 
        ORDER BY numero ASC`,
@@ -67,7 +67,7 @@ export async function POST(
     const { valor, data_vencimento, observacoes } = body;
     
     // Verifica se atendimento existe
-    const atendimento = queryOne<Atendimento>(
+    const atendimento = await queryOne<Atendimento>(
       'SELECT * FROM atendimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -95,21 +95,21 @@ export async function POST(
     }
     
     // Busca o próximo número de parcela
-    const ultimaParcela = queryOne<{ max_numero: number }>(
+    const ultimaParcela = await queryOne<{ max_numero: number }>(
       'SELECT MAX(numero) as max_numero FROM parcelas WHERE atendimento_id = ?',
       [parseInt(id)]
     );
     const numeroParcela = (ultimaParcela?.max_numero || 0) + 1;
     
     // Insere parcela
-    const result = execute(
+    const result = await execute(
       `INSERT INTO parcelas (atendimento_id, numero, valor, data_vencimento, observacoes)
        VALUES (?, ?, ?, ?, ?)`,
       [parseInt(id), numeroParcela, valor, data_vencimento, observacoes || null]
     );
     
     // Retorna a parcela criada
-    const novaParcela = queryOne<Parcela>(
+    const novaParcela = await queryOne<Parcela>(
       'SELECT * FROM parcelas WHERE id = ?',
       [result.lastInsertRowid]
     );
@@ -142,7 +142,7 @@ export async function DELETE(
     }
     
     // Verifica se parcela existe e pertence ao atendimento
-    const parcela = queryOne<Parcela>(
+    const parcela = await queryOne<Parcela>(
       'SELECT * FROM parcelas WHERE id = ? AND atendimento_id = ?',
       [parseInt(parcelaId), parseInt(id)]
     );
@@ -163,7 +163,7 @@ export async function DELETE(
     }
     
     // Remove parcela
-    execute('DELETE FROM parcelas WHERE id = ?', [parseInt(parcelaId)]);
+    await execute('DELETE FROM parcelas WHERE id = ?', [parseInt(parcelaId)]);
     
     return NextResponse.json({ message: 'Parcela removida com sucesso' });
   } catch (error) {
@@ -193,7 +193,7 @@ export async function PUT(
     }
     
     // Verifica se parcela existe e pertence ao atendimento
-    const parcela = queryOne<Parcela>(
+    const parcela = await queryOne<Parcela>(
       'SELECT * FROM parcelas WHERE id = ? AND atendimento_id = ?',
       [parcela_id, parseInt(id)]
     );
@@ -206,13 +206,13 @@ export async function PUT(
     }
     
     // Atualiza parcela como paga
-    execute(
+    await execute(
       'UPDATE parcelas SET pago = 1, pagamento_id = ? WHERE id = ?',
       [pagamento_id || null, parcela_id]
     );
     
     // Retorna parcela atualizada
-    const atualizada = queryOne<Parcela>(
+    const atualizada = await queryOne<Parcela>(
       'SELECT * FROM parcelas WHERE id = ?',
       [parcela_id]
     );

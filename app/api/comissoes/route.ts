@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
 
       sqlResumo += ' GROUP BY c.usuario_id, u.nome ORDER BY total_geral DESC';
 
-      const resumoComissoes = query<ResumoComissao>(sqlResumo, paramsResumo);
+      const resumoComissoes = await query<ResumoComissao>(sqlResumo, paramsResumo);
       return NextResponse.json(resumoComissoes);
     }
 
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
 
     sql += ' ORDER BY c.created_at DESC';
 
-    const comissoes = query<Comissao>(sql, params);
+    const comissoes = await query<Comissao>(sql, params);
 
     // Calcular totais
     const totalVenda = comissoes

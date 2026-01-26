@@ -32,7 +32,7 @@ export async function POST(
     const atendimentoId = parseInt(id);
 
     // 1. Verificar se atendimento existe e está em execução
-    const atendimentos = query<Atendimento>(
+    const atendimentos = await query<Atendimento>(
       'SELECT id, status FROM atendimentos WHERE id = ?',
       [atendimentoId]
     );
@@ -54,7 +54,7 @@ export async function POST(
     }
 
     // 2. Verificar se todos os itens estão concluídos
-    const itens = query<ItemAtendimento>(
+    const itens = await query<ItemAtendimento>(
       `SELECT id, valor, valor_pago, status, criado_por_id, executor_id, procedimento_id
        FROM itens_atendimento WHERE atendimento_id = ?`,
       [atendimentoId]
@@ -100,7 +100,7 @@ export async function POST(
 
     for (const item of itens) {
       // Buscar % de comissão do procedimento
-      const procedimentos = query<Procedimento>(
+      const procedimentos = await query<Procedimento>(
         'SELECT id, comissao_venda, comissao_execucao FROM procedimentos WHERE id = ?',
         [item.procedimento_id]
       );
@@ -113,7 +113,7 @@ export async function POST(
       if (item.criado_por_id && proc.comissao_venda > 0) {
         const valorComissaoVenda = item.valor * (proc.comissao_venda / 100);
         
-        execute(
+        await execute(
           `INSERT INTO comissoes (atendimento_id, item_atendimento_id, usuario_id, tipo, percentual, valor_base, valor_comissao)
            VALUES (?, ?, ?, 'venda', ?, ?, ?)`,
           [atendimentoId, item.id, item.criado_por_id, proc.comissao_venda, item.valor, valorComissaoVenda]
@@ -130,7 +130,7 @@ export async function POST(
       if (item.executor_id && proc.comissao_execucao > 0) {
         const valorComissaoExecucao = item.valor * (proc.comissao_execucao / 100);
         
-        execute(
+        await execute(
           `INSERT INTO comissoes (atendimento_id, item_atendimento_id, usuario_id, tipo, percentual, valor_base, valor_comissao)
            VALUES (?, ?, ?, 'execucao', ?, ?, ?)`,
           [atendimentoId, item.id, item.executor_id, proc.comissao_execucao, item.valor, valorComissaoExecucao]
@@ -145,7 +145,7 @@ export async function POST(
     }
 
     // 5. Finalizar atendimento
-    execute(
+    await execute(
       `UPDATE atendimentos SET status = 'finalizado', finalizado_at = datetime('now', 'localtime') WHERE id = ?`,
       [atendimentoId]
     );

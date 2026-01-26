@@ -5,7 +5,7 @@ import { Usuario } from '@/lib/types';
 // GET /api/usuarios - Listar todos os usuários
 export async function GET() {
   try {
-    const usuarios = query<Usuario>(
+    const usuarios = await query<Usuario>(
       'SELECT * FROM usuarios ORDER BY nome'
     );
     return NextResponse.json(usuarios);
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }
 
     // Verifica se email já existe
-    const existing = query<Usuario>(
+    const existing = await query<Usuario>(
       'SELECT id FROM usuarios WHERE email = ?',
       [email.toLowerCase().trim()]
     );
@@ -56,12 +56,12 @@ export async function POST(request: Request) {
     // Importar execute dinamicamente para evitar problemas
     const { execute } = await import('@/lib/db');
     
-    const result = execute(
+    const result = await execute(
       'INSERT INTO usuarios (nome, email, role) VALUES (?, ?, ?)',
       [nome.trim(), email.toLowerCase().trim(), role]
     );
 
-    const novoUsuario = query<Usuario>(
+    const novoUsuario = await query<Usuario>(
       'SELECT * FROM usuarios WHERE id = ?',
       [result.lastInsertRowid]
     );

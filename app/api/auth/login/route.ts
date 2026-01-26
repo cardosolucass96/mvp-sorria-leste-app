@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = queryOne<UsuarioComSenha>(
+    const user = await queryOne<UsuarioComSenha>(
       'SELECT * FROM usuarios WHERE email = ? AND ativo = 1',
       [email.toLowerCase().trim()]
     );

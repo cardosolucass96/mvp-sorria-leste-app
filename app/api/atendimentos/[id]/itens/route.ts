@@ -32,7 +32,7 @@ export async function GET(
   try {
     const { id } = await params;
     
-    const itens = query<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null; criado_por_nome: string | null }>(
+    const itens = await query<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null; criado_por_nome: string | null }>(
       `SELECT 
         i.*,
         p.nome as procedimento_nome,
@@ -68,7 +68,7 @@ export async function POST(
     const { procedimento_id, executor_id, criado_por_id, valor } = body;
     
     // Verifica se atendimento existe
-    const atendimento = queryOne<Atendimento>(
+    const atendimento = await queryOne<Atendimento>(
       'SELECT * FROM atendimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -97,7 +97,7 @@ export async function POST(
     }
     
     // Busca procedimento para pegar valor padrão
-    const procedimento = queryOne<Procedimento>(
+    const procedimento = await queryOne<Procedimento>(
       'SELECT * FROM procedimentos WHERE id = ? AND ativo = 1',
       [procedimento_id]
     );
@@ -111,7 +111,7 @@ export async function POST(
     
     // Verifica executor se fornecido
     if (executor_id) {
-      const executor = queryOne<{ id: number; role: string }>(
+      const executor = await queryOne<{ id: number; role: string }>(
         "SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1",
         [executor_id]
       );
@@ -135,7 +135,7 @@ export async function POST(
     const valorFinal = valor !== undefined ? valor : procedimento.valor;
     
     // Insere item
-    const result = execute(
+    const result = await execute(
       `INSERT INTO itens_atendimento 
         (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, status) 
        VALUES (?, ?, ?, ?, ?, 'pendente')`,
@@ -150,14 +150,14 @@ export async function POST(
     
     // Se adicionou durante execução, volta para aguardando_pagamento
     if (atendimento.status === 'em_execucao') {
-      execute(
+      await execute(
         "UPDATE atendimentos SET status = 'aguardando_pagamento' WHERE id = ?",
         [parseInt(id)]
       );
     }
     
     // Retorna item criado
-    const novoItem = queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null }>(
+    const novoItem = await queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null }>(
       `SELECT 
         i.*,
         p.nome as procedimento_nome,
@@ -198,7 +198,7 @@ export async function DELETE(
     }
     
     // Verifica se atendimento existe e está em avaliação
-    const atendimento = queryOne<Atendimento>(
+    const atendimento = await queryOne<Atendimento>(
       'SELECT * FROM atendimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -218,7 +218,7 @@ export async function DELETE(
     }
     
     // Verifica se item existe e pertence ao atendimento
-    const item = queryOne<ItemAtendimento>(
+    const item = await queryOne<ItemAtendimento>(
       'SELECT * FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
       [parseInt(itemId), parseInt(id)]
     );
@@ -231,7 +231,7 @@ export async function DELETE(
     }
     
     // Remove item
-    execute('DELETE FROM itens_atendimento WHERE id = ?', [parseInt(itemId)]);
+    await execute('DELETE FROM itens_atendimento WHERE id = ?', [parseInt(itemId)]);
     
     return NextResponse.json({ message: 'Item removido com sucesso' });
   } catch (error) {

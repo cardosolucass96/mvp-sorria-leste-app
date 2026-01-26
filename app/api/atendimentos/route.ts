@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     
     sql += ' ORDER BY a.created_at DESC';
     
-    const atendimentos = query<AtendimentoComCliente>(sql, params);
+    const atendimentos = await query<AtendimentoComCliente>(sql, params);
     
     return NextResponse.json(atendimentos);
   } catch (error) {
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Verifica se cliente existe
-    const cliente = queryOne<{ id: number }>(
+    const cliente = await queryOne<{ id: number }>(
       'SELECT id FROM clientes WHERE id = ?',
       [cliente_id]
     );
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Verifica se cliente já tem atendimento em aberto
-    const atendimentoAberto = queryOne<CountResult>(
+    const atendimentoAberto = await queryOne<CountResult>(
       `SELECT COUNT(*) as count FROM atendimentos 
        WHERE cliente_id = ? AND status != 'finalizado'`,
       [cliente_id]
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     
     // Verifica avaliador se fornecido
     if (avaliador_id) {
-      const avaliador = queryOne<{ id: number; role: string }>(
+      const avaliador = await queryOne<{ id: number; role: string }>(
         'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
         [avaliador_id]
       );
@@ -148,14 +148,14 @@ export async function POST(request: NextRequest) {
     }
     
     // Cria atendimento com status inicial 'triagem'
-    const result = execute(
+    const result = await execute(
       `INSERT INTO atendimentos (cliente_id, avaliador_id, status) 
        VALUES (?, ?, 'triagem')`,
       [cliente_id, avaliador_id || null]
     );
     
     // Busca atendimento criado com dados do cliente
-    const novoAtendimento = queryOne<AtendimentoComCliente>(
+    const novoAtendimento = await queryOne<AtendimentoComCliente>(
       `SELECT 
         a.*,
         c.nome as cliente_nome,

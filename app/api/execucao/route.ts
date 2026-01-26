@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     // Busca PROCEDIMENTOS PAGOS individuais:
     // 1. Já atribuídos ao executor (meus)
     // 2. Sem executor definido (disponíveis para pegar)
-    const procedimentos = query<ProcedimentoExecucao>(
+    const procedimentos = await query<ProcedimentoExecucao>(
       `SELECT 
         i.id,
         i.atendimento_id,

@@ -49,7 +49,7 @@ export async function GET(
     const { id } = await params;
     
     // Busca atendimento com dados do cliente
-    const atendimento = queryOne<AtendimentoComCliente>(
+    const atendimento = await queryOne<AtendimentoComCliente>(
       `SELECT 
         a.*,
         c.nome as cliente_nome,
@@ -74,7 +74,7 @@ export async function GET(
     }
     
     // Busca itens do atendimento
-    const itens = query<ItemAtendimento>(
+    const itens = await query<ItemAtendimento>(
       `SELECT 
         i.*,
         p.nome as procedimento_nome,
@@ -90,12 +90,12 @@ export async function GET(
     );
     
     // Calcula totais
-    const totalResult = queryOne<SumResult>(
+    const totalResult = await queryOne<SumResult>(
       'SELECT SUM(valor) as total FROM itens_atendimento WHERE atendimento_id = ?',
       [parseInt(id)]
     );
     
-    const totalPagoResult = queryOne<SumResult>(
+    const totalPagoResult = await queryOne<SumResult>(
       'SELECT SUM(valor_pago) as total FROM itens_atendimento WHERE atendimento_id = ?',
       [parseInt(id)]
     );
@@ -126,7 +126,7 @@ export async function PUT(
     const { status, avaliador_id } = body;
     
     // Verifica se existe
-    const atendimento = queryOne<Atendimento>(
+    const atendimento = await queryOne<Atendimento>(
       'SELECT * FROM atendimentos WHERE id = ?',
       [parseInt(id)]
     );
@@ -140,7 +140,7 @@ export async function PUT(
     
     // Se está mudando status, valida as regras de transição
     if (status && status !== atendimento.status) {
-      const validacao = validarTransicao(atendimento, status, parseInt(id));
+      const validacao = await validarTransicao(atendimento, status, parseInt(id));
       if (!validacao.valido) {
         return NextResponse.json(
           { error: validacao.mensagem },
@@ -160,7 +160,7 @@ export async function PUT(
       // Se liberando para execução, marca quem liberou e quando
       if (status === 'em_execucao' && atendimento.status === 'aguardando_pagamento') {
         // TODO: Pegar usuário logado do contexto de autenticação
-        const usuario = queryOne<{ id: number }>('SELECT id FROM usuarios LIMIT 1');
+        const usuario = await queryOne<{ id: number }>('SELECT id FROM usuarios LIMIT 1');
         const liberadoPorId = usuario?.id || 1;
         
         updates.push('liberado_por_id = ?');
@@ -188,13 +188,13 @@ export async function PUT(
     
     updateParams.push(parseInt(id));
     
-    execute(
+    await execute(
       `UPDATE atendimentos SET ${updates.join(', ')} WHERE id = ?`,
       updateParams
     );
     
     // Retorna atendimento atualizado
-    const atualizado = queryOne<AtendimentoComCliente>(
+    const atualizado = await queryOne<AtendimentoComCliente>(
       `SELECT 
         a.*,
         c.nome as cliente_nome,
@@ -221,11 +221,11 @@ export async function PUT(
 }
 
 // Função para validar transições de status
-function validarTransicao(
+async function validarTransicao(
   atendimento: Atendimento,
   novoStatus: string,
   atendimentoId: number
-): { valido: boolean; mensagem: string } {
+): Promise<{ valido: boolean; mensagem: string }> {
   const statusAtual = atendimento.status;
   
   // Transições permitidas
@@ -249,7 +249,7 @@ function validarTransicao(
   
   // Avaliação → Aguardando Pagamento: precisa ter pelo menos 1 procedimento
   if (statusAtual === 'avaliacao' && novoStatus === 'aguardando_pagamento') {
-    const itens = queryOne<CountResult>(
+    const itens = await queryOne<CountResult>(
       'SELECT COUNT(*) as count FROM itens_atendimento WHERE atendimento_id = ?',
       [atendimentoId]
     );
@@ -264,7 +264,7 @@ function validarTransicao(
   
   // Aguardando Pagamento → Em Execução: precisa ter pelo menos 1 procedimento pago
   if (statusAtual === 'aguardando_pagamento' && novoStatus === 'em_execucao') {
-    const itensPagos = queryOne<CountResult>(
+    const itensPagos = await queryOne<CountResult>(
       `SELECT COUNT(*) as count FROM itens_atendimento 
        WHERE atendimento_id = ? AND status = 'pago'`,
       [atendimentoId]
@@ -280,7 +280,7 @@ function validarTransicao(
   
   // Em Execução → Finalizado: todos procedimentos concluídos e tudo pago
   if (statusAtual === 'em_execucao' && novoStatus === 'finalizado') {
-    const pendentes = queryOne<CountResult>(
+    const pendentes = await queryOne<CountResult>(
       `SELECT COUNT(*) as count FROM itens_atendimento 
        WHERE atendimento_id = ? AND status != 'concluido'`,
       [atendimentoId]
@@ -293,12 +293,12 @@ function validarTransicao(
       };
     }
     
-    const total = queryOne<SumResult>(
+    const total = await queryOne<SumResult>(
       'SELECT SUM(valor) as total FROM itens_atendimento WHERE atendimento_id = ?',
       [atendimentoId]
     );
     
-    const pago = queryOne<SumResult>(
+    const pago = await queryOne<SumResult>(
       'SELECT SUM(valor) as total FROM pagamentos WHERE atendimento_id = ?',
       [atendimentoId]
     );

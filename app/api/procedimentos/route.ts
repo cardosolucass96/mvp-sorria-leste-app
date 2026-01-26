@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     
     sql += ' ORDER BY nome ASC';
     
-    const procedimentos = query<Procedimento>(sql, params);
+    const procedimentos = await query<Procedimento>(sql, params);
     
     return NextResponse.json(procedimentos);
   } catch (error) {
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const result = execute(
+    const result = await execute(
       `INSERT INTO procedimentos (nome, valor, comissao_venda, comissao_execucao) 
        VALUES (?, ?, ?, ?)`,
       [
@@ -97,10 +97,10 @@ export async function POST(request: NextRequest) {
       ]
     );
     
-    const novoProcedimento = query<Procedimento>(
+    const novoProcedimento = (await query<Procedimento>(
       'SELECT * FROM procedimentos WHERE id = ?',
       [result.lastInsertRowid]
-    )[0];
+    ))[0];
     
     return NextResponse.json(novoProcedimento, { status: 201 });
   } catch (error) {

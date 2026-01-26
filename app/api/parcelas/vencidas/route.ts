@@ -16,7 +16,7 @@ export async function GET() {
   try {
     const hoje = new Date().toISOString().split('T')[0];
     
-    const parcelas = query<ParcelaVencida>(
+    const parcelas = await query<ParcelaVencida>(
       `SELECT 
         p.*,
         c.nome as cliente_nome
