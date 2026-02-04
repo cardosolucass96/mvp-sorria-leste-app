@@ -33,6 +33,7 @@ export async function GET(
         i.atendimento_id,
         i.procedimento_id,
         p.nome as procedimento_nome,
+        p.por_dente,
         i.executor_id,
         e.nome as executor_nome,
         i.criado_por_id,
@@ -41,6 +42,8 @@ export async function GET(
         c.id as cliente_id,
         i.valor,
         i.valor_pago,
+        i.dentes,
+        i.quantidade,
         i.status,
         i.created_at,
         i.concluido_at

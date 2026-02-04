@@ -13,6 +13,9 @@ interface ItemAtendimento {
   criado_por_id: number | null;
   valor: number;
   valor_pago: number;
+  dentes: string | null;
+  quantidade: number;
+  por_dente: number;
   status: string;
   created_at: string;
   concluido_at: string | null;
@@ -356,6 +359,35 @@ export default function ExecucaoProcedimentoPage() {
           </div>
           {getStatusBadge(item.status)}
         </div>
+
+        {/* Dentes selecionados */}
+        {item.dentes && (() => {
+          try {
+            const dentesArray = JSON.parse(item.dentes) as string[];
+            if (dentesArray.length > 0) {
+              return (
+                <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <p className="text-sm font-semibold text-orange-800 mb-2">
+                    🦷 Dentes a serem tratados ({dentesArray.length}):
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {dentesArray.sort((a, b) => Number(a) - Number(b)).map((dente) => (
+                      <span
+                        key={dente}
+                        className="px-3 py-1 bg-orange-600 text-white text-sm font-bold rounded-full"
+                      >
+                        {dente}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          } catch {
+            return null;
+          }
+        })()}
 
         {/* Badges de estado */}
         <div className="mb-4">
