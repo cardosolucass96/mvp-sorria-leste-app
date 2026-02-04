@@ -37,8 +37,80 @@ export interface D1ExecResult {
 }
 
 // Interface do ambiente Cloudflare
+// Interface R2
+export interface R2Bucket {
+  put(key: string, value: ReadableStream | ArrayBuffer | ArrayBufferView | string | null | Blob, options?: R2PutOptions): Promise<R2Object>;
+  get(key: string, options?: R2GetOptions): Promise<R2ObjectBody | null>;
+  delete(keys: string | string[]): Promise<void>;
+  list(options?: R2ListOptions): Promise<R2Objects>;
+  head(key: string): Promise<R2Object | null>;
+}
+
+export interface R2PutOptions {
+  httpMetadata?: R2HTTPMetadata;
+  customMetadata?: Record<string, string>;
+}
+
+export interface R2GetOptions {
+  range?: { offset?: number; length?: number; suffix?: number };
+}
+
+export interface R2ListOptions {
+  prefix?: string;
+  limit?: number;
+  cursor?: string;
+  delimiter?: string;
+  include?: ('httpMetadata' | 'customMetadata')[];
+}
+
+export interface R2HTTPMetadata {
+  contentType?: string;
+  contentLanguage?: string;
+  contentDisposition?: string;
+  contentEncoding?: string;
+  cacheControl?: string;
+  cacheExpiry?: Date;
+}
+
+export interface R2Object {
+  key: string;
+  version: string;
+  size: number;
+  etag: string;
+  httpEtag: string;
+  checksums: R2Checksums;
+  uploaded: Date;
+  httpMetadata?: R2HTTPMetadata;
+  customMetadata?: Record<string, string>;
+}
+
+export interface R2ObjectBody extends R2Object {
+  body: ReadableStream;
+  bodyUsed: boolean;
+  arrayBuffer(): Promise<ArrayBuffer>;
+  text(): Promise<string>;
+  json<T>(): Promise<T>;
+  blob(): Promise<Blob>;
+}
+
+export interface R2Objects {
+  objects: R2Object[];
+  truncated: boolean;
+  cursor?: string;
+  delimitedPrefixes: string[];
+}
+
+export interface R2Checksums {
+  md5?: ArrayBuffer;
+  sha1?: ArrayBuffer;
+  sha256?: ArrayBuffer;
+  sha384?: ArrayBuffer;
+  sha512?: ArrayBuffer;
+}
+
 interface CloudflareEnv {
   DB: D1Database;
+  R2_BUCKET: R2Bucket;
   [key: string]: unknown;
 }
 
@@ -46,6 +118,12 @@ interface CloudflareEnv {
 export function getDb(): D1Database {
   const ctx = getCloudflareContext<CloudflareEnv>();
   return ctx.env.DB;
+}
+
+// Obter o bucket R2 do contexto Cloudflare
+export function getR2Bucket(): R2Bucket {
+  const ctx = getCloudflareContext<CloudflareEnv>();
+  return ctx.env.R2_BUCKET;
 }
 
 // Tipo de resultado para compatibilidade

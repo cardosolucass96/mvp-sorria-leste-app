@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, execute } from '@/lib/db';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
+import { query, execute, getR2Bucket } from '@/lib/db';
 
 interface Anexo {
   id: number;
@@ -15,6 +13,27 @@ interface Anexo {
   created_at: string;
   usuario_nome?: string;
 }
+
+// Tipos de arquivo permitidos (imagens, vídeos e documentos)
+const TIPOS_PERMITIDOS = [
+  // Imagens
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  // Vídeos
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  // Documentos
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+
+// Tamanho máximo: 50MB para vídeos, 10MB para outros
+const MAX_SIZE_VIDEO = 50 * 1024 * 1024;
+const MAX_SIZE_OTHER = 10 * 1024 * 1024;
 
 // GET /api/execucao/item/[id]/anexos - Lista anexos do item
 export async function GET(
@@ -43,7 +62,7 @@ export async function GET(
   }
 }
 
-// POST /api/execucao/item/[id]/anexos - Faz upload de anexo
+// POST /api/execucao/item/[id]/anexos - Faz upload de anexo para R2
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -70,41 +89,45 @@ export async function POST(
       );
     }
 
-    // Validar tipo de arquivo (imagens e PDFs)
-    const tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
-    if (!tiposPermitidos.includes(file.type)) {
+    // Validar tipo de arquivo
+    if (!TIPOS_PERMITIDOS.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Tipo de arquivo não permitido. Use: JPG, PNG, GIF, WebP ou PDF' },
+        { error: 'Tipo de arquivo não permitido. Use: JPG, PNG, GIF, WebP, MP4, WebM, MOV, PDF ou DOC/DOCX' },
         { status: 400 }
       );
     }
 
-    // Limitar tamanho (10MB)
-    const maxSize = 10 * 1024 * 1024;
+    // Validar tamanho
+    const isVideo = file.type.startsWith('video/');
+    const maxSize = isVideo ? MAX_SIZE_VIDEO : MAX_SIZE_OTHER;
     if (file.size > maxSize) {
+      const maxMB = maxSize / (1024 * 1024);
       return NextResponse.json(
-        { error: 'Arquivo muito grande. Máximo: 10MB' },
+        { error: `Arquivo muito grande. Máximo: ${maxMB}MB` },
         { status: 400 }
       );
     }
 
-    // Criar diretório de uploads se não existir
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'execucao', id);
-    await mkdir(uploadsDir, { recursive: true });
-
-    // Gerar nome único para o arquivo
+    // Gerar chave única para o R2
     const timestamp = Date.now();
-    const ext = path.extname(file.name);
-    const nomeArquivo = `${timestamp}${ext}`;
-    const caminhoCompleto = path.join(uploadsDir, nomeArquivo);
-    const caminhoRelativo = `/uploads/execucao/${id}/${nomeArquivo}`;
+    const ext = file.name.split('.').pop() || 'bin';
+    const r2Key = `execucao/${id}/${timestamp}.${ext}`;
 
-    // Salvar arquivo
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(caminhoCompleto, buffer);
+    // Upload para R2
+    const r2 = getR2Bucket();
+    const arrayBuffer = await file.arrayBuffer();
+    
+    await r2.put(r2Key, arrayBuffer, {
+      httpMetadata: {
+        contentType: file.type,
+      },
+      customMetadata: {
+        originalName: file.name,
+        uploadedBy: usuario_id,
+      },
+    });
 
-    // Registrar no banco
+    // Registrar no banco (caminho = chave R2)
     const result = await execute(
       `INSERT INTO anexos_execucao 
         (item_atendimento_id, usuario_id, nome_arquivo, tipo_arquivo, caminho, tamanho, descricao)
@@ -114,7 +137,7 @@ export async function POST(
         parseInt(usuario_id),
         file.name,
         file.type,
-        caminhoRelativo,
+        r2Key,
         file.size,
         descricao || null
       ]
@@ -123,7 +146,7 @@ export async function POST(
     return NextResponse.json(
       { 
         id: result.lastInsertRowid, 
-        caminho: caminhoRelativo,
+        caminho: r2Key,
         message: 'Arquivo enviado com sucesso' 
       },
       { status: 201 }
@@ -153,7 +176,25 @@ export async function DELETE(
       );
     }
 
-    execute('DELETE FROM anexos_execucao WHERE id = ?', [parseInt(anexoId)]);
+    // Buscar caminho do arquivo
+    const anexo = await query<{ caminho: string }>(
+      'SELECT caminho FROM anexos_execucao WHERE id = ?',
+      [parseInt(anexoId)]
+    );
+
+    if (anexo.length > 0 && anexo[0].caminho) {
+      // Remover do R2
+      try {
+        const r2 = getR2Bucket();
+        await r2.delete(anexo[0].caminho);
+      } catch (r2Error) {
+        console.warn('Erro ao remover arquivo do R2:', r2Error);
+        // Continua mesmo se falhar no R2
+      }
+    }
+
+    // Remover do banco
+    await execute('DELETE FROM anexos_execucao WHERE id = ?', [parseInt(anexoId)]);
 
     return NextResponse.json({ message: 'Anexo removido com sucesso' });
   } catch (error) {

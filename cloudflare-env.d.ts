@@ -3,6 +3,7 @@
 
 interface CloudflareEnv {
   DB: D1Database;
+  R2_BUCKET: R2Bucket;
   ASSETS: Fetcher;
   WORKER_SELF_REFERENCE: Service;
   ENVIRONMENT: string;

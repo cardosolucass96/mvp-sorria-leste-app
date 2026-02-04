@@ -153,10 +153,23 @@ CREATE TABLE IF NOT EXISTS anexos_execucao (
   usuario_id INTEGER NOT NULL, -- Quem fez upload
   nome_arquivo TEXT NOT NULL,
   tipo_arquivo TEXT NOT NULL, -- ex: image/jpeg, application/pdf
-  caminho TEXT NOT NULL, -- Caminho relativo do arquivo
+  caminho TEXT NOT NULL, -- Caminho no R2 ou local
   tamanho INTEGER NOT NULL, -- Tamanho em bytes
   descricao TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+);
+
+-- Prontuário de Execução (obrigatório para conclusão do procedimento)
+CREATE TABLE IF NOT EXISTS prontuarios (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_atendimento_id INTEGER NOT NULL UNIQUE, -- Um prontuário por item
+  usuario_id INTEGER NOT NULL, -- Executor que preencheu
+  descricao TEXT NOT NULL, -- Descrição detalhada do procedimento realizado (mínimo 50 caracteres)
+  observacoes TEXT, -- Observações adicionais opcionais
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );

@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useParams } from 'next/navigation';
-import Image from 'next/image';
 
 interface ItemAtendimento {
   id: number;
@@ -52,6 +51,19 @@ interface Anexo {
   created_at: string;
 }
 
+interface Prontuario {
+  id: number;
+  item_atendimento_id: number;
+  usuario_id: number;
+  usuario_nome: string;
+  descricao: string;
+  observacoes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const MIN_CARACTERES_PRONTUARIO = 50;
+
 export default function ExecucaoProcedimentoPage() {
   const params = useParams();
   const { user } = useAuth();
@@ -70,6 +82,13 @@ export default function ExecucaoProcedimentoPage() {
   const [enviandoAnexo, setEnviandoAnexo] = useState(false);
   const [descricaoAnexo, setDescricaoAnexo] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Prontuário
+  const [prontuario, setProntuario] = useState<Prontuario | null>(null);
+  const [descricaoProntuario, setDescricaoProntuario] = useState('');
+  const [observacoesProntuario, setObservacoesProntuario] = useState('');
+  const [salvandoProntuario, setSalvandoProntuario] = useState(false);
+  const [erroProntuario, setErroProntuario] = useState('');
 
   useEffect(() => {
     if (params.id) {
@@ -77,6 +96,7 @@ export default function ExecucaoProcedimentoPage() {
       carregarProcedimentos();
       carregarNotas();
       carregarAnexos();
+      carregarProntuario();
     }
   }, [params.id]);
 
@@ -123,6 +143,57 @@ export default function ExecucaoProcedimentoPage() {
     } catch (error) {
       console.error('Erro ao carregar anexos:', error);
     }
+  }
+
+  async function carregarProntuario() {
+    try {
+      const response = await fetch(`/api/execucao/item/${params.id}/prontuario`);
+      const data = await response.json();
+      if (data.prontuario) {
+        setProntuario(data.prontuario);
+        setDescricaoProntuario(data.prontuario.descricao);
+        setObservacoesProntuario(data.prontuario.observacoes || '');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar prontuário:', error);
+    }
+  }
+
+  async function salvarProntuario() {
+    if (!user) return;
+    
+    if (descricaoProntuario.trim().length < MIN_CARACTERES_PRONTUARIO) {
+      setErroProntuario(`A descrição deve ter no mínimo ${MIN_CARACTERES_PRONTUARIO} caracteres`);
+      return;
+    }
+    
+    setSalvandoProntuario(true);
+    setErroProntuario('');
+    
+    try {
+      const response = await fetch(`/api/execucao/item/${params.id}/prontuario`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          usuario_id: user.id,
+          descricao: descricaoProntuario,
+          observacoes: observacoesProntuario,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setProntuario(data.prontuario);
+        alert('Prontuário salvo com sucesso!');
+      } else {
+        const data = await response.json();
+        setErroProntuario(data.error || 'Erro ao salvar prontuário');
+      }
+    } catch (error) {
+      console.error('Erro ao salvar prontuário:', error);
+      setErroProntuario('Erro ao salvar prontuário');
+    }
+    setSalvandoProntuario(false);
   }
 
   async function adicionarNota() {
@@ -199,6 +270,17 @@ export default function ExecucaoProcedimentoPage() {
 
   async function marcarComoConcluido() {
     if (!item) return;
+    
+    // Verificar se o prontuário foi preenchido
+    if (!prontuario) {
+      alert('⚠️ Você precisa preencher o PRONTUÁRIO antes de concluir o procedimento.\n\nRole para baixo e preencha a descrição do procedimento realizado (mínimo 50 caracteres).');
+      return;
+    }
+    
+    if (!confirm('Tem certeza que deseja marcar este procedimento como concluído?\n\nEsta ação não pode ser desfeita.')) {
+      return;
+    }
+    
     try {
       const response = await fetch(
         `/api/atendimentos/${item.atendimento_id}/itens/${item.id}`,
@@ -442,12 +524,24 @@ export default function ExecucaoProcedimentoPage() {
 
           {/* Procedimento em execução - concluir */}
           {isMeuProcedimento && item.status === 'executando' && (
-            <button
-              onClick={marcarComoConcluido}
-              className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 font-semibold text-lg"
-            >
-              ✅ Marcar como Concluído
-            </button>
+            <div className="space-y-2">
+              {!prontuario && (
+                <div className="p-3 bg-yellow-50 border border-yellow-300 rounded-lg text-sm text-yellow-800">
+                  ⚠️ <strong>Prontuário pendente:</strong> Preencha o prontuário abaixo antes de concluir.
+                </div>
+              )}
+              <button
+                onClick={marcarComoConcluido}
+                disabled={!prontuario}
+                className={`w-full px-4 py-3 rounded-lg font-semibold text-lg ${
+                  prontuario 
+                    ? 'bg-green-600 text-white hover:bg-green-700' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {prontuario ? '✅ Marcar como Concluído' : '🔒 Preencha o Prontuário para Concluir'}
+              </button>
+            </div>
           )}
 
           {/* Procedimento concluído */}
@@ -472,6 +566,113 @@ export default function ExecucaoProcedimentoPage() {
           </button>
         </div>
       )}
+
+      {/* Seção de Prontuário - OBRIGATÓRIO para conclusão */}
+      {(isMeuProcedimento && item.status === 'executando') || prontuario ? (
+        <div className={`bg-white p-6 rounded-lg shadow ${!prontuario && item.status === 'executando' ? 'ring-2 ring-red-400' : ''}`}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-800">
+              📋 Prontuário {!prontuario && item.status === 'executando' && <span className="text-red-600">*</span>}
+            </h2>
+            {prontuario && (
+              <span className="px-3 py-1 text-sm font-semibold rounded bg-green-100 text-green-800">
+                ✓ Preenchido
+              </span>
+            )}
+          </div>
+          
+          {!prontuario && item.status === 'executando' && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700">
+                <strong>⚠️ Obrigatório:</strong> Preencha a descrição do procedimento realizado com no mínimo {MIN_CARACTERES_PRONTUARIO} caracteres para poder concluir.
+              </p>
+            </div>
+          )}
+
+          {/* Formulário de prontuário (apenas durante execução se não concluído) */}
+          {isMeuProcedimento && item.status === 'executando' && (
+            <div className="space-y-4">
+              {erroProntuario && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  {erroProntuario}
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição do Procedimento Realizado *
+                </label>
+                <textarea
+                  value={descricaoProntuario}
+                  onChange={(e) => setDescricaoProntuario(e.target.value)}
+                  placeholder="Descreva detalhadamente o procedimento realizado, materiais utilizados, técnicas aplicadas..."
+                  className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:outline-none ${
+                    descricaoProntuario.length < MIN_CARACTERES_PRONTUARIO ? 'border-red-300' : 'border-green-300'
+                  }`}
+                  rows={5}
+                />
+                <div className="flex justify-between mt-1">
+                  <span className={`text-xs ${descricaoProntuario.length < MIN_CARACTERES_PRONTUARIO ? 'text-red-600' : 'text-green-600'}`}>
+                    {descricaoProntuario.length}/{MIN_CARACTERES_PRONTUARIO} caracteres mínimos
+                  </span>
+                  {descricaoProntuario.length >= MIN_CARACTERES_PRONTUARIO && (
+                    <span className="text-xs text-green-600">✓ Mínimo atingido</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Observações Adicionais (opcional)
+                </label>
+                <textarea
+                  value={observacoesProntuario}
+                  onChange={(e) => setObservacoesProntuario(e.target.value)}
+                  placeholder="Observações sobre cuidados pós-procedimento, retornos, etc..."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                  rows={3}
+                />
+              </div>
+
+              <button
+                onClick={salvarProntuario}
+                disabled={salvandoProntuario || descricaoProntuario.trim().length < MIN_CARACTERES_PRONTUARIO}
+                className="w-full bg-orange-500 text-white px-4 py-3 rounded-lg hover:bg-orange-600 disabled:opacity-50 font-semibold"
+              >
+                {salvandoProntuario ? 'Salvando...' : prontuario ? '💾 Atualizar Prontuário' : '💾 Salvar Prontuário'}
+              </button>
+            </div>
+          )}
+
+          {/* Exibir prontuário salvo (para visualização) */}
+          {prontuario && (item.status === 'concluido' || !isMeuProcedimento) && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Descrição do Procedimento</label>
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <p className="text-gray-800 whitespace-pre-wrap">{prontuario.descricao}</p>
+                </div>
+              </div>
+              
+              {prontuario.observacoes && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Observações</label>
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <p className="text-gray-800 whitespace-pre-wrap">{prontuario.observacoes}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-xs text-gray-500">
+                Preenchido por <strong>{prontuario.usuario_nome}</strong> em {formatarData(prontuario.created_at)}
+                {prontuario.updated_at !== prontuario.created_at && (
+                  <> · Atualizado em {formatarData(prontuario.updated_at)}</>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* Seção de Notas */}
       {(isMeuProcedimento || item.status === 'concluido') && (
@@ -536,13 +737,13 @@ export default function ExecucaoProcedimentoPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,.pdf"
+                accept="image/*,video/*,.pdf,.doc,.docx"
                 onChange={enviarAnexo}
                 disabled={enviandoAnexo}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
               />
               <p className="mt-2 text-xs text-gray-500">
-                Formatos aceitos: JPG, PNG, GIF, WebP, PDF (máx. 10MB)
+                📷 Imagens: JPG, PNG, GIF, WebP (máx. 10MB) | 🎬 Vídeos: MP4, WebM, MOV (máx. 50MB) | 📄 Documentos: PDF, DOC (máx. 10MB)
               </p>
               {enviandoAnexo && (
                 <p className="mt-2 text-sm text-orange-600">⏳ Enviando arquivo...</p>
@@ -553,50 +754,61 @@ export default function ExecucaoProcedimentoPage() {
           {/* Lista de anexos */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {anexos.length > 0 ? (
-              anexos.map((anexo) => (
-                <div key={anexo.id} className="border rounded-lg overflow-hidden">
-                  {anexo.tipo_arquivo.startsWith('image/') ? (
-                    <a href={anexo.caminho} target="_blank" rel="noopener noreferrer">
-                      <Image
-                        src={anexo.caminho}
-                        alt={anexo.nome_arquivo}
-                        width={300}
-                        height={200}
-                        className="w-full h-40 object-cover hover:opacity-90"
+              anexos.map((anexo) => {
+                // Construir URL do R2 via API
+                const arquivoUrl = `/api/arquivos/${anexo.caminho}`;
+                const isImage = anexo.tipo_arquivo.startsWith('image/');
+                const isVideo = anexo.tipo_arquivo.startsWith('video/');
+                
+                return (
+                  <div key={anexo.id} className="border rounded-lg overflow-hidden">
+                    {isImage ? (
+                      <a href={arquivoUrl} target="_blank" rel="noopener noreferrer">
+                        <img
+                          src={arquivoUrl}
+                          alt={anexo.nome_arquivo}
+                          className="w-full h-40 object-cover hover:opacity-90"
+                        />
+                      </a>
+                    ) : isVideo ? (
+                      <video
+                        src={arquivoUrl}
+                        controls
+                        className="w-full h-40 object-cover bg-black"
                       />
-                    </a>
-                  ) : (
-                    <a
-                      href={anexo.caminho}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center h-40 bg-gray-100 hover:bg-gray-200"
-                    >
-                      <span className="text-4xl">📄</span>
-                    </a>
-                  )}
-                  <div className="p-3">
-                    <p className="font-medium text-sm truncate" title={anexo.nome_arquivo}>
-                      {anexo.nome_arquivo}
-                    </p>
-                    {anexo.descricao && (
-                      <p className="text-xs text-gray-600 mt-1">{anexo.descricao}</p>
-                    )}
-                    <p className="text-xs text-gray-400 mt-1">
-                      {(anexo.tamanho / 1024).toFixed(1)} KB • {formatarData(anexo.created_at)}
-                    </p>
-                    <p className="text-xs text-gray-400">Por {anexo.usuario_nome}</p>
-                    {isMeuProcedimento && item.status !== 'concluido' && (
-                      <button
-                        onClick={() => removerAnexo(anexo.id)}
-                        className="mt-2 text-xs text-red-600 hover:text-red-800"
+                    ) : (
+                      <a
+                        href={`${arquivoUrl}?download=true`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center h-40 bg-gray-100 hover:bg-gray-200"
                       >
-                        🗑️ Remover
-                      </button>
+                        <span className="text-4xl">📄</span>
+                      </a>
                     )}
+                    <div className="p-3">
+                      <p className="font-medium text-sm truncate" title={anexo.nome_arquivo}>
+                        {anexo.nome_arquivo}
+                      </p>
+                      {anexo.descricao && (
+                        <p className="text-xs text-gray-600 mt-1">{anexo.descricao}</p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-1">
+                        {(anexo.tamanho / 1024 / 1024).toFixed(2)} MB • {formatarData(anexo.created_at)}
+                      </p>
+                      <p className="text-xs text-gray-400">Por {anexo.usuario_nome}</p>
+                      {isMeuProcedimento && item.status !== 'concluido' && (
+                        <button
+                          onClick={() => removerAnexo(anexo.id)}
+                          className="mt-2 text-xs text-red-600 hover:text-red-800"
+                        >
+                          🗑️ Remover
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <p className="text-gray-500 text-sm col-span-2">Nenhum anexo</p>
             )}
