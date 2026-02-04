@@ -49,6 +49,7 @@ export interface Procedimento {
   valor: number;
   comissao_venda: number;
   comissao_execucao: number;
+  por_dente: number; // 0 ou 1 - indica se o valor é cobrado por dente
   ativo: number;
   created_at: string;
 }
@@ -73,6 +74,8 @@ export interface ItemAtendimento {
   criado_por_id: number;
   valor: number;
   valor_pago: number;
+  dentes: string | null; // JSON array com números dos dentes
+  quantidade: number; // Quantidade de dentes
   status: ItemStatus;
   observacoes: string | null;
   created_at: string;

@@ -4,11 +4,13 @@ import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import SeletorDentes from '@/components/SeletorDentes';
 
 interface Procedimento {
   id: number;
   nome: string;
   valor: number;
+  por_dente: number;
 }
 
 interface Usuario {
@@ -57,6 +59,7 @@ export default function AvaliacaoDetalhePage({
   const [procedimentoId, setProcedimentoId] = useState('');
   const [executorId, setExecutorId] = useState('');
   const [valorCustom, setValorCustom] = useState('');
+  const [dentesSelecionados, setDentesSelecionados] = useState<string[]>([]);
   const [adicionando, setAdicionando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
 
@@ -95,11 +98,22 @@ export default function AvaliacaoDetalhePage({
     e.preventDefault();
     if (!procedimentoId) return;
     
+    const proc = procedimentos.find(p => p.id === parseInt(procedimentoId));
+    
+    // Validar se precisa de dentes selecionados
+    if (proc?.por_dente && dentesSelecionados.length === 0) {
+      setError('Selecione pelo menos um dente para este procedimento');
+      return;
+    }
+    
     setAdicionando(true);
     setError('');
     
     try {
-      const proc = procedimentos.find(p => p.id === parseInt(procedimentoId));
+      // Calcular valor baseado em quantidade de dentes (se aplicável)
+      const quantidade = proc?.por_dente ? dentesSelecionados.length : 1;
+      const valorBase = valorCustom ? parseFloat(valorCustom) : proc?.valor || 0;
+      const valorTotal = valorBase * quantidade;
       
       const res = await fetch(`/api/atendimentos/${id}/itens`, {
         method: 'POST',
@@ -108,7 +122,9 @@ export default function AvaliacaoDetalhePage({
           procedimento_id: parseInt(procedimentoId),
           executor_id: executorId ? parseInt(executorId) : null,
           criado_por_id: user?.id,
-          valor: valorCustom ? parseFloat(valorCustom) : proc?.valor,
+          valor: valorTotal,
+          dentes: proc?.por_dente ? JSON.stringify(dentesSelecionados) : null,
+          quantidade: quantidade,
         }),
       });
       
@@ -121,6 +137,7 @@ export default function AvaliacaoDetalhePage({
       setProcedimentoId('');
       setExecutorId('');
       setValorCustom('');
+      setDentesSelecionados([]);
       await carregarDados();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao adicionar');
@@ -205,6 +222,14 @@ export default function AvaliacaoDetalhePage({
     p => p.id === parseInt(procedimentoId)
   );
 
+  // Calcular valor total com base em dentes selecionados
+  const calcularValorTotal = () => {
+    if (!procedimentoSelecionado) return 0;
+    const valorBase = valorCustom ? parseFloat(valorCustom) : procedimentoSelecionado.valor;
+    const quantidade = procedimentoSelecionado.por_dente ? dentesSelecionados.length : 1;
+    return valorBase * quantidade;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -283,6 +308,7 @@ export default function AvaliacaoDetalhePage({
                 onChange={(e) => {
                   setProcedimentoId(e.target.value);
                   setValorCustom('');
+                  setDentesSelecionados([]);
                 }}
                 className="input"
                 required
@@ -290,11 +316,30 @@ export default function AvaliacaoDetalhePage({
                 <option value="">Selecione...</option>
                 {procedimentos.map((proc) => (
                   <option key={proc.id} value={proc.id}>
-                    {proc.nome} - {formatarMoeda(proc.valor)}
+                    {proc.nome} - {formatarMoeda(proc.valor)}{proc.por_dente ? ' (por dente)' : ''}
                   </option>
                 ))}
               </select>
             </div>
+            
+            {/* Seletor de Dentes (se aplicável) */}
+            {procedimentoSelecionado?.por_dente === 1 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dentes *
+                </label>
+                <SeletorDentes
+                  dentesSelecionados={dentesSelecionados}
+                  onChange={setDentesSelecionados}
+                  disabled={adicionando}
+                />
+                {dentesSelecionados.length > 0 && (
+                  <p className="text-sm text-blue-600 mt-2">
+                    Valor: {formatarMoeda(procedimentoSelecionado.valor)} × {dentesSelecionados.length} dentes = <strong>{formatarMoeda(calcularValorTotal())}</strong>
+                  </p>
+                )}
+              </div>
+            )}
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

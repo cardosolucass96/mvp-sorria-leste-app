@@ -65,7 +65,7 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { procedimento_id, executor_id, criado_por_id, valor } = body;
+    const { procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade } = body;
     
     // Verifica se atendimento existe
     const atendimento = await queryOne<Atendimento>(
@@ -133,18 +133,21 @@ export async function POST(
     
     // Usa valor do procedimento se não fornecido
     const valorFinal = valor !== undefined ? valor : procedimento.valor;
+    const quantidadeFinal = quantidade || 1;
     
     // Insere item
     const result = await execute(
       `INSERT INTO itens_atendimento 
-        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, status) 
-       VALUES (?, ?, ?, ?, ?, 'pendente')`,
+        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente')`,
       [
         parseInt(id),
         procedimento_id,
         executor_id || null,
         criado_por_id || null,
-        valorFinal
+        valorFinal,
+        dentes || null,
+        quantidadeFinal
       ]
     );
     

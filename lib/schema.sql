@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS procedimentos (
   valor REAL NOT NULL DEFAULT 0,
   comissao_venda REAL NOT NULL DEFAULT 0,  -- % comissão do avaliador
   comissao_execucao REAL NOT NULL DEFAULT 0, -- % comissão do executor
+  por_dente INTEGER NOT NULL DEFAULT 0, -- 1 se o valor é cobrado por dente
   ativo INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
@@ -65,6 +66,8 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   criado_por_id INTEGER NOT NULL, -- Quem criou (avaliador ou executor)
   valor REAL NOT NULL, -- Valor do procedimento no momento
   valor_pago REAL NOT NULL DEFAULT 0, -- Quanto já foi pago deste procedimento
+  dentes TEXT, -- Dentes selecionados (JSON array: ["11", "21", "31"])
+  quantidade INTEGER NOT NULL DEFAULT 1, -- Quantidade de dentes (para cálculo do valor)
   status TEXT NOT NULL DEFAULT 'pendente'
     CHECK (status IN ('pendente', 'pago', 'executando', 'concluido')),
   observacoes TEXT,

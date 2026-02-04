@@ -18,33 +18,33 @@ INSERT OR IGNORE INTO usuarios (nome, email, role, senha) VALUES
   ('Dr. Ricardo Executor', 'dr.ricardo@sorrialeste.com', 'executor', 'Sorria@123'),
   ('Dra. Beatriz Executora', 'dra.beatriz@sorrialeste.com', 'executor', 'Sorria@123');
 
--- Procedimentos (25 procedimentos)
-INSERT OR IGNORE INTO procedimentos (nome, valor, comissao_venda, comissao_execucao, descricao) VALUES 
-  ('Consulta de Avaliação', 0, 0, 0, 'Avaliação inicial gratuita'),
-  ('Raio-X Panorâmico', 120, 5, 20, 'Radiografia panorâmica'),
-  ('Raio-X Periapical', 40, 5, 20, 'Radiografia periapical unitária'),
-  ('Limpeza/Profilaxia', 150, 10, 30, 'Limpeza dental completa'),
-  ('Aplicação de Flúor', 80, 10, 30, 'Aplicação tópica de flúor'),
-  ('Selante', 100, 10, 30, 'Selante por dente'),
-  ('Restauração Simples', 200, 10, 35, 'Restauração em resina 1 face'),
-  ('Restauração Composta', 350, 10, 35, 'Restauração em resina múltiplas faces'),
-  ('Restauração em Amálgama', 180, 10, 35, 'Restauração em amálgama'),
-  ('Extração Simples', 250, 10, 40, 'Extração dentária simples'),
-  ('Extração de Siso', 600, 10, 40, 'Extração de dente do siso'),
-  ('Extração de Siso Incluso', 900, 12, 45, 'Extração de siso incluso'),
-  ('Tratamento de Canal - Anterior', 600, 10, 40, 'Canal em dente anterior'),
-  ('Tratamento de Canal - Pré-molar', 800, 10, 40, 'Canal em pré-molar'),
-  ('Tratamento de Canal - Molar', 1000, 10, 40, 'Canal em molar'),
-  ('Clareamento Dental', 1200, 15, 30, 'Clareamento dental completo'),
-  ('Faceta de Porcelana', 2000, 15, 35, 'Faceta de porcelana unitária'),
-  ('Prótese Parcial Removível', 1500, 12, 35, 'PPR'),
-  ('Prótese Total', 2500, 12, 35, 'Dentadura completa'),
-  ('Coroa de Porcelana', 1800, 12, 35, 'Coroa unitária'),
-  ('Implante Unitário', 3500, 15, 40, 'Implante osseointegrado'),
-  ('Prótese sobre Implante', 2200, 12, 35, 'Coroa sobre implante'),
-  ('Ortodontia - Instalação', 1800, 10, 35, 'Instalação do aparelho'),
-  ('Ortodontia - Manutenção', 250, 5, 40, 'Manutenção mensal'),
-  ('Raspagem Periodontal', 400, 10, 35, 'Raspagem por quadrante');
+-- Procedimentos (25 procedimentos) - por_dente: 0=não, 1=sim
+INSERT OR IGNORE INTO procedimentos (nome, valor, comissao_venda, comissao_execucao, por_dente, descricao) VALUES 
+  ('Consulta de Avaliação', 0, 0, 0, 0, 'Avaliação inicial gratuita'),
+  ('Raio-X Panorâmico', 120, 5, 20, 0, 'Radiografia panorâmica'),
+  ('Raio-X Periapical', 40, 5, 20, 1, 'Radiografia periapical unitária'),
+  ('Limpeza/Profilaxia', 150, 10, 30, 0, 'Limpeza dental completa'),
+  ('Aplicação de Flúor', 80, 10, 30, 0, 'Aplicação tópica de flúor'),
+  ('Selante', 100, 10, 30, 1, 'Selante por dente'),
+  ('Restauração Simples', 200, 10, 35, 1, 'Restauração em resina 1 face'),
+  ('Restauração Composta', 350, 10, 35, 1, 'Restauração em resina múltiplas faces'),
+  ('Restauração em Amálgama', 180, 10, 35, 1, 'Restauração em amálgama'),
+  ('Extração Simples', 250, 10, 40, 1, 'Extração dentária simples'),
+  ('Extração de Siso', 600, 10, 40, 1, 'Extração de dente do siso'),
+  ('Extração de Siso Incluso', 900, 12, 45, 1, 'Extração de siso incluso'),
+  ('Tratamento de Canal - Anterior', 600, 10, 40, 1, 'Canal em dente anterior'),
+  ('Tratamento de Canal - Pré-molar', 800, 10, 40, 1, 'Canal em pré-molar'),
+  ('Tratamento de Canal - Molar', 1000, 10, 40, 1, 'Canal em molar'),
+  ('Clareamento Dental', 1200, 15, 30, 0, 'Clareamento dental completo'),
+  ('Faceta de Porcelana', 2000, 15, 35, 1, 'Faceta de porcelana unitária'),
+  ('Prótese Parcial Removível', 1500, 12, 35, 0, 'PPR'),
+  ('Prótese Total', 2500, 12, 35, 0, 'Dentadura completa'),
+  ('Coroa de Porcelana', 1800, 12, 35, 1, 'Coroa unitária'),
+  ('Implante Unitário', 3500, 15, 40, 1, 'Implante osseointegrado'),
+  ('Prótese sobre Implante', 2200, 12, 35, 1, 'Coroa sobre implante'),
+  ('Ortodontia - Instalação', 1800, 10, 35, 0, 'Instalação do aparelho'),
+  ('Ortodontia - Manutenção', 250, 5, 40, 0, 'Manutenção mensal'),
+  ('Raspagem Periodontal', 400, 10, 35, 0, 'Raspagem por quadrante');
 
 -- Clientes de exemplo (10 clientes)
 INSERT OR IGNORE INTO clientes (nome, cpf, telefone, email, data_nascimento, origem, endereco) VALUES 
