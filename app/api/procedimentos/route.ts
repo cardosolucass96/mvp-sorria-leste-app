@@ -86,14 +86,17 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    const por_dente = body.por_dente ? 1 : 0;
+    
     const result = await execute(
-      `INSERT INTO procedimentos (nome, valor, comissao_venda, comissao_execucao) 
-       VALUES (?, ?, ?, ?)`,
+      `INSERT INTO procedimentos (nome, valor, comissao_venda, comissao_execucao, por_dente) 
+       VALUES (?, ?, ?, ?, ?)`,
       [
         nome.trim(),
         valor,
         comissao_venda ?? 0,
-        comissao_execucao ?? 0
+        comissao_execucao ?? 0,
+        por_dente
       ]
     );
     

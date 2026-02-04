@@ -9,6 +9,7 @@ interface Procedimento {
   valor: number;
   comissao_venda: number;
   comissao_execucao: number;
+  por_dente: number;
   ativo: number;
   created_at: string;
 }
@@ -18,6 +19,7 @@ interface FormData {
   valor: string;
   comissao_venda: string;
   comissao_execucao: string;
+  por_dente: boolean;
 }
 
 const initialFormData: FormData = {
@@ -25,6 +27,7 @@ const initialFormData: FormData = {
   valor: '',
   comissao_venda: '',
   comissao_execucao: '',
+  por_dente: false,
 };
 
 export default function ProcedimentosPage() {
@@ -78,6 +81,7 @@ export default function ProcedimentosPage() {
       valor: proc.valor.toString(),
       comissao_venda: proc.comissao_venda.toString(),
       comissao_execucao: proc.comissao_execucao.toString(),
+      por_dente: proc.por_dente === 1,
     });
     setEditingId(proc.id);
     setError('');
@@ -102,6 +106,7 @@ export default function ProcedimentosPage() {
         valor: parseFloat(formData.valor) || 0,
         comissao_venda: parseFloat(formData.comissao_venda) || 0,
         comissao_execucao: parseFloat(formData.comissao_execucao) || 0,
+        por_dente: formData.por_dente,
       };
 
       const url = editingId 
@@ -233,6 +238,9 @@ export default function ProcedimentosPage() {
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                 Valor
               </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                Por Dente
+              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                 Comissão Venda
               </th>
@@ -250,7 +258,7 @@ export default function ProcedimentosPage() {
           <tbody className="bg-white divide-y divide-gray-200">
             {procedimentos.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                   Nenhum procedimento encontrado
                 </td>
               </tr>
@@ -266,6 +274,13 @@ export default function ProcedimentosPage() {
                     <span className={`font-semibold ${proc.valor === 0 ? 'text-green-600' : 'text-gray-900'}`}>
                       {proc.valor === 0 ? 'Grátis' : formatarMoeda(proc.valor)}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    {proc.por_dente ? (
+                      <span className="badge badge-warning">🦷 Sim</span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right text-gray-600">
                     {proc.comissao_venda}%
@@ -395,6 +410,22 @@ export default function ProcedimentosPage() {
                     placeholder="0"
                   />
                 </div>
+              </div>
+              
+              <div className="flex items-center gap-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="por_dente"
+                  checked={formData.por_dente}
+                  onChange={(e) => setFormData({...formData, por_dente: e.target.checked})}
+                  className="w-5 h-5 rounded text-orange-600 focus:ring-orange-500"
+                />
+                <label htmlFor="por_dente" className="text-sm text-gray-700 cursor-pointer">
+                  <span className="font-medium">🦷 Cobrar por dente</span>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Se marcado, o avaliador poderá selecionar múltiplos dentes e o valor será multiplicado pela quantidade
+                  </p>
+                </label>
               </div>
               
               <div className="flex justify-end gap-3 pt-4">

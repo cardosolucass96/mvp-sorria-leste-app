@@ -117,6 +117,10 @@ export async function PUT(
       updates.push('ativo = ?');
       updateParams.push(ativo ? 1 : 0);
     }
+    if (body.por_dente !== undefined) {
+      updates.push('por_dente = ?');
+      updateParams.push(body.por_dente ? 1 : 0);
+    }
     
     if (updates.length === 0) {
       return NextResponse.json(
