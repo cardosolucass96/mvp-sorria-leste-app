@@ -3,6 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatarMoeda } from '@/lib/utils/formatters';
+import { STATUS_CONFIG } from '@/lib/constants/status';
+import type { AtendimentoStatus } from '@/lib/types';
+import LoadingState from '@/components/ui/LoadingState';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface DashboardData {
   resumo: {
@@ -25,24 +30,9 @@ interface DashboardData {
   topExecutores: { nome: string; total: number }[];
 }
 
-const statusLabels: Record<string, string> = {
-  triagem: 'Triagem',
-  avaliacao: 'Avaliação',
-  aguardando_pagamento: 'Aguardando Pagamento',
-  em_execucao: 'Em Execução',
-  finalizado: 'Finalizado',
-};
-
-const statusColors: Record<string, string> = {
-  triagem: 'bg-gray-500',
-  avaliacao: 'bg-orange-500',
-  aguardando_pagamento: 'bg-amber-500',
-  em_execucao: 'bg-blue-500',
-  finalizado: 'bg-green-500',
-};
-
 export default function DashboardAdminPage() {
-  const { user, isLoading: authLoading } = useAuth();
+  usePageTitle('Dashboard');
+  const { user, isLoading: authLoading, isAdmin } = useAuth();
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,10 +41,11 @@ export default function DashboardAdminPage() {
   const [periodoSelecionado, setPeriodoSelecionado] = useState('todos');
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
+    // Permite acesso se o role real é admin (mesmo em modo dentista)
+    if (!authLoading && (!user || !isAdmin)) {
       router.push('/');
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, isAdmin]);
 
   useEffect(() => {
     fetchDashboard();
@@ -116,12 +107,7 @@ export default function DashboardAdminPage() {
     setDataFim(fim);
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-  };
+  const formatCurrency = formatarMoeda;
 
   const formatMes = (mes: string) => {
     const [ano, mesNum] = mes.split('-');
@@ -129,7 +115,7 @@ export default function DashboardAdminPage() {
     return `${meses[parseInt(mesNum) - 1]}/${ano.slice(2)}`;
   };
 
-  if (authLoading || !user || user.role !== 'admin') {
+  if (authLoading || !user || !isAdmin) {
     return null;
   }
 
@@ -208,10 +194,7 @@ export default function DashboardAdminPage() {
         </div>
 
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Carregando dados...</p>
-          </div>
+          <LoadingState message="Carregando dados..." />
         ) : data ? (
           <>
             {/* Cards de Resumo */}
@@ -345,19 +328,22 @@ export default function DashboardAdminPage() {
               <div className="card">
                 <h3 className="text-lg font-semibold mb-4 text-gray-800">📊 Atendimentos por Status</h3>
                 <div className="space-y-3">
-                  {data.porStatus.map((status) => (
-                    <div key={status.status} className="flex items-center gap-3">
-                      <span className="w-40 text-sm text-gray-600">{statusLabels[status.status]}</span>
-                      <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
-                        <div
-                          className={`h-full ${statusColors[status.status]} rounded-full flex items-center justify-end pr-2`}
-                          style={{ width: `${Math.max((status.count / data.resumo.totalAtendimentos) * 100, 5)}%` }}
-                        >
-                          <span className="text-xs text-white font-medium">{status.count}</span>
+                  {data.porStatus.map((status) => {
+                    const config = STATUS_CONFIG[status.status as AtendimentoStatus];
+                    return (
+                      <div key={status.status} className="flex items-center gap-3">
+                        <span className="w-40 text-sm text-gray-600">{config?.label || status.status}</span>
+                        <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
+                          <div
+                            className={`h-full ${config?.bgCor || 'bg-gray-300'} rounded-full flex items-center justify-end pr-2`}
+                            style={{ width: `${Math.max((status.count / data.resumo.totalAtendimentos) * 100, 5)}%` }}
+                          >
+                            <span className="text-xs text-white font-medium">{status.count}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

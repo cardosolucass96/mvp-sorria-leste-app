@@ -3,6 +3,11 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { formatarMoeda, formatarData, formatarDataHora } from '@/lib/utils/formatters';
+import { StatusBadge } from '@/components/domain';
+import Alert from '@/components/ui/Alert';
+import LoadingState from '@/components/ui/LoadingState';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface ItemAtendimento {
   id: number;
@@ -59,6 +64,7 @@ export default function PagamentoPage({
 }: { 
   params: Promise<{ id: string }> 
 }) {
+  usePageTitle('Pagamento do Atendimento');
   const { id } = use(params);
   const router = useRouter();
   
@@ -249,31 +255,6 @@ export default function PagamentoPage({
     }
   };
 
-  const formatarMoeda = (valor: number) => {
-    return valor.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    });
-  };
-
-  const formatarData = (data: string) => {
-    return new Date(data).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  };
-
-  const formatarDataHora = (data: string) => {
-    return new Date(data).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-  
   // Funções auxiliares para itens selecionados
   const handleItemChange = (itemId: number, valor: string) => {
     const valorNum = parseFloat(valor) || 0;
@@ -323,11 +304,7 @@ export default function PagamentoPage({
   const totalAplicado = Object.values(itensSelecionados).reduce((sum, val) => sum + val, 0);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Carregando...</div>
-      </div>
-    );
+    return <LoadingState message="Carregando pagamento..." />;
   }
 
   if (!atendimento) {
@@ -373,11 +350,7 @@ export default function PagamentoPage({
         </div>
       </div>
 
-      {error && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <Alert type="error" message={error} />}
 
       {/* Dados do Cliente */}
       <div className="card bg-blue-50 border border-blue-200">
@@ -701,17 +674,7 @@ export default function PagamentoPage({
                     {formatarMoeda(saldoDevedor)}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`text-sm px-2 py-1 rounded ${
-                      item.status === 'concluido' ? 'bg-green-100 text-green-700' :
-                      item.status === 'pago' ? 'bg-blue-100 text-blue-700' :
-                      item.status === 'executando' ? 'bg-purple-100 text-purple-700' :
-                      'bg-gray-100 text-gray-700'
-                    }`}>
-                      {item.status === 'pendente' ? 'Pendente' :
-                       item.status === 'pago' ? 'Pago' :
-                       item.status === 'executando' ? 'Executando' :
-                       item.status === 'concluido' ? 'Concluído' : item.status}
-                    </span>
+                    <StatusBadge type="item" status={item.status} />
                   </td>
                 </tr>
               );

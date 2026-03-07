@@ -176,11 +176,20 @@ export async function DELETE(
       );
     }
 
-    // Buscar caminho do arquivo
-    const anexo = await query<{ caminho: string }>(
-      'SELECT caminho FROM anexos_execucao WHERE id = ?',
+    const { id } = await params;
+
+    // Buscar caminho do arquivo e validar que pertence ao item
+    const anexo = await query<{ caminho: string; item_atendimento_id: number }>(
+      'SELECT caminho, item_atendimento_id FROM anexos_execucao WHERE id = ?',
       [parseInt(anexoId)]
     );
+
+    if (anexo.length > 0 && anexo[0].item_atendimento_id !== parseInt(id)) {
+      return NextResponse.json(
+        { error: 'Anexo não pertence a este item' },
+        { status: 403 }
+      );
+    }
 
     if (anexo.length > 0 && anexo[0].caminho) {
       // Remover do R2

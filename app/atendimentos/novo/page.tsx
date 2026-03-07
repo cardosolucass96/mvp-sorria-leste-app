@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { formatarMoeda } from '@/lib/utils/formatters';
+import Alert from '@/components/ui/Alert';
+import LoadingState from '@/components/ui/LoadingState';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface Cliente {
   id: number;
@@ -27,6 +31,7 @@ interface Procedimento {
 type TipoAtendimento = 'normal' | 'orto';
 
 export default function NovoAtendimentoPage() {
+  usePageTitle('Novo Atendimento');
   const router = useRouter();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [avaliadores, setAvaliadores] = useState<Usuario[]>([]);
@@ -100,10 +105,6 @@ export default function NovoAtendimentoPage() {
     (p) => p.id === parseInt(procedimentoOrtoId)
   );
 
-  const formatarMoeda = (valor: number) => {
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -157,11 +158,7 @@ export default function NovoAtendimentoPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Carregando...</div>
-      </div>
-    );
+    return <LoadingState message="Carregando dados..." />;
   }
 
   return (
@@ -180,11 +177,7 @@ export default function NovoAtendimentoPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <Alert type="error" message={error} />}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Tipo de Atendimento */}

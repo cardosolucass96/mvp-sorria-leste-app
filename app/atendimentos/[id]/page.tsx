@@ -3,6 +3,13 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { formatarMoeda, formatarDataHora } from '@/lib/utils/formatters';
+import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PROXIMOS_STATUS } from '@/lib/constants/status';
+import type { AtendimentoStatus, ItemStatus } from '@/lib/types';
+import { StatusBadge, StatusPipeline } from '@/components/domain';
+import Alert from '@/components/ui/Alert';
+import LoadingState from '@/components/ui/LoadingState';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface ItemAtendimento {
   id: number;
@@ -32,37 +39,12 @@ interface Atendimento {
   total_pago: number;
 }
 
-type StatusType = 'triagem' | 'avaliacao' | 'aguardando_pagamento' | 'em_execucao' | 'finalizado';
-
-const STATUS_CONFIG: Record<StatusType, { label: string; cor: string; bgCor: string }> = {
-  triagem: { label: 'Triagem', cor: 'text-gray-700', bgCor: 'bg-gray-100' },
-  avaliacao: { label: 'Avaliação', cor: 'text-blue-700', bgCor: 'bg-blue-100' },
-  aguardando_pagamento: { label: 'Aguardando Pagamento', cor: 'text-yellow-700', bgCor: 'bg-yellow-100' },
-  em_execucao: { label: 'Em Execução', cor: 'text-purple-700', bgCor: 'bg-purple-100' },
-  finalizado: { label: 'Finalizado', cor: 'text-green-700', bgCor: 'bg-green-100' },
-};
-
-const ITEM_STATUS: Record<string, { label: string; cor: string }> = {
-  pendente: { label: 'Pendente', cor: 'text-gray-600' },
-  pago: { label: 'Pago', cor: 'text-yellow-600' },
-  executando: { label: 'Executando', cor: 'text-blue-600' },
-  concluido: { label: 'Concluído', cor: 'text-green-600' },
-};
-
-// Próximos status possíveis
-const PROXIMOS_STATUS: Record<StatusType, StatusType | null> = {
-  triagem: 'avaliacao',
-  avaliacao: 'aguardando_pagamento',
-  aguardando_pagamento: 'em_execucao',
-  em_execucao: 'finalizado',
-  finalizado: null,
-};
-
 export default function AtendimentoDetalhePage({ 
   params 
 }: { 
   params: Promise<{ id: string }> 
 }) {
+  usePageTitle('Detalhes do Atendimento');
   const { id } = use(params);
   const router = useRouter();
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
@@ -150,29 +132,8 @@ export default function AtendimentoDetalhePage({
     }
   };
 
-  const formatarMoeda = (valor: number) => {
-    return valor.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    });
-  };
-
-  const formatarData = (data: string) => {
-    return new Date(data).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Carregando...</div>
-      </div>
-    );
+    return <LoadingState message="Carregando atendimento..." />;
   }
 
   if (!atendimento) {
@@ -186,8 +147,8 @@ export default function AtendimentoDetalhePage({
     );
   }
 
-  const statusConfig = STATUS_CONFIG[atendimento.status as StatusType];
-  const proximoStatus = PROXIMOS_STATUS[atendimento.status as StatusType];
+  const statusConfig = STATUS_CONFIG[atendimento.status as AtendimentoStatus];
+  const proximoStatus = PROXIMOS_STATUS[atendimento.status as AtendimentoStatus];
 
   return (
     <div className="space-y-6">
@@ -204,9 +165,7 @@ export default function AtendimentoDetalhePage({
             <h1 className="text-2xl font-bold text-gray-900">
               Atendimento #{atendimento.id}
             </h1>
-            <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-medium ${statusConfig.bgCor} ${statusConfig.cor}`}>
-              {statusConfig.label}
-            </span>
+            <StatusBadge type="atendimento" status={atendimento.status} />
           </div>
         </div>
         
@@ -233,11 +192,7 @@ export default function AtendimentoDetalhePage({
         </div>
       </div>
 
-      {error && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <Alert type="error" message={error} />}
 
       {/* Comissões Geradas (após finalização) */}
       {comissoesGeradas && (
@@ -318,12 +273,12 @@ export default function AtendimentoDetalhePage({
             </div>
             <div>
               <p className="text-sm text-gray-500">Criado em</p>
-              <p className="font-medium">{formatarData(atendimento.created_at)}</p>
+              <p className="font-medium">{formatarDataHora(atendimento.created_at)}</p>
             </div>
             {atendimento.liberado_em && (
               <div>
                 <p className="text-sm text-gray-500">Liberado para execução</p>
-                <p className="font-medium">{formatarData(atendimento.liberado_em)}</p>
+                <p className="font-medium">{formatarDataHora(atendimento.liberado_em)}</p>
                 {atendimento.liberado_por_nome && (
                   <p className="text-xs text-gray-500">por {atendimento.liberado_por_nome}</p>
                 )}
@@ -332,7 +287,7 @@ export default function AtendimentoDetalhePage({
             {atendimento.finalizado_at && (
               <div>
                 <p className="text-sm text-gray-500">Finalizado em</p>
-                <p className="font-medium">{formatarData(atendimento.finalizado_at)}</p>
+                <p className="font-medium">{formatarDataHora(atendimento.finalizado_at)}</p>
               </div>
             )}
           </div>
@@ -424,7 +379,6 @@ export default function AtendimentoDetalhePage({
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {atendimento.itens.map((item) => {
-                const itemConfig = ITEM_STATUS[item.status] || ITEM_STATUS.pendente;
                 return (
                   <tr key={item.id}>
                     <td className="px-4 py-3 font-medium text-gray-900">
@@ -440,9 +394,7 @@ export default function AtendimentoDetalhePage({
                       {formatarMoeda(item.valor)}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`text-sm font-medium ${itemConfig.cor}`}>
-                        {itemConfig.label}
-                      </span>
+                      <StatusBadge type="item" status={item.status} />
                     </td>
                   </tr>
                 );
@@ -466,34 +418,7 @@ export default function AtendimentoDetalhePage({
       {/* Timeline de Status */}
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">📍 Pipeline</h2>
-        <div className="flex items-center justify-between">
-          {Object.entries(STATUS_CONFIG).map(([status, config], index) => {
-            const isAtual = atendimento.status === status;
-            const isPast = Object.keys(STATUS_CONFIG).indexOf(atendimento.status) > index;
-            
-            return (
-              <div key={status} className="flex-1 flex items-center">
-                <div className={`
-                  flex flex-col items-center
-                  ${isAtual ? 'text-blue-600' : isPast ? 'text-green-600' : 'text-gray-400'}
-                `}>
-                  <div className={`
-                    w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-                    ${isAtual ? 'bg-blue-600 text-white' : isPast ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-500'}
-                  `}>
-                    {isPast ? '✓' : index + 1}
-                  </div>
-                  <span className="text-xs mt-1 text-center max-w-[80px]">
-                    {config.label}
-                  </span>
-                </div>
-                {index < Object.keys(STATUS_CONFIG).length - 1 && (
-                  <div className={`flex-1 h-1 mx-2 ${isPast ? 'bg-green-600' : 'bg-gray-200'}`} />
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <StatusPipeline currentStatus={atendimento.status as AtendimentoStatus} />
       </div>
     </div>
   );

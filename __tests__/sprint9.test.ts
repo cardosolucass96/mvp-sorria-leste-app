@@ -165,7 +165,7 @@ describe('Sprint 9 - Finalização e Comissões', () => {
   describe('Página de Comissões (Admin)', () => {
     test('página deve verificar permissão de admin', () => {
       const page = readFile('app/comissoes/page.tsx');
-      expect(page).toMatch(/role.*admin|admin.*role/);
+      expect(page).toMatch(/role.*admin|admin.*role|isAdmin/);
     });
 
     test('página deve ter modo resumo e detalhes', () => {
@@ -207,16 +207,17 @@ describe('Sprint 9 - Finalização e Comissões', () => {
 
   describe('Menu Sidebar', () => {
     test('Sidebar deve ter item Comissões para admin', () => {
-      const sidebar = readFile('components/layout/Sidebar.tsx');
-      expect(sidebar).toContain('/comissoes');
-      expect(sidebar).toMatch(/comissoes.*admin|admin.*comissoes/i);
+      // Após Sprint 3, MENU_ITEMS vivem em lib/constants/navigation.ts
+      const nav = readFile('lib/constants/navigation.ts');
+      expect(nav).toContain('/comissoes');
+      expect(nav).toMatch(/comissoes.*admin|admin.*comissoes/i);
     });
 
     test('Sidebar deve ter item Meus Procedimentos para avaliador e executor', () => {
-      const sidebar = readFile('components/layout/Sidebar.tsx');
-      expect(sidebar).toContain('/meus-procedimentos');
-      expect(sidebar).toContain('avaliador');
-      expect(sidebar).toContain('executor');
+      const nav = readFile('lib/constants/navigation.ts');
+      expect(nav).toContain('/meus-procedimentos');
+      expect(nav).toContain('avaliador');
+      expect(nav).toContain('executor');
     });
   });
 

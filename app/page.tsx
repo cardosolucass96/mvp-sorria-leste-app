@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatarMoeda } from '@/lib/utils/formatters';
+import LoadingState from '@/components/ui/LoadingState';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface DashboardStats {
   totalClientes: number;
@@ -20,7 +23,8 @@ interface DashboardStats {
 }
 
 export default function Home() {
-  const { user, hasRole } = useAuth();
+  usePageTitle('Início');
+  const { user, hasRole, effectiveRole, viewMode } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -28,11 +32,12 @@ export default function Home() {
     if (user?.id) {
       carregarDados();
     }
-  }, [user?.id]);
+  }, [user?.id, viewMode]);
 
   async function carregarDados() {
     try {
-      const response = await fetch(`/api/dashboard?usuario_id=${user?.id}&role=${user?.role}`);
+      const roleParaAPI = effectiveRole || user?.role;
+      const response = await fetch(`/api/dashboard?usuario_id=${user?.id}&role=${roleParaAPI}`);
       const data = await response.json();
       setStats(data);
     } catch (error) {
@@ -42,29 +47,14 @@ export default function Home() {
     }
   }
 
-  function formatarMoeda(valor: number): string {
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
-
   if (loading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-10 bg-gray-200 rounded w-1/3 mb-6"></div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-24 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Carregando painel..." />;
   }
 
   // ===========================
   // TELA DO ADMIN
   // ===========================
-  if (user?.role === 'admin') {
+  if (effectiveRole === 'admin') {
     return (
       <div className="space-y-6">
         <div>
@@ -193,7 +183,7 @@ export default function Home() {
   // ===========================
   // TELA DO ATENDENTE
   // ===========================
-  if (user?.role === 'atendente') {
+  if (effectiveRole === 'atendente') {
     return (
       <div className="space-y-6">
         <div>
@@ -312,7 +302,7 @@ export default function Home() {
   // ===========================
   // TELA DO AVALIADOR
   // ===========================
-  if (user?.role === 'avaliador') {
+  if (effectiveRole === 'avaliador') {
     return (
       <div className="space-y-6">
         <div>
@@ -400,22 +390,37 @@ export default function Home() {
   }
 
   // ===========================
-  // TELA DO EXECUTOR
+  // TELA DO EXECUTOR (ou Admin em modo dentista)
   // ===========================
-  if (user?.role === 'executor') {
+  if (effectiveRole === 'executor') {
+    const isDentista = user?.role === 'admin';
     return (
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            🦷 Área do Executor
+            🦷 {isDentista ? 'Área do Dentista' : 'Área do Executor'}
           </h1>
           <p className="mt-2 text-gray-600">
-            Olá, Dr(a). {user?.nome?.split(' ')[0]}! Sua fila de procedimentos.
+            Olá, Dr(a). {user?.nome?.split(' ')[0]}! {isDentista ? 'Suas filas de avaliação e execução.' : 'Sua fila de procedimentos.'}
           </p>
         </div>
 
-        {/* Cards principais para executor */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Cards principais */}
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${isDentista ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
+          {isDentista && (
+            <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-purple-500">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-purple-100 rounded-full">
+                  <span className="text-2xl">🔍</span>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Fila Avaliação</p>
+                  <p className="text-2xl font-bold text-purple-600">{(stats?.meusAtendimentosAvaliacao || 0) + (stats?.atendimentosDisponiveisAvaliacao || 0)}</p>
+                </div>
+              </div>
+            </Link>
+          )}
+
           <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-orange-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-orange-100 rounded-full">
@@ -440,7 +445,7 @@ export default function Home() {
             </div>
           </Link>
 
-          <Link href="/minhas-comissoes" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-green-500">
+          <Link href="/meus-procedimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-green-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-green-100 rounded-full">
                 <span className="text-2xl">💰</span>
@@ -453,38 +458,63 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Ação Principal */}
-        <Link href="/execucao" className="block">
-          <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-4 bg-orange-500 rounded-full">
-                  <span className="text-4xl">🦷</span>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-orange-900">Acessar Fila de Execução</h3>
-                  <p className="text-orange-700">
-                    {(stats?.meusProcedimentos || 0) + (stats?.procedimentosDisponiveis || 0)} procedimentos na fila
-                  </p>
+        {/* Ações Rápidas */}
+        <div className={`grid grid-cols-1 ${isDentista ? 'md:grid-cols-2' : ''} gap-4`}>
+          {isDentista && (
+            <Link href="/avaliacao" className="block">
+              <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-300">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-4 bg-purple-500 rounded-full">
+                      <span className="text-3xl">🔍</span>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-purple-900">Fila de Avaliação</h3>
+                      <p className="text-purple-700">
+                        {(stats?.meusAtendimentosAvaliacao || 0) + (stats?.atendimentosDisponiveisAvaliacao || 0)} atendimentos aguardando
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-3xl text-purple-500">→</span>
                 </div>
               </div>
-              <span className="text-4xl text-orange-500">→</span>
+            </Link>
+          )}
+
+          <Link href="/execucao" className="block">
+            <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-4 bg-orange-500 rounded-full">
+                    <span className="text-3xl">🦷</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-orange-900">Fila de Execução</h3>
+                    <p className="text-orange-700">
+                      {(stats?.meusProcedimentos || 0) + (stats?.procedimentosDisponiveis || 0)} procedimentos na fila
+                    </p>
+                  </div>
+                </div>
+                <span className="text-3xl text-orange-500">→</span>
+              </div>
+            </div>
+          </Link>
+        </div>
+
+        {/* Meus Procedimentos */}
+        <Link href="/meus-procedimentos" className="block">
+          <div className="card bg-green-50 border border-green-200 hover:shadow-lg transition-all">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-green-900">📋 Meus Procedimentos</h3>
+                <p className="text-sm text-green-700">Histórico completo de avaliações e execuções</p>
+              </div>
+              <span className="btn bg-green-600 text-white hover:bg-green-700">
+                Ver Detalhes
+              </span>
             </div>
           </div>
         </Link>
-
-        {/* Info de Comissões */}
-        <div className="card bg-green-50 border border-green-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-green-900">💵 Suas Comissões de Execução</h3>
-              <p className="text-sm text-green-700">Comissão sobre procedimentos que você executou</p>
-            </div>
-            <Link href="/minhas-comissoes" className="btn bg-green-600 text-white hover:bg-green-700">
-              Ver Detalhes
-            </Link>
-          </div>
-        </div>
       </div>
     );
   }

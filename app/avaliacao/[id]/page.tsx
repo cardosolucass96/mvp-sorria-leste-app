@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes from '@/components/SeletorDentes';
+import { formatarMoeda } from '@/lib/utils/formatters';
+import Alert from '@/components/ui/Alert';
+import LoadingState from '@/components/ui/LoadingState';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface Procedimento {
   id: number;
@@ -45,6 +49,7 @@ export default function AvaliacaoDetalhePage({
 }: { 
   params: Promise<{ id: string }> 
 }) {
+  usePageTitle('Detalhes da Avaliação');
   const { id } = use(params);
   const router = useRouter();
   const { user } = useAuth();
@@ -211,13 +216,6 @@ export default function AvaliacaoDetalhePage({
     }
   };
 
-  const formatarMoeda = (valor: number) => {
-    return valor.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    });
-  };
-
   const procedimentoSelecionado = procedimentos.find(
     p => p.id === parseInt(procedimentoId)
   );
@@ -231,11 +229,7 @@ export default function AvaliacaoDetalhePage({
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Carregando...</div>
-      </div>
-    );
+    return <LoadingState message="Carregando avaliação..." />;
   }
 
   if (!atendimento) {
@@ -279,11 +273,7 @@ export default function AvaliacaoDetalhePage({
         </button>
       </div>
 
-      {error && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <Alert type="error" message={error} />}
 
       {/* Aviso de privacidade */}
       <div className="card bg-yellow-50 border border-yellow-200">

@@ -5,38 +5,11 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserRole } from '@/lib/types';
-
-const roleLabels: Record<string, string> = {
-  admin: 'Administrador',
-  atendente: 'Atendente',
-  avaliador: 'Avaliador',
-  executor: 'Executor',
-};
-
-interface MenuItem {
-  href: string;
-  label: string;
-  icon: string;
-  roles?: UserRole[];
-}
-
-const menuItems: MenuItem[] = [
-  { href: '/', label: 'Início', icon: '🏠' },
-  { href: '/dashboard', label: 'Dashboard', icon: '📊', roles: ['admin'] },
-  { href: '/clientes', label: 'Clientes', icon: '👥', roles: ['admin', 'atendente'] },
-  { href: '/atendimentos', label: 'Atendimentos', icon: '📋', roles: ['admin', 'atendente'] },
-  { href: '/avaliacao', label: 'Fila Avaliação', icon: '🔍', roles: ['admin', 'avaliador'] },
-  { href: '/execucao', label: 'Fila Execução', icon: '🦷', roles: ['admin', 'executor'] },
-  { href: '/pagamentos', label: 'Pagamentos', icon: '💰', roles: ['admin', 'atendente'] },
-  { href: '/procedimentos', label: 'Procedimentos', icon: '📑', roles: ['admin'] },
-  { href: '/usuarios', label: 'Usuários', icon: '👤', roles: ['admin'] },
-  { href: '/comissoes', label: 'Comissões', icon: '💵', roles: ['admin'] },
-  { href: '/minhas-comissoes', label: 'Minhas Comissões', icon: '💰', roles: ['avaliador', 'executor'] },
-];
+import { MENU_ITEMS, VIEW_MODE_LABELS } from '@/lib/constants/navigation';
+import { ROLE_LABELS } from '@/lib/constants/roles';
 
 export default function Header() {
-  const { user, logout, hasRole } = useAuth();
+  const { user, logout, hasRole, viewMode, toggleViewMode, isAdmin } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -118,6 +91,8 @@ export default function Header() {
         <button
           onClick={() => setShowMobileMenu(!showMobileMenu)}
           className="md:hidden p-2 hover:bg-orange-600 rounded-lg transition-colors"
+          aria-label={showMobileMenu ? 'Fechar menu de navegação' : 'Abrir menu de navegação'}
+          aria-expanded={showMobileMenu}
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             {showMobileMenu ? (
@@ -149,20 +124,44 @@ export default function Header() {
         <div className="flex items-center gap-2 md:gap-4">
           {user ? (
             <>
+              {/* Toggle Admin/Dentista - Só para admins */}
+              {isAdmin && (
+                <button
+                  onClick={toggleViewMode}
+                  className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border-2 ${
+                    viewMode === 'admin'
+                      ? 'bg-white/20 border-white/40 text-white hover:bg-white/30'
+                      : 'bg-emerald-400/20 border-emerald-300/50 text-emerald-100 hover:bg-emerald-400/30'
+                  }`}
+                  title={viewMode === 'admin' ? 'Trocar para visão Dentista' : 'Trocar para visão Admin'}
+                  aria-label={viewMode === 'admin' ? 'Trocar para visão Dentista' : 'Trocar para visão Admin'}
+                >
+                  <span className="text-sm">{viewMode === 'admin' ? '🛡️' : '🦷'}</span>
+                  <span>{VIEW_MODE_LABELS[viewMode]}</span>
+                  <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                </button>
+              )}
+
               <div className="hidden sm:block text-right">
                 <p className="text-sm font-semibold">{user.nome}</p>
-                <p className="text-xs text-orange-100">{roleLabels[user.role]}</p>
+                <p className="text-xs text-orange-100">
+                  {isAdmin && viewMode === 'dentista' ? '🦷 Dentista' : ROLE_LABELS[user.role]}
+                </p>
               </div>
               <button
                 onClick={() => setShowSenhaModal(true)}
                 className="bg-orange-600 hover:bg-orange-700 px-2 md:px-3 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
                 title="Alterar senha"
+                aria-label="Alterar senha"
               >
                 🔑
               </button>
               <button
                 onClick={handleLogout}
                 className="bg-orange-700 hover:bg-orange-800 px-3 md:px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
+                aria-label="Sair do sistema"
               >
                 Sair
               </button>
@@ -180,9 +179,25 @@ export default function Header() {
 
       {/* Menu Mobile Dropdown */}
       {showMobileMenu && (
-        <nav className="md:hidden bg-stone-800 border-t border-stone-700">
+        <nav className="md:hidden bg-stone-800 border-t border-stone-700" aria-label="Menu mobile">
+          {/* Toggle Admin/Dentista - Mobile */}
+          {isAdmin && (
+            <div className="px-4 py-3 border-b border-stone-700">
+              <button
+                onClick={toggleViewMode}
+                className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  viewMode === 'admin'
+                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
+                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                }`}
+              >
+                <span>{viewMode === 'admin' ? '🛡️' : '🦷'}</span>
+                <span>{viewMode === 'admin' ? 'Trocar para Dentista' : 'Trocar para Admin'}</span>
+              </button>
+            </div>
+          )}
           <ul className="py-2">
-            {menuItems
+            {MENU_ITEMS
               .filter((item) => !item.roles || (user && hasRole(item.roles)))
               .map((item) => {
                 const isActive = pathname === item.href || 

@@ -263,8 +263,9 @@ describe('Sprint 3 - Cadastro de Clientes', () => {
         path.join(process.cwd(), 'app', 'clientes', 'page.tsx'),
         'utf-8'
       );
-      expect(content).toContain('<table');
-      expect(content).toContain('clientes.map');
+      // Após Sprint 3, usa componente Table ao invés de <table inline
+      expect(content).toMatch(/<Table|<table/);
+      expect(content).toContain('clientes');
     });
 
     test('deve ter função de excluir', () => {
@@ -284,51 +285,59 @@ describe('Sprint 3 - Cadastro de Clientes', () => {
   describe('Página de Cadastro de Cliente', () => {
 
     test('deve ter formulário', () => {
-      const content = fs.readFileSync(
+      // Após Sprint 3, formulário vive no componente ClienteForm
+      const page = fs.readFileSync(
         path.join(process.cwd(), 'app', 'clientes', 'novo', 'page.tsx'),
         'utf-8'
       );
-      expect(content).toContain('<form');
-      expect(content).toContain('handleSubmit');
+      const form = fs.readFileSync(
+        path.join(process.cwd(), 'components', 'domain', 'ClienteForm.tsx'),
+        'utf-8'
+      );
+      expect(page).toContain('ClienteForm');
+      expect(form).toContain('<form');
+      expect(form).toContain('handleSubmit');
     });
 
     test('deve ter campos obrigatórios', () => {
-      const content = fs.readFileSync(
-        path.join(process.cwd(), 'app', 'clientes', 'novo', 'page.tsx'),
+      const form = fs.readFileSync(
+        path.join(process.cwd(), 'components', 'domain', 'ClienteForm.tsx'),
         'utf-8'
       );
-      expect(content).toContain('nome');
-      expect(content).toContain('required');
+      expect(form).toContain('nome');
+      expect(form).toContain('required');
     });
 
     test('deve ter formatação de CPF', () => {
-      const content = fs.readFileSync(
-        path.join(process.cwd(), 'app', 'clientes', 'novo', 'page.tsx'),
+      const form = fs.readFileSync(
+        path.join(process.cwd(), 'components', 'domain', 'ClienteForm.tsx'),
         'utf-8'
       );
-      expect(content).toContain('handleCpfChange');
+      // Usa mask='cpf' do Input ou maskCPF
+      expect(form).toMatch(/mask.*cpf|maskCPF|handleCpfChange/i);
     });
 
     test('deve ter formatação de telefone', () => {
-      const content = fs.readFileSync(
-        path.join(process.cwd(), 'app', 'clientes', 'novo', 'page.tsx'),
+      const form = fs.readFileSync(
+        path.join(process.cwd(), 'components', 'domain', 'ClienteForm.tsx'),
         'utf-8'
       );
-      expect(content).toContain('handleTelefoneChange');
+      // Usa mask='telefone' do Input ou maskTelefone
+      expect(form).toMatch(/mask.*telefone|maskTelefone|handleTelefoneChange/i);
     });
 
     test('deve ter todos os campos do cliente', () => {
-      const content = fs.readFileSync(
-        path.join(process.cwd(), 'app', 'clientes', 'novo', 'page.tsx'),
+      const form = fs.readFileSync(
+        path.join(process.cwd(), 'components', 'domain', 'ClienteForm.tsx'),
         'utf-8'
       );
-      expect(content).toContain('nome');
-      expect(content).toContain('cpf');
-      expect(content).toContain('telefone');
-      expect(content).toContain('email');
-      expect(content).toContain('data_nascimento');
-      expect(content).toContain('endereco');
-      expect(content).toContain('observacoes');
+      expect(form).toContain('nome');
+      expect(form).toContain('cpf');
+      expect(form).toContain('telefone');
+      expect(form).toContain('email');
+      expect(form).toContain('data_nascimento');
+      expect(form).toContain('endereco');
+      expect(form).toContain('observacoes');
     });
 
   });

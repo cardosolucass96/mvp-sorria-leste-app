@@ -3,6 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import PageHeader from '@/components/ui/PageHeader';
+import StatCard from '@/components/ui/StatCard';
+import Badge from '@/components/ui/Badge';
+import Tabs from '@/components/ui/Tabs';
+import Table, { TableColumn } from '@/components/ui/Table';
+import LoadingState from '@/components/ui/LoadingState';
+import Button from '@/components/ui/Button';
+import { formatarMoeda, formatarData } from '@/lib/utils/formatters';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface ResumoComissao {
   usuario_id: number;
@@ -37,7 +46,8 @@ interface ComissoesData {
 }
 
 export default function ComissoesPage() {
-  const { user } = useAuth();
+  usePageTitle('Comissões');
+  const { user, isAdmin } = useAuth();
   const router = useRouter();
   const [resumo, setResumo] = useState<ResumoComissao[]>([]);
   const [detalhes, setDetalhes] = useState<ComissoesData | null>(null);
@@ -48,9 +58,9 @@ export default function ComissoesPage() {
   const [filtroDataFim, setFiltroDataFim] = useState<string>('');
 
   useEffect(() => {
-    // Verificar permissão
-    if (user && user.role !== 'admin') {
-      router.push('/minhas-comissoes');
+    // Verificar permissão - admin real pode ver (mesmo em modo dentista)
+    if (user && !isAdmin) {
+      router.push('/meus-procedimentos');
       return;
     }
     carregarDados();
@@ -82,249 +92,94 @@ export default function ComissoesPage() {
     }
   }
 
-  function formatarMoeda(valor: number): string {
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
-
-  function formatarData(dataStr: string): string {
-    const data = new Date(dataStr);
-    return data.toLocaleDateString('pt-BR');
-  }
-
   function limparFiltros() {
     setFiltroUsuario('');
     setFiltroDataInicio('');
     setFiltroDataFim('');
   }
 
-  if (loading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const resumoColumns: TableColumn<ResumoComissao>[] = [
+    { key: 'usuario_nome', header: 'Usuário' },
+    { key: 'total_venda', header: 'Comissão Venda', align: 'right', render: (r) => <span className="text-green-600">{formatarMoeda(r.total_venda)}</span> },
+    { key: 'total_execucao', header: 'Comissão Execução', align: 'right', render: (r) => <span className="text-blue-600">{formatarMoeda(r.total_execucao)}</span> },
+    { key: 'total_geral', header: 'Total', align: 'right', render: (r) => <span className="font-bold">{formatarMoeda(r.total_geral)}</span> },
+    { key: 'quantidade', header: 'Qtd. Procedimentos', align: 'center' },
+    {
+      key: 'acoes', header: 'Ações', align: 'center',
+      render: (r) => (
+        <Button variant="ghost" size="sm" onClick={() => { setFiltroUsuario(r.usuario_id.toString()); setViewMode('detalhes'); }}>
+          Ver Detalhes
+        </Button>
+      ),
+    },
+  ];
+
+  const detalheColumns: TableColumn<Comissao>[] = [
+    { key: 'created_at', header: 'Data', render: (c) => formatarData(c.created_at) },
+    { key: 'usuario_nome', header: 'Usuário' },
+    { key: 'cliente_nome', header: 'Cliente' },
+    { key: 'procedimento_nome', header: 'Procedimento' },
+    {
+      key: 'tipo', header: 'Tipo', align: 'center',
+      render: (c) => (
+        <Badge color={c.tipo === 'venda' ? 'green' : 'blue'} size="sm">
+          {c.tipo === 'venda' ? 'Venda' : 'Execução'}
+        </Badge>
+      ),
+    },
+    { key: 'valor_base', header: 'Valor Base', align: 'right', render: (c) => formatarMoeda(c.valor_base) },
+    { key: 'percentual', header: '%', align: 'right', render: (c) => `${c.percentual}%` },
+    { key: 'valor_comissao', header: 'Comissão', align: 'right', render: (c) => <span className="font-semibold">{formatarMoeda(c.valor_comissao)}</span> },
+  ];
+
+  if (loading) return <LoadingState />;
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">💰 Comissões</h1>
-        
-        {/* Toggle Resumo/Detalhes */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setViewMode('resumo')}
-            className={`px-4 py-2 rounded ${
-              viewMode === 'resumo'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            Resumo
-          </button>
-          <button
-            onClick={() => setViewMode('detalhes')}
-            className={`px-4 py-2 rounded ${
-              viewMode === 'detalhes'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            Detalhes
-          </button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title="Comissões" icon="💰" />
+
+      {/* Tabs Resumo/Detalhes */}
+      <Tabs
+        tabs={[
+          { key: 'resumo', label: 'Resumo' },
+          { key: 'detalhes', label: 'Detalhes' },
+        ]}
+        activeTab={viewMode}
+        onChange={(key) => setViewMode(key as 'resumo' | 'detalhes')}
+      />
 
       {/* Filtros */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
+      <div className="bg-white p-4 rounded-lg shadow">
         <h3 className="font-semibold mb-3">Filtros</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">Data Início</label>
-            <input
-              type="date"
-              value={filtroDataInicio}
-              onChange={(e) => setFiltroDataInicio(e.target.value)}
-              className="w-full border border-gray-300 rounded px-3 py-2"
-            />
+            <input type="date" value={filtroDataInicio} onChange={(e) => setFiltroDataInicio(e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2" />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Data Fim</label>
-            <input
-              type="date"
-              value={filtroDataFim}
-              onChange={(e) => setFiltroDataFim(e.target.value)}
-              className="w-full border border-gray-300 rounded px-3 py-2"
-            />
+            <input type="date" value={filtroDataFim} onChange={(e) => setFiltroDataFim(e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2" />
           </div>
           <div className="flex items-end">
-            <button
-              onClick={limparFiltros}
-              className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-            >
-              Limpar Filtros
-            </button>
+            <Button variant="secondary" onClick={limparFiltros}>Limpar Filtros</Button>
           </div>
         </div>
       </div>
 
       {/* View Resumo */}
       {viewMode === 'resumo' && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left p-4">Usuário</th>
-                <th className="text-right p-4">Comissão Venda</th>
-                <th className="text-right p-4">Comissão Execução</th>
-                <th className="text-right p-4">Total</th>
-                <th className="text-center p-4">Qtd. Procedimentos</th>
-                <th className="text-center p-4">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resumo.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center p-8 text-gray-500">
-                    Nenhuma comissão encontrada
-                  </td>
-                </tr>
-              ) : (
-                resumo.map((r) => (
-                  <tr key={r.usuario_id} className="border-t hover:bg-gray-50">
-                    <td className="p-4 font-medium">{r.usuario_nome}</td>
-                    <td className="p-4 text-right text-green-600">
-                      {formatarMoeda(r.total_venda)}
-                    </td>
-                    <td className="p-4 text-right text-blue-600">
-                      {formatarMoeda(r.total_execucao)}
-                    </td>
-                    <td className="p-4 text-right font-bold">
-                      {formatarMoeda(r.total_geral)}
-                    </td>
-                    <td className="p-4 text-center">{r.quantidade}</td>
-                    <td className="p-4 text-center">
-                      <button
-                        onClick={() => {
-                          setFiltroUsuario(r.usuario_id.toString());
-                          setViewMode('detalhes');
-                        }}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        Ver Detalhes
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-            {resumo.length > 0 && (
-              <tfoot className="bg-gray-100">
-                <tr className="font-bold">
-                  <td className="p-4">TOTAL GERAL</td>
-                  <td className="p-4 text-right text-green-600">
-                    {formatarMoeda(resumo.reduce((sum, r) => sum + r.total_venda, 0))}
-                  </td>
-                  <td className="p-4 text-right text-blue-600">
-                    {formatarMoeda(resumo.reduce((sum, r) => sum + r.total_execucao, 0))}
-                  </td>
-                  <td className="p-4 text-right">
-                    {formatarMoeda(resumo.reduce((sum, r) => sum + r.total_geral, 0))}
-                  </td>
-                  <td className="p-4 text-center">
-                    {resumo.reduce((sum, r) => sum + r.quantidade, 0)}
-                  </td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+        <Table columns={resumoColumns} data={resumo} keyExtractor={(r) => r.usuario_id} emptyMessage="Nenhuma comissão encontrada" caption="Resumo de comissões" />
       )}
 
       {/* View Detalhes */}
       {viewMode === 'detalhes' && detalhes && (
         <>
-          {/* Cards de Totais */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
-              <p className="text-sm text-green-600">Comissão de Venda</p>
-              <p className="text-2xl font-bold text-green-800">
-                {formatarMoeda(detalhes.totais.venda)}
-              </p>
-            </div>
-            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-              <p className="text-sm text-blue-600">Comissão de Execução</p>
-              <p className="text-2xl font-bold text-blue-800">
-                {formatarMoeda(detalhes.totais.execucao)}
-              </p>
-            </div>
-            <div className="bg-purple-50 border border-purple-200 p-4 rounded-lg">
-              <p className="text-sm text-purple-600">Total Geral</p>
-              <p className="text-2xl font-bold text-purple-800">
-                {formatarMoeda(detalhes.totais.geral)}
-              </p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <StatCard icon="💵" label="Comissão de Venda" value={formatarMoeda(detalhes.totais.venda)} color="border-green-500" />
+            <StatCard icon="🔧" label="Comissão de Execução" value={formatarMoeda(detalhes.totais.execucao)} color="border-blue-500" />
+            <StatCard icon="💰" label="Total Geral" value={formatarMoeda(detalhes.totais.geral)} color="border-purple-500" />
           </div>
-
-          {/* Tabela de Detalhes */}
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left p-4">Data</th>
-                  <th className="text-left p-4">Usuário</th>
-                  <th className="text-left p-4">Cliente</th>
-                  <th className="text-left p-4">Procedimento</th>
-                  <th className="text-center p-4">Tipo</th>
-                  <th className="text-right p-4">Valor Base</th>
-                  <th className="text-right p-4">%</th>
-                  <th className="text-right p-4">Comissão</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detalhes.comissoes.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center p-8 text-gray-500">
-                      Nenhuma comissão encontrada
-                    </td>
-                  </tr>
-                ) : (
-                  detalhes.comissoes.map((c) => (
-                    <tr key={c.id} className="border-t hover:bg-gray-50">
-                      <td className="p-4">{formatarData(c.created_at)}</td>
-                      <td className="p-4">{c.usuario_nome}</td>
-                      <td className="p-4">{c.cliente_nome}</td>
-                      <td className="p-4">{c.procedimento_nome}</td>
-                      <td className="p-4 text-center">
-                        <span
-                          className={`px-2 py-1 text-xs font-semibold rounded ${
-                            c.tipo === 'venda'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-blue-100 text-blue-800'
-                          }`}
-                        >
-                          {c.tipo === 'venda' ? 'Venda' : 'Execução'}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">{formatarMoeda(c.valor_base)}</td>
-                      <td className="p-4 text-right">{c.percentual}%</td>
-                      <td className="p-4 text-right font-semibold">
-                        {formatarMoeda(c.valor_comissao)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <Table columns={detalheColumns} data={detalhes.comissoes} keyExtractor={(c) => c.id} emptyMessage="Nenhuma comissão encontrada" caption="Detalhes de comissões" />
         </>
       )}
     </div>

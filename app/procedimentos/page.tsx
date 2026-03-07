@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { PageHeader, Button, Input, Checkbox, Badge, Alert, Modal, LoadingState } from '@/components/ui';
+import { formatarMoeda } from '@/lib/utils/formatters';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface Procedimento {
   id: number;
@@ -32,6 +34,7 @@ const initialFormData: FormData = {
 };
 
 export default function ProcedimentosPage() {
+  usePageTitle('Procedimentos');
   const { user } = useAuth();
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,69 +169,38 @@ export default function ProcedimentosPage() {
     }
   };
 
-  const formatarMoeda = (valor: number) => {
-    return valor.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    });
-  };
-
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Carregando...</div>
-      </div>
-    );
+    return <LoadingState mode="spinner" text="Carregando..." />;
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">📑 Procedimentos</h1>
-          <p className="text-gray-600">Catálogo de procedimentos odontológicos</p>
-        </div>
-        <button 
-          onClick={abrirModalNovo}
-          className="btn btn-primary"
-        >
-          + Novo Procedimento
-        </button>
-      </div>
+      <PageHeader
+        title="📑 Procedimentos"
+        description="Catálogo de procedimentos odontológicos"
+        actions={<Button onClick={abrirModalNovo}>+ Novo Procedimento</Button>}
+      />
 
       {/* Busca e Filtros */}
       <div className="card">
         <form onSubmit={handleBuscar} className="flex gap-4 items-end flex-wrap">
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Buscar
-            </label>
-            <input
-              type="text"
+            <Input
+              label="Buscar"
+              name="busca"
               value={busca}
-              onChange={(e) => setBusca(e.target.value)}
+              onChange={setBusca}
               placeholder="Nome do procedimento..."
-              className="input"
             />
           </div>
           
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="mostrarInativos"
-              checked={mostrarInativos}
-              onChange={(e) => setMostrarInativos(e.target.checked)}
-              className="rounded"
-            />
-            <label htmlFor="mostrarInativos" className="text-sm text-gray-700">
-              Mostrar inativos
-            </label>
-          </div>
+          <Checkbox
+            label="Mostrar inativos"
+            checked={mostrarInativos}
+            onChange={setMostrarInativos}
+          />
           
-          <button type="submit" className="btn btn-secondary">
-            Buscar
-          </button>
+          <Button type="submit" variant="secondary">Buscar</Button>
         </form>
       </div>
 
@@ -286,7 +258,7 @@ export default function ProcedimentosPage() {
                   </td>
                   <td className="px-6 py-4 text-center">
                     {proc.por_dente ? (
-                      <span className="badge badge-warning">🦷 Sim</span>
+                      <Badge color="amber">🦷 Sim</Badge>
                     ) : (
                       <span className="text-gray-400">-</span>
                     )}
@@ -303,9 +275,9 @@ export default function ProcedimentosPage() {
                   )}
                   <td className="px-6 py-4 text-center">
                     {proc.ativo ? (
-                      <span className="badge badge-success">Ativo</span>
+                      <Badge color="green">Ativo</Badge>
                     ) : (
-                      <span className="badge badge-secondary">Inativo</span>
+                      <Badge color="gray">Inativo</Badge>
                     )}
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
@@ -345,125 +317,76 @@ export default function ProcedimentosPage() {
       </div>
 
       {/* Modal de Criar/Editar */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
-                {editingId ? 'Editar Procedimento' : 'Novo Procedimento'}
-              </h2>
+      <Modal
+        isOpen={isModalOpen}
+        onClose={fecharModal}
+        title={editingId ? 'Editar Procedimento' : 'Novo Procedimento'}
+        size="md"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && <Alert type="error">{error}</Alert>}
+          
+          <Input
+            label="Nome"
+            name="nome"
+            value={formData.nome}
+            onChange={(v) => setFormData({...formData, nome: v})}
+            required
+            placeholder="Ex: Limpeza dental"
+            disabled={saving}
+          />
+          
+          <Input
+            label="Valor (R$)"
+            name="valor"
+            type="number"
+            value={formData.valor}
+            onChange={(v) => setFormData({...formData, valor: v})}
+            required
+            placeholder="0,00"
+            disabled={saving}
+          />
+          
+          {podeVerComissoes && (
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Comissão Venda (%)"
+                name="comissao_venda"
+                type="number"
+                value={formData.comissao_venda}
+                onChange={(v) => setFormData({...formData, comissao_venda: v})}
+                placeholder="0"
+                disabled={saving}
+              />
+              <Input
+                label="Comissão Execução (%)"
+                name="comissao_execucao"
+                type="number"
+                value={formData.comissao_execucao}
+                onChange={(v) => setFormData({...formData, comissao_execucao: v})}
+                placeholder="0"
+                disabled={saving}
+              />
             </div>
-            
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {error && (
-                <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome *
-                </label>
-                <input
-                  type="text"
-                  value={formData.nome}
-                  onChange={(e) => setFormData({...formData, nome: e.target.value})}
-                  className="input"
-                  required
-                  placeholder="Ex: Limpeza dental"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valor (R$) *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.valor}
-                  onChange={(e) => setFormData({...formData, valor: e.target.value})}
-                  className="input"
-                  required
-                  placeholder="0,00"
-                />
-              </div>
-              
-              {podeVerComissoes && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Comissão Venda (%)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="100"
-                      value={formData.comissao_venda}
-                      onChange={(e) => setFormData({...formData, comissao_venda: e.target.value})}
-                      className="input"
-                      placeholder="0"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Comissão Execução (%)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="100"
-                      value={formData.comissao_execucao}
-                      onChange={(e) => setFormData({...formData, comissao_execucao: e.target.value})}
-                      className="input"
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex items-center gap-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                <input
-                  type="checkbox"
-                  id="por_dente"
-                  checked={formData.por_dente}
-                  onChange={(e) => setFormData({...formData, por_dente: e.target.checked})}
-                  className="w-5 h-5 rounded text-orange-600 focus:ring-orange-500"
-                />
-                <label htmlFor="por_dente" className="text-sm text-gray-700 cursor-pointer">
-                  <span className="font-medium">🦷 Cobrar por dente</span>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Se marcado, o avaliador poderá selecionar múltiplos dentes e o valor será multiplicado pela quantidade
-                  </p>
-                </label>
-              </div>
-              
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={fecharModal}
-                  className="btn btn-secondary"
-                  disabled={saving}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={saving}
-                >
-                  {saving ? 'Salvando...' : 'Salvar'}
-                </button>
-              </div>
-            </form>
+          )}
+          
+          <Checkbox
+            label="🦷 Cobrar por dente"
+            checked={formData.por_dente}
+            onChange={(v) => setFormData({...formData, por_dente: v})}
+            hint="Se marcado, o avaliador poderá selecionar múltiplos dentes e o valor será multiplicado pela quantidade"
+          />
+          
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="secondary" onClick={fecharModal} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" loading={saving}>
+              Salvar
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }

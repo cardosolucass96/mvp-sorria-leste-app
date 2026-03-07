@@ -2,6 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { Usuario, UserRole } from '@/lib/types';
+import { PageHeader, Card, Button, Input, Select, Badge, Alert, LoadingState } from '@/components/ui';
+import { ROLE_LABELS_DESCRITIVOS, ROLE_COLORS } from '@/lib/constants/roles';
+import usePageTitle from '@/lib/utils/usePageTitle';
+
+const roleOptions = Object.entries(ROLE_LABELS_DESCRITIVOS).map(([value, label]) => ({
+  value,
+  label,
+}));
 
 interface UsuarioFormData {
   nome: string;
@@ -15,14 +23,8 @@ const initialFormData: UsuarioFormData = {
   role: 'atendente',
 };
 
-const roleLabels: Record<UserRole, string> = {
-  admin: 'Administrador',
-  atendente: 'Atendente',
-  avaliador: 'Avaliador (Dentista)',
-  executor: 'Executor (Dentista)',
-};
-
 export default function UsuariosPage() {
+  usePageTitle('Usuários');
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -161,98 +163,77 @@ export default function UsuariosPage() {
     }
   };
 
+  const getRoleBadgeColor = (role: UserRole): 'purple' | 'blue' | 'amber' | 'green' => {
+    const map: Record<UserRole, 'purple' | 'blue' | 'amber' | 'green'> = {
+      admin: 'purple',
+      atendente: 'blue',
+      avaliador: 'amber',
+      executor: 'green',
+    };
+    return map[role];
+  };
+
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-500">Carregando...</p>
-      </div>
-    );
+    return <LoadingState mode="spinner" text="Carregando..." />;
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">👤 Usuários</h1>
-          <p className="text-gray-600">Gerenciar usuários do sistema</p>
-        </div>
-        <button onClick={handleNew} className="btn btn-primary">
-          + Novo Usuário
-        </button>
-      </div>
+      <PageHeader
+        title="👤 Usuários"
+        description="Gerenciar usuários do sistema"
+        actions={<Button onClick={handleNew}>+ Novo Usuário</Button>}
+      />
 
-      {/* Mensagens */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-          {error}
-        </div>
+        <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>
       )}
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
-          {success}
-        </div>
+        <Alert type="success" dismissible onDismiss={() => setSuccess('')}>{success}</Alert>
       )}
 
       {/* Formulário */}
       {showForm && (
-        <div className="card">
+        <Card>
           <h2 className="text-lg font-semibold mb-4">
             {editingId ? 'Editar Usuário' : 'Novo Usuário'}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="nome" className="label">Nome</label>
-                <input
-                  type="text"
-                  id="nome"
-                  value={formData.nome}
-                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                  className="input"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="email" className="label">Email</label>
-                <input
-                  type="email"
-                  id="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="input"
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="role" className="label">Perfil</label>
-              <select
-                id="role"
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-                className="input"
+              <Input
+                label="Nome"
+                name="nome"
+                value={formData.nome}
+                onChange={(v) => setFormData({ ...formData, nome: v })}
                 required
-              >
-                {Object.entries(roleLabels).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
+              />
+              <Input
+                label="Email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={(v) => setFormData({ ...formData, email: v })}
+                required
+              />
             </div>
+            <Select
+              label="Perfil"
+              name="role"
+              value={formData.role}
+              onChange={(v) => setFormData({ ...formData, role: v as UserRole })}
+              options={roleOptions}
+              required
+            />
             <div className="flex gap-2">
-              <button type="submit" className="btn btn-primary">
-                Salvar
-              </button>
-              <button type="button" onClick={handleCancel} className="btn btn-secondary">
-                Cancelar
-              </button>
+              <Button type="submit">Salvar</Button>
+              <Button type="button" variant="secondary" onClick={handleCancel}>Cancelar</Button>
             </div>
           </form>
-        </div>
+        </Card>
       )}
 
       {/* Tabela de Usuários */}
-      <div className="card overflow-hidden p-0">
+      <Card noPadding>
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
@@ -283,19 +264,14 @@ export default function UsuariosPage() {
                   {usuario.email}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`badge ${
-                    usuario.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                    usuario.role === 'atendente' ? 'bg-blue-100 text-blue-800' :
-                    usuario.role === 'avaliador' ? 'bg-green-100 text-green-800' :
-                    'bg-orange-100 text-orange-800'
-                  }`}>
-                    {roleLabels[usuario.role]}
-                  </span>
+                  <Badge color={getRoleBadgeColor(usuario.role)}>
+                    {ROLE_LABELS_DESCRITIVOS[usuario.role]}
+                  </Badge>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`badge ${usuario.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  <Badge color={usuario.ativo ? 'green' : 'red'}>
                     {usuario.ativo ? 'Ativo' : 'Inativo'}
-                  </span>
+                  </Badge>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right space-x-2">
                   <button
@@ -330,7 +306,7 @@ export default function UsuariosPage() {
             Nenhum usuário cadastrado
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

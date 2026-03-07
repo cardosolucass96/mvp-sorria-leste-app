@@ -4,8 +4,13 @@ import Image from 'next/image';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import Input from '@/components/ui/Input';
+import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 export default function LoginPage() {
+  usePageTitle('Login');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [error, setError] = useState('');
@@ -60,51 +65,40 @@ export default function LoginPage() {
           <h2 className="text-xl font-semibold mb-6 text-gray-800 text-center">Entrar no Sistema</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="label">
-                Email
-              </label>
-              <input
-                type="email"
-                id="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input"
-                placeholder="seu.email@sorrialeste.com"
-                required
-                disabled={isLoading}
-              />
-            </div>
+            <Input
+              label="Email"
+              name="email"
+              type="email"
+              value={email}
+              onChange={setEmail}
+              placeholder="seu.email@sorrialeste.com"
+              required
+              disabled={isLoading}
+            />
 
-            <div>
-              <label htmlFor="senha" className="label">
-                Senha
-              </label>
-              <input
-                type="password"
-                id="senha"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                className="input"
-                placeholder="••••••••"
-                required
-                disabled={isLoading}
-              />
-            </div>
+            <Input
+              label="Senha"
+              name="senha"
+              type="password"
+              value={senha}
+              onChange={setSenha}
+              placeholder="••••••••"
+              required
+              disabled={isLoading}
+            />
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
+              <Alert type="error">{error}</Alert>
             )}
 
-            <button
+            <Button
               type="submit"
-              className="btn btn-primary w-full py-3 text-lg"
-              disabled={isLoading}
+              fullWidth
+              size="lg"
+              loading={isLoading}
             >
-              {isLoading ? 'Entrando...' : 'Entrar'}
-            </button>
+              Entrar
+            </Button>
           </form>
 
           {/* Emails de teste */}
@@ -116,6 +110,7 @@ export default function LoginPage() {
               {testEmails.map((item) => (
                 <button
                   key={item.email}
+                  type="button"
                   onClick={() => {
                     setEmail(item.email);
                     setSenha('Sorria@123');

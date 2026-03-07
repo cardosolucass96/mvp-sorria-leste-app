@@ -2,6 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import PageHeader from '@/components/ui/PageHeader';
+import StatCard from '@/components/ui/StatCard';
+import Tabs from '@/components/ui/Tabs';
+import Table, { TableColumn } from '@/components/ui/Table';
+import LoadingState from '@/components/ui/LoadingState';
+import Button from '@/components/ui/Button';
+import { formatarMoeda, formatarData } from '@/lib/utils/formatters';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface Atendimento {
   id: number;
@@ -27,6 +35,7 @@ interface Parcela {
 }
 
 export default function PagamentosPage() {
+  usePageTitle('Pagamentos');
   const [atendimentos, setAtendimentos] = useState<AtendimentoComTotais[]>([]);
   const [parcelasVencidas, setParcelasVencidas] = useState<Parcela[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,232 +84,66 @@ export default function PagamentosPage() {
     }
   };
 
-  const formatarMoeda = (valor: number) => {
-    return valor.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    });
-  };
+  if (loading) return <LoadingState />;
 
-  const formatarData = (data: string) => {
-    return new Date(data).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  };
+  const atendColumns: TableColumn<AtendimentoComTotais>[] = [
+    { key: 'cliente_nome', header: 'Cliente' },
+    { key: 'id', header: 'Atendimento', render: (a) => `#${a.id} - ${formatarData(a.created_at)}` },
+    { key: 'total', header: 'Total', align: 'right', render: (a) => formatarMoeda(a.total) },
+    { key: 'total_pago', header: 'Pago', align: 'right', render: (a) => <span className="text-green-600">{formatarMoeda(a.total_pago)}</span> },
+    { key: 'pendente', header: 'Pendente', align: 'right', render: (a) => <span className="font-bold text-red-600">{formatarMoeda(a.total - a.total_pago)}</span> },
+    { key: 'acoes', header: 'Ações', align: 'right', render: (a) => <Link href={`/atendimentos/${a.id}/pagamento`} className="btn btn-primary btn-sm">💳 Receber</Link> },
+  ];
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Carregando...</div>
-      </div>
-    );
-  }
+  const parcelaColumns: TableColumn<Parcela>[] = [
+    { key: 'cliente_nome', header: 'Cliente' },
+    { key: 'atendimento_id', header: 'Atendimento', render: (p) => `#${p.atendimento_id}` },
+    { key: 'numero', header: 'Parcela', render: (p) => `${p.numero}ª Parcela` },
+    { key: 'data_vencimento', header: 'Vencimento', render: (p) => <span className="text-red-600 font-medium">{formatarData(p.data_vencimento)} ⚠️</span> },
+    { key: 'valor', header: 'Valor', align: 'right', render: (p) => <span className="font-bold text-red-600">{formatarMoeda(p.valor)}</span> },
+    { key: 'acoes', header: 'Ações', align: 'right', render: (p) => <Link href={`/atendimentos/${p.atendimento_id}/pagamento`} className="btn btn-primary btn-sm">💳 Receber</Link> },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">💰 Pagamentos</h1>
-        <p className="text-gray-600">
-          Gerencie pagamentos e parcelas pendentes
-        </p>
-      </div>
+      <PageHeader title="Pagamentos" icon="💰" description="Gerencie pagamentos e parcelas pendentes" />
 
       {/* Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card bg-yellow-50 border border-yellow-200">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">⏳</span>
-            <div>
-              <p className="text-sm text-yellow-700">Aguardando Pagamento</p>
-              <p className="text-2xl font-bold text-yellow-800">{atendimentos.length}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="card bg-red-50 border border-red-200">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">⚠️</span>
-            <div>
-              <p className="text-sm text-red-700">Parcelas Vencidas</p>
-              <p className="text-2xl font-bold text-red-800">{parcelasVencidas.length}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="card bg-green-50 border border-green-200">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">💵</span>
-            <div>
-              <p className="text-sm text-green-700">Total a Receber</p>
-              <p className="text-2xl font-bold text-green-800">
-                {formatarMoeda(
-                  atendimentos.reduce((acc, a) => acc + (a.total - a.total_pago), 0)
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
+        <StatCard icon="⏳" label="Aguardando Pagamento" value={String(atendimentos.length)} color="border-yellow-500" />
+        <StatCard icon="⚠️" label="Parcelas Vencidas" value={String(parcelasVencidas.length)} color="border-red-500" />
+        <StatCard icon="💵" label="Total a Receber" value={formatarMoeda(atendimentos.reduce((acc, a) => acc + (a.total - a.total_pago), 0))} color="border-green-500" />
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b">
-        <button
-          onClick={() => setFiltro('aguardando')}
-          className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-            filtro === 'aguardando'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Aguardando Pagamento ({atendimentos.length})
-        </button>
-        <button
-          onClick={() => setFiltro('parcelas')}
-          className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-            filtro === 'parcelas'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Parcelas Vencidas ({parcelasVencidas.length})
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          { key: 'aguardando', label: `Aguardando Pagamento (${atendimentos.length})` },
+          { key: 'parcelas', label: `Parcelas Vencidas (${parcelasVencidas.length})` },
+        ]}
+        activeTab={filtro}
+        onChange={(key) => setFiltro(key as 'aguardando' | 'parcelas')}
+      />
 
       {/* Conteúdo */}
       {filtro === 'aguardando' && (
-        <div className="card">
-          {atendimentos.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <p className="text-lg">🎉 Nenhum atendimento aguardando pagamento!</p>
-              <p className="text-sm mt-2">Todos os clientes estão em dia.</p>
-            </div>
-          ) : (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Cliente
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Atendimento
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Total
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Pago
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Pendente
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {atendimentos.map((atend) => {
-                  const pendente = atend.total - atend.total_pago;
-                  return (
-                    <tr key={atend.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">
-                        {atend.cliente_nome}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        #{atend.id} - {formatarData(atend.created_at)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        {formatarMoeda(atend.total)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-green-600">
-                        {formatarMoeda(atend.total_pago)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-red-600">
-                        {formatarMoeda(pendente)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Link
-                          href={`/atendimentos/${atend.id}/pagamento`}
-                          className="btn btn-primary btn-sm"
-                        >
-                          💳 Receber
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <Table
+          columns={atendColumns}
+          data={atendimentos}
+          keyExtractor={(a) => a.id}
+          emptyMessage="🎉 Nenhum atendimento aguardando pagamento!"
+          caption="Atendimentos aguardando pagamento"
+        />
       )}
 
       {filtro === 'parcelas' && (
-        <div className="card">
-          {parcelasVencidas.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <p className="text-lg">🎉 Nenhuma parcela vencida!</p>
-              <p className="text-sm mt-2">Todos os clientes estão em dia com as parcelas.</p>
-            </div>
-          ) : (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Cliente
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Atendimento
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Parcela
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Vencimento
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Valor
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {parcelasVencidas.map((parc) => (
-                  <tr key={parc.id} className="bg-red-50 hover:bg-red-100">
-                    <td className="px-4 py-3 font-medium text-gray-900">
-                      {parc.cliente_nome}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      #{parc.atendimento_id}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {parc.numero}ª Parcela
-                    </td>
-                    <td className="px-4 py-3 text-red-600 font-medium">
-                      {formatarData(parc.data_vencimento)} ⚠️
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold text-red-600">
-                      {formatarMoeda(parc.valor)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/atendimentos/${parc.atendimento_id}/pagamento`}
-                        className="btn btn-primary btn-sm"
-                      >
-                        💳 Receber
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <Table
+          columns={parcelaColumns}
+          data={parcelasVencidas}
+          keyExtractor={(p) => p.id}
+          emptyMessage="🎉 Nenhuma parcela vencida!"
+          caption="Parcelas vencidas"
+        />
       )}
     </div>
   );

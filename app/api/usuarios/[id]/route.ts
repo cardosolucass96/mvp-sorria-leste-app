@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const usuario = await queryOne<Usuario>(
-      'SELECT * FROM usuarios WHERE id = ?',
+      'SELECT id, nome, email, role, ativo, created_at FROM usuarios WHERE id = ?',
       [id]
     );
 
@@ -41,7 +41,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Verifica se usuário existe
     const existing = await queryOne<Usuario>(
-      'SELECT * FROM usuarios WHERE id = ?',
+      'SELECT id, nome, email, role, ativo, created_at FROM usuarios WHERE id = ?',
       [id]
     );
 
@@ -96,7 +96,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     );
 
     const updated = await queryOne<Usuario>(
-      'SELECT * FROM usuarios WHERE id = ?',
+      'SELECT id, nome, email, role, ativo, created_at FROM usuarios WHERE id = ?',
       [id]
     );
 
@@ -116,7 +116,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
     
     const existing = await queryOne<Usuario>(
-      'SELECT * FROM usuarios WHERE id = ?',
+      'SELECT id, nome, email, role, ativo FROM usuarios WHERE id = ?',
       [id]
     );
 

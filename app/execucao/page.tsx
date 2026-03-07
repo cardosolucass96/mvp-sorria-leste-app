@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { PageHeader, Card, LoadingState, EmptyState } from '@/components/ui';
+import { StatusBadge } from '@/components/domain';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface Procedimento {
   id: number;
@@ -21,6 +24,7 @@ interface FilaData {
 }
 
 export default function ExecucaoPage() {
+  usePageTitle('Fila de Execução');
   const { user } = useAuth();
   const router = useRouter();
   const [fila, setFila] = useState<FilaData>({ meusProcedimentos: [], disponiveis: [] });
@@ -44,30 +48,11 @@ export default function ExecucaoPage() {
     }
   }
 
-  function getStatusBadge(status: string) {
-    const badges: Record<string, string> = {
-      pago: 'bg-green-100 text-green-800',
-      executando: 'bg-blue-100 text-blue-800',
-      concluido: 'bg-gray-100 text-gray-800',
-    };
-    
-    const labels: Record<string, string> = {
-      pago: 'Aguardando',
-      executando: 'Em Execução',
-      concluido: 'Concluído',
-    };
-
-    return (
-      <span className={`px-2 py-1 text-xs font-semibold rounded ${badges[status] || 'bg-gray-100 text-gray-800'}`}>
-        {labels[status] || status}
-      </span>
-    );
-  }
-
   function ProcedimentoCard({ procedimento }: { procedimento: Procedimento }) {
     return (
-      <div
-        className="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer border-l-4 border-blue-500"
+      <Card
+        variant="outlined"
+        borderColor="border-blue-500"
         onClick={() => router.push(`/execucao/${procedimento.id}`)}
       >
         <div className="flex justify-between items-start">
@@ -76,23 +61,16 @@ export default function ExecucaoPage() {
             <p className="text-sm text-gray-600">{procedimento.cliente_nome}</p>
             <p className="text-xs text-gray-400">Atendimento #{procedimento.atendimento_id}</p>
           </div>
-          {getStatusBadge(procedimento.status)}
+          <StatusBadge type="item" status={procedimento.status} />
         </div>
-      </div>
+      </Card>
     );
   }
 
   if (loading) {
     return (
       <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
+        <LoadingState mode="skeleton" lines={5} />
       </div>
     );
   }
@@ -101,19 +79,19 @@ export default function ExecucaoPage() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Fila de Execução</h1>
-        <div className="text-sm text-gray-600">
-          {totalProcedimentos} procedimento{totalProcedimentos !== 1 ? 's' : ''}
-        </div>
-      </div>
+      <PageHeader
+        title="Fila de Execução"
+        description={`${totalProcedimentos} procedimento${totalProcedimentos !== 1 ? 's' : ''}`}
+      />
 
       {totalProcedimentos === 0 ? (
-        <div className="bg-white p-8 rounded-lg shadow text-center">
-          <p className="text-gray-600">Nenhum procedimento na fila.</p>
-        </div>
+        <EmptyState
+          icon="🦷"
+          title="Nenhum procedimento na fila"
+          description="Quando houver procedimentos pagos, eles aparecerão aqui."
+        />
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-8 mt-6">
           {/* Meus Procedimentos */}
           <section>
             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">

@@ -205,12 +205,13 @@ describe('Sprint 8 - Execução (Dentista Executor)', () => {
 
   describe('Menu Sidebar', () => {
     test('Sidebar deve ter item Execução para executor e admin', () => {
-      const content = fs.readFileSync(
-        path.join(process.cwd(), 'components', 'layout', 'Sidebar.tsx'),
+      // Após Sprint 3, MENU_ITEMS vivem em lib/constants/navigation.ts
+      const nav = fs.readFileSync(
+        path.join(process.cwd(), 'lib', 'constants', 'navigation.ts'),
         'utf-8'
       );
-      expect(content).toContain('execucao');
-      expect(content).toContain('executor');
+      expect(nav).toContain('execucao');
+      expect(nav).toContain('executor');
     });
   });
 

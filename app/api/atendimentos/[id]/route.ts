@@ -233,7 +233,7 @@ async function validarTransicao(
     triagem: ['avaliacao'],
     avaliacao: ['aguardando_pagamento'],
     aguardando_pagamento: ['em_execucao'],
-    em_execucao: ['aguardando_pagamento', 'finalizado'],
+    em_execucao: ['aguardando_pagamento'],
     finalizado: [],
   };
   

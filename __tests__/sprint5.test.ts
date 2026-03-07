@@ -304,7 +304,7 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
         'utf-8'
       );
       expect(content).toContain('lista');
-      expect(content).toContain('<table');
+      expect(content).toMatch(/Table/);
     });
 
     test('deve ter toggle entre Kanban e Lista', () => {
@@ -312,8 +312,8 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
         path.join(process.cwd(), 'app', 'atendimentos', 'page.tsx'),
         'utf-8'
       );
-      expect(content).toContain("setViewMode('kanban')");
-      expect(content).toContain("setViewMode('lista')");
+      expect(content).toContain('ViewModeToggle');
+      expect(content).toContain('setViewMode');
     });
 
     test('deve mostrar colunas por status', () => {
@@ -446,8 +446,7 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
         'utf-8'
       );
       expect(content).toContain('Pipeline');
-      expect(content).toContain('isPast');
-      expect(content).toContain('isAtual');
+      expect(content).toContain('StatusPipeline');
     });
 
   });

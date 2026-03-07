@@ -3,43 +3,44 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserRole } from '@/lib/types';
+import { MENU_ITEMS } from '@/lib/constants/navigation';
 
-interface MenuItem {
-  href: string;
-  label: string;
-  icon: string;
-  roles?: UserRole[]; // Se não definido, todos podem ver
-}
-
-// Menu com controle de acesso por role
-const menuItems: MenuItem[] = [
-  { href: '/', label: 'Início', icon: '🏠' },
-  { href: '/dashboard', label: 'Dashboard', icon: '📊', roles: ['admin'] },
-  { href: '/clientes', label: 'Clientes', icon: '👥', roles: ['admin', 'atendente'] },
-  { href: '/atendimentos', label: 'Atendimentos', icon: '📋', roles: ['admin', 'atendente'] },
-  { href: '/avaliacao', label: 'Fila Avaliação', icon: '🔍', roles: ['admin', 'avaliador'] },
-  { href: '/execucao', label: 'Fila Execução', icon: '🦷', roles: ['admin', 'executor'] },
-  { href: '/meus-procedimentos', label: 'Meus Procedimentos', icon: '📋', roles: ['avaliador', 'executor'] },
-  { href: '/pagamentos', label: 'Pagamentos', icon: '💰', roles: ['admin', 'atendente'] },
-  { href: '/procedimentos', label: 'Procedimentos', icon: '📑', roles: ['admin'] },
-  { href: '/usuarios', label: 'Usuários', icon: '👤', roles: ['admin'] },
-  { href: '/comissoes', label: 'Comissões', icon: '💵', roles: ['admin'] },
-];
+import { ViewMode } from '@/contexts/AuthContext';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, viewMode, toggleViewMode, isAdmin } = useAuth();
 
-  // Filtra itens do menu baseado no role do usuário
-  const visibleMenuItems = menuItems.filter((item) => {
+  // Filtra itens do menu baseado no role do usuário (respeita viewMode)
+  const visibleMenuItems = MENU_ITEMS.filter((item) => {
     if (!item.roles) return true; // Sem restrição de role
     if (!user) return false; // Não logado não vê itens restritos
     return hasRole(item.roles);
   });
 
   return (
-    <aside className="hidden md:flex w-64 bg-stone-800 text-white min-h-screen flex-col">
+    <aside className="hidden md:flex w-64 bg-stone-800 text-white min-h-screen flex-col" role="navigation" aria-label="Menu principal">
+      {/* Toggle Admin/Dentista */}
+      {isAdmin && (
+        <div className="px-4 pt-4">
+          <button
+            onClick={toggleViewMode}
+            aria-label={viewMode === 'admin' ? 'Trocar para vis\u00e3o Dentista' : 'Trocar para vis\u00e3o Admin'}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              viewMode === 'admin'
+                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 hover:bg-orange-500/30'
+                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
+            }`}
+          >
+            <span className="text-base">{viewMode === 'admin' ? '🛡️' : '🦷'}</span>
+            <span>{viewMode === 'admin' ? 'Modo Admin' : 'Modo Dentista'}</span>
+            <svg className="w-3.5 h-3.5 opacity-60 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       <nav className="py-4 flex-1">
         <ul className="space-y-1">
           {visibleMenuItems.map((item) => {

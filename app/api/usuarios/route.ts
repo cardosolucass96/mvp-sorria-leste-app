@@ -6,7 +6,7 @@ import { Usuario } from '@/lib/types';
 export async function GET() {
   try {
     const usuarios = await query<Usuario>(
-      'SELECT * FROM usuarios ORDER BY nome'
+      'SELECT id, nome, email, role, ativo, created_at FROM usuarios ORDER BY nome'
     );
     return NextResponse.json(usuarios);
   } catch (error) {
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     );
 
     const novoUsuario = await query<Usuario>(
-      'SELECT * FROM usuarios WHERE id = ?',
+      'SELECT id, nome, email, role, ativo, created_at FROM usuarios WHERE id = ?',
       [result.lastInsertRowid]
     );
 

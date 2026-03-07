@@ -3,6 +3,12 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useParams } from 'next/navigation';
+import { formatarDataHora } from '@/lib/utils/formatters';
+import { StatusBadge } from '@/components/domain';
+import Alert from '@/components/ui/Alert';
+import LoadingState from '@/components/ui/LoadingState';
+import Modal from '@/components/ui/Modal';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface ItemAtendimento {
   id: number;
@@ -58,6 +64,7 @@ interface Prontuario {
 const MIN_CARACTERES_PRONTUARIO = 50;
 
 export default function ExecucaoProcedimentoPage() {
+  usePageTitle('Execução de Procedimento');
   const params = useParams();
   const { user } = useAuth();
   const router = useRouter();
@@ -322,48 +329,14 @@ export default function ExecucaoProcedimentoPage() {
     }
   }
 
-  function getStatusBadge(status: string) {
-    const badges: Record<string, string> = {
-      pago: 'bg-green-100 text-green-800',
-      executando: 'bg-blue-100 text-blue-800',
-      concluido: 'bg-gray-100 text-gray-800',
-    };
-    
-    const labels: Record<string, string> = {
-      pago: 'Aguardando Execução',
-      executando: 'Em Execução',
-      concluido: 'Concluído',
-    };
-
-    return (
-      <span className={`px-3 py-1 text-sm font-semibold rounded ${badges[status] || 'bg-gray-100 text-gray-800'}`}>
-        {labels[status] || status}
-      </span>
-    );
-  }
-
-  function formatarData(dataString: string) {
-    const data = new Date(dataString);
-    return data.toLocaleString('pt-BR');
-  }
-
   if (loading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="h-64 bg-gray-200 rounded"></div>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Carregando procedimento..." />;
   }
 
   if (!item) {
     return (
       <div className="p-6">
-        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded">
-          Procedimento não encontrado
-        </div>
+        <Alert type="error" message="Procedimento não encontrado" />
         <button
           onClick={() => router.push('/execucao')}
           className="mt-4 text-blue-600 hover:text-blue-800"
@@ -394,7 +367,7 @@ export default function ExecucaoProcedimentoPage() {
             <p className="text-lg text-gray-600 mt-1">{item.cliente_nome}</p>
             <p className="text-sm text-gray-400">Atendimento #{item.atendimento_id}</p>
           </div>
-          {getStatusBadge(item.status)}
+          <StatusBadge type="item" status={item.status} />
         </div>
 
         {/* Dentes selecionados */}
@@ -444,14 +417,14 @@ export default function ExecucaoProcedimentoPage() {
         {item.concluido_at && (
           <div className="bg-green-50 border border-green-200 p-3 rounded mb-4">
             <p className="text-sm text-green-800">
-              ✓ Concluído em {formatarData(item.concluido_at)}
+              ✓ Concluído em {formatarDataHora(item.concluido_at)}
             </p>
           </div>
         )}
 
         {/* Info de adição */}
         <div className="text-sm text-gray-500 mb-4">
-          Adicionado em {formatarData(item.created_at)}
+          Adicionado em {formatarDataHora(item.created_at)}
           {item.criado_por_nome && ` por ${item.criado_por_nome}`}
         </div>
 
@@ -706,9 +679,9 @@ export default function ExecucaoProcedimentoPage() {
               )}
 
               <div className="text-xs text-gray-500">
-                Preenchido por <strong>{prontuario.usuario_nome}</strong> em {formatarData(prontuario.created_at)}
+                Preenchido por <strong>{prontuario.usuario_nome}</strong> em {formatarDataHora(prontuario.created_at)}
                 {prontuario.updated_at !== prontuario.created_at && (
-                  <> · Atualizado em {formatarData(prontuario.updated_at)}</>
+                  <> · Atualizado em {formatarDataHora(prontuario.updated_at)}</>
                 )}
               </div>
             </div>
@@ -726,58 +699,56 @@ export default function ExecucaoProcedimentoPage() {
       )}
 
       {/* Modal Adicionar Procedimento */}
-      {showNovoProcedimento && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg w-full max-w-md">
-            <h3 className="text-lg font-bold mb-2">Adicionar Procedimento</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Para: <strong>{item.cliente_nome}</strong>
-            </p>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Procedimento</label>
-              <select
-                value={novoProcedimento.procedimento_id}
-                onChange={(e) =>
-                  setNovoProcedimento({ ...novoProcedimento, procedimento_id: e.target.value })
-                }
-                className="w-full border border-gray-300 rounded px-3 py-2"
-              >
-                <option value="">Selecione...</option>
-                {procedimentos.map((proc) => (
-                  <option key={proc.id} value={proc.id}>
-                    {proc.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="bg-yellow-50 border border-yellow-200 p-3 rounded mb-4">
-              <p className="text-sm text-yellow-800">
-                ⚠️ Ao adicionar um procedimento, o atendimento voltará para <strong>Aguardando Pagamento</strong>.
-              </p>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={adicionarProcedimento}
-                className="flex-1 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-              >
-                Adicionar
-              </button>
-              <button
-                onClick={() => {
-                  setShowNovoProcedimento(false);
-                  setNovoProcedimento({ procedimento_id: '' });
-                }}
-                className="flex-1 bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
+      <Modal
+        isOpen={showNovoProcedimento}
+        onClose={() => {
+          setShowNovoProcedimento(false);
+          setNovoProcedimento({ procedimento_id: '' });
+        }}
+        title="Adicionar Procedimento"
+      >
+        <p className="text-sm text-gray-600 mb-4">
+          Para: <strong>{item.cliente_nome}</strong>
+        </p>
+        
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">Procedimento</label>
+          <select
+            value={novoProcedimento.procedimento_id}
+            onChange={(e) =>
+              setNovoProcedimento({ ...novoProcedimento, procedimento_id: e.target.value })
+            }
+            className="w-full border border-gray-300 rounded px-3 py-2"
+          >
+            <option value="">Selecione...</option>
+            {procedimentos.map((proc) => (
+              <option key={proc.id} value={proc.id}>
+                {proc.nome}
+              </option>
+            ))}
+          </select>
         </div>
-      )}
+
+        <Alert type="warning" message="Ao adicionar um procedimento, o atendimento voltará para Aguardando Pagamento." />
+
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={adicionarProcedimento}
+            className="flex-1 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+          >
+            Adicionar
+          </button>
+          <button
+            onClick={() => {
+              setShowNovoProcedimento(false);
+              setNovoProcedimento({ procedimento_id: '' });
+            }}
+            className="flex-1 bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400"
+          >
+            Cancelar
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

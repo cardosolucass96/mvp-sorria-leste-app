@@ -186,11 +186,11 @@ export async function POST(request: NextRequest) {
       
       const atendimentoId = result.lastInsertRowid;
       
-      // Cria o item do atendimento com executor já definido
+      // Cria o item do atendimento com executor e criado_por já definidos
       await execute(
-        `INSERT INTO itens_atendimento (atendimento_id, procedimento_id, executor_id, valor, quantidade, status) 
-         VALUES (?, ?, ?, ?, 1, 'pendente')`,
-        [atendimentoId, procedimento_id, executor_id, valorFinal]
+        `INSERT INTO itens_atendimento (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, quantidade, status) 
+         VALUES (?, ?, ?, ?, ?, 1, 'pendente')`,
+        [atendimentoId, procedimento_id, executor_id, executor_id, valorFinal]
       );
       
       // Busca atendimento criado
