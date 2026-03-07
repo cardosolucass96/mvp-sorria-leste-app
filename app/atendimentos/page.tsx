@@ -11,12 +11,12 @@ import Select from '@/components/ui/Select';
 import { StatusBadge, ViewModeToggle } from '@/components/domain';
 import { STATUS_CONFIG, STATUS_ORDER } from '@/lib/constants/status';
 import { formatarDataHora } from '@/lib/utils/formatters';
-import type { AtendimentoStatus } from '@/lib/types';
+import type { AtendimentoStatus, Atendimento, AtendimentoCompleto } from '@/lib/types';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 export default function AtendimentosPage() {
   usePageTitle('Atendimentos');
-  const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
+  const [atendimentos, setAtendimentos] = useState<AtendimentoCompleto[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'kanban' | 'lista'>('kanban');
   const [busca, setBusca] = useState('');
@@ -49,9 +49,9 @@ export default function AtendimentosPage() {
   const atendimentosPorStatus = STATUS_ORDER.reduce((acc, status) => {
     acc[status] = atendimentos.filter((a) => a.status === status);
     return acc;
-  }, {} as Record<AtendimentoStatus, Atendimento[]>);
+  }, {} as Record<AtendimentoStatus, AtendimentoCompleto[]>);
 
-  const listaColumns: TableColumn<Atendimento>[] = [
+  const listaColumns: TableColumn<AtendimentoCompleto>[] = [
     { key: 'id', header: 'ID', render: (a) => `#${a.id}` },
     {
       key: 'cliente', header: 'Cliente',
@@ -100,7 +100,7 @@ export default function AtendimentosPage() {
             <Input
               label="Buscar cliente"
               value={busca}
-              onChange={(e) => setBusca(e.target.value)}
+              onChange={(value) => setBusca(value)}
               placeholder="Nome ou CPF do cliente..."
             />
           </div>
@@ -109,7 +109,7 @@ export default function AtendimentosPage() {
               <Select
                 label="Status"
                 value={filtroStatus}
-                onChange={(e) => setFiltroStatus(e.target.value)}
+                onChange={(value) => setFiltroStatus(value)}
                 options={STATUS_ORDER.map((s) => ({ value: s, label: STATUS_CONFIG[s].label }))}
                 placeholder="Todos"
               />

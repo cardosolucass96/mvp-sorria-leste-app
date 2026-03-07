@@ -185,7 +185,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Data de Nascimento</p>
-                  <p className="font-medium">{formatarData(cliente.data_nascimento)}</p>
+                  <p className="font-medium">{cliente.data_nascimento ? formatarData(cliente.data_nascimento) : '-'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Origem</p>

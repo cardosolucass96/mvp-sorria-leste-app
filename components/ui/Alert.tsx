@@ -5,7 +5,8 @@ import { useState } from 'react';
 export interface AlertProps {
   type?: 'info' | 'success' | 'warning' | 'error';
   title?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  message?: string;
   dismissible?: boolean;
   onDismiss?: () => void;
   className?: string;
@@ -45,6 +46,7 @@ export default function Alert({
   type = 'info',
   title,
   children,
+  message,
   dismissible = false,
   onDismiss,
   className = '',
@@ -74,7 +76,7 @@ export default function Alert({
 
       <div className="flex-1 min-w-0">
         {title && <p className="font-semibold text-sm mb-0.5">{title}</p>}
-        <div className="text-sm">{children}</div>
+        <div className="text-sm">{children ?? message}</div>
       </div>
 
       {dismissible && (

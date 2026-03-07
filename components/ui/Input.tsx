@@ -5,7 +5,7 @@ import { maskCPF, maskTelefone, maskMoeda } from '@/lib/utils/masks';
 
 export interface InputProps {
   label: string;
-  name: string;
+  name?: string;
   type?: 'text' | 'email' | 'password' | 'number' | 'date' | 'tel' | 'search';
   placeholder?: string;
   value: string | number;

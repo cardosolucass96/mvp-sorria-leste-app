@@ -9,7 +9,8 @@ export interface Tab {
 export interface TabsProps {
   tabs: Tab[];
   activeTab: string;
-  onTabChange: (key: string) => void;
+  onTabChange?: (key: string) => void;
+  onChange?: (key: string) => void;
   variant?: 'pills' | 'underline';
   size?: 'sm' | 'md';
   className?: string;
@@ -19,10 +20,15 @@ export default function Tabs({
   tabs,
   activeTab,
   onTabChange,
+  onChange,
   variant = 'pills',
   size = 'md',
   className = '',
 }: TabsProps) {
+  const handleChange = (key: string) => {
+    onTabChange?.(key);
+    onChange?.(key);
+  };
   if (variant === 'underline') {
     return (
       <div className={`border-b border-gray-200 ${className}`}>
@@ -34,7 +40,7 @@ export default function Tabs({
                 key={tab.key}
                 role="tab"
                 aria-selected={isActive}
-                onClick={() => onTabChange(tab.key)}
+                onClick={() => handleChange(tab.key)}
                 className={`
                   whitespace-nowrap border-b-2 font-medium transition-colors
                   ${size === 'sm' ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}
@@ -72,7 +78,7 @@ export default function Tabs({
             key={tab.key}
             role="tab"
             aria-selected={isActive}
-            onClick={() => onTabChange(tab.key)}
+            onClick={() => handleChange(tab.key)}
             className={`
               rounded-md font-medium transition-all
               ${size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'}

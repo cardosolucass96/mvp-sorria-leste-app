@@ -3,6 +3,7 @@ export interface LoadingStateProps {
   lines?: number;
   className?: string;
   text?: string;
+  message?: string;
 }
 
 function Spinner({ text }: { text?: string }) {
@@ -59,10 +60,11 @@ export default function LoadingState({
   lines = 5,
   className = '',
   text,
+  message,
 }: LoadingStateProps) {
   return (
     <div className={className}>
-      {mode === 'spinner' ? <Spinner text={text} /> : <Skeleton lines={lines} />}
+      {mode === 'spinner' ? <Spinner text={text ?? message} /> : <Skeleton lines={lines} />}
     </div>
   );
 }

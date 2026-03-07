@@ -108,6 +108,7 @@ export interface PagamentoItem {
 // Tipos com joins para exibição
 export interface AtendimentoCompleto extends Atendimento {
   cliente_nome: string;
+  cliente_telefone: string | null;
   avaliador_nome: string | null;
   liberado_por_nome: string | null;
 }

@@ -6,7 +6,8 @@ import React from 'react';
 
 export interface TableColumn<T> {
   key: string;
-  label: string;
+  label?: string;
+  header?: string;
   align?: 'left' | 'center' | 'right';
   width?: string;
   render?: (item: T, index: number) => React.ReactNode;
@@ -74,7 +75,7 @@ export default function Table<T>({
                 `}
                 style={col.width ? { width: col.width } : undefined}
               >
-                {col.label}
+              {col.label ?? col.header}
               </th>
             ))}
           </tr>
