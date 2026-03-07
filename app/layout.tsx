@@ -1,13 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppLayout } from "@/components/layout";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastProvider } from "@/components/ui/Toast";
-
-const inter = Inter({
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Sorria Leste - Sistema de Gestão Odontológica",
@@ -21,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.className} antialiased`}>
+      <body className="font-sans antialiased">
         <AuthProvider>
           <ToastProvider>
             <AppLayout>{children}</AppLayout>
