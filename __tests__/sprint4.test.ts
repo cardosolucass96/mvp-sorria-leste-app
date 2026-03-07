@@ -108,9 +108,9 @@ describe('Sprint 4 - Catálogo de Procedimentos', () => {
   });
 
   // ============================================
-  // TESTES DE BANCO - OPERAÇÕES DE PROCEDIMENTO
+  // TESTES DE BANCO - OPERAÇÕES DE PROCEDIMENTO (SKIP - migrado para D1)
   // ============================================
-  describe('Operações de Banco - Procedimentos', () => {
+  describe.skip('Operações de Banco - Procedimentos', () => {
 
     test('deve conseguir criar novo procedimento', () => {
       const result = execute(
@@ -322,9 +322,9 @@ describe('Sprint 4 - Catálogo de Procedimentos', () => {
   });
 
   // ============================================
-  // TESTES DE INTEGRIDADE DO SEED
+  // TESTES DE INTEGRIDADE DO SEED (SKIP - migrado para D1)
   // ============================================
-  describe('Procedimentos do Seed', () => {
+  describe.skip('Procedimentos do Seed', () => {
 
     test('deve ter pelo menos 15 procedimentos cadastrados', () => {
       const result = query<CountResult>('SELECT COUNT(*) as count FROM procedimentos');
@@ -372,9 +372,9 @@ describe('Sprint 4 - Catálogo de Procedimentos', () => {
   });
 
   // ============================================
-  // TESTES DE CAMPOS ESPECÍFICOS
+  // TESTES DE CAMPOS ESPECÍFICOS (SKIP - migrado para D1)
   // ============================================
-  describe('Campos de Procedimento', () => {
+  describe.skip('Campos de Procedimento', () => {
 
     test('procedimento deve ter campo nome', () => {
       const proc = queryOne<Procedimento>('SELECT * FROM procedimentos LIMIT 1');

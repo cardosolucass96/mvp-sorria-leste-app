@@ -33,13 +33,6 @@ interface Procedimento {
   comissao_execucao: number;
 }
 
-interface Nota {
-  id: number;
-  texto: string;
-  usuario_nome: string;
-  created_at: string;
-}
-
 interface Anexo {
   id: number;
   nome_arquivo: string;
@@ -70,15 +63,12 @@ export default function ExecucaoProcedimentoPage() {
   const router = useRouter();
   const [item, setItem] = useState<ItemAtendimento | null>(null);
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
-  const [notas, setNotas] = useState<Nota[]>([]);
   const [anexos, setAnexos] = useState<Anexo[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNovoProcedimento, setShowNovoProcedimento] = useState(false);
   const [novoProcedimento, setNovoProcedimento] = useState({
     procedimento_id: '',
   });
-  const [novaNota, setNovaNota] = useState('');
-  const [enviandoNota, setEnviandoNota] = useState(false);
   const [enviandoAnexo, setEnviandoAnexo] = useState(false);
   const [descricaoAnexo, setDescricaoAnexo] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -94,7 +84,6 @@ export default function ExecucaoProcedimentoPage() {
     if (params.id) {
       carregarItem();
       carregarProcedimentos();
-      carregarNotas();
       carregarAnexos();
       carregarProntuario();
     }
@@ -122,16 +111,6 @@ export default function ExecucaoProcedimentoPage() {
       setProcedimentos(data);
     } catch (error) {
       console.error('Erro ao carregar procedimentos:', error);
-    }
-  }
-
-  async function carregarNotas() {
-    try {
-      const response = await fetch(`/api/execucao/item/${params.id}/notas`);
-      const data = await response.json();
-      setNotas(data);
-    } catch (error) {
-      console.error('Erro ao carregar notas:', error);
     }
   }
 
@@ -194,30 +173,6 @@ export default function ExecucaoProcedimentoPage() {
       setErroProntuario('Erro ao salvar prontuário');
     }
     setSalvandoProntuario(false);
-  }
-
-  async function adicionarNota() {
-    if (!novaNota.trim() || !user) return;
-    
-    setEnviandoNota(true);
-    try {
-      const response = await fetch(`/api/execucao/item/${params.id}/notas`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          usuario_id: user.id,
-          texto: novaNota,
-        }),
-      });
-
-      if (response.ok) {
-        setNovaNota('');
-        carregarNotas();
-      }
-    } catch (error) {
-      console.error('Erro ao adicionar nota:', error);
-    }
-    setEnviandoNota(false);
   }
 
   async function enviarAnexo(e: React.ChangeEvent<HTMLInputElement>) {
@@ -641,6 +596,93 @@ export default function ExecucaoProcedimentoPage() {
               >
                 {salvandoProntuario ? 'Salvando...' : prontuario ? '💾 Atualizar Prontuário' : '💾 Salvar Prontuário'}
               </button>
+
+              {/* Anexos dentro do prontuário */}
+              <div className="pt-4 border-t border-gray-200">
+                <h3 className="text-md font-semibold text-gray-700 mb-3">📎 Anexos e Imagens</h3>
+                
+                <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg mb-4">
+                  <div className="mb-2">
+                    <input
+                      type="text"
+                      value={descricaoAnexo}
+                      onChange={(e) => setDescricaoAnexo(e.target.value)}
+                      placeholder="Descrição do arquivo (opcional)"
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-2"
+                    />
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*,.pdf,.doc,.docx"
+                    onChange={enviarAnexo}
+                    disabled={enviandoAnexo}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                  />
+                  <p className="mt-2 text-xs text-gray-500">
+                    📷 Imagens (máx. 10MB) | 🎬 Vídeos (máx. 50MB) | 📄 Documentos (máx. 10MB)
+                  </p>
+                  {enviandoAnexo && (
+                    <p className="mt-2 text-sm text-orange-600">⏳ Enviando arquivo...</p>
+                  )}
+                </div>
+
+                {/* Lista de anexos */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {anexos.length > 0 ? (
+                    anexos.map((anexo) => {
+                      const arquivoUrl = `/api/arquivos/${anexo.caminho}`;
+                      const isImage = anexo.tipo_arquivo.startsWith('image/');
+                      const isVideo = anexo.tipo_arquivo.startsWith('video/');
+                      
+                      return (
+                        <div key={anexo.id} className="border rounded-lg overflow-hidden">
+                          {isImage ? (
+                            <a href={arquivoUrl} target="_blank" rel="noopener noreferrer">
+                              <img
+                                src={arquivoUrl}
+                                alt={anexo.nome_arquivo}
+                                className="w-full h-32 object-cover hover:opacity-90"
+                              />
+                            </a>
+                          ) : isVideo ? (
+                            <video
+                              src={arquivoUrl}
+                              controls
+                              className="w-full h-32 object-cover bg-black"
+                            />
+                          ) : (
+                            <a
+                              href={`${arquivoUrl}?download=true`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-center h-32 bg-gray-100 hover:bg-gray-200"
+                            >
+                              <span className="text-3xl">📄</span>
+                            </a>
+                          )}
+                          <div className="p-2">
+                            <p className="font-medium text-xs truncate" title={anexo.nome_arquivo}>
+                              {anexo.nome_arquivo}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {(anexo.tamanho / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                            <button
+                              onClick={() => removerAnexo(anexo.id)}
+                              className="mt-1 text-xs text-red-600 hover:text-red-800"
+                            >
+                              🗑️ Remover
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-gray-500 text-xs col-span-2">Nenhum anexo adicionado</p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -673,148 +715,6 @@ export default function ExecucaoProcedimentoPage() {
           )}
         </div>
       ) : null}
-
-      {/* Seção de Notas */}
-      {(isMeuProcedimento || item.status === 'concluido') && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">📝 Notas de Execução</h2>
-          
-          {/* Formulário para adicionar nota */}
-          {isMeuProcedimento && item.status !== 'concluido' && (
-            <div className="mb-4">
-              <textarea
-                value={novaNota}
-                onChange={(e) => setNovaNota(e.target.value)}
-                placeholder="Adicione uma nota sobre este procedimento..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                rows={3}
-              />
-              <button
-                onClick={adicionarNota}
-                disabled={enviandoNota || !novaNota.trim()}
-                className="mt-2 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 disabled:opacity-50"
-              >
-                {enviandoNota ? 'Salvando...' : '💾 Salvar Nota'}
-              </button>
-            </div>
-          )}
-
-          {/* Lista de notas */}
-          <div className="space-y-3">
-            {notas.length > 0 ? (
-              notas.map((nota) => (
-                <div key={nota.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <p className="text-gray-800 whitespace-pre-wrap">{nota.texto}</p>
-                  <div className="mt-2 text-xs text-gray-500">
-                    Por <strong>{nota.usuario_nome}</strong> em {formatarData(nota.created_at)}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 text-sm">Nenhuma nota registrada</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Seção de Anexos */}
-      {(isMeuProcedimento || item.status === 'concluido') && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">📎 Anexos e Imagens</h2>
-          
-          {/* Upload de arquivos */}
-          {isMeuProcedimento && item.status !== 'concluido' && (
-            <div className="mb-4 p-4 border-2 border-dashed border-gray-300 rounded-lg">
-              <div className="mb-2">
-                <input
-                  type="text"
-                  value={descricaoAnexo}
-                  onChange={(e) => setDescricaoAnexo(e.target.value)}
-                  placeholder="Descrição do arquivo (opcional)"
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-2"
-                />
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,video/*,.pdf,.doc,.docx"
-                onChange={enviarAnexo}
-                disabled={enviandoAnexo}
-                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
-              />
-              <p className="mt-2 text-xs text-gray-500">
-                📷 Imagens: JPG, PNG, GIF, WebP (máx. 10MB) | 🎬 Vídeos: MP4, WebM, MOV (máx. 50MB) | 📄 Documentos: PDF, DOC (máx. 10MB)
-              </p>
-              {enviandoAnexo && (
-                <p className="mt-2 text-sm text-orange-600">⏳ Enviando arquivo...</p>
-              )}
-            </div>
-          )}
-
-          {/* Lista de anexos */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {anexos.length > 0 ? (
-              anexos.map((anexo) => {
-                // Construir URL do R2 via API
-                const arquivoUrl = `/api/arquivos/${anexo.caminho}`;
-                const isImage = anexo.tipo_arquivo.startsWith('image/');
-                const isVideo = anexo.tipo_arquivo.startsWith('video/');
-                
-                return (
-                  <div key={anexo.id} className="border rounded-lg overflow-hidden">
-                    {isImage ? (
-                      <a href={arquivoUrl} target="_blank" rel="noopener noreferrer">
-                        <img
-                          src={arquivoUrl}
-                          alt={anexo.nome_arquivo}
-                          className="w-full h-40 object-cover hover:opacity-90"
-                        />
-                      </a>
-                    ) : isVideo ? (
-                      <video
-                        src={arquivoUrl}
-                        controls
-                        className="w-full h-40 object-cover bg-black"
-                      />
-                    ) : (
-                      <a
-                        href={`${arquivoUrl}?download=true`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center h-40 bg-gray-100 hover:bg-gray-200"
-                      >
-                        <span className="text-4xl">📄</span>
-                      </a>
-                    )}
-                    <div className="p-3">
-                      <p className="font-medium text-sm truncate" title={anexo.nome_arquivo}>
-                        {anexo.nome_arquivo}
-                      </p>
-                      {anexo.descricao && (
-                        <p className="text-xs text-gray-600 mt-1">{anexo.descricao}</p>
-                      )}
-                      <p className="text-xs text-gray-400 mt-1">
-                        {(anexo.tamanho / 1024 / 1024).toFixed(2)} MB • {formatarData(anexo.created_at)}
-                      </p>
-                      <p className="text-xs text-gray-400">Por {anexo.usuario_nome}</p>
-                      {isMeuProcedimento && item.status !== 'concluido' && (
-                        <button
-                          onClick={() => removerAnexo(anexo.id)}
-                          className="mt-2 text-xs text-red-600 hover:text-red-800"
-                        >
-                          🗑️ Remover
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="text-gray-500 text-sm col-span-2">Nenhum anexo</p>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Info para procedimentos disponíveis */}
       {isDisponivel && (

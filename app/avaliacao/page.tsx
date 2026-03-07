@@ -32,10 +32,9 @@ export default function AvaliacaoPage() {
         a.status === 'avaliacao' && !a.avaliador_id
       );
       
-      // Meus atendimentos: onde EU sou o avaliador (em avaliação ou triagem)
+      // Meus atendimentos: onde EU sou o avaliador (apenas em avaliação)
       const meus = data.filter((a: Atendimento) => 
-        a.avaliador_id === user.id && 
-        (a.status === 'triagem' || a.status === 'avaliacao')
+        a.avaliador_id === user.id && a.status === 'avaliacao'
       );
       
       setAtendimentosDisponiveis(disponiveis);
@@ -149,14 +148,14 @@ export default function AvaliacaoPage() {
                   
                   <div className="flex items-center gap-4">
                     <span className="badge badge-info">
-                      {atendimento.status === 'triagem' ? 'Triagem' : 'Em Avaliação'}
+                      Em Avaliação
                     </span>
                     
                     <Link
                       href={`/avaliacao/${atendimento.id}`}
                       className="btn btn-primary"
                     >
-                      {atendimento.status === 'triagem' ? 'Iniciar Avaliação' : 'Continuar'}
+                      Continuar
                     </Link>
                   </div>
                 </div>

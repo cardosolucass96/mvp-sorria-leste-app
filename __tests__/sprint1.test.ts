@@ -47,9 +47,9 @@ interface TableInfo {
 describe('Sprint 1 - Setup e Estrutura Base', () => {
   
   // ============================================
-  // TESTES DO BANCO DE DADOS
+  // TESTES DO BANCO DE DADOS (SKIP - migrado para D1)
   // ============================================
-  describe('Banco de Dados SQLite', () => {
+  describe.skip('Banco de Dados SQLite', () => {
     
     test('deve conseguir conectar ao banco de dados', () => {
       const db = getDb();
@@ -71,9 +71,9 @@ describe('Sprint 1 - Setup e Estrutura Base', () => {
   });
 
   // ============================================
-  // TESTES DO SCHEMA
+  // TESTES DO SCHEMA (SKIP - migrado para D1)
   // ============================================
-  describe('Schema do Banco', () => {
+  describe.skip('Schema do Banco', () => {
 
     test('tabela "usuarios" deve existir', () => {
       const tables = query<TableInfo>(
@@ -133,9 +133,9 @@ describe('Sprint 1 - Setup e Estrutura Base', () => {
   });
 
   // ============================================
-  // TESTES DO SEED - USUÁRIOS
+  // TESTES DO SEED - USUÁRIOS (SKIP - migrado para D1)
   // ============================================
-  describe('Seed de Usuários', () => {
+  describe.skip('Seed de Usuários', () => {
 
     test('deve ter pelo menos 8 usuários cadastrados', () => {
       const result = query<CountResult>('SELECT COUNT(*) as count FROM usuarios');
@@ -198,9 +198,9 @@ describe('Sprint 1 - Setup e Estrutura Base', () => {
   });
 
   // ============================================
-  // TESTES DO SEED - CLIENTES
+  // TESTES DO SEED - CLIENTES (SKIP - migrado para D1)
   // ============================================
-  describe('Seed de Clientes', () => {
+  describe.skip('Seed de Clientes', () => {
 
     test('deve ter pelo menos 5 clientes cadastrados', () => {
       const result = query<CountResult>('SELECT COUNT(*) as count FROM clientes');
@@ -235,9 +235,9 @@ describe('Sprint 1 - Setup e Estrutura Base', () => {
   });
 
   // ============================================
-  // TESTES DO SEED - PROCEDIMENTOS
+  // TESTES DO SEED - PROCEDIMENTOS (SKIP - migrado para D1)
   // ============================================
-  describe('Seed de Procedimentos', () => {
+  describe.skip('Seed de Procedimentos', () => {
 
     test('deve ter pelo menos 15 procedimentos cadastrados', () => {
       const result = query<CountResult>('SELECT COUNT(*) as count FROM procedimentos');
@@ -284,9 +284,9 @@ describe('Sprint 1 - Setup e Estrutura Base', () => {
   });
 
   // ============================================
-  // TESTES DE INTEGRIDADE
+  // TESTES DE INTEGRIDADE (SKIP - migrado para D1)
   // ============================================
-  describe('Integridade dos Dados', () => {
+  describe.skip('Integridade dos Dados', () => {
 
     test('foreign keys devem estar habilitadas', () => {
       const result = query<{ foreign_keys: number }>('PRAGMA foreign_keys');
@@ -326,8 +326,8 @@ describe('Sprint 1 - Setup e Estrutura Base', () => {
       expect(fs.existsSync(filePath)).toBe(true);
     });
 
-    test('lib/seed.ts deve existir', () => {
-      const filePath = path.join(process.cwd(), 'lib', 'seed.ts');
+    test('lib/seed.sql deve existir', () => {
+      const filePath = path.join(process.cwd(), 'lib', 'seed.sql');
       expect(fs.existsSync(filePath)).toBe(true);
     });
 

@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { cliente_id, avaliador_id } = body;
+    const { cliente_id, avaliador_id, tipo_orto, executor_id, procedimento_id, valor } = body;
     
     // Validações
     if (!cliente_id) {
@@ -125,8 +125,8 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Verifica avaliador se fornecido
-    if (avaliador_id) {
+    // Verifica avaliador se fornecido (fluxo normal)
+    if (avaliador_id && !tipo_orto) {
       const avaliador = await queryOne<{ id: number; role: string }>(
         'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
         [avaliador_id]
@@ -147,6 +147,70 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    // === FLUXO ORTO ===
+    if (tipo_orto) {
+      // Validações orto
+      if (!executor_id || !procedimento_id) {
+        return NextResponse.json(
+          { error: 'Executor e procedimento são obrigatórios para atendimento orto' },
+          { status: 400 }
+        );
+      }
+      
+      // Verifica executor
+      const executor = await queryOne<{ id: number; role: string }>(
+        'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
+        [executor_id]
+      );
+      if (!executor) {
+        return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
+      }
+      
+      // Verifica procedimento
+      const procedimento = await queryOne<{ id: number; valor: number; nome: string }>(
+        'SELECT id, valor, nome FROM procedimentos WHERE id = ? AND ativo = 1',
+        [procedimento_id]
+      );
+      if (!procedimento) {
+        return NextResponse.json({ error: 'Procedimento não encontrado' }, { status: 404 });
+      }
+      
+      const valorFinal = valor || procedimento.valor;
+      
+      // Cria atendimento já em aguardando_pagamento
+      const result = await execute(
+        `INSERT INTO atendimentos (cliente_id, avaliador_id, status, observacoes) 
+         VALUES (?, NULL, 'aguardando_pagamento', ?)`,
+        [cliente_id, 'Atendimento Orto']
+      );
+      
+      const atendimentoId = result.lastInsertRowid;
+      
+      // Cria o item do atendimento com executor já definido
+      await execute(
+        `INSERT INTO itens_atendimento (atendimento_id, procedimento_id, executor_id, valor, quantidade, status) 
+         VALUES (?, ?, ?, ?, 1, 'pendente')`,
+        [atendimentoId, procedimento_id, executor_id, valorFinal]
+      );
+      
+      // Busca atendimento criado
+      const novoAtendimento = await queryOne<AtendimentoComCliente>(
+        `SELECT 
+          a.*,
+          c.nome as cliente_nome,
+          c.cpf as cliente_cpf,
+          c.telefone as cliente_telefone,
+          NULL as avaliador_nome
+        FROM atendimentos a
+        INNER JOIN clientes c ON a.cliente_id = c.id
+        WHERE a.id = ?`,
+        [atendimentoId]
+      );
+      
+      return NextResponse.json(novoAtendimento, { status: 201 });
+    }
+    
+    // === FLUXO NORMAL ===
     // Cria atendimento com status inicial 'triagem'
     const result = await execute(
       `INSERT INTO atendimentos (cliente_id, avaliador_id, status) 

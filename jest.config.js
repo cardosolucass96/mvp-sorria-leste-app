@@ -6,6 +6,7 @@ module.exports = {
   testMatch: ['**/__tests__/**/*.test.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    '^@opennextjs/cloudflare$': '<rootDir>/__mocks__/opennextjs-cloudflare.ts',
   },
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {

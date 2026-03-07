@@ -212,9 +212,9 @@ describe('Sprint 9 - Finalização e Comissões', () => {
       expect(sidebar).toMatch(/comissoes.*admin|admin.*comissoes/i);
     });
 
-    test('Sidebar deve ter item Minhas Comissões para avaliador e executor', () => {
+    test('Sidebar deve ter item Meus Procedimentos para avaliador e executor', () => {
       const sidebar = readFile('components/layout/Sidebar.tsx');
-      expect(sidebar).toContain('/minhas-comissoes');
+      expect(sidebar).toContain('/meus-procedimentos');
       expect(sidebar).toContain('avaliador');
       expect(sidebar).toContain('executor');
     });

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Procedimento {
   id: number;
@@ -31,10 +32,14 @@ const initialFormData: FormData = {
 };
 
 export default function ProcedimentosPage() {
+  const { user } = useAuth();
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [mostrarInativos, setMostrarInativos] = useState(false);
+  
+  // Apenas admin e atendente podem ver comissões
+  const podeVerComissoes = user?.role === 'admin' || user?.role === 'atendente';
   
   // Modal/Formulário
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -241,12 +246,16 @@ export default function ProcedimentosPage() {
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                 Por Dente
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                Comissão Venda
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                Comissão Execução
-              </th>
+              {podeVerComissoes && (
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  Comissão Venda
+                </th>
+              )}
+              {podeVerComissoes && (
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  Comissão Execução
+                </th>
+              )}
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                 Status
               </th>
@@ -258,7 +267,7 @@ export default function ProcedimentosPage() {
           <tbody className="bg-white divide-y divide-gray-200">
             {procedimentos.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={podeVerComissoes ? 7 : 5} className="px-6 py-8 text-center text-gray-500">
                   Nenhum procedimento encontrado
                 </td>
               </tr>
@@ -282,12 +291,16 @@ export default function ProcedimentosPage() {
                       <span className="text-gray-400">-</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-right text-gray-600">
-                    {proc.comissao_venda}%
-                  </td>
-                  <td className="px-6 py-4 text-right text-gray-600">
-                    {proc.comissao_execucao}%
-                  </td>
+                  {podeVerComissoes && (
+                    <td className="px-6 py-4 text-right text-gray-600">
+                      {proc.comissao_venda}%
+                    </td>
+                  )}
+                  {podeVerComissoes && (
+                    <td className="px-6 py-4 text-right text-gray-600">
+                      {proc.comissao_execucao}%
+                    </td>
+                  )}
                   <td className="px-6 py-4 text-center">
                     {proc.ativo ? (
                       <span className="badge badge-success">Ativo</span>
@@ -378,39 +391,41 @@ export default function ProcedimentosPage() {
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Comissão Venda (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={formData.comissao_venda}
-                    onChange={(e) => setFormData({...formData, comissao_venda: e.target.value})}
-                    className="input"
-                    placeholder="0"
-                  />
+              {podeVerComissoes && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Comissão Venda (%)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={formData.comissao_venda}
+                      onChange={(e) => setFormData({...formData, comissao_venda: e.target.value})}
+                      className="input"
+                      placeholder="0"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Comissão Execução (%)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={formData.comissao_execucao}
+                      onChange={(e) => setFormData({...formData, comissao_execucao: e.target.value})}
+                      className="input"
+                      placeholder="0"
+                    />
+                  </div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Comissão Execução (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={formData.comissao_execucao}
-                    onChange={(e) => setFormData({...formData, comissao_execucao: e.target.value})}
-                    className="input"
-                    placeholder="0"
-                  />
-                </div>
-              </div>
+              )}
               
               <div className="flex items-center gap-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                 <input

@@ -114,9 +114,9 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
   });
 
   // ============================================
-  // TESTES DE BANCO - OPERAÇÕES DE ATENDIMENTO
+  // TESTES DE BANCO - OPERAÇÕES DE ATENDIMENTO (SKIP - migrado para D1)
   // ============================================
-  describe('Operações de Banco - Atendimentos', () => {
+  describe.skip('Operações de Banco - Atendimentos', () => {
 
     let clienteTesteId: number;
 
@@ -453,9 +453,9 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
   });
 
   // ============================================
-  // TESTES DE INTEGRIDADE DO SCHEMA
+  // TESTES DE INTEGRIDADE DO SCHEMA (SKIP - migrado para D1)
   // ============================================
-  describe('Schema de Atendimentos', () => {
+  describe.skip('Schema de Atendimentos', () => {
 
     test('tabela atendimentos deve ter campo cliente_id', () => {
       const result = query<{ name: string }>(

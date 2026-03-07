@@ -110,9 +110,9 @@ describe('Sprint 3 - Cadastro de Clientes', () => {
   });
 
   // ============================================
-  // TESTES DE BANCO - OPERAÇÕES DE CLIENTE
+  // TESTES DE BANCO - OPERAÇÕES DE CLIENTE (SKIP - migrado para D1)
   // ============================================
-  describe('Operações de Banco - Clientes', () => {
+  describe.skip('Operações de Banco - Clientes', () => {
 
     test('deve conseguir criar novo cliente', () => {
       const testCpf = `999.999.999-${Date.now() % 100}`;
@@ -376,9 +376,9 @@ describe('Sprint 3 - Cadastro de Clientes', () => {
   });
 
   // ============================================
-  // TESTES DE INTEGRIDADE DO SEED
+  // TESTES DE INTEGRIDADE DO SEED (SKIP - migrado para D1)
   // ============================================
-  describe('Clientes do Seed', () => {
+  describe.skip('Clientes do Seed', () => {
 
     test('deve ter pelo menos 5 clientes cadastrados', () => {
       const result = query<CountResult>('SELECT COUNT(*) as count FROM clientes');

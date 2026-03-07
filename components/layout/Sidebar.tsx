@@ -20,11 +20,11 @@ const menuItems: MenuItem[] = [
   { href: '/atendimentos', label: 'Atendimentos', icon: '📋', roles: ['admin', 'atendente'] },
   { href: '/avaliacao', label: 'Fila Avaliação', icon: '🔍', roles: ['admin', 'avaliador'] },
   { href: '/execucao', label: 'Fila Execução', icon: '🦷', roles: ['admin', 'executor'] },
+  { href: '/meus-procedimentos', label: 'Meus Procedimentos', icon: '📋', roles: ['avaliador', 'executor'] },
   { href: '/pagamentos', label: 'Pagamentos', icon: '💰', roles: ['admin', 'atendente'] },
   { href: '/procedimentos', label: 'Procedimentos', icon: '📑', roles: ['admin'] },
   { href: '/usuarios', label: 'Usuários', icon: '👤', roles: ['admin'] },
   { href: '/comissoes', label: 'Comissões', icon: '💵', roles: ['admin'] },
-  { href: '/minhas-comissoes', label: 'Minhas Comissões', icon: '💰', roles: ['avaliador', 'executor'] },
 ];
 
 export default function Sidebar() {
