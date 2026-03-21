@@ -261,8 +261,8 @@ describe('Sprint 4 - Catálogo de Procedimentos', () => {
         path.join(process.cwd(), 'app', 'procedimentos', 'page.tsx'),
         'utf-8'
       );
-      expect(content).toContain('<table');
-      expect(content).toContain('procedimentos.map');
+      expect(content).toMatch(/<table|<Table/);
+      expect(content).toMatch(/procedimentos\.map|columns/);
     });
 
     test('deve mostrar valor do procedimento', () => {

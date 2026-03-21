@@ -15,12 +15,12 @@ const sizeClasses: Record<NonNullable<AvatarProps['size']>, string> = {
 /** Gera cor determinística baseada no nome */
 function hashColor(name: string): string {
   const colors = [
-    'bg-orange-500',
-    'bg-blue-500',
-    'bg-green-500',
+    'bg-primary-500',
+    'bg-info-500',
+    'bg-success-500',
     'bg-purple-500',
-    'bg-red-500',
-    'bg-amber-500',
+    'bg-error-500',
+    'bg-warning-500',
     'bg-teal-500',
     'bg-pink-500',
   ];

@@ -21,14 +21,14 @@ export interface StatusBadgeProps {
 
 // Mapear cor do config para BadgeProps['color']
 const corToBadgeColor: Record<string, BadgeProps['color']> = {
-  'bg-gray-100': 'gray',
-  'bg-blue-100': 'blue',
-  'bg-amber-100': 'amber',
+  'bg-neutral-100': 'gray',
+  'bg-info-100': 'blue',
+  'bg-warning-100': 'amber',
   'bg-purple-100': 'purple',
-  'bg-green-100': 'green',
-  'bg-orange-100': 'orange',
+  'bg-success-100': 'green',
+  'bg-primary-100': 'orange',
   'bg-yellow-100': 'yellow',
-  'bg-red-100': 'red',
+  'bg-error-100': 'red',
 };
 
 function getBadgeColor(bgCor: string): NonNullable<BadgeProps['color']> {

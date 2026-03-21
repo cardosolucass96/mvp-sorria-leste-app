@@ -46,7 +46,10 @@ export default function NovoClientePage() {
         title="Novo Cliente"
         icon="➕"
         description="Cadastrar novo cliente na clínica"
-        backHref="/clientes"
+        breadcrumb={[
+          { label: 'Clientes', href: '/clientes' },
+          { label: 'Novo Cliente' },
+        ]}
       />
 
       <Card>

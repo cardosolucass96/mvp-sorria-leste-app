@@ -17,20 +17,20 @@ export interface StatusConfig {
 export const STATUS_CONFIG: Record<AtendimentoStatus, StatusConfig> = {
   triagem: {
     label: 'Triagem',
-    cor: 'text-gray-700',
-    bgCor: 'bg-gray-100',
+    cor: 'text-neutral-700',
+    bgCor: 'bg-neutral-100',
     icon: '📝',
   },
   avaliacao: {
     label: 'Avaliação',
-    cor: 'text-blue-700',
-    bgCor: 'bg-blue-100',
+    cor: 'text-info-700',
+    bgCor: 'bg-info-100',
     icon: '🔍',
   },
   aguardando_pagamento: {
     label: 'Aguardando Pagamento',
-    cor: 'text-amber-700',
-    bgCor: 'bg-amber-100',
+    cor: 'text-warning-700',
+    bgCor: 'bg-warning-100',
     icon: '💰',
   },
   em_execucao: {
@@ -41,19 +41,19 @@ export const STATUS_CONFIG: Record<AtendimentoStatus, StatusConfig> = {
   },
   finalizado: {
     label: 'Finalizado',
-    cor: 'text-green-700',
-    bgCor: 'bg-green-100',
+    cor: 'text-success-700',
+    bgCor: 'bg-success-100',
     icon: '✅',
   },
 };
 
 /** Cores sólidas para gráficos / barras do dashboard */
 export const STATUS_CHART_COLORS: Record<AtendimentoStatus, string> = {
-  triagem: 'bg-gray-500',
-  avaliacao: 'bg-blue-500',
-  aguardando_pagamento: 'bg-amber-500',
+  triagem: 'bg-neutral-500',
+  avaliacao: 'bg-info-500',
+  aguardando_pagamento: 'bg-warning-500',
   em_execucao: 'bg-purple-500',
-  finalizado: 'bg-green-500',
+  finalizado: 'bg-success-500',
 };
 
 /** Ordem do pipeline de atendimento */
@@ -86,26 +86,26 @@ export interface ItemStatusConfig {
 export const ITEM_STATUS_CONFIG: Record<ItemStatus, ItemStatusConfig> = {
   pendente: {
     label: 'Pendente',
-    cor: 'text-gray-600',
-    bgCor: 'bg-gray-100',
+    cor: 'text-neutral-600',
+    bgCor: 'bg-neutral-100',
     icon: '⏳',
   },
   pago: {
     label: 'Pago',
-    cor: 'text-blue-700',
-    bgCor: 'bg-blue-100',
+    cor: 'text-info-700',
+    bgCor: 'bg-info-100',
     icon: '💰',
   },
   executando: {
     label: 'Em Execução',
-    cor: 'text-orange-700',
-    bgCor: 'bg-orange-100',
+    cor: 'text-primary-700',
+    bgCor: 'bg-primary-100',
     icon: '🦷',
   },
   concluido: {
     label: 'Concluído',
-    cor: 'text-green-700',
-    bgCor: 'bg-green-100',
+    cor: 'text-success-700',
+    bgCor: 'bg-success-100',
     icon: '✅',
   },
 };
@@ -128,13 +128,13 @@ export const PARCELA_STATUS_CONFIG: Record<ParcelaStatus, ParcelaStatusConfig> =
   },
   paga: {
     label: 'Paga',
-    cor: 'text-green-700',
-    bgCor: 'bg-green-100',
+    cor: 'text-success-700',
+    bgCor: 'bg-success-100',
   },
   vencida: {
     label: 'Vencida',
-    cor: 'text-red-700',
-    bgCor: 'bg-red-100',
+    cor: 'text-error-700',
+    bgCor: 'bg-error-100',
   },
 };
 
@@ -156,8 +156,8 @@ export function getAtendimentoStatus(status: string): StatusConfig {
   return (
     STATUS_CONFIG[status as AtendimentoStatus] ?? {
       label: status,
-      cor: 'text-gray-600',
-      bgCor: 'bg-gray-100',
+      cor: 'text-neutral-600',
+      bgCor: 'bg-neutral-100',
       icon: '❓',
     }
   );
@@ -168,8 +168,8 @@ export function getItemStatus(status: string): ItemStatusConfig {
   return (
     ITEM_STATUS_CONFIG[status as ItemStatus] ?? {
       label: status,
-      cor: 'text-gray-600',
-      bgCor: 'bg-gray-100',
+      cor: 'text-neutral-600',
+      bgCor: 'bg-neutral-100',
       icon: '❓',
     }
   );

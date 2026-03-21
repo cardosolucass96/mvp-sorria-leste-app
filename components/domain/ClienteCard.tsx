@@ -20,8 +20,8 @@ export default function ClienteCard({ cliente, onClick, className }: ClienteCard
     <Card onClick={onClick} className={className}>
       <div className="flex items-start justify-between">
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-gray-900 truncate">{cliente.nome}</h3>
-          <div className="mt-2 space-y-1 text-sm text-gray-600">
+          <h3 className="font-semibold text-foreground truncate">{cliente.nome}</h3>
+          <div className="mt-2 space-y-1 text-sm text-neutral-600">
             <p>📄 CPF: {formatarCPF(cliente.cpf)}</p>
             <p>📱 Tel: {formatarTelefone(cliente.telefone)}</p>
             {cliente.email && <p>✉️ {cliente.email}</p>}

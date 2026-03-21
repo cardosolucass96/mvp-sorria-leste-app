@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useId } from 'react';
+import { useState, useRef, useId, useEffect } from 'react';
 
 export interface TooltipProps {
   content: string;
@@ -24,7 +24,7 @@ export default function Tooltip({
 }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   const id = useId();
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const show = () => {
     clearTimeout(timeoutRef.current);
@@ -34,6 +34,18 @@ export default function Tooltip({
   const hide = () => {
     timeoutRef.current = setTimeout(() => setVisible(false), 100);
   };
+
+  // WCAG 1.4.13: Escape key dismisses tooltip
+  useEffect(() => {
+    if (!visible) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setVisible(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [visible]);
 
   return (
     <span
@@ -51,7 +63,7 @@ export default function Tooltip({
           role="tooltip"
           className={`
             absolute z-50 px-2.5 py-1.5 text-xs font-medium
-            bg-gray-900 text-white rounded-lg shadow-lg
+            bg-neutral-900 text-white rounded-lg shadow-lg
             whitespace-nowrap pointer-events-none
             ${positionClasses[position]}
           `.trim()}

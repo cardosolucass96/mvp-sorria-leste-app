@@ -43,11 +43,11 @@ export default function LoginPage() {
   ];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-400 via-orange-500 to-orange-600">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-400 via-primary-500 to-primary-600">
       <div className="max-w-md w-full mx-4">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-block bg-white rounded-2xl p-4 shadow-xl mb-4">
+          <div className="inline-block bg-surface rounded-2xl p-4 shadow-xl mb-4">
             <Image
               src="/logo-sorria-leste.jpg"
               alt="Sorria Leste"
@@ -57,12 +57,12 @@ export default function LoginPage() {
             />
           </div>
           <h1 className="text-4xl font-bold text-white mt-4 drop-shadow-lg">Sorria Leste</h1>
-          <p className="text-orange-100 text-lg">Clínica Odontológica</p>
+          <p className="text-primary-100 text-lg">Clínica Odontológica</p>
         </div>
 
         {/* Card de Login */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-xl font-semibold mb-6 text-gray-800 text-center">Entrar no Sistema</h2>
+        <div className="bg-surface rounded-2xl shadow-2xl p-8">
+          <h2 className="text-xl font-semibold mb-6 text-neutral-800 text-center">Entrar no Sistema</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
@@ -102,9 +102,9 @@ export default function LoginPage() {
           </form>
 
           {/* Emails de teste */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-sm text-gray-500 mb-3 text-center">
-              👇 Clique para preencher (senha: <code className="bg-gray-100 px-1 rounded">Sorria@123</code>):
+          <div className="mt-6 pt-6 border-t border-neutral-200">
+            <p className="text-sm text-muted mb-3 text-center">
+              👇 Clique para preencher (senha: <code className="bg-surface-muted px-1 rounded">Sorria@123</code>):
             </p>
             <div className="grid grid-cols-2 gap-2">
               {testEmails.map((item) => (
@@ -115,10 +115,10 @@ export default function LoginPage() {
                     setEmail(item.email);
                     setSenha('Sorria@123');
                   }}
-                  className="text-left px-3 py-2 text-sm bg-orange-50 hover:bg-orange-100 rounded-lg transition-all hover:shadow-md border border-orange-100"
+                  className="text-left px-3 py-2 text-sm bg-primary-50 hover:bg-primary-100 rounded-lg transition-all hover:shadow-md border border-primary-100"
                 >
                   <span className="text-lg mr-1">{item.icon}</span>
-                  <span className="font-medium text-orange-800">{item.role}</span>
+                  <span className="font-medium text-primary-800">{item.role}</span>
                 </button>
               ))}
             </div>
@@ -126,7 +126,7 @@ export default function LoginPage() {
         </div>
 
         {/* Rodapé */}
-        <p className="text-center text-sm text-orange-100 mt-6">
+        <p className="text-center text-sm text-primary-100 mt-6">
           Sorria Leste v1.0 - Sistema de Gestão
         </p>
       </div>

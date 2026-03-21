@@ -42,17 +42,17 @@ export default function AtendimentoCard({
           <div className="flex items-center gap-3">
             <span className="text-2xl" aria-hidden="true">🦷</span>
             <div className="min-w-0">
-              <h3 className="font-semibold text-lg text-gray-900 truncate">
+              <h3 className="font-semibold text-lg text-foreground truncate">
                 {atendimento.cliente_nome}
               </h3>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted">
                 Atendimento #{atendimento.id} • {formatarDataHora(atendimento.created_at)}
               </p>
             </div>
           </div>
 
           {!compact && (
-            <div className="mt-3 flex flex-wrap gap-3 text-sm text-gray-600">
+            <div className="mt-3 flex flex-wrap gap-3 text-sm text-neutral-600">
               {atendimento.total != null && (
                 <span>💰 {formatarMoeda(atendimento.total)}</span>
               )}

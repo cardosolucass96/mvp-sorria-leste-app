@@ -131,9 +131,13 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`👤 ${cliente.nome}`}
+        title={cliente.nome}
+        icon="👤"
         description={`Cadastrado em ${formatarData(cliente.created_at)}`}
-        backHref="/clientes"
+        breadcrumb={[
+          { label: 'Clientes', href: '/clientes' },
+          { label: cliente.nome },
+        ]}
         actions={
           !isEditing ? (
             <div className="flex gap-2">
@@ -176,19 +180,19 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <h2 className="text-lg font-semibold mb-4">Dados Pessoais</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-500">Nome Completo</p>
+                  <p className="text-sm text-muted">Nome Completo</p>
                   <p className="font-medium">{cliente.nome}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">CPF</p>
+                  <p className="text-sm text-muted">CPF</p>
                   <p className="font-medium">{cliente.cpf ? formatarCPF(cliente.cpf) : '-'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Data de Nascimento</p>
-                  <p className="font-medium">{formatarData(cliente.data_nascimento)}</p>
+                  <p className="text-sm text-muted">Data de Nascimento</p>
+                  <p className="font-medium">{cliente.data_nascimento ? formatarData(cliente.data_nascimento) : '-'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Origem</p>
+                  <p className="text-sm text-muted">Origem</p>
                   <p className="font-medium">{getOrigemLabel(cliente.origem)}</p>
                 </div>
               </div>
@@ -198,15 +202,15 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <h2 className="text-lg font-semibold mb-4">Contato</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-500">Telefone</p>
+                  <p className="text-sm text-muted">Telefone</p>
                   <p className="font-medium">{cliente.telefone ? formatarTelefone(cliente.telefone) : '-'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Email</p>
+                  <p className="text-sm text-muted">Email</p>
                   <p className="font-medium">{cliente.email || '-'}</p>
                 </div>
                 <div className="md:col-span-2">
-                  <p className="text-sm text-gray-500">Endereço</p>
+                  <p className="text-sm text-muted">Endereço</p>
                   <p className="font-medium">{cliente.endereco || '-'}</p>
                 </div>
               </div>
@@ -215,7 +219,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             {cliente.observacoes && (
               <div>
                 <h2 className="text-lg font-semibold mb-4">Observações</h2>
-                <p className="text-gray-700 whitespace-pre-wrap">{cliente.observacoes}</p>
+                <p className="text-neutral-700 whitespace-pre-wrap">{cliente.observacoes}</p>
               </div>
             )}
           </div>

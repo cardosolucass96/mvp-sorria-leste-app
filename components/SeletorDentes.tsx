@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface SeletorDentesProps {
   dentesSelecionados: string[];
@@ -56,11 +56,11 @@ export default function SeletorDentes({ dentesSelecionados, onChange, disabled =
           type="button"
           onClick={() => setExpandido(!expandido)}
           disabled={disabled}
-          className="text-sm text-orange-600 hover:text-orange-800 font-medium flex items-center gap-1"
+          className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center gap-1"
         >
           {expandido ? '▼' : '▶'} Selecionar dentes
           {dentesSelecionados.length > 0 && (
-            <span className="ml-2 px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full text-xs">
+            <span className="ml-2 px-2 py-0.5 bg-primary-100 text-primary-800 rounded-full text-xs">
               {dentesSelecionados.length} {dentesSelecionados.length === 1 ? 'dente' : 'dentes'}
             </span>
           )}
@@ -71,7 +71,7 @@ export default function SeletorDentes({ dentesSelecionados, onChange, disabled =
             type="button"
             onClick={limparSelecao}
             disabled={disabled}
-            className="text-xs text-gray-500 hover:text-gray-700"
+            className="text-xs text-muted hover:text-neutral-700"
           >
             Limpar
           </button>
@@ -79,7 +79,7 @@ export default function SeletorDentes({ dentesSelecionados, onChange, disabled =
       </div>
 
       {expandido && (
-        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-3">
+        <div className="border border-border rounded-lg p-4 bg-surface-secondary space-y-3">
           {Object.entries(DENTES_PERMANENTES).map(([quadrante, dentes]) => {
             const todosSelecionados = dentes.every(d => dentesSelecionados.includes(d));
             const algunsSelecionados = dentes.some(d => dentesSelecionados.includes(d)) && !todosSelecionados;
@@ -90,7 +90,7 @@ export default function SeletorDentes({ dentesSelecionados, onChange, disabled =
                   type="button"
                   onClick={() => selecionarQuadrante(dentes)}
                   disabled={disabled}
-                  className="text-xs font-medium text-gray-600 hover:text-orange-600 flex items-center gap-1"
+                  className="text-xs font-medium text-neutral-600 hover:text-primary-600 flex items-center gap-1"
                 >
                   <input
                     type="checkbox"
@@ -99,7 +99,7 @@ export default function SeletorDentes({ dentesSelecionados, onChange, disabled =
                       if (input) input.indeterminate = algunsSelecionados;
                     }}
                     onChange={() => {}}
-                    className="rounded text-orange-600"
+                    className="rounded text-primary-600"
                   />
                   {quadrante}
                 </button>
@@ -115,9 +115,9 @@ export default function SeletorDentes({ dentesSelecionados, onChange, disabled =
                         disabled={disabled}
                         className={`
                           px-2 py-1.5 text-xs font-medium rounded transition-all
-                          ${selecionado 
-                            ? 'bg-orange-600 text-white shadow-sm' 
-                            : 'bg-white text-gray-700 border border-gray-300 hover:border-orange-400 hover:bg-orange-50'
+                          ${selecionado
+                            ? 'bg-primary-600 text-white shadow-sm'
+                            : 'bg-surface text-neutral-700 border border-neutral-300 hover:border-primary-400 hover:bg-primary-50'
                           }
                           ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                         `}
@@ -134,7 +134,7 @@ export default function SeletorDentes({ dentesSelecionados, onChange, disabled =
       )}
 
       {dentesSelecionados.length > 0 && (
-        <div className="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded p-2">
+        <div className="text-xs text-neutral-600 bg-info-50 border border-info-200 rounded p-2">
           <strong>Dentes selecionados:</strong> {dentesSelecionados.sort((a, b) => Number(a) - Number(b)).join(', ')}
         </div>
       )}

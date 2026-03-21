@@ -364,7 +364,7 @@ describe('Sprint 2 - Login Simples + Usuários', () => {
         'utf-8'
       );
       expect(content).toContain('usuarios');
-      expect(content).toContain('<table');
+      expect(content).toMatch(/<table|<Table/);
     });
 
     test('deve ter formulário de criação/edição', () => {

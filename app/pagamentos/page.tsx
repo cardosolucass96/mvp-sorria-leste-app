@@ -2,12 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import PageHeader from '@/components/ui/PageHeader';
-import StatCard from '@/components/ui/StatCard';
-import Tabs from '@/components/ui/Tabs';
-import Table, { TableColumn } from '@/components/ui/Table';
-import LoadingState from '@/components/ui/LoadingState';
-import Button from '@/components/ui/Button';
+import { PageHeader, Alert, StatCard, Tabs, Table, LoadingState, Button } from '@/components/ui';
+import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda, formatarData } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
@@ -39,6 +35,7 @@ export default function PagamentosPage() {
   const [atendimentos, setAtendimentos] = useState<AtendimentoComTotais[]>([]);
   const [parcelasVencidas, setParcelasVencidas] = useState<Parcela[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filtro, setFiltro] = useState<'aguardando' | 'parcelas'>('aguardando');
 
   useEffect(() => {
@@ -79,6 +76,7 @@ export default function PagamentosPage() {
       }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
+      setError('Erro ao carregar dados de pagamentos');
     } finally {
       setLoading(false);
     }
@@ -87,32 +85,34 @@ export default function PagamentosPage() {
   if (loading) return <LoadingState />;
 
   const atendColumns: TableColumn<AtendimentoComTotais>[] = [
-    { key: 'cliente_nome', header: 'Cliente' },
-    { key: 'id', header: 'Atendimento', render: (a) => `#${a.id} - ${formatarData(a.created_at)}` },
-    { key: 'total', header: 'Total', align: 'right', render: (a) => formatarMoeda(a.total) },
-    { key: 'total_pago', header: 'Pago', align: 'right', render: (a) => <span className="text-green-600">{formatarMoeda(a.total_pago)}</span> },
-    { key: 'pendente', header: 'Pendente', align: 'right', render: (a) => <span className="font-bold text-red-600">{formatarMoeda(a.total - a.total_pago)}</span> },
-    { key: 'acoes', header: 'Ações', align: 'right', render: (a) => <Link href={`/atendimentos/${a.id}/pagamento`} className="btn btn-primary btn-sm">💳 Receber</Link> },
+    { key: 'cliente_nome', label: 'Cliente' },
+    { key: 'id', label: 'Atendimento', render: (a) => `#${a.id} - ${formatarData(a.created_at)}` },
+    { key: 'total', label: 'Total', align: 'right', render: (a) => formatarMoeda(a.total) },
+    { key: 'total_pago', label: 'Pago', align: 'right', render: (a) => <span className="text-success-600">{formatarMoeda(a.total_pago)}</span> },
+    { key: 'pendente', label: 'Pendente', align: 'right', render: (a) => <span className="font-bold text-error-600">{formatarMoeda(a.total - a.total_pago)}</span> },
+    { key: 'acoes', label: 'Ações', align: 'right', render: (a) => <Link href={`/atendimentos/${a.id}/pagamento`}><Button size="sm">💳 Receber</Button></Link> },
   ];
 
   const parcelaColumns: TableColumn<Parcela>[] = [
-    { key: 'cliente_nome', header: 'Cliente' },
-    { key: 'atendimento_id', header: 'Atendimento', render: (p) => `#${p.atendimento_id}` },
-    { key: 'numero', header: 'Parcela', render: (p) => `${p.numero}ª Parcela` },
-    { key: 'data_vencimento', header: 'Vencimento', render: (p) => <span className="text-red-600 font-medium">{formatarData(p.data_vencimento)} ⚠️</span> },
-    { key: 'valor', header: 'Valor', align: 'right', render: (p) => <span className="font-bold text-red-600">{formatarMoeda(p.valor)}</span> },
-    { key: 'acoes', header: 'Ações', align: 'right', render: (p) => <Link href={`/atendimentos/${p.atendimento_id}/pagamento`} className="btn btn-primary btn-sm">💳 Receber</Link> },
+    { key: 'cliente_nome', label: 'Cliente' },
+    { key: 'atendimento_id', label: 'Atendimento', render: (p) => `#${p.atendimento_id}` },
+    { key: 'numero', label: 'Parcela', render: (p) => `${p.numero}ª Parcela` },
+    { key: 'data_vencimento', label: 'Vencimento', render: (p) => <span className="text-error-600 font-medium">{formatarData(p.data_vencimento)} ⚠️</span> },
+    { key: 'valor', label: 'Valor', align: 'right', render: (p) => <span className="font-bold text-error-600">{formatarMoeda(p.valor)}</span> },
+    { key: 'acoes', label: 'Ações', align: 'right', render: (p) => <Link href={`/atendimentos/${p.atendimento_id}/pagamento`}><Button size="sm">💳 Receber</Button></Link> },
   ];
 
   return (
     <div className="space-y-6">
+      {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
+
       <PageHeader title="Pagamentos" icon="💰" description="Gerencie pagamentos e parcelas pendentes" />
 
       {/* Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard icon="⏳" label="Aguardando Pagamento" value={String(atendimentos.length)} color="border-yellow-500" />
-        <StatCard icon="⚠️" label="Parcelas Vencidas" value={String(parcelasVencidas.length)} color="border-red-500" />
-        <StatCard icon="💵" label="Total a Receber" value={formatarMoeda(atendimentos.reduce((acc, a) => acc + (a.total - a.total_pago), 0))} color="border-green-500" />
+        <StatCard icon="⚠️" label="Parcelas Vencidas" value={String(parcelasVencidas.length)} color="border-error-500" />
+        <StatCard icon="💵" label="Total a Receber" value={formatarMoeda(atendimentos.reduce((acc, a) => acc + (a.total - a.total_pago), 0))} color="border-success-500" />
       </div>
 
       {/* Tabs */}
@@ -122,7 +122,7 @@ export default function PagamentosPage() {
           { key: 'parcelas', label: `Parcelas Vencidas (${parcelasVencidas.length})` },
         ]}
         activeTab={filtro}
-        onChange={(key) => setFiltro(key as 'aguardando' | 'parcelas')}
+        onTabChange={(key) => setFiltro(key as 'aguardando' | 'parcelas')}
       />
 
       {/* Conteúdo */}

@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatarMoeda } from '@/lib/utils/formatters';
-import Alert from '@/components/ui/Alert';
-import LoadingState from '@/components/ui/LoadingState';
+import { Alert, LoadingState, PageHeader, Card, Button, Input, Select } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface Cliente {
@@ -40,6 +39,7 @@ export default function NovoAtendimentoPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   
   const [clienteId, setClienteId] = useState('');
   const [avaliadorId, setAvaliadorId] = useState('');
@@ -86,6 +86,7 @@ export default function NovoAtendimentoPage() {
       }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
+      setLoadError('Erro ao carregar dados. Tente recarregar a página.');
     } finally {
       setLoading(false);
     }
@@ -158,30 +159,27 @@ export default function NovoAtendimentoPage() {
   };
 
   if (loading) {
-    return <LoadingState message="Carregando dados..." />;
+    return <LoadingState text="Carregando dados..." />;
   }
 
   return (
     <div className="space-y-6 max-w-3xl">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link 
-          href="/atendimentos" 
-          className="text-gray-500 hover:text-gray-700"
-        >
-          ← Voltar
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">📋 Novo Atendimento</h1>
-          <p className="text-gray-600">Iniciar atendimento para um cliente</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Novo Atendimento"
+        icon="📋"
+        description="Iniciar atendimento para um cliente"
+        breadcrumb={[
+          { label: 'Atendimentos', href: '/atendimentos' },
+          { label: 'Novo Atendimento' },
+        ]}
+      />
 
-      {error && <Alert type="error" message={error} />}
+      {loadError && <Alert type="error">{loadError}</Alert>}
+      {error && <Alert type="error">{error}</Alert>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Tipo de Atendimento */}
-        <div className="card">
+        <Card>
           <h2 className="text-lg font-semibold mb-4">Tipo de Atendimento</h2>
           <div className="grid grid-cols-2 gap-3">
             <button
@@ -189,13 +187,13 @@ export default function NovoAtendimentoPage() {
               onClick={() => setTipoAtendimento('normal')}
               className={`p-4 rounded-lg border-2 text-left transition-all ${
                 tipoAtendimento === 'normal'
-                  ? 'border-orange-500 bg-orange-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-primary-500 bg-primary-50'
+                  : 'border-neutral-200 hover:border-neutral-300'
               }`}
             >
               <div className="text-2xl mb-1">🔍</div>
-              <div className="font-semibold text-gray-900">Normal</div>
-              <p className="text-xs text-gray-500 mt-1">
+              <div className="font-semibold text-foreground">Normal</div>
+              <p className="text-xs text-muted mt-1">
                 Triagem → Avaliação → Pagamento → Execução
               </p>
             </button>
@@ -205,44 +203,44 @@ export default function NovoAtendimentoPage() {
               onClick={() => setTipoAtendimento('orto')}
               className={`p-4 rounded-lg border-2 text-left transition-all ${
                 tipoAtendimento === 'orto'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-info-500 bg-info-50'
+                  : 'border-neutral-200 hover:border-neutral-300'
               }`}
             >
               <div className="text-2xl mb-1">🦷</div>
-              <div className="font-semibold text-gray-900">Orto / Aparelho</div>
-              <p className="text-xs text-gray-500 mt-1">
+              <div className="font-semibold text-foreground">Orto / Aparelho</div>
+              <p className="text-xs text-muted mt-1">
                 Direto para Pagamento → Execução pelo dentista
               </p>
             </button>
           </div>
-        </div>
+        </Card>
 
         {/* Seleção de Cliente */}
-        <div className="card">
+        <Card>
           <h2 className="text-lg font-semibold mb-4">Selecione o Cliente</h2>
           
           <div className="mb-4">
-            <input
-              type="text"
+            <Input
+              label="Buscar cliente"
+              name="busca"
               value={busca}
-              onChange={(e) => setBusca(e.target.value)}
+              onChange={(value) => setBusca(value)}
               placeholder="Buscar por nome, CPF ou telefone..."
-              className="input"
             />
           </div>
           
           <div className="max-h-64 overflow-y-auto border rounded-lg divide-y">
             {clientesFiltrados.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">
+              <div className="p-4 text-center text-muted">
                 Nenhum cliente encontrado
               </div>
             ) : (
               clientesFiltrados.map((cliente) => (
                 <label
                   key={cliente.id}
-                  className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
-                    clienteId === cliente.id.toString() ? 'bg-blue-50' : ''
+                  className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-surface-secondary transition-colors ${
+                    clienteId === cliente.id.toString() ? 'bg-info-50' : ''
                   }`}
                 >
                   <input
@@ -251,11 +249,11 @@ export default function NovoAtendimentoPage() {
                     value={cliente.id}
                     checked={clienteId === cliente.id.toString()}
                     onChange={(e) => setClienteId(e.target.value)}
-                    className="text-blue-600"
+                    className="text-info-600"
                   />
                   <div className="flex-1">
-                    <p className="font-medium text-gray-900">{cliente.nome}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="font-medium text-foreground">{cliente.nome}</p>
+                    <p className="text-sm text-muted">
                       {cliente.cpf && `CPF: ${cliente.cpf}`}
                       {cliente.cpf && cliente.telefone && ' • '}
                       {cliente.telefone && `Tel: ${cliente.telefone}`}
@@ -269,112 +267,92 @@ export default function NovoAtendimentoPage() {
           <div className="mt-4 pt-4 border-t">
             <Link 
               href="/clientes/novo" 
-              className="text-blue-600 hover:text-blue-800 text-sm"
+              className="text-info-600 hover:text-info-800 text-sm"
             >
               + Cadastrar novo cliente
             </Link>
           </div>
-        </div>
+        </Card>
 
         {/* Fluxo Normal: Avaliador */}
         {tipoAtendimento === 'normal' && (
-          <div className="card">
+          <Card>
             <h2 className="text-lg font-semibold mb-4">Avaliador (opcional)</h2>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-muted mb-4">
               Selecione um avaliador ou deixe em branco para definir depois
             </p>
             
-            <select
+            <Select
+              label="Avaliador"
+              name="avaliador"
               value={avaliadorId}
-              onChange={(e) => setAvaliadorId(e.target.value)}
-              className="input"
-            >
-              <option value="">-- Definir depois --</option>
-              {avaliadores.map((avaliador) => (
-                <option key={avaliador.id} value={avaliador.id}>
-                  {avaliador.nome} ({avaliador.role})
-                </option>
-              ))}
-            </select>
-          </div>
+              onChange={(value) => setAvaliadorId(value)}
+              options={avaliadores.map((a) => ({ value: String(a.id), label: `${a.nome} (${a.role})` }))}
+              placeholder="-- Definir depois --"
+            />
+          </Card>
         )}
 
         {/* Fluxo Orto: Dentista + Procedimento */}
         {tipoAtendimento === 'orto' && (
-          <div className="card border-l-4 border-l-blue-500">
+          <Card className="border-l-4 border-l-info-500">
             <h2 className="text-lg font-semibold mb-4">🦷 Configuração Orto</h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Dentista (executor) *
-                </label>
-                <select
+                <Select
+                  label="Dentista (executor) *"
+                  name="executor"
                   value={executorId}
-                  onChange={(e) => setExecutorId(e.target.value)}
-                  className="input"
+                  onChange={(value) => setExecutorId(value)}
+                  options={executores.map((e) => ({ value: String(e.id), label: e.nome }))}
+                  placeholder="Selecione o dentista..."
                   required
-                >
-                  <option value="">Selecione o dentista...</option>
-                  {executores.map((exec) => (
-                    <option key={exec.id} value={exec.id}>
-                      {exec.nome}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Procedimento *
-                </label>
-                <select
+                <Select
+                  label="Procedimento *"
+                  name="procedimento"
                   value={procedimentoOrtoId}
-                  onChange={(e) => setProcedimentoOrtoId(e.target.value)}
-                  className="input"
+                  onChange={(value) => setProcedimentoOrtoId(value)}
+                  options={procedimentos.map((p) => ({ value: String(p.id), label: `${p.nome} - ${formatarMoeda(p.valor)}` }))}
+                  placeholder="Selecione o procedimento..."
                   required
-                >
-                  <option value="">Selecione o procedimento...</option>
-                  {procedimentos.map((proc) => (
-                    <option key={proc.id} value={proc.id}>
-                      {proc.nome} - {formatarMoeda(proc.valor)}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               {procedimentoSelecionado && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-blue-800">
+                <div className="bg-info-50 border border-info-200 rounded-lg p-4">
+                  <p className="text-sm text-info-800">
                     <strong>Resumo:</strong> {procedimentoSelecionado.nome} — {formatarMoeda(procedimentoSelecionado.valor)}
                   </p>
-                  <p className="text-xs text-blue-600 mt-1">
+                  <p className="text-xs text-info-600 mt-1">
                     O atendimento será criado e irá direto para a fila de pagamento.
                     Após o pagamento, entrará na fila de execução do dentista selecionado.
                   </p>
                 </div>
               )}
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Botões */}
         <div className="flex justify-end gap-3">
-          <Link href="/atendimentos" className="btn btn-secondary">
+          <Button variant="secondary" onClick={() => router.push('/atendimentos')} type="button">
             Cancelar
-          </Link>
-          <button
+          </Button>
+          <Button
             type="submit"
             disabled={!clienteId || saving || (tipoAtendimento === 'orto' && (!executorId || !procedimentoOrtoId))}
-            className="btn btn-primary disabled:opacity-50"
+            loading={saving}
           >
-            {saving 
-              ? 'Criando...' 
-              : tipoAtendimento === 'orto' 
-                ? '🦷 Criar Atendimento Orto' 
-                : 'Criar Atendimento'
+            {tipoAtendimento === 'orto' 
+              ? '🦷 Criar Atendimento Orto' 
+              : 'Criar Atendimento'
             }
-          </button>
+          </Button>
         </div>
       </form>
     </div>

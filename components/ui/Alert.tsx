@@ -16,27 +16,27 @@ const typeConfig: Record<
   { bg: string; border: string; text: string; icon: string }
 > = {
   info: {
-    bg: 'bg-blue-50',
-    border: 'border-blue-200',
-    text: 'text-blue-800',
+    bg: 'bg-info-50',
+    border: 'border-info-200',
+    text: 'text-info-800',
     icon: 'ℹ️',
   },
   success: {
-    bg: 'bg-green-50',
-    border: 'border-green-200',
-    text: 'text-green-800',
+    bg: 'bg-success-50',
+    border: 'border-success-200',
+    text: 'text-success-800',
     icon: '✅',
   },
   warning: {
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    text: 'text-amber-800',
+    bg: 'bg-warning-50',
+    border: 'border-warning-200',
+    text: 'text-warning-800',
     icon: '⚠️',
   },
   error: {
-    bg: 'bg-red-50',
-    border: 'border-red-200',
-    text: 'text-red-800',
+    bg: 'bg-error-50',
+    border: 'border-error-200',
+    text: 'text-error-800',
     icon: '❌',
   },
 };
@@ -61,7 +61,8 @@ export default function Alert({
 
   return (
     <div
-      role="alert"
+      role={type === 'error' || type === 'warning' ? 'alert' : 'status'}
+      aria-live={type === 'error' || type === 'warning' ? 'assertive' : 'polite'}
       className={`
         flex gap-3 p-4 rounded-lg border
         ${config.bg} ${config.border} ${config.text}

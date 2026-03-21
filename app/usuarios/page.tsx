@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { Usuario, UserRole } from '@/lib/types';
-import { PageHeader, Card, Button, Input, Select, Badge, Alert, LoadingState } from '@/components/ui';
-import { ROLE_LABELS_DESCRITIVOS, ROLE_COLORS } from '@/lib/constants/roles';
+import { PageHeader, Card, Button, Input, Select, Badge, Alert, LoadingState, Table } from '@/components/ui';
+import type { TableColumn } from '@/components/ui/Table';
+import { ROLE_LABELS_DESCRITIVOS } from '@/lib/constants/roles';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 const roleOptions = Object.entries(ROLE_LABELS_DESCRITIVOS).map(([value, label]) => ({
@@ -233,80 +234,63 @@ export default function UsuariosPage() {
       )}
 
       {/* Tabela de Usuários */}
-      <Card noPadding>
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Nome
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Perfil
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Status
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                Ações
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {usuarios.map((usuario) => (
-              <tr key={usuario.id} className={!usuario.ativo ? 'bg-gray-50 opacity-60' : ''}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="font-medium text-gray-900">{usuario.nome}</span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                  {usuario.email}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Badge color={getRoleBadgeColor(usuario.role)}>
-                    {ROLE_LABELS_DESCRITIVOS[usuario.role]}
-                  </Badge>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Badge color={usuario.ativo ? 'green' : 'red'}>
-                    {usuario.ativo ? 'Ativo' : 'Inativo'}
-                  </Badge>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right space-x-2">
-                  <button
-                    onClick={() => handleEdit(usuario)}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                  >
-                    Editar
-                  </button>
-                  {usuario.ativo ? (
-                    <button
-                      onClick={() => handleDelete(usuario.id, usuario.nome)}
-                      className="text-red-600 hover:text-red-800 text-sm font-medium"
-                    >
-                      Desativar
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleReactivate(usuario.id)}
-                      className="text-green-600 hover:text-green-800 text-sm font-medium"
-                    >
-                      Reativar
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {usuarios.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            Nenhum usuário cadastrado
-          </div>
-        )}
-      </Card>
+      <Table<Usuario>
+        columns={[
+          {
+            key: 'nome',
+            label: 'Nome',
+            render: (u) => <span className="font-medium text-foreground">{u.nome}</span>,
+          },
+          {
+            key: 'email',
+            label: 'Email',
+            render: (u) => <span className="text-neutral-600">{u.email}</span>,
+          },
+          {
+            key: 'role',
+            label: 'Perfil',
+            render: (u) => (
+              <Badge color={getRoleBadgeColor(u.role)}>
+                {ROLE_LABELS_DESCRITIVOS[u.role]}
+              </Badge>
+            ),
+          },
+          {
+            key: 'status',
+            label: 'Status',
+            render: (u) => (
+              <Badge color={u.ativo ? 'green' : 'red'}>
+                {u.ativo ? 'Ativo' : 'Inativo'}
+              </Badge>
+            ),
+          },
+          {
+            key: 'acoes',
+            label: 'Ações',
+            align: 'right',
+            render: (u) => (
+              <div className="space-x-2">
+                <Button variant="ghost" size="sm" onClick={() => handleEdit(u)} className="text-info-600 hover:text-info-800">
+                  Editar
+                </Button>
+                {u.ativo ? (
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(u.id, u.nome)} className="text-error-600 hover:text-error-800">
+                    Desativar
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm" onClick={() => handleReactivate(u.id)} className="text-success-600 hover:text-success-800">
+                    Reativar
+                  </Button>
+                )}
+              </div>
+            ),
+          },
+        ] as TableColumn<Usuario>[]}
+        data={usuarios}
+        keyExtractor={(u) => u.id}
+        emptyMessage="Nenhum usuário cadastrado"
+        caption="Usuários do sistema"
+      />
     </div>
   );
 }

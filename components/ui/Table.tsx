@@ -28,12 +28,12 @@ export interface TableProps<T> {
 
 // ─── Skeleton ───────────────────────────────────────────────────
 
-function SkeletonRow({ cols }: { cols: number }) {
+function SkeletonRow({ cols, rowIndex = 0 }: { cols: number; rowIndex?: number }) {
   return (
     <tr>
       {Array.from({ length: cols }).map((_, i) => (
         <td key={i} className="px-4 py-3">
-          <div className="h-4 bg-gray-200 rounded animate-pulse" style={{ width: `${50 + Math.random() * 40}%` }} />
+          <div className="h-4 bg-neutral-200 rounded animate-pulse" style={{ width: `${50 + ((rowIndex * 17 + i * 13) % 40)}%` }} />
         </td>
       ))}
     </tr>
@@ -58,19 +58,20 @@ export default function Table<T>({
     align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
 
   return (
-    <div className={`overflow-x-auto rounded-xl border border-orange-100 ${className}`}>
-      <table className="w-full text-sm">
+    <div className={`overflow-x-auto rounded-xl border border-border-light ${className}`}>
+      <table className="w-full text-sm" aria-busy={loading || undefined}>
         {caption && <caption className="sr-only">{caption}</caption>}
 
-        <thead className="bg-orange-50">
+        <thead className="bg-primary-50">
           <tr>
             {columns.map((col) => (
               <th
                 key={col.key}
+                scope="col"
                 className={`
-                  px-4 py-3 text-xs font-semibold uppercase tracking-wider text-orange-900
+                  px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900
                   ${alignClass(col.align)}
-                  ${stickyHeader ? 'sticky top-0 bg-orange-50 z-10' : ''}
+                  ${stickyHeader ? 'sticky top-0 bg-primary-50 z-10' : ''}
                 `}
                 style={col.width ? { width: col.width } : undefined}
               >
@@ -80,18 +81,18 @@ export default function Table<T>({
           </tr>
         </thead>
 
-        <tbody className="divide-y divide-gray-100 bg-white">
+        <tbody className="divide-y divide-neutral-100 bg-surface">
           {loading ? (
             <>
-              <SkeletonRow cols={columns.length} />
-              <SkeletonRow cols={columns.length} />
-              <SkeletonRow cols={columns.length} />
+              <SkeletonRow cols={columns.length} rowIndex={0} />
+              <SkeletonRow cols={columns.length} rowIndex={1} />
+              <SkeletonRow cols={columns.length} rowIndex={2} />
             </>
           ) : data.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="px-4 py-12 text-center">
-                <div className="flex flex-col items-center gap-2 text-gray-500">
-                  <span className="text-3xl">{emptyIcon}</span>
+                <div className="flex flex-col items-center gap-2 text-muted">
+                  <span className="text-3xl" aria-hidden="true">{emptyIcon}</span>
                   <p className="text-sm">{emptyMessage}</p>
                 </div>
               </td>
@@ -101,10 +102,13 @@ export default function Table<T>({
               <tr
                 key={keyExtractor(item)}
                 onClick={onRowClick ? () => onRowClick(item) : undefined}
+                onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(item); } } : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                role={onRowClick ? 'row' : undefined}
                 className={`
                   transition-colors
-                  ${onRowClick ? 'cursor-pointer hover:bg-orange-50/50' : ''}
-                  ${index % 2 === 1 ? 'bg-gray-50/30' : ''}
+                  ${onRowClick ? 'cursor-pointer hover:bg-primary-50/50 focus:bg-primary-50/50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500' : ''}
+                  ${index % 2 === 1 ? 'bg-neutral-50/30' : ''}
                 `}
               >
                 {columns.map((col) => (

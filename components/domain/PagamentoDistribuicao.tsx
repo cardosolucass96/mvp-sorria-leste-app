@@ -5,7 +5,6 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
 import Checkbox from '@/components/ui/Checkbox';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
@@ -71,7 +70,7 @@ export default function PagamentoDistribuicao({
   return (
     <div className={`space-y-4 ${className}`}>
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-700">Distribuir para itens</h3>
+        <h3 className="text-sm font-semibold text-neutral-700">Distribuir para itens</h3>
         <Button variant="ghost" size="sm" onClick={distribuirIgualmente}>
           Distribuir igualmente
         </Button>
@@ -79,14 +78,14 @@ export default function PagamentoDistribuicao({
 
       {/* Barra de progresso */}
       <div>
-        <div className="flex justify-between text-xs text-gray-500 mb-1">
+        <div className="flex justify-between text-xs text-muted mb-1">
           <span>Distribuído: {formatarMoeda(totalDistribuido)}</span>
           <span>Total: {formatarMoeda(totalPagamento)}</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
+        <div className="w-full bg-neutral-200 rounded-full h-2">
           <div
             className={`h-2 rounded-full transition-all ${
-              isValid ? 'bg-green-500' : percentual > 100 ? 'bg-red-500' : 'bg-orange-500'
+              isValid ? 'bg-success-500' : percentual > 100 ? 'bg-error-500' : 'bg-primary-500'
             }`}
             style={{ width: `${Math.min(percentual, 100)}%` }}
           />
@@ -99,7 +98,7 @@ export default function PagamentoDistribuicao({
           <div
             key={item.id}
             className={`flex items-center gap-3 p-3 rounded-lg border ${
-              item.selecionado ? 'border-orange-200 bg-orange-50' : 'border-gray-200 bg-white'
+              item.selecionado ? 'border-primary-200 bg-primary-50' : 'border-border bg-surface'
             }`}
           >
             <Checkbox
@@ -107,7 +106,7 @@ export default function PagamentoDistribuicao({
               checked={item.selecionado}
               onChange={handleToggle(index)}
             />
-            <span className="text-xs text-gray-500 shrink-0">
+            <span className="text-xs text-muted shrink-0">
               (restante: {formatarMoeda(item.valorRestante)})
             </span>
             {item.selecionado && (

@@ -67,11 +67,8 @@ describe('Sprint 5: Landmarks & Roles', () => {
     expect(layout).toContain('role="main"');
   });
 
-  test('Sidebar tem role="navigation"', () => {
-    expect(sidebar).toContain('role="navigation"');
-  });
-
-  test('Sidebar tem aria-label="Menu principal"', () => {
+  test('Sidebar tem <nav> com aria-label para navegação', () => {
+    expect(sidebar).toContain('<nav');
     expect(sidebar).toContain('aria-label="Menu principal"');
   });
 });
@@ -340,10 +337,8 @@ describe('Sprint 5: Empty states nas listas', () => {
   });
 
   const pagesWithEmptyState = [
-    ['meus-procedimentos', 'page.tsx'],
     ['execucao', 'page.tsx'],
     ['clientes', '[id]', 'page.tsx'],
-    ['minhas-comissoes', 'page.tsx'],
   ];
 
   test.each(pagesWithEmptyState)('%s usa EmptyState', (...segments) => {
@@ -352,6 +347,8 @@ describe('Sprint 5: Empty states nas listas', () => {
   });
 
   const pagesWithTableEmpty = [
+    ['meus-procedimentos', 'page.tsx'],
+    ['minhas-comissoes', 'page.tsx'],
     ['clientes', 'page.tsx'],
     ['pagamentos', 'page.tsx'],
     ['comissoes', 'page.tsx'],

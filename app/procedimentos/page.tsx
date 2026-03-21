@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { PageHeader, Button, Input, Checkbox, Badge, Alert, Modal, LoadingState } from '@/components/ui';
+import { PageHeader, Button, Input, Checkbox, Badge, Alert, Modal, LoadingState, Card, Table } from '@/components/ui';
+import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
@@ -62,6 +63,7 @@ export default function ProcedimentosPage() {
       setProcedimentos(data);
     } catch (error) {
       console.error('Erro ao carregar procedimentos:', error);
+      setError('Erro ao carregar procedimentos');
     } finally {
       setLoading(false);
     }
@@ -182,7 +184,7 @@ export default function ProcedimentosPage() {
       />
 
       {/* Busca e Filtros */}
-      <div className="card">
+      <Card>
         <form onSubmit={handleBuscar} className="flex gap-4 items-end flex-wrap">
           <div className="flex-1 min-w-[200px]">
             <Input
@@ -202,116 +204,86 @@ export default function ProcedimentosPage() {
           
           <Button type="submit" variant="secondary">Buscar</Button>
         </form>
-      </div>
+      </Card>
 
       {/* Tabela */}
-      <div className="card overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Procedimento
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                Valor
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                Por Dente
-              </th>
-              {podeVerComissoes && (
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                  Comissão Venda
-                </th>
-              )}
-              {podeVerComissoes && (
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                  Comissão Execução
-                </th>
-              )}
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                Status
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                Ações
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {procedimentos.length === 0 ? (
-              <tr>
-                <td colSpan={podeVerComissoes ? 7 : 5} className="px-6 py-8 text-center text-gray-500">
-                  Nenhum procedimento encontrado
-                </td>
-              </tr>
-            ) : (
-              procedimentos.map((proc) => (
-                <tr key={proc.id} className={!proc.ativo ? 'bg-gray-50' : ''}>
-                  <td className="px-6 py-4">
-                    <div className={`font-medium ${!proc.ativo ? 'text-gray-400' : 'text-gray-900'}`}>
-                      {proc.nome}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <span className={`font-semibold ${proc.valor === 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                      {proc.valor === 0 ? 'Grátis' : formatarMoeda(proc.valor)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {proc.por_dente ? (
-                      <Badge color="amber">🦷 Sim</Badge>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                  {podeVerComissoes && (
-                    <td className="px-6 py-4 text-right text-gray-600">
-                      {proc.comissao_venda}%
-                    </td>
-                  )}
-                  {podeVerComissoes && (
-                    <td className="px-6 py-4 text-right text-gray-600">
-                      {proc.comissao_execucao}%
-                    </td>
-                  )}
-                  <td className="px-6 py-4 text-center">
-                    {proc.ativo ? (
-                      <Badge color="green">Ativo</Badge>
-                    ) : (
-                      <Badge color="gray">Inativo</Badge>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right space-x-2">
-                    <button
-                      onClick={() => abrirModalEditar(proc)}
-                      className="text-blue-600 hover:text-blue-800 text-sm"
-                    >
-                      Editar
-                    </button>
-                    {proc.ativo ? (
-                      <button
-                        onClick={() => handleDesativar(proc.id)}
-                        className="text-red-600 hover:text-red-800 text-sm"
-                      >
-                        Desativar
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleReativar(proc.id)}
-                        className="text-green-600 hover:text-green-800 text-sm"
-                      >
-                        Reativar
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Table<Procedimento>
+        columns={[
+          {
+            key: 'nome',
+            label: 'Procedimento',
+            render: (proc) => (
+              <span className={`font-medium ${!proc.ativo ? 'text-neutral-400' : 'text-foreground'}`}>
+                {proc.nome}
+              </span>
+            ),
+          },
+          {
+            key: 'valor',
+            label: 'Valor',
+            align: 'right',
+            render: (proc) => (
+              <span className={`font-semibold ${proc.valor === 0 ? 'text-success-600' : 'text-foreground'}`}>
+                {proc.valor === 0 ? 'Grátis' : formatarMoeda(proc.valor)}
+              </span>
+            ),
+          },
+          {
+            key: 'por_dente',
+            label: 'Por Dente',
+            align: 'center',
+            render: (proc) => proc.por_dente ? <Badge color="amber">🦷 Sim</Badge> : <span className="text-neutral-400">-</span>,
+          },
+          ...(podeVerComissoes ? [
+            {
+              key: 'comissao_venda',
+              label: 'Comissão Venda',
+              align: 'right' as const,
+              render: (proc: Procedimento) => <span className="text-neutral-600">{proc.comissao_venda}%</span>,
+            },
+            {
+              key: 'comissao_execucao',
+              label: 'Comissão Execução',
+              align: 'right' as const,
+              render: (proc: Procedimento) => <span className="text-neutral-600">{proc.comissao_execucao}%</span>,
+            },
+          ] : []),
+          {
+            key: 'status',
+            label: 'Status',
+            align: 'center',
+            render: (proc) => proc.ativo ? <Badge color="green">Ativo</Badge> : <Badge color="gray">Inativo</Badge>,
+          },
+          {
+            key: 'acoes',
+            label: 'Ações',
+            align: 'right',
+            render: (proc) => (
+              <div className="space-x-2">
+                <Button variant="ghost" size="sm" onClick={() => abrirModalEditar(proc)} className="text-info-600 hover:text-info-800">
+                  Editar
+                </Button>
+                {proc.ativo ? (
+                  <Button variant="ghost" size="sm" onClick={() => handleDesativar(proc.id)} className="text-error-600 hover:text-error-800">
+                    Desativar
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm" onClick={() => handleReativar(proc.id)} className="text-success-600 hover:text-success-800">
+                    Reativar
+                  </Button>
+                )}
+              </div>
+            ),
+          },
+        ] as TableColumn<Procedimento>[]}
+        data={procedimentos}
+        keyExtractor={(proc) => proc.id}
+        emptyMessage="Nenhum procedimento encontrado"
+        caption="Procedimentos odontológicos"
+      />
 
       {/* Resumo */}
-      <div className="text-sm text-gray-500">
+      <div className="text-sm text-muted">
         Total: {procedimentos.length} procedimento(s)
         {mostrarInativos && ` (${procedimentos.filter(p => !p.ativo).length} inativo(s))`}
       </div>

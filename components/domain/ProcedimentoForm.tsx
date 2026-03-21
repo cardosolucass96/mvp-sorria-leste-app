@@ -51,20 +51,35 @@ export default function ProcedimentoForm({
   showComissoes = true,
 }: ProcedimentoFormProps) {
   const [formData, setFormData] = useState<ProcedimentoFormData>({ ...emptyForm });
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ProcedimentoFormData, string>>>({});
 
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       setFormData({ ...emptyForm, ...initialData });
+      setFieldErrors({});
     }
   }, [isOpen, initialData]);
 
   const handleChange = (field: keyof ProcedimentoFormData) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => { const next = { ...prev }; delete next[field]; return next; });
+    }
+  };
+
+  const validate = (): boolean => {
+    const errors: Partial<Record<keyof ProcedimentoFormData, string>> = {};
+    if (!formData.nome.trim()) errors.nome = 'Nome é obrigatório';
+    const valor = parseFloat(formData.valor);
+    if (!formData.valor || isNaN(valor) || valor <= 0) errors.valor = 'Valor deve ser maior que zero';
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validate()) return;
     await onSubmit(formData);
   };
 
@@ -88,6 +103,7 @@ export default function ProcedimentoForm({
           required
           placeholder="Ex: Limpeza dental"
           disabled={loading}
+          error={fieldErrors.nome}
         />
 
         <Input
@@ -101,6 +117,7 @@ export default function ProcedimentoForm({
           disabled={loading}
           min={0}
           step="0.01"
+          error={fieldErrors.valor}
         />
 
         {showComissoes && (
@@ -133,7 +150,7 @@ export default function ProcedimentoForm({
           </div>
         )}
 
-        <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+        <div className="p-3 bg-primary-50 border border-primary-200 rounded-lg">
           <Checkbox
             label="🦷 Cobrar por dente"
             name="por_dente"

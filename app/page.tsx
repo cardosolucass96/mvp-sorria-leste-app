@@ -48,7 +48,7 @@ export default function Home() {
   }
 
   if (loading) {
-    return <LoadingState message="Carregando painel..." />;
+    return <LoadingState text="Carregando painel..." />;
   }
 
   // ===========================
@@ -58,10 +58,10 @@ export default function Home() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-foreground">
             🏥 Painel Administrativo
           </h1>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-neutral-600">
             Olá, {user?.nome?.split(' ')[0]}! Visão geral do sistema.
           </p>
         </div>
@@ -70,35 +70,35 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link href="/clientes" className="card hover:shadow-lg transition-all hover:-translate-y-1">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-orange-100 rounded-full">
+              <div className="p-3 bg-primary-100 rounded-full">
                 <span className="text-2xl">👥</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Total Clientes</p>
-                <p className="text-2xl font-bold text-orange-600">{stats?.totalClientes || 0}</p>
+                <p className="text-sm text-muted">Total Clientes</p>
+                <p className="text-2xl font-bold text-primary-600">{stats?.totalClientes || 0}</p>
               </div>
             </div>
           </Link>
 
           <Link href="/atendimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-amber-100 rounded-full">
+              <div className="p-3 bg-warning-100 rounded-full">
                 <span className="text-2xl">📋</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Atendimentos Hoje</p>
-                <p className="text-2xl font-bold text-amber-600">{stats?.atendimentosHoje || 0}</p>
+                <p className="text-sm text-muted">Atendimentos Hoje</p>
+                <p className="text-2xl font-bold text-warning-600">{stats?.atendimentosHoje || 0}</p>
               </div>
             </div>
           </Link>
 
           <Link href="/pagamentos" className="card hover:shadow-lg transition-shadow">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-orange-100 rounded-full">
+              <div className="p-3 bg-primary-100 rounded-full">
                 <span className="text-2xl">⏳</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Aguardando Pagamento</p>
+                <p className="text-sm text-muted">Aguardando Pagamento</p>
                 <p className="text-2xl font-bold">{stats?.aguardandoPagamento || 0}</p>
               </div>
             </div>
@@ -106,11 +106,11 @@ export default function Home() {
 
           <div className="card">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-green-100 rounded-full">
+              <div className="p-3 bg-success-100 rounded-full">
                 <span className="text-2xl">✅</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Finalizados Hoje</p>
+                <p className="text-sm text-muted">Finalizados Hoje</p>
                 <p className="text-2xl font-bold">{stats?.finalizadosHoje || 0}</p>
               </div>
             </div>
@@ -119,31 +119,31 @@ export default function Home() {
 
         {/* Segunda linha de cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-orange-400">
+          <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-400">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Fila de Avaliação</p>
-                <p className="text-2xl font-bold text-orange-600">{stats?.emAvaliacao || 0}</p>
+                <p className="text-sm text-muted">Fila de Avaliação</p>
+                <p className="text-2xl font-bold text-primary-600">{stats?.emAvaliacao || 0}</p>
               </div>
               <span className="text-3xl">🔍</span>
             </div>
           </Link>
 
-          <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-orange-500">
+          <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Em Execução</p>
-                <p className="text-2xl font-bold text-orange-700">{stats?.emExecucao || 0}</p>
+                <p className="text-sm text-muted">Em Execução</p>
+                <p className="text-2xl font-bold text-primary-700">{stats?.emExecucao || 0}</p>
               </div>
               <span className="text-3xl">🦷</span>
             </div>
           </Link>
 
-          <Link href="/pagamentos" className="card hover:shadow-lg transition-shadow border-l-4 border-red-500">
+          <Link href="/pagamentos" className="card hover:shadow-lg transition-shadow border-l-4 border-error-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Parcelas Vencidas</p>
-                <p className="text-2xl font-bold text-red-600">{stats?.parcelasVencidas || 0}</p>
+                <p className="text-sm text-muted">Parcelas Vencidas</p>
+                <p className="text-2xl font-bold text-error-600">{stats?.parcelasVencidas || 0}</p>
               </div>
               <span className="text-3xl">⚠️</span>
             </div>
@@ -151,28 +151,28 @@ export default function Home() {
         </div>
 
         {/* Ações Rápidas */}
-        <div className="card bg-gradient-to-r from-orange-50 to-amber-50">
-          <h2 className="text-xl font-semibold mb-4 text-orange-800">⚡ Ações Rápidas</h2>
+        <div className="card bg-gradient-to-r from-primary-50 to-warning-50">
+          <h2 className="text-xl font-semibold mb-4 text-primary-800">⚡ Ações Rápidas</h2>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <Link href="/clientes/novo" className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl hover:bg-orange-50 transition-all hover:shadow-md border border-orange-100">
+            <Link href="/clientes/novo" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
               <span className="text-3xl">➕</span>
-              <span className="text-sm font-medium text-center text-orange-800">Novo Cliente</span>
+              <span className="text-sm font-medium text-center text-primary-800">Novo Cliente</span>
             </Link>
-            <Link href="/atendimentos/novo" className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl hover:bg-orange-50 transition-all hover:shadow-md border border-orange-100">
+            <Link href="/atendimentos/novo" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
               <span className="text-3xl">📝</span>
-              <span className="text-sm font-medium text-center text-orange-800">Novo Atendimento</span>
+              <span className="text-sm font-medium text-center text-primary-800">Novo Atendimento</span>
             </Link>
-            <Link href="/avaliacao" className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl hover:bg-orange-50 transition-all hover:shadow-md border border-orange-100">
+            <Link href="/avaliacao" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
               <span className="text-3xl">🔍</span>
-              <span className="text-sm font-medium text-center text-orange-800">Fila Avaliação</span>
+              <span className="text-sm font-medium text-center text-primary-800">Fila Avaliação</span>
             </Link>
-            <Link href="/comissoes" className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl hover:bg-orange-50 transition-all hover:shadow-md border border-orange-100">
+            <Link href="/comissoes" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
               <span className="text-3xl">💵</span>
-              <span className="text-sm font-medium text-center text-orange-800">Comissões</span>
+              <span className="text-sm font-medium text-center text-primary-800">Comissões</span>
             </Link>
-            <Link href="/usuarios" className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl hover:bg-orange-50 transition-all hover:shadow-md border border-orange-100">
+            <Link href="/usuarios" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
               <span className="text-3xl">👤</span>
-              <span className="text-sm font-medium text-center text-orange-800">Usuários</span>
+              <span className="text-sm font-medium text-center text-primary-800">Usuários</span>
             </Link>
           </div>
         </div>
@@ -187,60 +187,60 @@ export default function Home() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-foreground">
             👋 Olá, {user?.nome?.split(' ')[0]}!
           </h1>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-neutral-600">
             Área de Recepção - Atendimento ao Cliente
           </p>
         </div>
 
         {/* Cards principais para atendente */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link href="/clientes" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-orange-500">
+          <Link href="/clientes" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-500">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-orange-100 rounded-full">
+              <div className="p-3 bg-primary-100 rounded-full">
                 <span className="text-2xl">👥</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Clientes Cadastrados</p>
-                <p className="text-2xl font-bold text-orange-600">{stats?.totalClientes || 0}</p>
+                <p className="text-sm text-muted">Clientes Cadastrados</p>
+                <p className="text-2xl font-bold text-primary-600">{stats?.totalClientes || 0}</p>
               </div>
             </div>
           </Link>
 
-          <Link href="/atendimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-amber-500">
+          <Link href="/atendimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-warning-500">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-amber-100 rounded-full">
+              <div className="p-3 bg-warning-100 rounded-full">
                 <span className="text-2xl">📋</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Atendimentos Hoje</p>
-                <p className="text-2xl font-bold text-amber-600">{stats?.atendimentosHoje || 0}</p>
+                <p className="text-sm text-muted">Atendimentos Hoje</p>
+                <p className="text-2xl font-bold text-warning-600">{stats?.atendimentosHoje || 0}</p>
               </div>
             </div>
           </Link>
 
-          <Link href="/pagamentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-orange-400">
+          <Link href="/pagamentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-400">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-orange-100 rounded-full">
+              <div className="p-3 bg-primary-100 rounded-full">
                 <span className="text-2xl">💰</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Aguardando Pagamento</p>
-                <p className="text-2xl font-bold text-orange-600">{stats?.aguardandoPagamento || 0}</p>
+                <p className="text-sm text-muted">Aguardando Pagamento</p>
+                <p className="text-2xl font-bold text-primary-600">{stats?.aguardandoPagamento || 0}</p>
               </div>
             </div>
           </Link>
 
-          <Link href="/pagamentos" className="card hover:shadow-lg transition-shadow border-l-4 border-red-500">
+          <Link href="/pagamentos" className="card hover:shadow-lg transition-shadow border-l-4 border-error-500">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-red-100 rounded-full">
+              <div className="p-3 bg-error-100 rounded-full">
                 <span className="text-2xl">⚠️</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Parcelas Vencidas</p>
-                <p className="text-2xl font-bold text-red-600">{stats?.parcelasVencidas || 0}</p>
+                <p className="text-sm text-muted">Parcelas Vencidas</p>
+                <p className="text-2xl font-bold text-error-600">{stats?.parcelasVencidas || 0}</p>
               </div>
             </div>
           </Link>
@@ -248,50 +248,50 @@ export default function Home() {
 
         {/* Ações Principais */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Link href="/clientes/novo" className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-orange-50 border-2 border-orange-200">
+          <Link href="/clientes/novo" className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-primary-50 border-2 border-primary-200">
             <div className="flex items-center gap-4">
-              <div className="p-4 bg-orange-500 rounded-full">
+              <div className="p-4 bg-primary-500 rounded-full">
                 <span className="text-3xl">➕</span>
               </div>
               <div>
-                <h3 className="text-xl font-bold text-orange-900">Cadastrar Novo Cliente</h3>
-                <p className="text-sm text-orange-700">Registrar um novo paciente no sistema</p>
+                <h3 className="text-xl font-bold text-primary-900">Cadastrar Novo Cliente</h3>
+                <p className="text-sm text-primary-700">Registrar um novo paciente no sistema</p>
               </div>
             </div>
           </Link>
 
-          <Link href="/atendimentos/novo" className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-amber-50 border-2 border-amber-200">
+          <Link href="/atendimentos/novo" className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-warning-50 border-2 border-warning-200">
             <div className="flex items-center gap-4">
-              <div className="p-4 bg-amber-500 rounded-full">
+              <div className="p-4 bg-warning-500 rounded-full">
                 <span className="text-3xl">📝</span>
               </div>
               <div>
-                <h3 className="text-xl font-bold text-amber-900">Novo Atendimento</h3>
-                <p className="text-sm text-amber-700">Iniciar atendimento para cliente existente</p>
+                <h3 className="text-xl font-bold text-warning-900">Novo Atendimento</h3>
+                <p className="text-sm text-warning-700">Iniciar atendimento para cliente existente</p>
               </div>
             </div>
           </Link>
         </div>
 
         {/* Links secundários */}
-        <div className="card bg-gradient-to-r from-orange-50 to-amber-50">
-          <h2 className="text-lg font-semibold mb-4 text-orange-800">🔗 Acesso Rápido</h2>
+        <div className="card bg-gradient-to-r from-primary-50 to-warning-50">
+          <h2 className="text-lg font-semibold mb-4 text-primary-800">🔗 Acesso Rápido</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Link href="/clientes" className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl hover:bg-orange-50 transition-all border border-orange-100">
+            <Link href="/clientes" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all border border-primary-100">
               <span className="text-2xl">🔍</span>
-              <span className="text-sm text-orange-800">Buscar Cliente</span>
+              <span className="text-sm text-primary-800">Buscar Cliente</span>
             </Link>
-            <Link href="/atendimentos" className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl hover:bg-orange-50 transition-all border border-orange-100">
+            <Link href="/atendimentos" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all border border-primary-100">
               <span className="text-2xl">📋</span>
-              <span className="text-sm text-orange-800">Ver Atendimentos</span>
+              <span className="text-sm text-primary-800">Ver Atendimentos</span>
             </Link>
-            <Link href="/pagamentos" className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl hover:bg-orange-50 transition-all border border-orange-100">
+            <Link href="/pagamentos" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all border border-primary-100">
               <span className="text-2xl">💳</span>
-              <span className="text-sm text-orange-800">Pagamentos</span>
+              <span className="text-sm text-primary-800">Pagamentos</span>
             </Link>
-            <Link href="/minhas-comissoes" className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl hover:bg-orange-50 transition-all border border-orange-100">
+            <Link href="/minhas-comissoes" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all border border-primary-100">
               <span className="text-2xl">💰</span>
-              <span className="text-sm text-orange-800">Minhas Comissões</span>
+              <span className="text-sm text-primary-800">Minhas Comissões</span>
             </Link>
           </div>
         </div>
@@ -306,48 +306,48 @@ export default function Home() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-foreground">
             🔍 Área do Avaliador
           </h1>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-neutral-600">
             Olá, Dr(a). {user?.nome?.split(' ')[0]}! Sua fila de avaliações.
           </p>
         </div>
 
         {/* Cards principais para avaliador */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-orange-500">
+          <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-500">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-orange-100 rounded-full">
+              <div className="p-3 bg-primary-100 rounded-full">
                 <span className="text-2xl">👤</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Meus Atendimentos</p>
-                <p className="text-2xl font-bold text-orange-600">{stats?.meusAtendimentosAvaliacao || 0}</p>
+                <p className="text-sm text-muted">Meus Atendimentos</p>
+                <p className="text-2xl font-bold text-primary-600">{stats?.meusAtendimentosAvaliacao || 0}</p>
               </div>
             </div>
           </Link>
 
-          <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-amber-500">
+          <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-warning-500">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-amber-100 rounded-full">
+              <div className="p-3 bg-warning-100 rounded-full">
                 <span className="text-2xl">📋</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Disponíveis para Pegar</p>
-                <p className="text-2xl font-bold text-amber-600">{stats?.atendimentosDisponiveisAvaliacao || 0}</p>
+                <p className="text-sm text-muted">Disponíveis para Pegar</p>
+                <p className="text-2xl font-bold text-warning-600">{stats?.atendimentosDisponiveisAvaliacao || 0}</p>
               </div>
             </div>
           </Link>
 
-          <Link href="/minhas-comissoes" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-green-500">
+          <Link href="/minhas-comissoes" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-success-500">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-green-100 rounded-full">
+              <div className="p-3 bg-success-100 rounded-full">
                 <span className="text-2xl">💰</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Comissões (Este Mês)</p>
-                <p className="text-2xl font-bold text-green-600">{formatarMoeda(stats?.minhasComissoes || 0)}</p>
+                <p className="text-sm text-muted">Comissões (Este Mês)</p>
+                <p className="text-2xl font-bold text-success-600">{formatarMoeda(stats?.minhasComissoes || 0)}</p>
               </div>
             </div>
           </Link>
@@ -355,32 +355,32 @@ export default function Home() {
 
         {/* Ação Principal */}
         <Link href="/avaliacao" className="block">
-          <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300">
+          <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-primary-50 to-warning-50 border-2 border-primary-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="p-4 bg-orange-500 rounded-full">
+                <div className="p-4 bg-primary-500 rounded-full">
                   <span className="text-4xl">🔍</span>
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-orange-900">Acessar Fila de Avaliação</h3>
-                  <p className="text-orange-700">
+                  <h3 className="text-2xl font-bold text-primary-900">Acessar Fila de Avaliação</h3>
+                  <p className="text-primary-700">
                     {(stats?.meusAtendimentosAvaliacao || 0) + (stats?.atendimentosDisponiveisAvaliacao || 0)} atendimentos aguardando
                   </p>
                 </div>
               </div>
-              <span className="text-4xl text-orange-500">→</span>
+              <span className="text-4xl text-primary-500">→</span>
             </div>
           </div>
         </Link>
 
         {/* Info de Comissões */}
-        <div className="card bg-green-50 border border-green-200">
+        <div className="card bg-success-50 border border-success-200">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-semibold text-green-900">💵 Suas Comissões de Venda</h3>
-              <p className="text-sm text-green-700">Comissão sobre procedimentos que você vendeu</p>
+              <h3 className="font-semibold text-success-900">💵 Suas Comissões de Venda</h3>
+              <p className="text-sm text-success-700">Comissão sobre procedimentos que você vendeu</p>
             </div>
-            <Link href="/minhas-comissoes" className="btn bg-green-600 text-white hover:bg-green-700">
+            <Link href="/minhas-comissoes" className="btn bg-success-600 text-white hover:bg-success-700">
               Ver Detalhes
             </Link>
           </div>
@@ -397,10 +397,10 @@ export default function Home() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-foreground">
             🦷 {isDentista ? 'Área do Dentista' : 'Área do Executor'}
           </h1>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-neutral-600">
             Olá, Dr(a). {user?.nome?.split(' ')[0]}! {isDentista ? 'Suas filas de avaliação e execução.' : 'Sua fila de procedimentos.'}
           </p>
         </div>
@@ -414,45 +414,45 @@ export default function Home() {
                   <span className="text-2xl">🔍</span>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Fila Avaliação</p>
+                  <p className="text-sm text-muted">Fila Avaliação</p>
                   <p className="text-2xl font-bold text-purple-600">{(stats?.meusAtendimentosAvaliacao || 0) + (stats?.atendimentosDisponiveisAvaliacao || 0)}</p>
                 </div>
               </div>
             </Link>
           )}
 
-          <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-orange-500">
+          <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-500">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-orange-100 rounded-full">
+              <div className="p-3 bg-primary-100 rounded-full">
                 <span className="text-2xl">👤</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Meus Procedimentos</p>
-                <p className="text-2xl font-bold text-orange-600">{stats?.meusProcedimentos || 0}</p>
+                <p className="text-sm text-muted">Meus Procedimentos</p>
+                <p className="text-2xl font-bold text-primary-600">{stats?.meusProcedimentos || 0}</p>
               </div>
             </div>
           </Link>
 
-          <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-amber-500">
+          <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-warning-500">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-amber-100 rounded-full">
+              <div className="p-3 bg-warning-100 rounded-full">
                 <span className="text-2xl">📋</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Disponíveis para Pegar</p>
-                <p className="text-2xl font-bold text-amber-600">{stats?.procedimentosDisponiveis || 0}</p>
+                <p className="text-sm text-muted">Disponíveis para Pegar</p>
+                <p className="text-2xl font-bold text-warning-600">{stats?.procedimentosDisponiveis || 0}</p>
               </div>
             </div>
           </Link>
 
-          <Link href="/meus-procedimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-green-500">
+          <Link href="/meus-procedimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-success-500">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-green-100 rounded-full">
+              <div className="p-3 bg-success-100 rounded-full">
                 <span className="text-2xl">💰</span>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Comissões (Este Mês)</p>
-                <p className="text-2xl font-bold text-green-600">{formatarMoeda(stats?.minhasComissoes || 0)}</p>
+                <p className="text-sm text-muted">Comissões (Este Mês)</p>
+                <p className="text-2xl font-bold text-success-600">{formatarMoeda(stats?.minhasComissoes || 0)}</p>
               </div>
             </div>
           </Link>
@@ -482,20 +482,20 @@ export default function Home() {
           )}
 
           <Link href="/execucao" className="block">
-            <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300">
+            <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-primary-50 to-warning-50 border-2 border-primary-300">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="p-4 bg-orange-500 rounded-full">
+                  <div className="p-4 bg-primary-500 rounded-full">
                     <span className="text-3xl">🦷</span>
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-orange-900">Fila de Execução</h3>
-                    <p className="text-orange-700">
+                    <h3 className="text-xl font-bold text-primary-900">Fila de Execução</h3>
+                    <p className="text-primary-700">
                       {(stats?.meusProcedimentos || 0) + (stats?.procedimentosDisponiveis || 0)} procedimentos na fila
                     </p>
                   </div>
                 </div>
-                <span className="text-3xl text-orange-500">→</span>
+                <span className="text-3xl text-primary-500">→</span>
               </div>
             </div>
           </Link>
@@ -503,13 +503,13 @@ export default function Home() {
 
         {/* Meus Procedimentos */}
         <Link href="/meus-procedimentos" className="block">
-          <div className="card bg-green-50 border border-green-200 hover:shadow-lg transition-all">
+          <div className="card bg-success-50 border border-success-200 hover:shadow-lg transition-all">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-green-900">📋 Meus Procedimentos</h3>
-                <p className="text-sm text-green-700">Histórico completo de avaliações e execuções</p>
+                <h3 className="font-semibold text-success-900">📋 Meus Procedimentos</h3>
+                <p className="text-sm text-success-700">Histórico completo de avaliações e execuções</p>
               </div>
-              <span className="btn bg-green-600 text-white hover:bg-green-700">
+              <span className="btn bg-success-600 text-white hover:bg-success-700">
                 Ver Detalhes
               </span>
             </div>
@@ -525,10 +525,10 @@ export default function Home() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">
+        <h1 className="text-3xl font-bold text-foreground">
           🦷 Bem-vindo ao Sorria Leste!
         </h1>
-        <p className="mt-2 text-gray-600">
+        <p className="mt-2 text-neutral-600">
           Sistema de Gestão Odontológica
         </p>
       </div>

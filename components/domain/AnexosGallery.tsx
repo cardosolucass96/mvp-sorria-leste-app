@@ -101,7 +101,7 @@ export default function AnexosGallery({
           className="hidden"
         />
         {uploadError && (
-          <span className="text-sm text-red-600">{uploadError}</span>
+          <span className="text-sm text-error-600">{uploadError}</span>
         )}
       </div>
 
@@ -117,7 +117,7 @@ export default function AnexosGallery({
           {anexos.map((anexo) => (
             <div
               key={anexo.id}
-              className="relative group rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+              className="relative group rounded-lg border border-border overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
               onClick={() => setPreviewAnexo(anexo)}
             >
               {isImage(anexo.tipo) ? (
@@ -127,14 +127,14 @@ export default function AnexosGallery({
                   className="w-full h-32 object-cover"
                 />
               ) : (
-                <div className="w-full h-32 flex items-center justify-center bg-gray-50">
+                <div className="w-full h-32 flex items-center justify-center bg-surface-secondary">
                   <span className="text-3xl">📄</span>
                 </div>
               )}
 
               <div className="p-2">
-                <p className="text-xs font-medium text-gray-700 truncate">{anexo.nome}</p>
-                <p className="text-xs text-gray-500">{formatFileSize(anexo.tamanho)}</p>
+                <p className="text-xs font-medium text-neutral-700 truncate">{anexo.nome}</p>
+                <p className="text-xs text-muted">{formatFileSize(anexo.tamanho)}</p>
               </div>
 
               {/* Delete button overlay */}
@@ -143,7 +143,7 @@ export default function AnexosGallery({
                   e.stopPropagation();
                   setDeleteTarget(anexo);
                 }}
-                className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                className="absolute top-1 right-1 w-6 h-6 bg-error-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                 aria-label={`Excluir ${anexo.nome}`}
               >
                 ×
@@ -170,13 +170,13 @@ export default function AnexosGallery({
           ) : (
             <div className="text-center py-8">
               <span className="text-5xl mb-4 block">📄</span>
-              <p className="text-gray-600">{previewAnexo.nome}</p>
-              <p className="text-sm text-gray-500">{formatFileSize(previewAnexo.tamanho)}</p>
+              <p className="text-neutral-600">{previewAnexo.nome}</p>
+              <p className="text-sm text-muted">{formatFileSize(previewAnexo.tamanho)}</p>
               <a
                 href={previewAnexo.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+                className="mt-4 inline-block text-info-600 hover:text-info-800 font-medium"
               >
                 Abrir arquivo →
               </a>

@@ -63,7 +63,7 @@ export default function ConfirmDialog({
         <span className="text-3xl shrink-0" aria-hidden="true">
           {typeIcons[type]}
         </span>
-        <p className="text-sm text-gray-600 leading-relaxed">{message}</p>
+        <p className="text-sm text-neutral-600 leading-relaxed">{message}</p>
       </div>
     </Modal>
   );

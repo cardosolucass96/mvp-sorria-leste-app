@@ -102,7 +102,9 @@ describe('Sprint 1: componentes têm estrutura correta', () => {
     });
     test('tem loading state com spinner', () => {
       expect(src).toContain('loading');
-      expect(src).toContain('animate-spin');
+      const hasAnimateSpin = src.includes('animate-spin');
+      const hasSpinnerImport = src.includes('Spinner');
+      expect(hasAnimateSpin || hasSpinnerImport).toBe(true);
     });
     test('tem prop disabled', () => {
       expect(src).toContain('disabled');
@@ -328,7 +330,9 @@ describe('Sprint 1: componentes têm estrutura correta', () => {
 
     test('suporta modo spinner', () => {
       expect(src).toContain('spinner');
-      expect(src).toContain('animate-spin');
+      const hasAnimateSpin = src.includes('animate-spin');
+      const hasSpinnerImport = src.includes('Spinner');
+      expect(hasAnimateSpin || hasSpinnerImport).toBe(true);
     });
     test('suporta modo skeleton', () => {
       expect(src).toContain('skeleton');
@@ -349,8 +353,9 @@ describe('Sprint 1: componentes têm estrutura correta', () => {
       expect(src).toContain("'warning'");
       expect(src).toContain("'error'");
     });
-    test('tem role="alert"', () => {
-      expect(src).toContain('role="alert"');
+    test('tem role="alert" ou role="status" para acessibilidade', () => {
+      // Suporta role dinâmico (alert para error/warning, status para info/success)
+      expect(src).toMatch(/role=.*alert|role=.*status/);
     });
     test('suporta dismiss', () => {
       expect(src).toContain('dismissible');
@@ -411,7 +416,7 @@ describe('Sprint 1: componentes têm estrutura correta', () => {
     });
     test('suporta variante pills', () => {
       expect(src).toContain('pills');
-      expect(src).toContain('bg-orange-500');
+      expect(src).toContain('bg-primary-500');
     });
     test('suporta variante underline', () => {
       expect(src).toContain('underline');

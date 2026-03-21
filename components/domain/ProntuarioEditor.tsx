@@ -73,21 +73,21 @@ export default function ProntuarioEditor({
       {/* Histórico */}
       {entries.length > 0 && (
         <div className="space-y-3 border-t pt-4">
-          <h3 className="text-sm font-semibold text-gray-700">Histórico</h3>
+          <h3 className="text-sm font-semibold text-neutral-700">Histórico</h3>
           {entries.map((entry) => (
             <div
               key={entry.id}
-              className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+              className="p-3 bg-surface-secondary rounded-lg border border-border"
             >
               <div className="flex justify-between items-start mb-1">
-                <span className="text-sm font-medium text-gray-900">
+                <span className="text-sm font-medium text-foreground">
                   {entry.autor_nome}
                 </span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-muted">
                   {formatarDataCompleta(entry.created_at)}
                 </span>
               </div>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+              <p className="text-sm text-neutral-700 whitespace-pre-wrap">
                 {entry.texto}
               </p>
             </div>

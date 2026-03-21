@@ -1,17 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Cliente } from '@/lib/types';
 import { formatarCPF, formatarTelefone } from '@/lib/utils/formatters';
-import PageHeader from '@/components/ui/PageHeader';
-import Table from '@/components/ui/Table';
+import { PageHeader, Table, Button, Alert, SearchInput } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
-import Input from '@/components/ui/Input';
-import Button from '@/components/ui/Button';
-import Alert from '@/components/ui/Alert';
-import LoadingState from '@/components/ui/LoadingState';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 export default function ClientesPage() {
@@ -56,13 +51,10 @@ export default function ClientesPage() {
     }
   }, [error, success]);
 
-  // Busca com debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadClientes(busca);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [busca]);
+  // Busca com debounce (SearchInput handles debounce internally)
+  const handleSearch = useCallback((term: string) => {
+    loadClientes(term);
+  }, []);
 
   // Excluir cliente
   const handleDelete = async (id: number, nome: string) => {
@@ -94,7 +86,7 @@ export default function ClientesPage() {
       render: (cliente) => (
         <Link
           href={`/clientes/${cliente.id}`}
-          className="font-medium text-blue-600 hover:text-blue-800"
+          className="font-medium text-info-600 hover:text-info-800"
         >
           {cliente.nome}
         </Link>
@@ -103,17 +95,17 @@ export default function ClientesPage() {
     {
       key: 'cpf',
       label: 'CPF',
-      render: (cliente) => <span className="text-gray-600">{formatarCPF(cliente.cpf)}</span>,
+      render: (cliente) => <span className="text-neutral-600">{formatarCPF(cliente.cpf)}</span>,
     },
     {
       key: 'telefone',
       label: 'Telefone',
-      render: (cliente) => <span className="text-gray-600">{formatarTelefone(cliente.telefone)}</span>,
+      render: (cliente) => <span className="text-neutral-600">{formatarTelefone(cliente.telefone)}</span>,
     },
     {
       key: 'email',
       label: 'Email',
-      render: (cliente) => <span className="text-gray-600">{cliente.email || '-'}</span>,
+      render: (cliente) => <span className="text-neutral-600">{cliente.email || '-'}</span>,
     },
     {
       key: 'acoes',
@@ -121,18 +113,19 @@ export default function ClientesPage() {
       align: 'right',
       render: (cliente) => (
         <div className="space-x-2">
-          <Link
-            href={`/clientes/${cliente.id}`}
-            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-          >
-            Ver/Editar
+          <Link href={`/clientes/${cliente.id}`}>
+            <Button variant="ghost" size="sm" className="text-info-600 hover:text-info-800">
+              Ver/Editar
+            </Button>
           </Link>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => handleDelete(cliente.id, cliente.nome)}
-            className="text-red-600 hover:text-red-800 text-sm font-medium"
+            className="text-error-600 hover:text-error-800"
           >
             Excluir
-          </button>
+          </Button>
         </div>
       ),
     },
@@ -153,21 +146,12 @@ export default function ClientesPage() {
       {success && <Alert type="success" dismissible onDismiss={() => setSuccess('')}>{success}</Alert>}
 
       {/* Busca */}
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <Input
-            label=""
-            name="busca"
-            type="search"
-            value={busca}
-            onChange={setBusca}
-            placeholder="Buscar por nome, CPF, telefone ou email..."
-          />
-        </div>
-        {busca && (
-          <Button variant="secondary" onClick={() => setBusca('')}>Limpar</Button>
-        )}
-      </div>
+      <SearchInput
+        value={busca}
+        onChange={setBusca}
+        onSearch={handleSearch}
+        placeholder="Buscar por nome, CPF, telefone ou email..."
+      />
 
       {/* Tabela */}
       <Table
@@ -181,7 +165,7 @@ export default function ClientesPage() {
       />
 
       {!isLoading && clientes.length > 0 && (
-        <p className="text-sm text-gray-500">{clientes.length} cliente(s) encontrado(s)</p>
+        <p className="text-sm text-muted">{clientes.length} cliente(s) encontrado(s)</p>
       )}
     </div>
   );

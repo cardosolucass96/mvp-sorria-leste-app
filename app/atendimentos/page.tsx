@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingState from '@/components/ui/LoadingState';
+import Alert from '@/components/ui/Alert';
 import Table, { TableColumn } from '@/components/ui/Table';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -12,12 +13,24 @@ import { StatusBadge, ViewModeToggle } from '@/components/domain';
 import { STATUS_CONFIG, STATUS_ORDER } from '@/lib/constants/status';
 import { formatarDataHora } from '@/lib/utils/formatters';
 import type { AtendimentoStatus } from '@/lib/types';
+
+interface Atendimento {
+  id: number;
+  cliente_nome: string;
+  cliente_telefone?: string;
+  avaliador_nome?: string | null;
+  status: AtendimentoStatus;
+  created_at: string;
+  total?: number;
+  qtd_itens?: number;
+}
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 export default function AtendimentosPage() {
   usePageTitle('Atendimentos');
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'kanban' | 'lista'>('kanban');
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<string>('');
@@ -32,6 +45,7 @@ export default function AtendimentosPage() {
       setAtendimentos(data);
     } catch (error) {
       console.error('Erro ao carregar atendimentos:', error);
+      setError('Erro ao carregar atendimentos');
     } finally {
       setLoading(false);
     }
@@ -52,26 +66,28 @@ export default function AtendimentosPage() {
   }, {} as Record<AtendimentoStatus, Atendimento[]>);
 
   const listaColumns: TableColumn<Atendimento>[] = [
-    { key: 'id', header: 'ID', render: (a) => `#${a.id}` },
+    { key: 'id', label: 'ID', render: (a) => `#${a.id}` },
     {
-      key: 'cliente', header: 'Cliente',
+      key: 'cliente', label: 'Cliente',
       render: (a) => (
         <div>
-          <div className="font-medium text-gray-900">{a.cliente_nome}</div>
-          <div className="text-sm text-gray-500">{a.cliente_telefone}</div>
+          <div className="font-medium text-foreground">{a.cliente_nome}</div>
+          <div className="text-sm text-muted">{a.cliente_telefone}</div>
         </div>
       ),
     },
-    { key: 'avaliador_nome', header: 'Avaliador', render: (a) => a.avaliador_nome || '-' },
-    { key: 'status', header: 'Status', align: 'center', render: (a) => <StatusBadge status={a.status} type="atendimento" /> },
-    { key: 'created_at', header: 'Criado em', render: (a) => formatarDataHora(a.created_at) },
-    { key: 'acoes', header: 'Ações', align: 'right', render: (a) => <Link href={`/atendimentos/${a.id}`} className="text-blue-600 hover:text-blue-800 text-sm">Ver detalhes</Link> },
+    { key: 'avaliador_nome', label: 'Avaliador', render: (a) => a.avaliador_nome || '-' },
+    { key: 'status', label: 'Status', align: 'center', render: (a) => <StatusBadge status={a.status} type="atendimento" /> },
+    { key: 'created_at', label: 'Criado em', render: (a) => formatarDataHora(a.created_at) },
+    { key: 'acoes', label: 'Ações', align: 'right', render: (a) => <Link href={`/atendimentos/${a.id}`} className="text-info-600 hover:text-info-800 text-sm">Ver detalhes</Link> },
   ];
 
   if (loading) return <LoadingState />;
 
   return (
     <div className="space-y-6">
+      {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
+
       <PageHeader
         title="Atendimentos"
         icon="📋"
@@ -99,8 +115,9 @@ export default function AtendimentosPage() {
           <div className="flex-1 min-w-[200px]">
             <Input
               label="Buscar cliente"
+              name="busca"
               value={busca}
-              onChange={(e) => setBusca(e.target.value)}
+              onChange={(value) => setBusca(value)}
               placeholder="Nome ou CPF do cliente..."
             />
           </div>
@@ -108,8 +125,9 @@ export default function AtendimentosPage() {
             <div className="min-w-[180px]">
               <Select
                 label="Status"
+                name="filtroStatus"
                 value={filtroStatus}
-                onChange={(e) => setFiltroStatus(e.target.value)}
+                onChange={(value) => setFiltroStatus(value)}
                 options={STATUS_ORDER.map((s) => ({ value: s, label: STATUS_CONFIG[s].label }))}
                 placeholder="Todos"
               />
@@ -125,7 +143,7 @@ export default function AtendimentosPage() {
           {STATUS_ORDER.map((status) => {
             const cfg = STATUS_CONFIG[status];
             return (
-              <div key={status} className="flex-shrink-0 w-72 bg-gray-100 rounded-lg">
+              <div key={status} className="flex-shrink-0 w-72 bg-surface-muted rounded-lg">
                 <div className={`p-3 rounded-t-lg ${cfg.bgCor}`}>
                   <div className="flex justify-between items-center">
                     <h3 className={`font-semibold ${cfg.cor}`}>{cfg.label}</h3>
@@ -136,16 +154,16 @@ export default function AtendimentosPage() {
                 </div>
                 <div className="p-2 space-y-2 max-h-[60vh] overflow-y-auto">
                   {atendimentosPorStatus[status].length === 0 ? (
-                    <div className="p-4 text-center text-gray-400 text-sm">Nenhum atendimento</div>
+                    <div className="p-4 text-center text-neutral-400 text-sm">Nenhum atendimento</div>
                   ) : (
                     atendimentosPorStatus[status].map((atendimento) => (
                       <Link key={atendimento.id} href={`/atendimentos/${atendimento.id}`}
-                        className="block bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow border border-gray-200">
-                        <div className="font-medium text-gray-900 mb-1">{atendimento.cliente_nome}</div>
+                        className="block bg-surface rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow border border-neutral-200">
+                        <div className="font-medium text-foreground mb-1">{atendimento.cliente_nome}</div>
                         {atendimento.cliente_telefone && (
-                          <div className="text-sm text-gray-500 mb-2">📞 {atendimento.cliente_telefone}</div>
+                          <div className="text-sm text-muted mb-2">📞 {atendimento.cliente_telefone}</div>
                         )}
-                        <div className="flex justify-between items-center text-xs text-gray-400">
+                        <div className="flex justify-between items-center text-xs text-neutral-400">
                           <span>#{atendimento.id}</span>
                           <span>{formatarDataHora(atendimento.created_at).split(' ')[0]}</span>
                         </div>
@@ -170,7 +188,7 @@ export default function AtendimentosPage() {
         />
       )}
 
-      <div className="text-sm text-gray-500">
+      <div className="text-sm text-muted">
         Total: {atendimentos.length} atendimento(s)
       </div>
     </div>

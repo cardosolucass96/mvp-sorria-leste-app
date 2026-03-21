@@ -2,12 +2,10 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes from '@/components/SeletorDentes';
 import { formatarMoeda } from '@/lib/utils/formatters';
-import Alert from '@/components/ui/Alert';
-import LoadingState from '@/components/ui/LoadingState';
+import { Alert, LoadingState, PageHeader, Card, Button, Select, Input, EmptyState } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface Procedimento {
@@ -229,93 +227,80 @@ export default function AvaliacaoDetalhePage({
   };
 
   if (loading) {
-    return <LoadingState message="Carregando avaliação..." />;
+    return <LoadingState text="Carregando avaliação..." />;
   }
 
   if (!atendimento) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500 mb-4">Atendimento não encontrado</p>
-        <Link href="/avaliacao" className="text-blue-600">
-          ← Voltar para fila
-        </Link>
-      </div>
+      <EmptyState
+        icon="🔍"
+        title="Atendimento não encontrado"
+        actionLabel="Voltar para fila"
+        onAction={() => router.push('/avaliacao')}
+      />
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <Link 
-            href="/avaliacao" 
-            className="text-gray-500 hover:text-gray-700"
+      <PageHeader
+        title={`Avaliação - ${atendimento.cliente_nome}`}
+        icon="🔍"
+        description={`Atendimento #${atendimento.id}`}
+        breadcrumb={[
+          { label: 'Avaliações', href: '/avaliacao' },
+          { label: atendimento.cliente_nome },
+        ]}
+        actions={
+          <Button
+            onClick={handleFinalizarAvaliacao}
+            disabled={finalizando || atendimento.itens.length === 0}
+            loading={finalizando}
           >
-            ← Voltar
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              🔍 Avaliação - {atendimento.cliente_nome}
-            </h1>
-            <p className="text-gray-600">
-              Atendimento #{atendimento.id}
-            </p>
-          </div>
-        </div>
-        
-        <button
-          onClick={handleFinalizarAvaliacao}
-          disabled={finalizando || atendimento.itens.length === 0}
-          className="btn btn-primary disabled:opacity-50"
-        >
-          {finalizando ? 'Finalizando...' : '✓ Finalizar Avaliação'}
-        </button>
-      </div>
+            ✓ Finalizar Avaliação
+          </Button>
+        }
+      />
 
-      {error && <Alert type="error" message={error} />}
+      {error && <Alert type="error">{error}</Alert>}
 
       {/* Aviso de privacidade */}
-      <div className="card bg-yellow-50 border border-yellow-200">
+      <Card className="bg-yellow-50 border border-yellow-200">
         <p className="text-sm text-yellow-800">
           <strong>⚠️ Modo Avaliação:</strong> Você está vendo apenas o nome do paciente.
           Os dados pessoais (CPF, telefone, email) estão ocultos por privacidade.
         </p>
-      </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Adicionar Procedimento */}
-        <div className="card">
+        <Card>
           <h2 className="text-lg font-semibold mb-4">➕ Adicionar Procedimento</h2>
           
           <form onSubmit={handleAdicionarProcedimento} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Procedimento *
-              </label>
-              <select
+              <Select
+                label="Procedimento *"
+                name="procedimento"
                 value={procedimentoId}
-                onChange={(e) => {
-                  setProcedimentoId(e.target.value);
+                onChange={(value) => {
+                  setProcedimentoId(value);
                   setValorCustom('');
                   setDentesSelecionados([]);
                 }}
-                className="input"
+                options={procedimentos.map((proc) => ({
+                  value: String(proc.id),
+                  label: `${proc.nome} - ${formatarMoeda(proc.valor)}${proc.por_dente ? ' (por dente)' : ''}`,
+                }))}
+                placeholder="Selecione..."
                 required
-              >
-                <option value="">Selecione...</option>
-                {procedimentos.map((proc) => (
-                  <option key={proc.id} value={proc.id}>
-                    {proc.nome} - {formatarMoeda(proc.valor)}{proc.por_dente ? ' (por dente)' : ''}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             
             {/* Seletor de Dentes (se aplicável) */}
             {procedimentoSelecionado?.por_dente === 1 && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-neutral-700 mb-2">
                   Dentes *
                 </label>
                 <SeletorDentes
@@ -324,7 +309,7 @@ export default function AvaliacaoDetalhePage({
                   disabled={adicionando}
                 />
                 {dentesSelecionados.length > 0 && (
-                  <p className="text-sm text-blue-600 mt-2">
+                  <p className="text-sm text-info-600 mt-2">
                     Valor: {formatarMoeda(procedimentoSelecionado.valor)} × {dentesSelecionados.length} dentes = <strong>{formatarMoeda(calcularValorTotal())}</strong>
                   </p>
                 )}
@@ -332,114 +317,103 @@ export default function AvaliacaoDetalhePage({
             )}
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Executor
-              </label>
-              <select
+              <Select
+                label="Executor"
+                name="executor"
                 value={executorId}
-                onChange={(e) => setExecutorId(e.target.value)}
-                className="input"
-              >
-                <option value="">Definir depois</option>
-                {executores.map((exec) => (
-                  <option key={exec.id} value={exec.id}>
-                    {exec.nome}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setExecutorId(value)}
+                options={executores.map((exec) => ({ value: String(exec.id), label: exec.nome }))}
+                placeholder="Definir depois"
+              />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Valor (R$)
-              </label>
-              <input
+              <Input
+                label="Valor (R$)"
+                name="valor"
                 type="number"
-                step="0.01"
-                min="0"
                 value={valorCustom}
-                onChange={(e) => setValorCustom(e.target.value)}
+                onChange={(value) => setValorCustom(value)}
                 placeholder={procedimentoSelecionado 
                   ? `Padrão: ${procedimentoSelecionado.valor}` 
                   : 'Selecione um procedimento'}
-                className="input"
+                hint={procedimentoSelecionado && !valorCustom
+                  ? `Valor padrão será usado: ${formatarMoeda(procedimentoSelecionado.valor)}`
+                  : undefined}
               />
-              {procedimentoSelecionado && !valorCustom && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Valor padrão será usado: {formatarMoeda(procedimentoSelecionado.valor)}
-                </p>
-              )}
             </div>
             
-            <button
+            <Button
               type="submit"
+              variant="secondary"
               disabled={!procedimentoId || adicionando}
-              className="btn btn-secondary w-full disabled:opacity-50"
+              loading={adicionando}
+              className="w-full"
             >
-              {adicionando ? 'Adicionando...' : '+ Adicionar'}
-            </button>
+              + Adicionar
+            </Button>
           </form>
-        </div>
+        </Card>
 
         {/* Resumo Financeiro */}
-        <div className="card">
+        <Card>
           <h2 className="text-lg font-semibold mb-4">💰 Resumo</h2>
           
           <div className="space-y-4">
-            <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-              <span className="text-gray-600">Total de Procedimentos</span>
+            <div className="flex justify-between items-center p-4 bg-surface-secondary rounded-lg">
+              <span className="text-neutral-600">Total de Procedimentos</span>
               <span className="text-xl font-bold">{atendimento.itens.length}</span>
             </div>
             
-            <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
-              <span className="text-blue-700">Valor Total</span>
-              <span className="text-2xl font-bold text-blue-700">
+            <div className="flex justify-between items-center p-4 bg-info-50 rounded-lg">
+              <span className="text-info-700">Valor Total</span>
+              <span className="text-2xl font-bold text-info-700">
                 {formatarMoeda(atendimento.total)}
               </span>
             </div>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Lista de Procedimentos */}
-      <div className="card">
+      <Card>
         <h2 className="text-lg font-semibold mb-4">🦷 Procedimentos Adicionados</h2>
         
         {atendimento.itens.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-muted">
             <p>Nenhum procedimento adicionado ainda</p>
             <p className="text-sm mt-2">
               Use o formulário ao lado para adicionar procedimentos
             </p>
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-neutral-200">
+            <thead className="bg-surface-secondary">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
                   Procedimento
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
                   Vendedor
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
                   Executor
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
                   Valor
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
                   Ações
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-surface divide-y divide-neutral-200">
               {atendimento.itens.map((item) => (
                 <tr key={item.id}>
-                  <td className="px-4 py-3 font-medium text-gray-900">
+                  <td className="px-4 py-3 font-medium text-foreground">
                     {item.procedimento_nome}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
+                  <td className="px-4 py-3 text-sm text-neutral-600">
                     {item.criado_por_nome || 'N/A'}
                   </td>
                   <td className="px-4 py-3">
@@ -463,7 +437,7 @@ export default function AvaliacaoDetalhePage({
                     {atendimento.status === 'avaliacao' && (
                       <button
                         onClick={() => handleRemoverItem(item.id)}
-                        className="text-red-600 hover:text-red-800 text-sm"
+                        className="text-error-600 hover:text-error-800 text-sm"
                       >
                         Remover
                       </button>
@@ -472,12 +446,12 @@ export default function AvaliacaoDetalhePage({
                 </tr>
               ))}
             </tbody>
-            <tfoot className="bg-gray-50">
+            <tfoot className="bg-surface-secondary">
               <tr>
                 <td colSpan={3} className="px-4 py-3 text-right font-semibold">
                   Total:
                 </td>
-                <td className="px-4 py-3 text-right font-bold text-lg text-blue-600">
+                <td className="px-4 py-3 text-right font-bold text-lg text-info-600">
                   {formatarMoeda(atendimento.total)}
                 </td>
                 <td></td>
@@ -485,29 +459,29 @@ export default function AvaliacaoDetalhePage({
             </tfoot>
           </table>
         )}
-      </div>
+      </Card>
 
       {/* Aviso para finalizar */}
       {atendimento.itens.length > 0 && (
-        <div className="card bg-green-50 border border-green-200">
+        <Card className="bg-success-50 border border-success-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-green-900">
+              <p className="font-medium text-success-900">
                 ✓ Avaliação pronta para ser finalizada
               </p>
-              <p className="text-sm text-green-700">
+              <p className="text-sm text-success-700">
                 O paciente será encaminhado para pagamento
               </p>
             </div>
-            <button
+            <Button
               onClick={handleFinalizarAvaliacao}
               disabled={finalizando}
-              className="btn btn-primary"
+              loading={finalizando}
             >
-              {finalizando ? 'Finalizando...' : 'Finalizar Avaliação →'}
-            </button>
+              Finalizar Avaliação →
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

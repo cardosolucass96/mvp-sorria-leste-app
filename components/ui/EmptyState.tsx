@@ -23,8 +23,8 @@ export default function EmptyState({
       <span className="text-5xl mb-4" aria-hidden="true">
         {icon}
       </span>
-      <h3 className="text-lg font-semibold text-gray-900 mb-1">{title}</h3>
-      {description && <p className="text-sm text-gray-500 max-w-md mb-4">{description}</p>}
+      <h3 className="text-lg font-semibold text-foreground mb-1">{title}</h3>
+      {description && <p className="text-sm text-muted max-w-md mb-4">{description}</p>}
       {actionLabel && onAction && (
         <Button variant="primary" onClick={onAction}>
           {actionLabel}

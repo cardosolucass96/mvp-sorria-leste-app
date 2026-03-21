@@ -24,3 +24,6 @@ export {
   unmask,
   unmaskMoeda,
 } from './masks';
+
+export { useForm } from './useForm';
+export type { UseFormOptions, UseFormReturn, FormErrors } from './useForm';

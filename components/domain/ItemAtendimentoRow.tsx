@@ -46,14 +46,14 @@ export default function ItemAtendimentoRow({
   const dentesFormatados = formatarDentes(item.dentes);
 
   return (
-    <tr className="hover:bg-gray-50">
+    <tr className="hover:bg-neutral-50">
       <td className="px-4 py-3">
-        <div className="font-medium text-gray-900">{item.procedimento_nome}</div>
+        <div className="font-medium text-foreground">{item.procedimento_nome}</div>
         {item.observacoes && (
-          <div className="text-xs text-gray-500 mt-0.5">{item.observacoes}</div>
+          <div className="text-xs text-muted mt-0.5">{item.observacoes}</div>
         )}
       </td>
-      <td className="px-4 py-3 text-gray-600">
+      <td className="px-4 py-3 text-neutral-600">
         {item.executor_nome || '-'}
       </td>
       <td className="px-4 py-3 text-right font-medium">
@@ -66,7 +66,7 @@ export default function ItemAtendimentoRow({
         {dentesFormatados ? (
           <Badge color="orange" size="sm">🦷 {dentesFormatados}</Badge>
         ) : (
-          <span className="text-gray-400">-</span>
+          <span className="text-neutral-400">-</span>
         )}
       </td>
       {showActions && (
@@ -74,7 +74,7 @@ export default function ItemAtendimentoRow({
           {onEdit && (
             <button
               onClick={() => onEdit(item)}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              className="text-info-600 hover:text-info-800 text-sm font-medium"
             >
               Editar
             </button>
@@ -82,7 +82,7 @@ export default function ItemAtendimentoRow({
           {onRemove && (
             <button
               onClick={() => onRemove(item)}
-              className="text-red-600 hover:text-red-800 text-sm font-medium"
+              className="text-error-600 hover:text-error-800 text-sm font-medium"
             >
               Remover
             </button>

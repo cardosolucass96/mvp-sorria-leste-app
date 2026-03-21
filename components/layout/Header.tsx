@@ -85,12 +85,12 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg">
+    <header className="bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg">
       <div className="flex items-center justify-between px-3 md:px-6 py-3">
         {/* Menu Hamburguer Mobile */}
         <button
           onClick={() => setShowMobileMenu(!showMobileMenu)}
-          className="md:hidden p-2 hover:bg-orange-600 rounded-lg transition-colors"
+          className="md:hidden p-2 hover:bg-primary-600 rounded-lg transition-colors"
           aria-label={showMobileMenu ? 'Fechar menu de navegação' : 'Abrir menu de navegação'}
           aria-expanded={showMobileMenu}
         >
@@ -105,7 +105,7 @@ export default function Header() {
 
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
-          <div className="bg-white rounded-lg p-1 shadow-md">
+          <div className="bg-surface rounded-lg p-1 shadow-md">
             <Image
               src="/logo-sorria-leste.jpg"
               alt="Sorria Leste"
@@ -116,7 +116,7 @@ export default function Header() {
           </div>
           <div>
             <h1 className="text-lg md:text-xl font-bold tracking-tight">Sorria Leste</h1>
-            <p className="hidden sm:block text-xs text-orange-100">Clínica Odontológica</p>
+            <p className="hidden sm:block text-xs text-primary-100">Clínica Odontológica</p>
           </div>
         </Link>
 
@@ -146,13 +146,13 @@ export default function Header() {
 
               <div className="hidden sm:block text-right">
                 <p className="text-sm font-semibold">{user.nome}</p>
-                <p className="text-xs text-orange-100">
+                <p className="text-xs text-primary-100">
                   {isAdmin && viewMode === 'dentista' ? '🦷 Dentista' : ROLE_LABELS[user.role]}
                 </p>
               </div>
               <button
                 onClick={() => setShowSenhaModal(true)}
-                className="bg-orange-600 hover:bg-orange-700 px-2 md:px-3 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
+                className="bg-primary-600 hover:bg-primary-700 px-2 md:px-3 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
                 title="Alterar senha"
                 aria-label="Alterar senha"
               >
@@ -160,7 +160,7 @@ export default function Header() {
               </button>
               <button
                 onClick={handleLogout}
-                className="bg-orange-700 hover:bg-orange-800 px-3 md:px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
+                className="bg-primary-700 hover:bg-primary-800 px-3 md:px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
                 aria-label="Sair do sistema"
               >
                 Sair
@@ -169,7 +169,7 @@ export default function Header() {
           ) : (
             <Link
               href="/login"
-              className="bg-orange-700 hover:bg-orange-800 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
+              className="bg-primary-700 hover:bg-primary-800 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
             >
               Entrar
             </Link>
@@ -179,15 +179,15 @@ export default function Header() {
 
       {/* Menu Mobile Dropdown */}
       {showMobileMenu && (
-        <nav className="md:hidden bg-stone-800 border-t border-stone-700" aria-label="Menu mobile">
+        <nav className="md:hidden bg-sidebar border-t border-neutral-700" aria-label="Menu mobile">
           {/* Toggle Admin/Dentista - Mobile */}
           {isAdmin && (
-            <div className="px-4 py-3 border-b border-stone-700">
+            <div className="px-4 py-3 border-b border-neutral-700">
               <button
                 onClick={toggleViewMode}
                 className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                   viewMode === 'admin'
-                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
+                    ? 'bg-sidebar-active/20 text-sidebar-text-active border border-sidebar-active/50'
                     : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
                 }`}
               >
@@ -200,7 +200,7 @@ export default function Header() {
             {MENU_ITEMS
               .filter((item) => !item.roles || (user && hasRole(item.roles)))
               .map((item) => {
-                const isActive = pathname === item.href || 
+                const isActive = pathname === item.href ||
                   (item.href !== '/' && pathname.startsWith(item.href));
                 return (
                   <li key={item.href}>
@@ -209,8 +209,8 @@ export default function Header() {
                       onClick={() => setShowMobileMenu(false)}
                       className={`flex items-center gap-3 px-4 py-3 transition-colors ${
                         isActive
-                          ? 'bg-orange-500/20 text-orange-400'
-                          : 'text-gray-300 hover:bg-stone-700'
+                          ? 'bg-sidebar-active/20 text-sidebar-text-active'
+                          : 'text-sidebar-text hover:bg-sidebar-hover'
                       }`}
                     >
                       <span>{item.icon}</span>
@@ -226,12 +226,12 @@ export default function Header() {
       {/* Modal Trocar Senha */}
       {showSenhaModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+          <div className="bg-surface rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">🔑 Alterar Senha</h2>
+              <h2 className="text-xl font-bold text-foreground">🔑 Alterar Senha</h2>
               <button
                 onClick={fecharModal}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
+                className="text-neutral-400 hover:text-neutral-600 text-2xl"
               >
                 ×
               </button>
@@ -239,28 +239,28 @@ export default function Header() {
 
             <form onSubmit={handleTrocarSenha} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
                   Senha Atual
                 </label>
                 <input
                   type="password"
                   value={senhaAtual}
                   onChange={(e) => setSenhaAtual(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   required
                   disabled={loading}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
                   Nova Senha
                 </label>
                 <input
                   type="password"
                   value={novaSenha}
                   onChange={(e) => setNovaSenha(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   required
                   disabled={loading}
                   minLength={6}
@@ -268,14 +268,14 @@ export default function Header() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
                   Confirmar Nova Senha
                 </label>
                 <input
                   type="password"
                   value={confirmarSenha}
                   onChange={(e) => setConfirmarSenha(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   required
                   disabled={loading}
                   minLength={6}
@@ -283,13 +283,13 @@ export default function Header() {
               </div>
 
               {erro && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-error-50 border border-error-200 text-error-700 px-4 py-3 rounded-lg text-sm">
                   {erro}
                 </div>
               )}
 
               {sucesso && (
-                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-success-50 border border-success-200 text-success-700 px-4 py-3 rounded-lg text-sm">
                   {sucesso}
                 </div>
               )}
@@ -298,14 +298,14 @@ export default function Header() {
                 <button
                   type="button"
                   onClick={fecharModal}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2 border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors"
                   disabled={loading}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50"
                   disabled={loading}
                 >
                   {loading ? 'Salvando...' : 'Alterar Senha'}

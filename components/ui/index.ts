@@ -59,3 +59,23 @@ export type { TooltipProps } from './Tooltip';
 
 export { default as Avatar } from './Avatar';
 export type { AvatarProps } from './Avatar';
+
+export { default as ErrorBoundary } from './ErrorBoundary';
+
+export { default as Spinner } from './Spinner';
+export type { SpinnerProps } from './Spinner';
+
+export { default as SearchInput } from './SearchInput';
+export type { SearchInputProps } from './SearchInput';
+
+export { default as FormField } from './FormField';
+export type { FormFieldProps } from './FormField';
+
+export { default as Breadcrumb } from './Breadcrumb';
+export type { BreadcrumbProps, BreadcrumbItem } from './Breadcrumb';
+
+export { default as Pagination } from './Pagination';
+export type { PaginationProps } from './Pagination';
+
+export { default as Divider } from './Divider';
+export type { DividerProps } from './Divider';

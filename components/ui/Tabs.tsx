@@ -1,5 +1,7 @@
 'use client';
 
+import { useRef, useCallback } from 'react';
+
 export interface Tab {
   key: string;
   label: string;
@@ -23,10 +25,45 @@ export default function Tabs({
   size = 'md',
   className = '',
 }: TabsProps) {
+  const tabListRef = useRef<HTMLDivElement>(null);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const currentIndex = tabs.findIndex((t) => t.key === activeTab);
+      let nextIndex = -1;
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        nextIndex = (currentIndex + 1) % tabs.length;
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        nextIndex = 0;
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        nextIndex = tabs.length - 1;
+      }
+
+      if (nextIndex >= 0) {
+        onTabChange(tabs[nextIndex].key);
+        const buttons = tabListRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+        buttons?.[nextIndex]?.focus();
+      }
+    },
+    [tabs, activeTab, onTabChange]
+  );
+
   if (variant === 'underline') {
     return (
-      <div className={`border-b border-gray-200 ${className}`}>
-        <nav className="flex gap-0 -mb-px overflow-x-auto" role="tablist">
+      <div className={`border-b border-border ${className}`}>
+        <nav
+          ref={tabListRef}
+          className="flex gap-0 -mb-px overflow-x-auto"
+          role="tablist"
+          onKeyDown={handleKeyDown}
+        >
           {tabs.map((tab) => {
             const isActive = tab.key === activeTab;
             return (
@@ -34,13 +71,14 @@ export default function Tabs({
                 key={tab.key}
                 role="tab"
                 aria-selected={isActive}
+                tabIndex={isActive ? 0 : -1}
                 onClick={() => onTabChange(tab.key)}
                 className={`
                   whitespace-nowrap border-b-2 font-medium transition-colors
                   ${size === 'sm' ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}
                   ${isActive
-                    ? 'border-orange-500 text-orange-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
                   }
                 `}
               >
@@ -48,7 +86,7 @@ export default function Tabs({
                 {tab.count != null && (
                   <span
                     className={`ml-2 px-1.5 py-0.5 rounded-full text-xs font-semibold ${
-                      isActive ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
+                      isActive ? 'bg-primary-100 text-primary-700' : 'bg-neutral-100 text-neutral-600'
                     }`}
                   >
                     {tab.count}
@@ -64,7 +102,12 @@ export default function Tabs({
 
   // pills variant (default)
   return (
-    <div className={`flex flex-wrap gap-1 p-1 bg-gray-100 rounded-lg ${className}`} role="tablist">
+    <div
+      ref={tabListRef}
+      className={`flex flex-wrap gap-1 p-1 bg-neutral-100 rounded-lg ${className}`}
+      role="tablist"
+      onKeyDown={handleKeyDown}
+    >
       {tabs.map((tab) => {
         const isActive = tab.key === activeTab;
         return (
@@ -72,13 +115,14 @@ export default function Tabs({
             key={tab.key}
             role="tab"
             aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
             onClick={() => onTabChange(tab.key)}
             className={`
               rounded-md font-medium transition-all
               ${size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'}
               ${isActive
-                ? 'bg-orange-500 text-white shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                ? 'bg-primary-500 text-white shadow-sm'
+                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200'
               }
             `}
           >
@@ -86,7 +130,7 @@ export default function Tabs({
             {tab.count != null && (
               <span
                 className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${
-                  isActive ? 'bg-orange-400/30 text-white' : 'bg-gray-200 text-gray-600'
+                  isActive ? 'bg-primary-400/30 text-white' : 'bg-neutral-200 text-neutral-600'
                 }`}
               >
                 {tab.count}

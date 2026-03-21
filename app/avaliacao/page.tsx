@@ -23,6 +23,7 @@ export default function AvaliacaoPage() {
   const [atendimentosDisponiveis, setAtendimentosDisponiveis] = useState<Atendimento[]>([]);
   const [meusAtendimentos, setMeusAtendimentos] = useState<Atendimento[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const carregarAtendimentos = useCallback(async () => {
     if (!user) return;
@@ -45,6 +46,7 @@ export default function AvaliacaoPage() {
       setMeusAtendimentos(meus);
     } catch (error) {
       console.error('Erro ao carregar atendimentos:', error);
+      setError('Erro ao carregar atendimentos');
     } finally {
       setLoading(false);
     }
@@ -81,6 +83,8 @@ export default function AvaliacaoPage() {
 
   return (
     <div className="space-y-8">
+      {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
+
       <PageHeader
         title="🔍 Avaliações"
         description="Gerencie suas avaliações odontológicas"
@@ -100,15 +104,15 @@ export default function AvaliacaoPage() {
       {/* Seção: Meus Atendimentos */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-xl font-semibold text-gray-900">📋 Meus Atendimentos</h2>
+          <h2 className="text-xl font-semibold text-foreground">📋 Meus Atendimentos</h2>
           <Badge color="blue">{meusAtendimentos.length}</Badge>
         </div>
 
         {meusAtendimentos.length === 0 ? (
           <Card variant="outlined">
             <div className="text-center py-4">
-              <p className="text-gray-500">Você não tem atendimentos atribuídos</p>
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="text-muted">Você não tem atendimentos atribuídos</p>
+              <p className="text-sm text-neutral-400 mt-1">
                 Assuma um atendimento da lista abaixo para começar
               </p>
             </div>
@@ -119,17 +123,17 @@ export default function AvaliacaoPage() {
               <Card 
                 key={atendimento.id} 
                 variant="outlined"
-                borderColor="border-blue-500"
+                borderColor="border-info-500"
               >
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">🦷</span>
                       <div>
-                        <h3 className="font-semibold text-lg text-gray-900">
+                        <h3 className="font-semibold text-lg text-foreground">
                           {atendimento.cliente_nome}
                         </h3>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted">
                           Atendimento #{atendimento.id} • {formatarDataHora(atendimento.created_at)}
                         </p>
                       </div>
@@ -151,24 +155,24 @@ export default function AvaliacaoPage() {
       </div>
 
       {/* Divisor */}
-      <hr className="border-gray-200" />
+      <hr className="border-neutral-200" />
 
       {/* Seção: Atendimentos Disponíveis */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-xl font-semibold text-gray-900">🆓 Atendimentos Disponíveis</h2>
+          <h2 className="text-xl font-semibold text-foreground">🆓 Atendimentos Disponíveis</h2>
           <Badge color="gray">{atendimentosDisponiveis.length}</Badge>
         </div>
         
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted">
           Atendimentos sem avaliador definido. Clique em &quot;Assumir&quot; para se tornar responsável.
         </p>
 
         {atendimentosDisponiveis.length === 0 ? (
           <Card variant="outlined">
             <div className="text-center py-4">
-              <p className="text-green-700 text-lg">🎉 Nenhum atendimento disponível!</p>
-              <p className="text-green-600 text-sm mt-1">
+              <p className="text-success-700 text-lg">🎉 Nenhum atendimento disponível!</p>
+              <p className="text-success-600 text-sm mt-1">
                 Todos os atendimentos já têm um avaliador responsável.
               </p>
             </div>
@@ -186,10 +190,10 @@ export default function AvaliacaoPage() {
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">🆕</span>
                       <div>
-                        <h3 className="font-semibold text-lg text-gray-900">
+                        <h3 className="font-semibold text-lg text-foreground">
                           {atendimento.cliente_nome}
                         </h3>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted">
                           Atendimento #{atendimento.id} • {formatarDataHora(atendimento.created_at)}
                         </p>
                       </div>
@@ -211,7 +215,7 @@ export default function AvaliacaoPage() {
       </div>
 
       {/* Resumo */}
-      <div className="text-sm text-gray-500 pt-4 border-t">
+      <div className="text-sm text-muted pt-4 border-t">
         <div className="flex gap-6">
           <span>Meus: <strong>{meusAtendimentos.length}</strong></span>
           <span>Disponíveis: <strong>{atendimentosDisponiveis.length}</strong></span>

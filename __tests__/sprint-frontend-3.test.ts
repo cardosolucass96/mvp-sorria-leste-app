@@ -66,8 +66,8 @@ describe('Sprint 3: clientes/page.tsx', () => {
   test('usa formatarTelefone do Sprint 0', () => {
     expect(src).toContain('formatarTelefone');
   });
-  test('usa LoadingState', () => {
-    expect(src).toContain('LoadingState');
+  test('usa LoadingState ou Table com loading', () => {
+    expect(src).toMatch(/LoadingState|loading/);
   });
   test('não define formatarCPF localmente', () => {
     expect(src).not.toMatch(/function formatarCPF/);
@@ -269,8 +269,8 @@ describe('Sprint 3: meus-procedimentos/page.tsx', () => {
     expect(src).toContain('formatarData');
     expect(src).toContain("from '@/lib/utils/formatters'");
   });
-  test('usa EmptyState do Sprint 1', () => {
-    expect(src).toContain('EmptyState');
+  test('usa EmptyState ou Table com emptyMessage', () => {
+    expect(src).toMatch(/EmptyState|emptyMessage/);
   });
   test('não define formatarData localmente', () => {
     expect(src).not.toMatch(/function formatarData/);

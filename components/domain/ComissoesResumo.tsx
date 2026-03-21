@@ -34,8 +34,8 @@ export default function ComissoesResumo({
       label: 'Profissional',
       render: (c) => (
         <div>
-          <span className="font-medium text-gray-900">{c.nome}</span>
-          <span className="text-xs text-gray-500 ml-2">({c.role})</span>
+          <span className="font-medium text-foreground">{c.nome}</span>
+          <span className="text-xs text-muted ml-2">({c.role})</span>
         </div>
       ),
     },
@@ -44,7 +44,7 @@ export default function ComissoesResumo({
       label: 'Comissão Venda',
       align: 'right',
       render: (c) => (
-        <span className={c.total_venda > 0 ? 'text-blue-700 font-medium' : 'text-gray-400'}>
+        <span className={c.total_venda > 0 ? 'text-info-700 font-medium' : 'text-neutral-400'}>
           {formatarMoeda(c.total_venda)}
         </span>
       ),
@@ -54,7 +54,7 @@ export default function ComissoesResumo({
       label: 'Comissão Execução',
       align: 'right',
       render: (c) => (
-        <span className={c.total_execucao > 0 ? 'text-green-700 font-medium' : 'text-gray-400'}>
+        <span className={c.total_execucao > 0 ? 'text-success-700 font-medium' : 'text-neutral-400'}>
           {formatarMoeda(c.total_execucao)}
         </span>
       ),
@@ -64,7 +64,7 @@ export default function ComissoesResumo({
       label: 'Total',
       align: 'right',
       render: (c) => (
-        <span className="font-bold text-gray-900">
+        <span className="font-bold text-foreground">
           {formatarMoeda(c.total_venda + c.total_execucao)}
         </span>
       ),
@@ -89,8 +89,8 @@ export default function ComissoesResumo({
       />
       {comissoes.length > 0 && (
         <div className="mt-3 text-right text-sm">
-          <span className="text-gray-500">Total Geral: </span>
-          <span className="font-bold text-gray-900">{formatarMoeda(totalGeral)}</span>
+          <span className="text-muted">Total Geral: </span>
+          <span className="font-bold text-foreground">{formatarMoeda(totalGeral)}</span>
         </div>
       )}
     </div>

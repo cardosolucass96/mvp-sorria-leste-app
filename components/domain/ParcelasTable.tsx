@@ -65,12 +65,12 @@ export default function ParcelasTable({
               p.status === 'pendente' || p.status === 'vencida' ? (
                 <button
                   onClick={() => onMarcarPaga(p)}
-                  className="text-green-600 hover:text-green-800 text-sm font-medium"
+                  className="text-success-600 hover:text-success-800 text-sm font-medium"
                 >
                   Marcar Paga
                 </button>
               ) : p.pago_em ? (
-                <span className="text-xs text-gray-500">Pago em {formatarData(p.pago_em)}</span>
+                <span className="text-xs text-muted">Pago em {formatarData(p.pago_em)}</span>
               ) : null,
           },
         ]

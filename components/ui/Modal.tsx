@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useId } from 'react';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -11,6 +11,7 @@ export interface ModalProps {
   footer?: React.ReactNode;
   closeOnOverlay?: boolean;
   closeOnEsc?: boolean;
+  className?: string;
 }
 
 const sizeClasses: Record<NonNullable<ModalProps['size']>, string> = {
@@ -29,9 +30,11 @@ export default function Modal({
   footer,
   closeOnOverlay = true,
   closeOnEsc = true,
+  className = '',
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
 
   // Focus trap
   const handleKeyDown = useCallback(
@@ -94,7 +97,7 @@ export default function Modal({
       style={{ zIndex: 'var(--z-modal, 1050)' }}
       role="dialog"
       aria-modal="true"
-      aria-labelledby="modal-title"
+      aria-labelledby={titleId}
     >
       {/* Overlay */}
       <div
@@ -108,21 +111,22 @@ export default function Modal({
       <div
         ref={panelRef}
         className={`
-          relative bg-white rounded-xl shadow-xl w-full
+          relative bg-surface rounded-xl shadow-xl w-full
           max-h-[90vh] flex flex-col
           animate-in fade-in zoom-in-95 duration-200
           ${sizeClasses[size]}
+          ${className}
         `.trim()}
         style={{ zIndex: 'var(--z-modal, 1050)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 id="modal-title" className="text-lg font-semibold text-gray-900">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 id={titleId} className="text-lg font-semibold text-foreground">
             {title}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100"
+            className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded-lg hover:bg-neutral-100"
             aria-label="Fechar"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,7 +140,7 @@ export default function Modal({
 
         {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+          <div className="px-6 py-4 border-t border-border flex justify-end gap-3">
             {footer}
           </div>
         )}

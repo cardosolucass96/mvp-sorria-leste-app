@@ -76,15 +76,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 // ─── Container ──────────────────────────────────────────────────
 
 const typeConfig: Record<ToastType, { bg: string; icon: string }> = {
-  success: { bg: 'bg-green-600', icon: '✅' },
-  error: { bg: 'bg-red-600', icon: '❌' },
-  warning: { bg: 'bg-amber-600', icon: '⚠️' },
-  info: { bg: 'bg-blue-600', icon: 'ℹ️' },
+  success: { bg: 'bg-success-600', icon: '✅' },
+  error: { bg: 'bg-error-600', icon: '❌' },
+  warning: { bg: 'bg-warning-600', icon: '⚠️' },
+  info: { bg: 'bg-info-600', icon: 'ℹ️' },
 };
 
 function ToastContainer({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: string) => void }) {
-  if (toasts.length === 0) return null;
-
   return (
     <div
       className="fixed top-4 right-4 flex flex-col gap-2 max-w-sm w-full pointer-events-none"
@@ -100,7 +98,7 @@ function ToastContainer({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: st
             pointer-events-auto animate-in slide-in-from-right duration-300
             ${typeConfig[t.type].bg}
           `.trim()}
-          role="status"
+          role={t.type === 'error' || t.type === 'warning' ? 'alert' : 'status'}
         >
           <span aria-hidden="true">{typeConfig[t.type].icon}</span>
           <p className="flex-1">{t.message}</p>

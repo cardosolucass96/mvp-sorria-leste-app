@@ -13,6 +13,8 @@ import Textarea from '@/components/ui/Textarea';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import { ORIGENS_OPTIONS } from '@/lib/constants/origens';
+import { validarCPF, validarEmail, validarTelefone } from '@/lib/utils/validators';
+import { unmask } from '@/lib/utils/masks';
 
 export interface ClienteFormData {
   nome: string;
@@ -59,13 +61,31 @@ export default function ClienteForm({
     ...emptyForm,
     ...initialData,
   });
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ClienteFormData, string>>>({});
 
   const handleChange = (field: keyof ClienteFormData) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    // Clear field error on change
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => { const next = { ...prev }; delete next[field]; return next; });
+    }
+  };
+
+  const validate = (): boolean => {
+    const errors: Partial<Record<keyof ClienteFormData, string>> = {};
+    if (!formData.nome.trim()) errors.nome = 'Nome é obrigatório';
+    else if (formData.nome.trim().length < 2) errors.nome = 'Nome deve ter ao menos 2 caracteres';
+    if (formData.cpf && !validarCPF(unmask(formData.cpf))) errors.cpf = 'CPF inválido';
+    if (formData.email && !validarEmail(formData.email)) errors.email = 'Email inválido';
+    if (formData.telefone && !validarTelefone(unmask(formData.telefone))) errors.telefone = 'Telefone inválido';
+    if (!formData.origem) errors.origem = 'Origem é obrigatória';
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validate()) return;
     await onSubmit(formData);
   };
 
@@ -88,6 +108,7 @@ export default function ClienteForm({
               required
               placeholder="Digite o nome completo"
               disabled={loading}
+              error={fieldErrors.nome}
             />
           </div>
 
@@ -99,6 +120,7 @@ export default function ClienteForm({
             mask="cpf"
             placeholder="000.000.000-00"
             disabled={loading}
+            error={fieldErrors.cpf}
           />
 
           <Input
@@ -119,6 +141,7 @@ export default function ClienteForm({
             required
             placeholder="Selecione..."
             disabled={loading}
+            error={fieldErrors.origem}
           />
         </div>
       </div>
@@ -135,6 +158,7 @@ export default function ClienteForm({
             mask="telefone"
             placeholder="(00) 00000-0000"
             disabled={loading}
+            error={fieldErrors.telefone}
           />
 
           <Input
@@ -145,6 +169,7 @@ export default function ClienteForm({
             onChange={handleChange('email')}
             placeholder="email@exemplo.com"
             disabled={loading}
+            error={fieldErrors.email}
           />
 
           <div className="md:col-span-2">

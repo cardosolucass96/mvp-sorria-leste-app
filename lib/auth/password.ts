@@ -46,7 +46,7 @@ export async function hashPassword(plainPassword: string): Promise<string> {
   const derivedBits = await crypto.subtle.deriveBits(
     {
       name: ALGORITHM,
-      salt,
+      salt: salt as BufferSource,
       iterations: ITERATIONS,
       hash: HASH_ALGO,
     },
@@ -93,7 +93,7 @@ export async function verifyPassword(
   const derivedBits = await crypto.subtle.deriveBits(
     {
       name: ALGORITHM,
-      salt,
+      salt: salt as BufferSource,
       iterations,
       hash: HASH_ALGO,
     },

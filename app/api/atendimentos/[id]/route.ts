@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query, execute } from '@/lib/db';
+import { extractToken, verifyToken } from '@/lib/auth/jwt';
 
 interface Atendimento {
   id: number;
@@ -159,9 +160,16 @@ export async function PUT(
       
       // Se liberando para execução, marca quem liberou e quando
       if (status === 'em_execucao' && atendimento.status === 'aguardando_pagamento') {
-        // TODO: Pegar usuário logado do contexto de autenticação
-        const usuario = await queryOne<{ id: number }>('SELECT id FROM usuarios LIMIT 1');
-        const liberadoPorId = usuario?.id || 1;
+        // Extrai ID do usuário logado via JWT; fallback para primeiro do banco
+        let liberadoPorId = 1;
+        const token = extractToken(request);
+        if (token) {
+          const payload = await verifyToken(token);
+          if (payload) liberadoPorId = payload.sub;
+        } else {
+          const usuario = await queryOne<{ id: number }>('SELECT id FROM usuarios LIMIT 1');
+          if (usuario) liberadoPorId = usuario.id;
+        }
         
         updates.push('liberado_por_id = ?');
         updateParams.push(liberadoPorId);

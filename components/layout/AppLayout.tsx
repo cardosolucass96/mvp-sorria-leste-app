@@ -41,10 +41,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
   // Mostra loading enquanto verifica autenticação
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-surface-muted">
         <div className="text-center">
           <span className="text-4xl">🦷</span>
-          <p className="mt-2 text-gray-600">Carregando...</p>
+          <p className="mt-2 text-neutral-600">Carregando...</p>
         </div>
       </div>
     );
@@ -60,14 +60,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
       {/* Skip to content link for accessibility */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:bg-orange-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:bg-primary-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg"
       >
         Pular para conteúdo
       </a>
       <Header />
       <div className="flex flex-1">
         <Sidebar />
-        <main id="main-content" className="flex-1 bg-gray-100 p-3 md:p-6" role="main">
+        <main id="main-content" className="flex-1 bg-surface-muted p-3 md:p-6" role="main">
           <ErrorBoundary>
             {children}
           </ErrorBoundary>

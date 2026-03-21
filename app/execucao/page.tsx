@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { PageHeader, Card, LoadingState, EmptyState } from '@/components/ui';
+import { PageHeader, Card, LoadingState, EmptyState, Alert } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
@@ -29,6 +29,7 @@ export default function ExecucaoPage() {
   const router = useRouter();
   const [fila, setFila] = useState<FilaData>({ meusProcedimentos: [], disponiveis: [] });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (user?.id) {
@@ -43,6 +44,7 @@ export default function ExecucaoPage() {
       setFila(data);
     } catch (error) {
       console.error('Erro ao carregar procedimentos:', error);
+      setError('Erro ao carregar procedimentos');
     } finally {
       setLoading(false);
     }
@@ -52,14 +54,14 @@ export default function ExecucaoPage() {
     return (
       <Card
         variant="outlined"
-        borderColor="border-blue-500"
+        borderColor="border-info-500"
         onClick={() => router.push(`/execucao/${procedimento.id}`)}
       >
         <div className="flex justify-between items-start">
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900">{procedimento.procedimento_nome}</h3>
-            <p className="text-sm text-gray-600">{procedimento.cliente_nome}</p>
-            <p className="text-xs text-gray-400">Atendimento #{procedimento.atendimento_id}</p>
+            <h3 className="text-lg font-semibold text-foreground">{procedimento.procedimento_nome}</h3>
+            <p className="text-sm text-neutral-600">{procedimento.cliente_nome}</p>
+            <p className="text-xs text-neutral-400">Atendimento #{procedimento.atendimento_id}</p>
           </div>
           <StatusBadge type="item" status={procedimento.status} />
         </div>
@@ -79,6 +81,8 @@ export default function ExecucaoPage() {
 
   return (
     <div className="p-6">
+      {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
+
       <PageHeader
         title="Fila de Execução"
         description={`${totalProcedimentos} procedimento${totalProcedimentos !== 1 ? 's' : ''}`}
@@ -94,17 +98,17 @@ export default function ExecucaoPage() {
         <div className="space-y-8 mt-6">
           {/* Meus Procedimentos */}
           <section>
-            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+            <h2 className="text-lg font-bold text-neutral-800 mb-4 flex items-center gap-2">
+              <span className="bg-info-100 text-info-800 px-3 py-1 rounded-full text-sm">
                 👤 Meus Procedimentos
               </span>
-              <span className="text-gray-500 text-sm font-normal">
+              <span className="text-muted text-sm font-normal">
                 ({fila.meusProcedimentos.length})
               </span>
             </h2>
             
             {fila.meusProcedimentos.length === 0 ? (
-              <div className="bg-gray-50 p-4 rounded-lg text-center text-gray-500">
+              <div className="bg-surface-secondary p-4 rounded-lg text-center text-muted">
                 Nenhum procedimento atribuído a você ainda.
               </div>
             ) : (
@@ -118,17 +122,17 @@ export default function ExecucaoPage() {
 
           {/* Disponíveis para Pegar */}
           <section>
-            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-neutral-800 mb-4 flex items-center gap-2">
               <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm">
                 📋 Disponíveis para Pegar
               </span>
-              <span className="text-gray-500 text-sm font-normal">
+              <span className="text-muted text-sm font-normal">
                 ({fila.disponiveis.length})
               </span>
             </h2>
             
             {fila.disponiveis.length === 0 ? (
-              <div className="bg-gray-50 p-4 rounded-lg text-center text-gray-500">
+              <div className="bg-surface-secondary p-4 rounded-lg text-center text-muted">
                 Nenhum procedimento disponível no momento.
               </div>
             ) : (

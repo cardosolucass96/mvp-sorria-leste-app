@@ -31,11 +31,11 @@ export default function FilterBar({
   const hasFilters = Object.values(values).some((v) => v !== '');
 
   return (
-    <div className={`bg-white rounded-xl border border-orange-100 p-4 ${className}`}>
+    <div className={`bg-surface rounded-xl border border-border-light p-4 ${className}`}>
       {/* Mobile toggle */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 text-sm font-medium text-gray-700 md:hidden w-full"
+        className="flex items-center gap-2 text-sm font-medium text-neutral-700 md:hidden w-full"
         aria-expanded={expanded}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -43,7 +43,7 @@ export default function FilterBar({
         </svg>
         Filtros
         {hasFilters && (
-          <span className="bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+          <span className="bg-primary-500 text-white text-xs px-1.5 py-0.5 rounded-full">
             {Object.values(values).filter((v) => v !== '').length}
           </span>
         )}
@@ -64,13 +64,13 @@ export default function FilterBar({
             if (field.type === 'select' && field.options) {
               return (
                 <div key={field.name} className="w-full">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">
                     {field.label}
                   </label>
                   <select
                     value={values[field.name] || ''}
                     onChange={(e) => onChange(field.name, e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   >
                     <option value="">{field.placeholder || 'Todos'}</option>
                     {field.options.map((opt) => (

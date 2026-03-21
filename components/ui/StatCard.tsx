@@ -14,7 +14,7 @@ export default function StatCard({
   icon,
   label,
   value,
-  color = 'border-orange-400',
+  color = 'border-primary-400',
   href,
   description,
   className = '',
@@ -22,7 +22,7 @@ export default function StatCard({
   const content = (
     <div
       className={`
-        bg-white rounded-xl shadow-md border border-orange-100 p-5
+        bg-surface rounded-xl shadow-md border border-border-light p-5
         border-l-4 ${color}
         ${href ? 'hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200' : ''}
         ${className}
@@ -33,10 +33,10 @@ export default function StatCard({
           {icon}
         </span>
         <div className="min-w-0">
-          <p className="text-sm text-gray-500 truncate">{label}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-0.5">{value}</p>
+          <p className="text-sm text-muted truncate">{label}</p>
+          <p className="text-2xl font-bold text-foreground mt-0.5">{value}</p>
           {description && (
-            <p className="text-xs text-gray-400 mt-1">{description}</p>
+            <p className="text-xs text-neutral-400 mt-1">{description}</p>
           )}
         </div>
       </div>

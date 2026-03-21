@@ -5,9 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useParams } from 'next/navigation';
 import { formatarDataHora } from '@/lib/utils/formatters';
 import { StatusBadge } from '@/components/domain';
-import Alert from '@/components/ui/Alert';
-import LoadingState from '@/components/ui/LoadingState';
-import Modal from '@/components/ui/Modal';
+import { Alert, LoadingState, Modal, PageHeader, Card, Button, EmptyState } from '@/components/ui';
+import { useToast } from '@/components/ui/Toast';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface ItemAtendimento {
@@ -68,7 +67,9 @@ export default function ExecucaoProcedimentoPage() {
   const params = useParams();
   const { user } = useAuth();
   const router = useRouter();
+  const { addToast } = useToast();
   const [item, setItem] = useState<ItemAtendimento | null>(null);
+  const [error, setError] = useState('');
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
   const [anexos, setAnexos] = useState<Anexo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,6 +107,7 @@ export default function ExecucaoProcedimentoPage() {
       setItem(data);
     } catch (error) {
       console.error('Erro ao carregar procedimento:', error);
+      setError('Erro ao carregar procedimento');
     } finally {
       setLoading(false);
     }
@@ -170,7 +172,7 @@ export default function ExecucaoProcedimentoPage() {
       if (response.ok) {
         const data = await response.json();
         setProntuario(data.prontuario);
-        alert('Prontuário salvo com sucesso!');
+        addToast('Prontuário salvo com sucesso!', 'success');
       } else {
         const data = await response.json();
         setErroProntuario(data.error || 'Erro ao salvar prontuário');
@@ -206,7 +208,7 @@ export default function ExecucaoProcedimentoPage() {
         }
       } else {
         const data = await response.json();
-        alert(data.error || 'Erro ao enviar arquivo');
+        addToast(data.error || 'Erro ao enviar arquivo', 'error');
       }
     } catch (error) {
       console.error('Erro ao enviar anexo:', error);
@@ -235,7 +237,7 @@ export default function ExecucaoProcedimentoPage() {
     
     // Verificar se o prontuário foi preenchido
     if (!prontuario) {
-      alert('⚠️ Você precisa preencher o PRONTUÁRIO antes de concluir o procedimento.\n\nRole para baixo e preencha a descrição do procedimento realizado (mínimo 50 caracteres).');
+      addToast('Preencha o PRONTUÁRIO antes de concluir o procedimento.', 'warning');
       return;
     }
     
@@ -303,7 +305,7 @@ export default function ExecucaoProcedimentoPage() {
 
   async function adicionarProcedimento() {
     if (!item || !novoProcedimento.procedimento_id) {
-      alert('Selecione um procedimento');
+      addToast('Selecione um procedimento', 'warning');
       return;
     }
 
@@ -321,7 +323,7 @@ export default function ExecucaoProcedimentoPage() {
       if (response.ok) {
         setShowNovoProcedimento(false);
         setNovoProcedimento({ procedimento_id: '' });
-        alert(`Procedimento adicionado para ${item.cliente_nome}! O atendimento voltou para Aguardando Pagamento.`);
+        addToast(`Procedimento adicionado para ${item.cliente_nome}! Atendimento voltou para Aguardando Pagamento.`, 'success');
         router.push('/execucao');
       }
     } catch (error) {
@@ -330,20 +332,17 @@ export default function ExecucaoProcedimentoPage() {
   }
 
   if (loading) {
-    return <LoadingState message="Carregando procedimento..." />;
+    return <LoadingState text="Carregando procedimento..." />;
   }
 
   if (!item) {
     return (
-      <div className="p-6">
-        <Alert type="error" message="Procedimento não encontrado" />
-        <button
-          onClick={() => router.push('/execucao')}
-          className="mt-4 text-blue-600 hover:text-blue-800"
-        >
-          ← Voltar para a fila
-        </button>
-      </div>
+      <EmptyState
+        icon="🦷"
+        title="Procedimento não encontrado"
+        actionLabel="Voltar para fila"
+        onAction={() => router.push('/execucao')}
+      />
     );
   }
 
@@ -351,22 +350,22 @@ export default function ExecucaoProcedimentoPage() {
   const isDisponivel = item.executor_id === null;
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <button
-        onClick={() => router.push('/execucao')}
-        className="text-blue-600 hover:text-blue-800 mb-4"
-      >
-        ← Voltar para a fila
-      </button>
+    <div className="max-w-2xl mx-auto space-y-6">
+      <PageHeader
+        title={item.procedimento_nome}
+        icon="🦷"
+        description={`${item.cliente_nome} · Atendimento #${item.atendimento_id}`}
+        breadcrumb={[
+          { label: 'Execução', href: '/execucao' },
+          { label: item.procedimento_nome },
+        ]}
+      />
+
+      {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
       {/* Card Principal do Procedimento */}
-      <div className="bg-white p-6 rounded-lg shadow mb-6">
+      <Card>
         <div className="flex justify-between items-start mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{item.procedimento_nome}</h1>
-            <p className="text-lg text-gray-600 mt-1">{item.cliente_nome}</p>
-            <p className="text-sm text-gray-400">Atendimento #{item.atendimento_id}</p>
-          </div>
           <StatusBadge type="item" status={item.status} />
         </div>
 
@@ -376,15 +375,15 @@ export default function ExecucaoProcedimentoPage() {
             const dentesArray = JSON.parse(item.dentes) as string[];
             if (dentesArray.length > 0) {
               return (
-                <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                  <p className="text-sm font-semibold text-orange-800 mb-2">
+                <div className="mb-4 p-4 bg-primary-50 border border-primary-200 rounded-lg">
+                  <p className="text-sm font-semibold text-primary-800 mb-2">
                     🦷 Dentes a serem tratados ({dentesArray.length}):
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {dentesArray.sort((a, b) => Number(a) - Number(b)).map((dente) => (
                       <span
                         key={dente}
-                        className="px-3 py-1 bg-orange-600 text-white text-sm font-bold rounded-full"
+                        className="px-3 py-1 bg-primary-600 text-white text-sm font-bold rounded-full"
                       >
                         {dente}
                       </span>
@@ -407,7 +406,7 @@ export default function ExecucaoProcedimentoPage() {
             </span>
           )}
           {isMeuProcedimento && item.status !== 'concluido' && (
-            <span className="inline-block px-3 py-1 text-sm font-semibold rounded bg-blue-100 text-blue-800">
+            <span className="inline-block px-3 py-1 text-sm font-semibold rounded bg-info-100 text-info-800">
               👤 Meu procedimento
             </span>
           )}
@@ -415,15 +414,15 @@ export default function ExecucaoProcedimentoPage() {
 
         {/* Info de conclusão */}
         {item.concluido_at && (
-          <div className="bg-green-50 border border-green-200 p-3 rounded mb-4">
-            <p className="text-sm text-green-800">
+          <div className="bg-success-50 border border-success-200 p-3 rounded mb-4">
+            <p className="text-sm text-success-800">
               ✓ Concluído em {formatarDataHora(item.concluido_at)}
             </p>
           </div>
         )}
 
         {/* Info de adição */}
-        <div className="text-sm text-gray-500 mb-4">
+        <div className="text-sm text-muted mb-4">
           Adicionado em {formatarDataHora(item.created_at)}
           {item.criado_por_nome && ` por ${item.criado_por_nome}`}
         </div>
@@ -432,22 +431,23 @@ export default function ExecucaoProcedimentoPage() {
         <div className="space-y-3">
           {/* Procedimento disponível - pegar */}
           {isDisponivel && item.status === 'pago' && (
-            <button
+            <Button
               onClick={pegarProcedimento}
-              className="w-full bg-yellow-500 text-white px-4 py-3 rounded-lg hover:bg-yellow-600 font-semibold text-lg"
+              className="w-full text-lg py-3"
+              variant="secondary"
             >
               🙋 Pegar Este Procedimento
-            </button>
+            </Button>
           )}
 
           {/* Procedimento meu e pago - iniciar */}
           {isMeuProcedimento && item.status === 'pago' && (
-            <button
+            <Button
               onClick={iniciarExecucao}
-              className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 font-semibold text-lg"
+              className="w-full text-lg py-3"
             >
               ▶️ Iniciar Execução
-            </button>
+            </Button>
           )}
 
           {/* Procedimento em execução - concluir */}
@@ -458,60 +458,56 @@ export default function ExecucaoProcedimentoPage() {
                   ⚠️ <strong>Prontuário pendente:</strong> Preencha o prontuário abaixo antes de concluir.
                 </div>
               )}
-              <button
+              <Button
                 onClick={marcarComoConcluido}
                 disabled={!prontuario}
-                className={`w-full px-4 py-3 rounded-lg font-semibold text-lg ${
-                  prontuario 
-                    ? 'bg-green-600 text-white hover:bg-green-700' 
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
+                className="w-full text-lg py-3"
               >
                 {prontuario ? '✅ Marcar como Concluído' : '🔒 Preencha o Prontuário para Concluir'}
-              </button>
+              </Button>
             </div>
           )}
 
           {/* Procedimento concluído */}
           {item.status === 'concluido' && (
-            <div className="w-full text-center text-gray-600 py-3 bg-gray-100 rounded-lg">
+            <div className="w-full text-center text-neutral-600 py-3 bg-surface-muted rounded-lg">
               ✓ Procedimento concluído
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* Botão Adicionar Procedimento - apenas se for MEU procedimento */}
       {isMeuProcedimento && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">Ações Adicionais</h2>
+        <Card>
+          <h2 className="text-lg font-bold text-neutral-800 mb-4">Ações Adicionais</h2>
           
-          <button
+          <Button
             onClick={() => setShowNovoProcedimento(true)}
-            className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 font-semibold"
+            className="w-full"
           >
             ➕ Adicionar Procedimento para {item.cliente_nome}
-          </button>
-        </div>
+          </Button>
+        </Card>
       )}
 
       {/* Seção de Prontuário - OBRIGATÓRIO para conclusão */}
       {(isMeuProcedimento && item.status === 'executando') || prontuario ? (
-        <div className={`bg-white p-6 rounded-lg shadow ${!prontuario && item.status === 'executando' ? 'ring-2 ring-red-400' : ''}`}>
+        <Card className={!prontuario && item.status === 'executando' ? 'ring-2 ring-error-400' : ''}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-800">
-              📋 Prontuário {!prontuario && item.status === 'executando' && <span className="text-red-600">*</span>}
+            <h2 className="text-lg font-bold text-neutral-800">
+              📋 Prontuário {!prontuario && item.status === 'executando' && <span className="text-error-600">*</span>}
             </h2>
             {prontuario && (
-              <span className="px-3 py-1 text-sm font-semibold rounded bg-green-100 text-green-800">
+              <span className="px-3 py-1 text-sm font-semibold rounded bg-success-100 text-success-800">
                 ✓ Preenchido
               </span>
             )}
           </div>
           
           {!prontuario && item.status === 'executando' && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">
+            <div className="mb-4 p-3 bg-error-50 border border-error-200 rounded-lg">
+              <p className="text-sm text-error-700">
                 <strong>⚠️ Obrigatório:</strong> Preencha a descrição do procedimento realizado com no mínimo {MIN_CARACTERES_PRONTUARIO} caracteres para poder concluir.
               </p>
             </div>
@@ -521,67 +517,68 @@ export default function ExecucaoProcedimentoPage() {
           {isMeuProcedimento && item.status === 'executando' && (
             <div className="space-y-4">
               {erroProntuario && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                <div className="p-3 bg-error-50 border border-error-200 rounded-lg text-sm text-error-700">
                   {erroProntuario}
                 </div>
               )}
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
                   Descrição do Procedimento Realizado *
                 </label>
                 <textarea
                   value={descricaoProntuario}
                   onChange={(e) => setDescricaoProntuario(e.target.value)}
                   placeholder="Descreva detalhadamente o procedimento realizado, materiais utilizados, técnicas aplicadas..."
-                  className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:outline-none ${
-                    descricaoProntuario.length < MIN_CARACTERES_PRONTUARIO ? 'border-red-300' : 'border-green-300'
+                  className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:outline-none ${
+                    descricaoProntuario.length < MIN_CARACTERES_PRONTUARIO ? 'border-error-300' : 'border-success-300'
                   }`}
                   rows={5}
                 />
                 <div className="flex justify-between mt-1">
-                  <span className={`text-xs ${descricaoProntuario.length < MIN_CARACTERES_PRONTUARIO ? 'text-red-600' : 'text-green-600'}`}>
+                  <span className={`text-xs ${descricaoProntuario.length < MIN_CARACTERES_PRONTUARIO ? 'text-error-600' : 'text-success-600'}`}>
                     {descricaoProntuario.length}/{MIN_CARACTERES_PRONTUARIO} caracteres mínimos
                   </span>
                   {descricaoProntuario.length >= MIN_CARACTERES_PRONTUARIO && (
-                    <span className="text-xs text-green-600">✓ Mínimo atingido</span>
+                    <span className="text-xs text-success-600">✓ Mínimo atingido</span>
                   )}
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
                   Observações Adicionais (opcional)
                 </label>
                 <textarea
                   value={observacoesProntuario}
                   onChange={(e) => setObservacoesProntuario(e.target.value)}
                   placeholder="Observações sobre cuidados pós-procedimento, retornos, etc..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                  className="w-full border border-neutral-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:outline-none"
                   rows={3}
                 />
               </div>
 
-              <button
+              <Button
                 onClick={salvarProntuario}
                 disabled={salvandoProntuario || descricaoProntuario.trim().length < MIN_CARACTERES_PRONTUARIO}
-                className="w-full bg-orange-500 text-white px-4 py-3 rounded-lg hover:bg-orange-600 disabled:opacity-50 font-semibold"
+                loading={salvandoProntuario}
+                className="w-full"
               >
-                {salvandoProntuario ? 'Salvando...' : prontuario ? '💾 Atualizar Prontuário' : '💾 Salvar Prontuário'}
-              </button>
+                {prontuario ? '💾 Atualizar Prontuário' : '💾 Salvar Prontuário'}
+              </Button>
 
               {/* Anexos dentro do prontuário */}
-              <div className="pt-4 border-t border-gray-200">
-                <h3 className="text-md font-semibold text-gray-700 mb-3">📎 Anexos e Imagens</h3>
+              <div className="pt-4 border-t border-neutral-200">
+                <h3 className="text-md font-semibold text-neutral-700 mb-3">📎 Anexos e Imagens</h3>
                 
-                <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg mb-4">
+                <div className="p-4 border-2 border-dashed border-neutral-300 rounded-lg mb-4">
                   <div className="mb-2">
                     <input
                       type="text"
                       value={descricaoAnexo}
                       onChange={(e) => setDescricaoAnexo(e.target.value)}
                       placeholder="Descrição do arquivo (opcional)"
-                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-2"
+                      className="w-full border border-neutral-300 rounded px-3 py-2 text-sm mb-2"
                     />
                   </div>
                   <input
@@ -590,13 +587,13 @@ export default function ExecucaoProcedimentoPage() {
                     accept="image/*,video/*,.pdf,.doc,.docx"
                     onChange={enviarAnexo}
                     disabled={enviandoAnexo}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                    className="block w-full text-sm text-muted file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
                   />
-                  <p className="mt-2 text-xs text-gray-500">
+                  <p className="mt-2 text-xs text-muted">
                     📷 Imagens (máx. 10MB) | 🎬 Vídeos (máx. 50MB) | 📄 Documentos (máx. 10MB)
                   </p>
                   {enviandoAnexo && (
-                    <p className="mt-2 text-sm text-orange-600">⏳ Enviando arquivo...</p>
+                    <p className="mt-2 text-sm text-primary-600">⏳ Enviando arquivo...</p>
                   )}
                 </div>
 
@@ -629,7 +626,7 @@ export default function ExecucaoProcedimentoPage() {
                               href={`${arquivoUrl}?download=true`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center justify-center h-32 bg-gray-100 hover:bg-gray-200"
+                              className="flex items-center justify-center h-32 bg-surface-muted hover:bg-neutral-200"
                             >
                               <span className="text-3xl">📄</span>
                             </a>
@@ -638,12 +635,12 @@ export default function ExecucaoProcedimentoPage() {
                             <p className="font-medium text-xs truncate" title={anexo.nome_arquivo}>
                               {anexo.nome_arquivo}
                             </p>
-                            <p className="text-xs text-gray-400">
+                            <p className="text-xs text-neutral-400">
                               {(anexo.tamanho / 1024 / 1024).toFixed(2)} MB
                             </p>
                             <button
                               onClick={() => removerAnexo(anexo.id)}
-                              className="mt-1 text-xs text-red-600 hover:text-red-800"
+                              className="mt-1 text-xs text-error-600 hover:text-error-800"
                             >
                               🗑️ Remover
                             </button>
@@ -652,7 +649,7 @@ export default function ExecucaoProcedimentoPage() {
                       );
                     })
                   ) : (
-                    <p className="text-gray-500 text-xs col-span-2">Nenhum anexo adicionado</p>
+                    <p className="text-muted text-xs col-span-2">Nenhum anexo adicionado</p>
                   )}
                 </div>
               </div>
@@ -663,22 +660,22 @@ export default function ExecucaoProcedimentoPage() {
           {prontuario && (item.status === 'concluido' || !isMeuProcedimento) && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">Descrição do Procedimento</label>
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <p className="text-gray-800 whitespace-pre-wrap">{prontuario.descricao}</p>
+                <label className="block text-sm font-medium text-muted mb-1">Descrição do Procedimento</label>
+                <div className="bg-surface-secondary p-4 rounded-lg border border-neutral-200">
+                  <p className="text-neutral-800 whitespace-pre-wrap">{prontuario.descricao}</p>
                 </div>
               </div>
               
               {prontuario.observacoes && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Observações</label>
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <p className="text-gray-800 whitespace-pre-wrap">{prontuario.observacoes}</p>
+                  <label className="block text-sm font-medium text-muted mb-1">Observações</label>
+                  <div className="bg-surface-secondary p-4 rounded-lg border border-neutral-200">
+                    <p className="text-neutral-800 whitespace-pre-wrap">{prontuario.observacoes}</p>
                   </div>
                 </div>
               )}
 
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-muted">
                 Preenchido por <strong>{prontuario.usuario_nome}</strong> em {formatarDataHora(prontuario.created_at)}
                 {prontuario.updated_at !== prontuario.created_at && (
                   <> · Atualizado em {formatarDataHora(prontuario.updated_at)}</>
@@ -686,7 +683,7 @@ export default function ExecucaoProcedimentoPage() {
               </div>
             </div>
           )}
-        </div>
+        </Card>
       ) : null}
 
       {/* Info para procedimentos disponíveis */}
@@ -707,7 +704,7 @@ export default function ExecucaoProcedimentoPage() {
         }}
         title="Adicionar Procedimento"
       >
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-neutral-600 mb-4">
           Para: <strong>{item.cliente_nome}</strong>
         </p>
         
@@ -718,7 +715,7 @@ export default function ExecucaoProcedimentoPage() {
             onChange={(e) =>
               setNovoProcedimento({ ...novoProcedimento, procedimento_id: e.target.value })
             }
-            className="w-full border border-gray-300 rounded px-3 py-2"
+            className="w-full border border-neutral-300 rounded px-3 py-2"
           >
             <option value="">Selecione...</option>
             {procedimentos.map((proc) => (
@@ -729,24 +726,25 @@ export default function ExecucaoProcedimentoPage() {
           </select>
         </div>
 
-        <Alert type="warning" message="Ao adicionar um procedimento, o atendimento voltará para Aguardando Pagamento." />
+        <Alert type="warning">Ao adicionar um procedimento, o atendimento voltará para Aguardando Pagamento.</Alert>
 
         <div className="flex gap-2 mt-4">
-          <button
+          <Button
             onClick={adicionarProcedimento}
-            className="flex-1 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+            className="flex-1"
           >
             Adicionar
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="secondary"
             onClick={() => {
               setShowNovoProcedimento(false);
               setNovoProcedimento({ procedimento_id: '' });
             }}
-            className="flex-1 bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400"
+            className="flex-1"
           >
             Cancelar
-          </button>
+          </Button>
         </div>
       </Modal>
     </div>

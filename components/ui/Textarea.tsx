@@ -43,9 +43,9 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
 
     return (
       <div className={`w-full ${className}`}>
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor={id} className="block text-sm font-medium text-neutral-700 mb-1">
           {label}
-          {required && <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>}
+          {required && <span className="text-error-500 ml-0.5" aria-hidden="true">*</span>}
         </label>
 
         <textarea
@@ -65,10 +65,10 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
             w-full px-3 py-2 border rounded-lg text-sm resize-y
             transition-colors duration-200
             focus:outline-none focus:ring-2 focus:border-transparent
-            disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed
+            disabled:bg-neutral-50 disabled:text-neutral-500 disabled:cursor-not-allowed
             ${error
-              ? 'border-red-300 focus:ring-red-400 text-red-900 placeholder-red-300'
-              : 'border-gray-300 focus:ring-orange-500'
+              ? 'border-error-300 focus:ring-error-400 text-error-900 placeholder-error-300'
+              : 'border-neutral-300 focus:ring-primary-500'
             }
           `.trim()}
         />
@@ -76,17 +76,17 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         <div className="flex justify-between mt-1">
           <div>
             {error && (
-              <p id={`${id}-error`} className="text-sm text-red-600" role="alert">
+              <p id={`${id}-error`} className="text-sm text-error-600" role="alert">
                 {error}
               </p>
             )}
             {!error && hint && (
-              <p id={`${id}-hint`} className="text-sm text-gray-500">
+              <p id={`${id}-hint`} className="text-sm text-neutral-500">
                 {hint}
               </p>
             )}
             {!error && !hint && belowMin && (
-              <p className="text-sm text-amber-600">
+              <p className="text-sm text-warning-600">
                 Mínimo {minLength} caracteres ({value.length}/{minLength})
               </p>
             )}
@@ -95,7 +95,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           {maxLength != null && (
             <span
               className={`text-xs ${
-                remaining !== null && remaining <= 20 ? 'text-red-500 font-medium' : 'text-gray-400'
+                remaining !== null && remaining <= 20 ? 'text-error-500 font-medium' : 'text-neutral-400'
               }`}
             >
               {value.length}/{maxLength}

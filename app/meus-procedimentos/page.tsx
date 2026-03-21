@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { PageHeader, StatCard, Badge, EmptyState, LoadingState, Tabs } from '@/components/ui';
+import { PageHeader, StatCard, Badge, LoadingState, Tabs, Alert, Table } from '@/components/ui';
+import type { TableColumn } from '@/components/ui/Table';
 import { StatusBadge } from '@/components/domain';
 import { formatarData } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -25,6 +26,7 @@ export default function MeusProcedimentosPage() {
   const { user, hasRole } = useAuth();
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filtro, setFiltro] = useState<string>('todos');
 
   const carregarProcedimentos = useCallback(async () => {
@@ -36,6 +38,7 @@ export default function MeusProcedimentosPage() {
       setProcedimentos(data);
     } catch (error) {
       console.error('Erro ao carregar procedimentos:', error);
+      setError('Erro ao carregar procedimentos');
     } finally {
       setLoading(false);
     }
@@ -75,6 +78,8 @@ export default function MeusProcedimentosPage() {
 
   return (
     <div className="space-y-6">
+      {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
+
       <PageHeader
         title="📋 Meus Procedimentos"
         description="Histórico de procedimentos que você avaliou ou executou"
@@ -86,7 +91,7 @@ export default function MeusProcedimentosPage() {
           icon="📋"
           label="Total de Procedimentos"
           value={procedimentos.length}
-          color="border-blue-400"
+          color="border-info-400"
         />
         
         {hasRole(['avaliador', 'admin']) && (
@@ -103,7 +108,7 @@ export default function MeusProcedimentosPage() {
             icon="🦷"
             label="Procedimentos Executados"
             value={totalExecutados}
-            color="border-green-400"
+            color="border-success-400"
           />
         )}
       </div>
@@ -112,75 +117,58 @@ export default function MeusProcedimentosPage() {
       <Tabs tabs={tabs} activeTab={filtro} onTabChange={setFiltro} variant="pills" />
 
       {/* Lista de procedimentos */}
-      {procedimentosFiltrados.length === 0 ? (
-        <EmptyState
-          icon="📭"
-          title="Nenhum procedimento encontrado"
-          description="Os procedimentos que você avaliar ou executar aparecerão aqui"
-        />
-      ) : (
-        <div className="card overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Procedimento
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Paciente
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                  Tipo
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                  Dentes
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                  Data
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {procedimentosFiltrados.map((proc) => (
-                <tr key={`${proc.tipo}-${proc.item_id}`} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-gray-900">{proc.procedimento_nome}</div>
-                    <div className="text-xs text-gray-500">Atendimento #{proc.atendimento_id}</div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-700">
-                    {proc.cliente_nome}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {proc.tipo === 'avaliacao' ? (
-                      <Badge color="purple">🔍 Avaliação</Badge>
-                    ) : (
-                      <Badge color="green">🦷 Execução</Badge>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-center text-sm">
-                    {proc.dentes ? (
-                      <span className="text-orange-600 font-medium">
-                        {formatarDentes(proc.dentes)}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <StatusBadge type="item" status={proc.status} showIcon />
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm text-gray-500">
-                    {formatarData(proc.concluido_at || proc.created_at)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Table<Procedimento>
+        columns={[
+          {
+            key: 'procedimento',
+            label: 'Procedimento',
+            render: (proc) => (
+              <div>
+                <div className="font-medium text-foreground">{proc.procedimento_nome}</div>
+                <div className="text-xs text-muted">Atendimento #{proc.atendimento_id}</div>
+              </div>
+            ),
+          },
+          {
+            key: 'cliente',
+            label: 'Paciente',
+            render: (proc) => <span className="text-neutral-700">{proc.cliente_nome}</span>,
+          },
+          {
+            key: 'tipo',
+            label: 'Tipo',
+            align: 'center',
+            render: (proc) => proc.tipo === 'avaliacao'
+              ? <Badge color="purple">🔍 Avaliação</Badge>
+              : <Badge color="green">🦷 Execução</Badge>,
+          },
+          {
+            key: 'dentes',
+            label: 'Dentes',
+            align: 'center',
+            render: (proc) => proc.dentes
+              ? <span className="text-primary-600 font-medium">{formatarDentes(proc.dentes)}</span>
+              : <span className="text-neutral-400">-</span>,
+          },
+          {
+            key: 'status',
+            label: 'Status',
+            align: 'center',
+            render: (proc) => <StatusBadge type="item" status={proc.status} showIcon />,
+          },
+          {
+            key: 'data',
+            label: 'Data',
+            align: 'right',
+            render: (proc) => <span className="text-sm text-muted">{formatarData(proc.concluido_at || proc.created_at)}</span>,
+          },
+        ] as TableColumn<Procedimento>[]}
+        data={procedimentosFiltrados}
+        keyExtractor={(proc) => `${proc.tipo}-${proc.item_id}`}
+        emptyMessage="Nenhum procedimento encontrado"
+        emptyIcon="📭"
+        caption="Meus procedimentos"
+      />
     </div>
   );
 }

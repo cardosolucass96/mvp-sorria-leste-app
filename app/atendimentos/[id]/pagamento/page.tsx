@@ -304,14 +304,14 @@ export default function PagamentoPage({
   const totalAplicado = Object.values(itensSelecionados).reduce((sum, val) => sum + val, 0);
 
   if (loading) {
-    return <LoadingState message="Carregando pagamento..." />;
+    return <LoadingState text="Carregando pagamento..." />;
   }
 
   if (!atendimento) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500 mb-4">Atendimento não encontrado</p>
-        <Link href="/atendimentos" className="text-blue-600">
+        <p className="text-muted mb-4">Atendimento não encontrado</p>
+        <Link href="/atendimentos" className="text-info-600">
           ← Voltar para lista
         </Link>
       </div>
@@ -335,40 +335,40 @@ export default function PagamentoPage({
         <div className="flex items-center gap-4">
           <Link 
             href={`/atendimentos/${id}`} 
-            className="text-gray-500 hover:text-gray-700"
+            className="text-muted hover:text-neutral-700"
           >
             ← Voltar
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-foreground">
               💳 Pagamento
             </h1>
-            <p className="text-gray-600">
+            <p className="text-neutral-600">
               {atendimento.cliente_nome} - Atendimento #{atendimento.id}
             </p>
           </div>
         </div>
       </div>
 
-      {error && <Alert type="error" message={error} />}
+      {error && <Alert type="error">{error}</Alert>}
 
       {/* Dados do Cliente */}
-      <div className="card bg-blue-50 border border-blue-200">
+      <div className="card bg-info-50 border border-info-200">
         <div className="flex items-center gap-6">
           <div>
-            <p className="text-sm text-blue-600">Cliente</p>
-            <p className="font-semibold text-blue-900">{atendimento.cliente_nome}</p>
+            <p className="text-sm text-info-600">Cliente</p>
+            <p className="font-semibold text-info-900">{atendimento.cliente_nome}</p>
           </div>
           {atendimento.cliente_cpf && (
             <div>
-              <p className="text-sm text-blue-600">CPF</p>
-              <p className="font-medium text-blue-800">{atendimento.cliente_cpf}</p>
+              <p className="text-sm text-info-600">CPF</p>
+              <p className="font-medium text-info-800">{atendimento.cliente_cpf}</p>
             </div>
           )}
           {atendimento.cliente_telefone && (
             <div>
-              <p className="text-sm text-blue-600">Telefone</p>
-              <p className="font-medium text-blue-800">{atendimento.cliente_telefone}</p>
+              <p className="text-sm text-info-600">Telefone</p>
+              <p className="font-medium text-info-800">{atendimento.cliente_telefone}</p>
             </div>
           )}
         </div>
@@ -381,24 +381,24 @@ export default function PagamentoPage({
           <h2 className="text-lg font-semibold mb-4">💰 Resumo Financeiro</h2>
           
           <div className="space-y-3">
-            <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-gray-600">Total do Tratamento</span>
+            <div className="flex justify-between p-3 bg-surface-secondary rounded-lg">
+              <span className="text-neutral-600">Total do Tratamento</span>
               <span className="font-bold text-lg">{formatarMoeda(atendimento.total)}</span>
             </div>
             
-            <div className="flex justify-between p-3 bg-green-50 rounded-lg">
-              <span className="text-green-700">Pago</span>
-              <span className="font-bold text-lg text-green-700">{formatarMoeda(totalPago)}</span>
+            <div className="flex justify-between p-3 bg-success-50 rounded-lg">
+              <span className="text-success-700">Pago</span>
+              <span className="font-bold text-lg text-success-700">{formatarMoeda(totalPago)}</span>
             </div>
             
             <div className={`flex justify-between p-3 rounded-lg ${
-              saldoDevedor > 0 ? 'bg-red-50' : 'bg-green-50'
+              saldoDevedor > 0 ? 'bg-error-50' : 'bg-success-50'
             }`}>
-              <span className={saldoDevedor > 0 ? 'text-red-700' : 'text-green-700'}>
+              <span className={saldoDevedor > 0 ? 'text-error-700' : 'text-success-700'}>
                 {saldoDevedor > 0 ? 'Saldo Devedor' : 'Quitado'}
               </span>
               <span className={`font-bold text-lg ${
-                saldoDevedor > 0 ? 'text-red-700' : 'text-green-700'
+                saldoDevedor > 0 ? 'text-error-700' : 'text-success-700'
               }`}>
                 {formatarMoeda(saldoDevedor)}
               </span>
@@ -426,7 +426,7 @@ export default function PagamentoPage({
               >
                 {avancando ? 'Avançando...' : '✓ Liberar para Execução'}
               </button>
-              <p className="text-xs text-gray-500 mt-2 text-center">
+              <p className="text-xs text-muted mt-2 text-center">
                 {itensPagos.length} procedimento(s) pago(s) e pronto(s) para execução
               </p>
             </div>
@@ -450,7 +450,7 @@ export default function PagamentoPage({
           
           <form onSubmit={handleRegistrarPagamento} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
                 Valor (R$) *
               </label>
               <input
@@ -467,7 +467,7 @@ export default function PagamentoPage({
                 <button
                   type="button"
                   onClick={() => setValorPagamento(saldoDevedor.toString())}
-                  className="text-xs text-blue-600 hover:text-blue-800 mt-1"
+                  className="text-xs text-info-600 hover:text-info-800 mt-1"
                 >
                   Preencher saldo devedor: {formatarMoeda(saldoDevedor)}
                 </button>
@@ -475,7 +475,7 @@ export default function PagamentoPage({
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
                 Método *
               </label>
               <select
@@ -493,7 +493,7 @@ export default function PagamentoPage({
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
                 Observações
               </label>
               <input
@@ -509,19 +509,19 @@ export default function PagamentoPage({
             {valorPagamento && parseFloat(valorPagamento) > 0 && (
               <div className="border-t pt-4">
                 <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-neutral-700">
                     Distribuir entre procedimentos *
                   </label>
                   <button
                     type="button"
                     onClick={distribuirValorProporcional}
-                    className="text-xs text-blue-600 hover:text-blue-800"
+                    className="text-xs text-info-600 hover:text-info-800"
                   >
                     📊 Distribuir Proporcional
                   </button>
                 </div>
                 
-                <div className="space-y-2 max-h-60 overflow-y-auto bg-gray-50 p-3 rounded">
+                <div className="space-y-2 max-h-60 overflow-y-auto bg-surface-secondary p-3 rounded">
                   {atendimento.itens.map((item) => {
                     const saldoDevedor = item.valor - item.valor_pago;
                     if (saldoDevedor <= 0) return null;
@@ -529,8 +529,8 @@ export default function PagamentoPage({
                     return (
                       <div key={item.id} className="flex items-center gap-2">
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">{item.procedimento_nome}</p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-sm font-medium text-foreground">{item.procedimento_nome}</p>
+                          <p className="text-xs text-muted">
                             Saldo devedor: {formatarMoeda(saldoDevedor)}
                           </p>
                         </div>
@@ -549,12 +549,12 @@ export default function PagamentoPage({
                   })}
                 </div>
                 
-                <div className="mt-3 p-3 bg-blue-50 rounded flex justify-between items-center">
-                  <span className="text-sm font-medium text-blue-900">Total aplicado:</span>
+                <div className="mt-3 p-3 bg-info-50 rounded flex justify-between items-center">
+                  <span className="text-sm font-medium text-info-900">Total aplicado:</span>
                   <span className={`font-bold text-lg ${
                     Math.abs(totalAplicado - parseFloat(valorPagamento)) < 0.01
-                      ? 'text-green-600'
-                      : 'text-red-600'
+                      ? 'text-success-600'
+                      : 'text-error-600'
                   }`}>
                     {formatarMoeda(totalAplicado)} / {formatarMoeda(parseFloat(valorPagamento))}
                   </span>
@@ -578,7 +578,7 @@ export default function PagamentoPage({
           
           <form onSubmit={handleAdicionarParcela} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
                 Valor (R$) *
               </label>
               <input
@@ -594,7 +594,7 @@ export default function PagamentoPage({
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
                 Data de Vencimento *
               </label>
               <input
@@ -607,7 +607,7 @@ export default function PagamentoPage({
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
                 Observações
               </label>
               <input
@@ -634,42 +634,42 @@ export default function PagamentoPage({
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">🦷 Procedimentos e Pagamentos</h2>
         
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-neutral-200">
+          <thead className="bg-surface-secondary">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
                 Procedimento
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
                 Valor Total
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
                 Já Pago
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
                 Saldo Devedor
               </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+              <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase">
                 Status
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-surface divide-y divide-neutral-200">
             {atendimento.itens.map((item) => {
               const saldoDevedor = item.valor - item.valor_pago;
               return (
-                <tr key={item.id} className={saldoDevedor === 0 ? 'bg-green-50' : ''}>
-                  <td className="px-4 py-3 font-medium text-gray-900">
+                <tr key={item.id} className={saldoDevedor === 0 ? 'bg-success-50' : ''}>
+                  <td className="px-4 py-3 font-medium text-foreground">
                     {item.procedimento_nome}
                   </td>
                   <td className="px-4 py-3 text-right">
                     {formatarMoeda(item.valor)}
                   </td>
-                  <td className="px-4 py-3 text-right text-green-600 font-medium">
+                  <td className="px-4 py-3 text-right text-success-600 font-medium">
                     {formatarMoeda(item.valor_pago)}
                   </td>
                   <td className={`px-4 py-3 text-right font-medium ${
-                    saldoDevedor > 0 ? 'text-red-600' : 'text-green-600'
+                    saldoDevedor > 0 ? 'text-error-600' : 'text-success-600'
                   }`}>
                     {formatarMoeda(saldoDevedor)}
                   </td>
@@ -680,16 +680,16 @@ export default function PagamentoPage({
               );
             })}
           </tbody>
-          <tfoot className="bg-gray-50">
+          <tfoot className="bg-surface-secondary">
             <tr>
               <td className="px-4 py-3 font-semibold">Total</td>
               <td className="px-4 py-3 text-right font-bold text-lg">
                 {formatarMoeda(atendimento.total)}
               </td>
-              <td className="px-4 py-3 text-right font-bold text-lg text-green-600">
+              <td className="px-4 py-3 text-right font-bold text-lg text-success-600">
                 {formatarMoeda(atendimento.total_pago)}
               </td>
-              <td className="px-4 py-3 text-right font-bold text-lg text-red-600">
+              <td className="px-4 py-3 text-right font-bold text-lg text-error-600">
                 {formatarMoeda(atendimento.total - atendimento.total_pago)}
               </td>
               <td></td>
@@ -703,57 +703,57 @@ export default function PagamentoPage({
         <h2 className="text-lg font-semibold mb-4">💳 Pagamentos Registrados</h2>
         
         {pagamentos.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-muted">
             Nenhum pagamento registrado
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-neutral-200">
+            <thead className="bg-surface-secondary">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
                   Data/Hora
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
                   Recebido por
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
                   Método
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
                   Valor
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
                   Observações
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-surface divide-y divide-neutral-200">
               {pagamentos.map((pag) => (
                 <tr key={pag.id}>
-                  <td className="px-4 py-3 text-gray-600">
+                  <td className="px-4 py-3 text-neutral-600">
                     {formatarDataHora(pag.created_at)}
                   </td>
-                  <td className="px-4 py-3 text-gray-900">
+                  <td className="px-4 py-3 text-foreground">
                     {pag.recebido_por_nome || 'N/A'}
                   </td>
                   <td className="px-4 py-3">
                     {METODOS_PAGAMENTO.find(m => m.value === pag.metodo)?.label || pag.metodo}
                   </td>
-                  <td className="px-4 py-3 text-right font-medium text-green-600">
+                  <td className="px-4 py-3 text-right font-medium text-success-600">
                     {formatarMoeda(pag.valor)}
                   </td>
-                  <td className="px-4 py-3 text-gray-500">
+                  <td className="px-4 py-3 text-muted">
                     {pag.observacoes || '-'}
                   </td>
                 </tr>
               ))}
             </tbody>
-            <tfoot className="bg-green-50">
+            <tfoot className="bg-success-50">
               <tr>
-                <td colSpan={3} className="px-4 py-3 font-semibold text-green-700">
+                <td colSpan={3} className="px-4 py-3 font-semibold text-success-700">
                   Total Pago
                 </td>
-                <td className="px-4 py-3 text-right font-bold text-lg text-green-700">
+                <td className="px-4 py-3 text-right font-bold text-lg text-success-700">
                   {formatarMoeda(totalPago)}
                 </td>
                 <td></td>
@@ -768,42 +768,42 @@ export default function PagamentoPage({
         <h2 className="text-lg font-semibold mb-4">📅 Parcelas Agendadas</h2>
         
         {parcelas.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-muted">
             Nenhuma parcela agendada
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-neutral-200">
+            <thead className="bg-surface-secondary">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
                   Parcela
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
                   Vencimento
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
                   Valor
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
                   Observações
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
                   Ações
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-surface divide-y divide-neutral-200">
               {parcelas.map((parc) => {
                 const vencida = new Date(parc.data_vencimento) < new Date() && !parc.pago;
                 return (
-                  <tr key={parc.id} className={vencida ? 'bg-red-50' : ''}>
+                  <tr key={parc.id} className={vencida ? 'bg-error-50' : ''}>
                     <td className="px-4 py-3 font-medium">
                       {parc.numero}ª Parcela
                     </td>
-                    <td className={`px-4 py-3 ${vencida ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
+                    <td className={`px-4 py-3 ${vencida ? 'text-error-600 font-medium' : 'text-neutral-600'}`}>
                       {formatarData(parc.data_vencimento)}
                       {vencida && ' ⚠️'}
                     </td>
@@ -812,21 +812,21 @@ export default function PagamentoPage({
                     </td>
                     <td className="px-4 py-3 text-center">
                       {parc.pago ? (
-                        <span className="text-green-600 font-medium">✓ Pago</span>
+                        <span className="text-success-600 font-medium">✓ Pago</span>
                       ) : (
-                        <span className={vencida ? 'text-red-600' : 'text-yellow-600'}>
+                        <span className={vencida ? 'text-error-600' : 'text-yellow-600'}>
                           {vencida ? 'Vencida' : 'Pendente'}
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-500">
+                    <td className="px-4 py-3 text-muted">
                       {parc.observacoes || '-'}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {!parc.pago && (
                         <button
                           onClick={() => handleRemoverParcela(parc.id)}
-                          className="text-red-600 hover:text-red-800 text-sm"
+                          className="text-error-600 hover:text-error-800 text-sm"
                         >
                           Remover
                         </button>

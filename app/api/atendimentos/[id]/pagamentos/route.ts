@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
+import { extractToken, verifyToken } from '@/lib/auth/jwt';
 
 interface Pagamento {
   id: number;
@@ -113,7 +114,7 @@ export async function POST(
     
     // Valida itens se fornecidos
     if (itens && itens.length > 0) {
-      const totalAplicado = itens.reduce((sum: number, item: any) => sum + item.valor_aplicado, 0);
+      const totalAplicado = itens.reduce((sum: number, item: { valor_aplicado: number }) => sum + item.valor_aplicado, 0);
       if (Math.abs(totalAplicado - valor) > 0.01) {
         return NextResponse.json(
           { error: 'A soma dos valores aplicados deve ser igual ao valor do pagamento' },
@@ -122,9 +123,16 @@ export async function POST(
       }
     }
     
-    // TODO: Pegar usuário logado do contexto de autenticação
-    const usuario = await queryOne<{ id: number }>('SELECT id FROM usuarios LIMIT 1');
-    const recebidoPorId = usuario?.id || 1;
+    // Tenta extrair usuário do JWT; fallback para primeiro usuário do banco
+    let recebidoPorId = 1;
+    const token = extractToken(request);
+    if (token) {
+      const payload = await verifyToken(token);
+      if (payload) recebidoPorId = payload.sub;
+    } else {
+      const usuario = await queryOne<{ id: number }>('SELECT id FROM usuarios LIMIT 1');
+      if (usuario) recebidoPorId = usuario.id;
+    }
     
     // Insere pagamento
     const result = await execute(

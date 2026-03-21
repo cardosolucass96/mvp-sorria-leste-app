@@ -48,13 +48,28 @@ export default function PagamentoForm({
     parcelas: '1',
     observacoes: '',
   });
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof PagamentoFormData, string>>>({});
 
   const handleChange = (field: keyof PagamentoFormData) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => { const next = { ...prev }; delete next[field]; return next; });
+    }
+  };
+
+  const validate = (): boolean => {
+    const errors: Partial<Record<keyof PagamentoFormData, string>> = {};
+    if (!formData.metodo) errors.metodo = 'Selecione um método de pagamento';
+    const valor = parseFloat(formData.valor);
+    if (!formData.valor || isNaN(valor) || valor <= 0) errors.valor = 'Valor deve ser maior que zero';
+    else if (maxValor && valor > maxValor) errors.valor = `Valor não pode exceder R$ ${maxValor.toFixed(2)}`;
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validate()) return;
     await onSubmit(formData);
   };
 
@@ -72,6 +87,8 @@ export default function PagamentoForm({
         options={metodoOptions}
         required
         disabled={loading}
+        placeholder="Selecione..."
+        error={fieldErrors.metodo}
       />
 
       <Input
@@ -85,6 +102,7 @@ export default function PagamentoForm({
         disabled={loading}
         min={0}
         step="0.01"
+        error={fieldErrors.valor}
       />
 
       {showParcelas && (

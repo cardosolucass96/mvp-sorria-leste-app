@@ -40,13 +40,13 @@ export default class ErrorBoundary extends React.Component<ErrorBoundaryProps, E
         <div className="p-6 text-center" role="alert">
           <div className="inline-flex flex-col items-center gap-3 max-w-md mx-auto">
             <span className="text-4xl">⚠️</span>
-            <h2 className="text-lg font-semibold text-gray-900">Algo deu errado</h2>
-            <p className="text-sm text-gray-600">
+            <h2 className="text-lg font-semibold text-foreground">Algo deu errado</h2>
+            <p className="text-sm text-neutral-600">
               Ocorreu um erro inesperado. Tente recarregar a página.
             </p>
             <button
               onClick={() => this.setState({ hasError: false, error: null })}
-              className="btn btn-primary"
+              className="inline-flex items-center justify-center font-medium rounded-lg px-4 py-2 text-sm bg-primary-500 text-white hover:bg-primary-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-400"
             >
               Tentar novamente
             </button>

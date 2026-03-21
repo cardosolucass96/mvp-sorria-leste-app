@@ -67,14 +67,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
     return (
       <div className={`w-full ${className}`}>
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor={id} className="block text-sm font-medium text-neutral-700 mb-1">
           {label}
-          {required && <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>}
+          {required && <span className="text-error-500 ml-0.5" aria-hidden="true">*</span>}
         </label>
 
         <div className="relative">
           {icon && (
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none">
               {icon}
             </span>
           )}
@@ -90,6 +90,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             disabled={disabled}
             autoFocus={autoFocus}
             required={required}
+            aria-required={required || undefined}
             min={min}
             max={max}
             step={step}
@@ -99,23 +100,23 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               w-full px-3 py-2 border rounded-lg text-sm
               transition-colors duration-200
               focus:outline-none focus:ring-2 focus:border-transparent
-              disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed
+              disabled:bg-neutral-50 disabled:text-neutral-500 disabled:cursor-not-allowed
               ${icon ? 'pl-10' : ''}
               ${error
-                ? 'border-red-300 focus:ring-red-400 text-red-900 placeholder-red-300'
-                : 'border-gray-300 focus:ring-orange-500'
+                ? 'border-error-300 focus:ring-error-400 text-error-900 placeholder-error-300'
+                : 'border-neutral-300 focus:ring-primary-500'
               }
             `.trim()}
           />
         </div>
 
         {error && (
-          <p id={`${id}-error`} className="mt-1 text-sm text-red-600" role="alert">
+          <p id={`${id}-error`} className="mt-1 text-sm text-error-600" role="alert">
             {error}
           </p>
         )}
         {!error && hint && (
-          <p id={`${id}-hint`} className="mt-1 text-sm text-gray-500">
+          <p id={`${id}-hint`} className="mt-1 text-sm text-neutral-500">
             {hint}
           </p>
         )}
