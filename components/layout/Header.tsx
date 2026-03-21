@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState } from 'react';
+import { Shield, Stethoscope, ArrowLeftRight, KeyRound } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { MENU_ITEMS, VIEW_MODE_LABELS } from '@/lib/constants/navigation';
 import { ROLE_LABELS } from '@/lib/constants/roles';
@@ -136,18 +137,19 @@ export default function Header() {
                   title={viewMode === 'admin' ? 'Trocar para visão Dentista' : 'Trocar para visão Admin'}
                   aria-label={viewMode === 'admin' ? 'Trocar para visão Dentista' : 'Trocar para visão Admin'}
                 >
-                  <span className="text-sm">{viewMode === 'admin' ? '🛡️' : '🦷'}</span>
+                  {viewMode === 'admin'
+                    ? <Shield className="w-3.5 h-3.5" aria-hidden="true" />
+                    : <Stethoscope className="w-3.5 h-3.5" aria-hidden="true" />
+                  }
                   <span>{VIEW_MODE_LABELS[viewMode]}</span>
-                  <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                  </svg>
+                  <ArrowLeftRight className="w-3 h-3 opacity-70" aria-hidden="true" />
                 </button>
               )}
 
               <div className="hidden sm:block text-right">
                 <p className="text-sm font-semibold">{user.nome}</p>
                 <p className="text-xs text-primary-100">
-                  {isAdmin && viewMode === 'dentista' ? '🦷 Dentista' : ROLE_LABELS[user.role]}
+                  {isAdmin && viewMode === 'dentista' ? 'Dentista' : ROLE_LABELS[user.role]}
                 </p>
               </div>
               <button
@@ -156,7 +158,7 @@ export default function Header() {
                 title="Alterar senha"
                 aria-label="Alterar senha"
               >
-                🔑
+                <KeyRound className="w-4 h-4" aria-hidden="true" />
               </button>
               <button
                 onClick={handleLogout}
@@ -191,7 +193,10 @@ export default function Header() {
                     : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
                 }`}
               >
-                <span>{viewMode === 'admin' ? '🛡️' : '🦷'}</span>
+                {viewMode === 'admin'
+                  ? <Shield className="w-4 h-4" aria-hidden="true" />
+                  : <Stethoscope className="w-4 h-4" aria-hidden="true" />
+                }
                 <span>{viewMode === 'admin' ? 'Trocar para Dentista' : 'Trocar para Admin'}</span>
               </button>
             </div>
@@ -202,6 +207,7 @@ export default function Header() {
               .map((item) => {
                 const isActive = pathname === item.href ||
                   (item.href !== '/' && pathname.startsWith(item.href));
+                const ItemIcon = item.icon;
                 return (
                   <li key={item.href}>
                     <Link
@@ -213,7 +219,7 @@ export default function Header() {
                           : 'text-sidebar-text hover:bg-sidebar-hover'
                       }`}
                     >
-                      <span>{item.icon}</span>
+                      <ItemIcon className="w-5 h-5 shrink-0" aria-hidden="true" />
                       <span>{item.label}</span>
                     </Link>
                   </li>
@@ -228,7 +234,10 @@ export default function Header() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-surface rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-foreground">🔑 Alterar Senha</h2>
+              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <KeyRound className="w-5 h-5" aria-hidden="true" />
+                Alterar Senha
+              </h2>
               <button
                 onClick={fecharModal}
                 className="text-neutral-400 hover:text-neutral-600 text-2xl"

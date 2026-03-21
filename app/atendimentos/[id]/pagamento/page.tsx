@@ -53,10 +53,10 @@ interface Atendimento {
 }
 
 const METODOS_PAGAMENTO = [
-  { value: 'dinheiro', label: '💵 Dinheiro' },
-  { value: 'pix', label: '📱 PIX' },
-  { value: 'cartao_debito', label: '💳 Cartão Débito' },
-  { value: 'cartao_credito', label: '💳 Cartão Crédito' },
+  { value: 'dinheiro', label: 'Dinheiro' },
+  { value: 'pix', label: 'PIX' },
+  { value: 'cartao_debito', label: 'Cartão Débito' },
+  { value: 'cartao_credito', label: 'Cartão Crédito' },
 ];
 
 export default function PagamentoPage({ 
@@ -378,7 +378,7 @@ export default function PagamentoPage({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Resumo Financeiro */}
         <div className="card">
-          <h2 className="text-lg font-semibold mb-4">💰 Resumo Financeiro</h2>
+          <h2 className="text-lg font-semibold mb-4">Resumo Financeiro</h2>
           
           <div className="space-y-3">
             <div className="flex justify-between p-3 bg-surface-secondary rounded-lg">
@@ -435,7 +435,7 @@ export default function PagamentoPage({
           {atendimento.status === 'aguardando_pagamento' && !temProcedimentoPago && (
             <div className="mt-6 pt-4 border-t">
               <div className="p-3 bg-yellow-50 rounded-lg text-center">
-                <p className="text-yellow-800 font-medium">⚠️ Pagamento necessário</p>
+                <p className="text-yellow-800 font-medium">Pagamento necessário</p>
                 <p className="text-yellow-600 text-sm">
                   Pague pelo menos 1 procedimento completo para liberar
                 </p>
@@ -446,7 +446,7 @@ export default function PagamentoPage({
 
         {/* Registrar Pagamento */}
         <div className="card">
-          <h2 className="text-lg font-semibold mb-4">➕ Registrar Pagamento</h2>
+          <h2 className="text-lg font-semibold mb-4">Registrar Pagamento</h2>
           
           <form onSubmit={handleRegistrarPagamento} className="space-y-4">
             <div>
@@ -517,7 +517,7 @@ export default function PagamentoPage({
                     onClick={distribuirValorProporcional}
                     className="text-xs text-info-600 hover:text-info-800"
                   >
-                    📊 Distribuir Proporcional
+                    Distribuir Proporcional
                   </button>
                 </div>
                 
@@ -567,7 +567,7 @@ export default function PagamentoPage({
               disabled={!valorPagamento || registrando}
               className="btn btn-secondary w-full disabled:opacity-50"
             >
-              {registrando ? 'Registrando...' : '💰 Registrar Pagamento'}
+              {registrando ? 'Registrando...' : 'Registrar Pagamento'}
             </button>
           </form>
         </div>
@@ -632,7 +632,7 @@ export default function PagamentoPage({
 
       {/* Procedimentos */}
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">🦷 Procedimentos e Pagamentos</h2>
+        <h2 className="text-lg font-semibold mb-4">Procedimentos e Pagamentos</h2>
         
         <table className="min-w-full divide-y divide-neutral-200">
           <thead className="bg-surface-secondary">
@@ -805,7 +805,7 @@ export default function PagamentoPage({
                     </td>
                     <td className={`px-4 py-3 ${vencida ? 'text-error-600 font-medium' : 'text-neutral-600'}`}>
                       {formatarData(parc.data_vencimento)}
-                      {vencida && ' ⚠️'}
+                      {vencida && <span className="ml-1 text-xs font-semibold text-error-600">Vencida</span>}
                     </td>
                     <td className="px-4 py-3 text-right font-medium">
                       {formatarMoeda(parc.valor)}

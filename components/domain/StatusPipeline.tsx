@@ -4,6 +4,7 @@
  * Responsivo: horizontal desktop, vertical mobile.
  */
 
+import { CheckCircle } from 'lucide-react';
 import { STATUS_CONFIG, STATUS_ORDER } from '@/lib/constants/status';
 import type { AtendimentoStatus } from '@/lib/types';
 
@@ -24,6 +25,7 @@ export default function StatusPipeline({ currentStatus, className = '' }: Status
           const isCurrent = status === currentStatus;
           const isPast = index < currentIndex;
           const isFuture = index > currentIndex;
+          const Icon = config.icon;
 
           return (
             <div key={status} className="flex items-center flex-1 min-w-0">
@@ -37,7 +39,10 @@ export default function StatusPipeline({ currentStatus, className = '' }: Status
                   ${isFuture ? 'bg-neutral-50 text-neutral-400' : ''}
                 `}
               >
-                <span className="text-sm shrink-0">{isPast ? '✅' : config.icon}</span>
+                {isPast
+                  ? <CheckCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  : <Icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                }
                 <span className="truncate">{config.label}</span>
               </div>
 
@@ -62,6 +67,7 @@ export default function StatusPipeline({ currentStatus, className = '' }: Status
           const isCurrent = status === currentStatus;
           const isPast = index < currentIndex;
           const isFuture = index > currentIndex;
+          const Icon = config.icon;
 
           return (
             <div key={status} className="flex items-center gap-3">
@@ -69,13 +75,16 @@ export default function StatusPipeline({ currentStatus, className = '' }: Status
               <div className="flex flex-col items-center">
                 <div
                   className={`
-                    w-6 h-6 rounded-full flex items-center justify-center text-xs
+                    w-6 h-6 rounded-full flex items-center justify-center
                     ${isCurrent ? `${config.bgCor} ${config.cor} ring-2 ring-current` : ''}
                     ${isPast ? 'bg-success-100 text-success-700' : ''}
                     ${isFuture ? 'bg-neutral-100 text-neutral-400' : ''}
                   `}
                 >
-                  {isPast ? '✓' : config.icon}
+                  {isPast
+                    ? <CheckCircle className="w-3 h-3" aria-hidden="true" />
+                    : <Icon className="w-3 h-3" aria-hidden="true" />
+                  }
                 </div>
                 {index < STATUS_ORDER.length - 1 && (
                   <div

@@ -34,14 +34,6 @@ export default function LoginPage() {
     setIsLoading(false);
   };
 
-  // Lista de emails para facilitar o teste
-  const testEmails = [
-    { email: 'admin@sorrialeste.com', role: 'Admin', icon: '👑' },
-    { email: 'maria@sorrialeste.com', role: 'Atendente', icon: '👋' },
-    { email: 'dr.carlos@sorrialeste.com', role: 'Avaliador', icon: '🔍' },
-    { email: 'dr.pedro@sorrialeste.com', role: 'Executor', icon: '🦷' },
-  ];
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-400 via-primary-500 to-primary-600">
       <div className="max-w-md w-full mx-4">
@@ -101,28 +93,6 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Emails de teste */}
-          <div className="mt-6 pt-6 border-t border-neutral-200">
-            <p className="text-sm text-muted mb-3 text-center">
-              👇 Clique para preencher (senha: <code className="bg-surface-muted px-1 rounded">Sorria@123</code>):
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {testEmails.map((item) => (
-                <button
-                  key={item.email}
-                  type="button"
-                  onClick={() => {
-                    setEmail(item.email);
-                    setSenha('Sorria@123');
-                  }}
-                  className="text-left px-3 py-2 text-sm bg-primary-50 hover:bg-primary-100 rounded-lg transition-all hover:shadow-md border border-primary-100"
-                >
-                  <span className="text-lg mr-1">{item.icon}</span>
-                  <span className="font-medium text-primary-800">{item.role}</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Rodapé */}

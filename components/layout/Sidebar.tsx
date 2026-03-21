@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Shield, Stethoscope, ArrowLeftRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { MENU_ITEMS } from '@/lib/constants/navigation';
 
@@ -30,11 +31,12 @@ export default function Sidebar() {
                 : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
             }`}
           >
-            <span className="text-base" aria-hidden="true">{viewMode === 'admin' ? '🛡️' : '🦷'}</span>
+            {viewMode === 'admin'
+              ? <Shield className="w-4 h-4" aria-hidden="true" />
+              : <Stethoscope className="w-4 h-4" aria-hidden="true" />
+            }
             <span>{viewMode === 'admin' ? 'Modo Admin' : 'Modo Dentista'}</span>
-            <svg className="w-3.5 h-3.5 opacity-60 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-            </svg>
+            <ArrowLeftRight className="w-3.5 h-3.5 opacity-60 ml-auto" aria-hidden="true" />
           </button>
         </div>
       )}
@@ -44,6 +46,7 @@ export default function Sidebar() {
           {visibleMenuItems.map((item) => {
             const isActive = pathname === item.href ||
               (item.href !== '/' && pathname.startsWith(item.href));
+            const ItemIcon = item.icon;
 
             return (
               <li key={item.href}>
@@ -58,7 +61,7 @@ export default function Sidebar() {
                     }
                   `}
                 >
-                  <span className="text-lg" aria-hidden="true">{item.icon}</span>
+                  <ItemIcon className="w-5 h-5 shrink-0" aria-hidden="true" />
                   <span>{item.label}</span>
                 </Link>
               </li>

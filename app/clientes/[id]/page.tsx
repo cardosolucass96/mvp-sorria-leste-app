@@ -4,6 +4,7 @@ import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Cliente } from '@/lib/types';
+import { User } from 'lucide-react';
 import { PageHeader, Card, Button, Alert, LoadingState, EmptyState } from '@/components/ui';
 import { ClienteForm, ClienteFormData } from '@/components/domain';
 import { formatarData, formatarCPF, formatarTelefone } from '@/lib/utils/formatters';
@@ -120,7 +121,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   if (!cliente) {
     return (
       <EmptyState
-        icon="👤"
+        icon={<User className="w-7 h-7" />}
         title="Cliente não encontrado"
         actionLabel="Voltar para lista"
         onAction={() => router.push('/clientes')}
@@ -132,7 +133,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     <div className="space-y-6">
       <PageHeader
         title={cliente.nome}
-        icon="👤"
+        icon={<User className="w-7 h-7" />}
         description={`Cadastrado em ${formatarData(cliente.created_at)}`}
         breadcrumb={[
           { label: 'Clientes', href: '/clientes' },
@@ -141,8 +142,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         actions={
           !isEditing ? (
             <div className="flex gap-2">
-              <Button onClick={() => setIsEditing(true)}>✏️ Editar</Button>
-              <Button variant="danger" onClick={handleDelete}>🗑️ Excluir</Button>
+              <Button onClick={() => setIsEditing(true)}>Editar</Button>
+              <Button variant="danger" onClick={handleDelete}>Excluir</Button>
             </div>
           ) : undefined
         }
@@ -231,7 +232,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           <h2 className="text-lg font-semibold mb-4">Ações Rápidas</h2>
           <div className="flex gap-4">
             <Link href={`/atendimentos/novo?cliente=${id}`}>
-              <Button>📝 Novo Atendimento</Button>
+              <Button>Novo Atendimento</Button>
             </Link>
           </div>
         </Card>

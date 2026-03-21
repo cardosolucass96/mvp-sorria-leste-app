@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes from '@/components/SeletorDentes';
 import { formatarMoeda } from '@/lib/utils/formatters';
+import { Search } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Card, Button, Select, Input, EmptyState } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
@@ -233,7 +234,7 @@ export default function AvaliacaoDetalhePage({
   if (!atendimento) {
     return (
       <EmptyState
-        icon="🔍"
+        icon={<Search className="w-7 h-7" />}
         title="Atendimento não encontrado"
         actionLabel="Voltar para fila"
         onAction={() => router.push('/avaliacao')}
@@ -245,7 +246,7 @@ export default function AvaliacaoDetalhePage({
     <div className="space-y-6">
       <PageHeader
         title={`Avaliação - ${atendimento.cliente_nome}`}
-        icon="🔍"
+        icon={<Search className="w-7 h-7" />}
         description={`Atendimento #${atendimento.id}`}
         breadcrumb={[
           { label: 'Avaliações', href: '/avaliacao' },
@@ -267,7 +268,7 @@ export default function AvaliacaoDetalhePage({
       {/* Aviso de privacidade */}
       <Card className="bg-yellow-50 border border-yellow-200">
         <p className="text-sm text-yellow-800">
-          <strong>⚠️ Modo Avaliação:</strong> Você está vendo apenas o nome do paciente.
+          <strong>Modo Avaliação:</strong> Você está vendo apenas o nome do paciente.
           Os dados pessoais (CPF, telefone, email) estão ocultos por privacidade.
         </p>
       </Card>
@@ -275,7 +276,7 @@ export default function AvaliacaoDetalhePage({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Adicionar Procedimento */}
         <Card>
-          <h2 className="text-lg font-semibold mb-4">➕ Adicionar Procedimento</h2>
+          <h2 className="text-lg font-semibold mb-4">Adicionar Procedimento</h2>
           
           <form onSubmit={handleAdicionarProcedimento} className="space-y-4">
             <div>
@@ -357,7 +358,7 @@ export default function AvaliacaoDetalhePage({
 
         {/* Resumo Financeiro */}
         <Card>
-          <h2 className="text-lg font-semibold mb-4">💰 Resumo</h2>
+          <h2 className="text-lg font-semibold mb-4">Resumo</h2>
           
           <div className="space-y-4">
             <div className="flex justify-between items-center p-4 bg-surface-secondary rounded-lg">
@@ -377,7 +378,7 @@ export default function AvaliacaoDetalhePage({
 
       {/* Lista de Procedimentos */}
       <Card>
-        <h2 className="text-lg font-semibold mb-4">🦷 Procedimentos Adicionados</h2>
+        <h2 className="text-lg font-semibold mb-4">Procedimentos Adicionados</h2>
         
         {atendimento.itens.length === 0 ? (
           <div className="text-center py-8 text-muted">

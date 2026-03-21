@@ -8,6 +8,7 @@ import type { BadgeProps } from '@/components/ui/Badge';
 import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PARCELA_STATUS_CONFIG } from '@/lib/constants/status';
 import type { AtendimentoStatus, ItemStatus } from '@/lib/types';
 import type { ParcelaStatus } from '@/lib/constants/status';
+import type { LucideIcon } from 'lucide-react';
 
 export type StatusBadgeType = 'atendimento' | 'item' | 'parcela';
 
@@ -43,18 +44,18 @@ export default function StatusBadge({
   className,
 }: StatusBadgeProps) {
   let label = status;
-  let icon = '';
+  let Icon: LucideIcon | null = null;
   let color: NonNullable<BadgeProps['color']> = 'gray';
 
   if (type === 'atendimento' && status in STATUS_CONFIG) {
     const config = STATUS_CONFIG[status as AtendimentoStatus];
     label = config.label;
-    icon = config.icon;
+    Icon = config.icon;
     color = getBadgeColor(config.bgCor);
   } else if (type === 'item' && status in ITEM_STATUS_CONFIG) {
     const config = ITEM_STATUS_CONFIG[status as ItemStatus];
     label = config.label;
-    icon = config.icon;
+    Icon = config.icon;
     color = getBadgeColor(config.bgCor);
   } else if (type === 'parcela' && status in PARCELA_STATUS_CONFIG) {
     const config = PARCELA_STATUS_CONFIG[status as ParcelaStatus];
@@ -64,7 +65,7 @@ export default function StatusBadge({
 
   return (
     <Badge color={color} size={size} className={className}>
-      {showIcon && icon && <span className="mr-1">{icon}</span>}
+      {showIcon && Icon && <Icon className="w-3 h-3 mr-1 inline-block" aria-hidden="true" />}
       {label}
     </Badge>
   );

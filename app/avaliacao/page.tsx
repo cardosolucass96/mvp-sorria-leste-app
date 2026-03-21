@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { Search, User, Stethoscope } from 'lucide-react';
 import { PageHeader, Card, Badge, Button, LoadingState, Alert } from '@/components/ui';
 import { formatarDataHora } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -86,14 +87,15 @@ export default function AvaliacaoPage() {
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
       <PageHeader
-        title="🔍 Avaliações"
+        title="Avaliações"
+        icon={<Search className="w-7 h-7" />}
         description="Gerencie suas avaliações odontológicas"
       />
 
       {/* Info do Avaliador */}
       <Alert type="info">
         <p className="text-sm">
-          <strong>👤 Avaliador:</strong> {user?.nome}
+          <strong>Avaliador:</strong> {user?.nome}
         </p>
         <p className="text-xs mt-1 opacity-80">
           Você verá apenas o nome do cliente durante a avaliação. 
@@ -104,7 +106,7 @@ export default function AvaliacaoPage() {
       {/* Seção: Meus Atendimentos */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-xl font-semibold text-foreground">📋 Meus Atendimentos</h2>
+          <h2 className="text-xl font-semibold text-foreground">Meus Atendimentos</h2>
           <Badge color="blue">{meusAtendimentos.length}</Badge>
         </div>
 
@@ -128,7 +130,7 @@ export default function AvaliacaoPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">🦷</span>
+                      <Stethoscope className="w-6 h-6 text-primary-400" aria-hidden="true" />
                       <div>
                         <h3 className="font-semibold text-lg text-foreground">
                           {atendimento.cliente_nome}
@@ -160,7 +162,7 @@ export default function AvaliacaoPage() {
       {/* Seção: Atendimentos Disponíveis */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-xl font-semibold text-foreground">🆓 Atendimentos Disponíveis</h2>
+          <h2 className="text-xl font-semibold text-foreground">Atendimentos Disponíveis</h2>
           <Badge color="gray">{atendimentosDisponiveis.length}</Badge>
         </div>
         
@@ -171,7 +173,7 @@ export default function AvaliacaoPage() {
         {atendimentosDisponiveis.length === 0 ? (
           <Card variant="outlined">
             <div className="text-center py-4">
-              <p className="text-success-700 text-lg">🎉 Nenhum atendimento disponível!</p>
+              <p className="text-success-700 text-lg">Nenhum atendimento disponível!</p>
               <p className="text-success-600 text-sm mt-1">
                 Todos os atendimentos já têm um avaliador responsável.
               </p>

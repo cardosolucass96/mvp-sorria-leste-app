@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { FileText, Activity } from 'lucide-react';
 import { PageHeader, Button, Input, Checkbox, Badge, Alert, Modal, LoadingState, Card, Table } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda } from '@/lib/utils/formatters';
@@ -178,7 +179,8 @@ export default function ProcedimentosPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="📑 Procedimentos"
+        title="Procedimentos"
+        icon={<FileText className="w-7 h-7" />}
         description="Catálogo de procedimentos odontológicos"
         actions={<Button onClick={abrirModalNovo}>+ Novo Procedimento</Button>}
       />
@@ -232,7 +234,7 @@ export default function ProcedimentosPage() {
             key: 'por_dente',
             label: 'Por Dente',
             align: 'center',
-            render: (proc) => proc.por_dente ? <Badge color="amber">🦷 Sim</Badge> : <span className="text-neutral-400">-</span>,
+            render: (proc) => proc.por_dente ? <Badge color="amber">Sim</Badge> : <span className="text-neutral-400">-</span>,
           },
           ...(podeVerComissoes ? [
             {
@@ -343,7 +345,7 @@ export default function ProcedimentosPage() {
           )}
           
           <Checkbox
-            label="🦷 Cobrar por dente"
+            label="Cobrar por dente"
             checked={formData.por_dente}
             onChange={(v) => setFormData({...formData, por_dente: v})}
             hint="Se marcado, o avaliador poderá selecionar múltiplos dentes e o valor será multiplicado pela quantidade"

@@ -4,7 +4,7 @@ import Breadcrumb, { type BreadcrumbItem } from './Breadcrumb';
 export interface PageHeaderProps {
   title: string;
   description?: string;
-  icon?: string;
+  icon?: React.ReactNode;
   backHref?: string;
   /** Breadcrumb trail — if provided, replaces the simple "Voltar" back link */
   breadcrumb?: BreadcrumbItem[];
@@ -42,7 +42,9 @@ export default function PageHeader({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-3">
-            {icon && <span>{icon}</span>}
+            {icon && (
+              <span className="text-primary-500" aria-hidden="true">{icon}</span>
+            )}
             {title}
           </h1>
           {description && (

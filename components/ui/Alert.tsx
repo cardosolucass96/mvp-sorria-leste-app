@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Info, CheckCircle, AlertTriangle, XCircle, X } from 'lucide-react';
 
 export interface AlertProps {
   type?: 'info' | 'success' | 'warning' | 'error';
@@ -11,35 +12,32 @@ export interface AlertProps {
   className?: string;
 }
 
-const typeConfig: Record<
-  NonNullable<AlertProps['type']>,
-  { bg: string; border: string; text: string; icon: string }
-> = {
+const typeConfig = {
   info: {
     bg: 'bg-info-50',
     border: 'border-info-200',
     text: 'text-info-800',
-    icon: 'ℹ️',
+    Icon: Info,
   },
   success: {
     bg: 'bg-success-50',
     border: 'border-success-200',
     text: 'text-success-800',
-    icon: '✅',
+    Icon: CheckCircle,
   },
   warning: {
     bg: 'bg-warning-50',
     border: 'border-warning-200',
     text: 'text-warning-800',
-    icon: '⚠️',
+    Icon: AlertTriangle,
   },
   error: {
     bg: 'bg-error-50',
     border: 'border-error-200',
     text: 'text-error-800',
-    icon: '❌',
+    Icon: XCircle,
   },
-};
+} as const;
 
 export default function Alert({
   type = 'info',
@@ -50,7 +48,7 @@ export default function Alert({
   className = '',
 }: AlertProps) {
   const [visible, setVisible] = useState(true);
-  const config = typeConfig[type];
+  const { bg, border, text, Icon } = typeConfig[type];
 
   if (!visible) return null;
 
@@ -63,15 +61,9 @@ export default function Alert({
     <div
       role={type === 'error' || type === 'warning' ? 'alert' : 'status'}
       aria-live={type === 'error' || type === 'warning' ? 'assertive' : 'polite'}
-      className={`
-        flex gap-3 p-4 rounded-lg border
-        ${config.bg} ${config.border} ${config.text}
-        ${className}
-      `.trim()}
+      className={`flex gap-3 p-4 rounded-lg border ${bg} ${border} ${text} ${className}`.trim()}
     >
-      <span className="shrink-0 text-base" aria-hidden="true">
-        {config.icon}
-      </span>
+      <Icon className="shrink-0 w-5 h-5 mt-0.5" aria-hidden="true" />
 
       <div className="flex-1 min-w-0">
         {title && <p className="font-semibold text-sm mb-0.5">{title}</p>}
@@ -84,9 +76,7 @@ export default function Alert({
           className="shrink-0 p-0.5 rounded hover:bg-black/5 transition-colors"
           aria-label="Fechar alerta"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <X className="w-4 h-4" />
         </button>
       )}
     </div>

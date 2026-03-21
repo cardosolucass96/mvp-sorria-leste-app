@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Usuario, UserRole } from '@/lib/types';
+import { Users } from 'lucide-react';
 import { PageHeader, Card, Button, Input, Select, Badge, Alert, LoadingState, Table } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { ROLE_LABELS_DESCRITIVOS } from '@/lib/constants/roles';
@@ -181,7 +182,8 @@ export default function UsuariosPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="👤 Usuários"
+        title="Usuários"
+        icon={<Users className="w-7 h-7" />}
         description="Gerenciar usuários do sistema"
         actions={<Button onClick={handleNew}>+ Novo Usuário</Button>}
       />

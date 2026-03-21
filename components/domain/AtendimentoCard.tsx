@@ -3,6 +3,7 @@
  * Exibe cliente, status badge, data, total, quantidade de itens.
  */
 
+import { Stethoscope, DollarSign, ClipboardList, User } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import StatusBadge from './StatusBadge';
 import { formatarMoeda, formatarDataHora } from '@/lib/utils/formatters';
@@ -40,7 +41,9 @@ export default function AtendimentoCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3">
-            <span className="text-2xl" aria-hidden="true">🦷</span>
+            <div className="w-9 h-9 rounded-lg bg-primary-50 flex items-center justify-center shrink-0" aria-hidden="true">
+              <Stethoscope className="w-5 h-5 text-primary-500" />
+            </div>
             <div className="min-w-0">
               <h3 className="font-semibold text-lg text-foreground truncate">
                 {atendimento.cliente_nome}
@@ -52,15 +55,24 @@ export default function AtendimentoCard({
           </div>
 
           {!compact && (
-            <div className="mt-3 flex flex-wrap gap-3 text-sm text-neutral-600">
+            <div className="mt-3 flex flex-wrap gap-4 text-sm text-neutral-500">
               {atendimento.total != null && (
-                <span>💰 {formatarMoeda(atendimento.total)}</span>
+                <span className="flex items-center gap-1">
+                  <DollarSign className="w-3.5 h-3.5" />
+                  {formatarMoeda(atendimento.total)}
+                </span>
               )}
               {atendimento.qtd_itens != null && (
-                <span>📋 {atendimento.qtd_itens} item(ns)</span>
+                <span className="flex items-center gap-1">
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  {atendimento.qtd_itens} item(ns)
+                </span>
               )}
               {atendimento.avaliador_nome && (
-                <span>👤 {atendimento.avaliador_nome}</span>
+                <span className="flex items-center gap-1">
+                  <User className="w-3.5 h-3.5" />
+                  {atendimento.avaliador_nome}
+                </span>
               )}
             </div>
           )}

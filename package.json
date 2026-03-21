@@ -21,6 +21,7 @@
     "d1:seed:local": "wrangler d1 execute sorria-leste-db --local --file=lib/seed.sql"
   },
   "dependencies": {
+    "lucide-react": "^0.577.0",
     "next": "16.1.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",

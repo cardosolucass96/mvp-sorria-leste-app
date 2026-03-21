@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { Banknote, DollarSign, Wrench } from 'lucide-react';
 import { PageHeader, Alert, StatCard, Badge, Tabs, Table, LoadingState, Button, FilterBar } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda, formatarData } from '@/lib/utils/formatters';
@@ -135,7 +136,7 @@ export default function ComissoesPage() {
     <div className="space-y-6">
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
-      <PageHeader title="Comissões" icon="💰" />
+      <PageHeader title="Comissões" icon={<Banknote className="w-7 h-7" />} />
 
       {/* Tabs Resumo/Detalhes */}
       <Tabs
@@ -170,9 +171,9 @@ export default function ComissoesPage() {
       {viewMode === 'detalhes' && detalhes && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <StatCard icon="💵" label="Comissão de Venda" value={formatarMoeda(detalhes.totais.venda)} color="border-success-500" />
-            <StatCard icon="🔧" label="Comissão de Execução" value={formatarMoeda(detalhes.totais.execucao)} color="border-info-500" />
-            <StatCard icon="💰" label="Total Geral" value={formatarMoeda(detalhes.totais.geral)} color="border-purple-500" />
+            <StatCard icon={<DollarSign className="w-6 h-6" />} label="Comissão de Venda" value={formatarMoeda(detalhes.totais.venda)} color="border-success-500" />
+            <StatCard icon={<Wrench className="w-6 h-6" />} label="Comissão de Execução" value={formatarMoeda(detalhes.totais.execucao)} color="border-info-500" />
+            <StatCard icon={<Banknote className="w-6 h-6" />} label="Total Geral" value={formatarMoeda(detalhes.totais.geral)} color="border-purple-500" />
           </div>
           <Table columns={detalheColumns} data={detalhes.comissoes} keyExtractor={(c) => c.id} emptyMessage="Nenhuma comissão encontrada" caption="Detalhes de comissões" />
         </>

@@ -7,6 +7,7 @@ import { formatarMoeda, formatarDataHora } from '@/lib/utils/formatters';
 import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PROXIMOS_STATUS } from '@/lib/constants/status';
 import type { AtendimentoStatus, ItemStatus } from '@/lib/types';
 import { StatusBadge, StatusPipeline } from '@/components/domain';
+import { ClipboardList } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Button, Card, Table, EmptyState } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -139,7 +140,7 @@ export default function AtendimentoDetalhePage({
   if (!atendimento) {
     return (
       <EmptyState
-        icon="📋"
+        icon={<ClipboardList className="w-7 h-7" />}
         title="Atendimento não encontrado"
         actionLabel="Voltar para lista"
         onAction={() => router.push('/atendimentos')}
@@ -162,7 +163,7 @@ export default function AtendimentoDetalhePage({
     <div className="space-y-6">
       <PageHeader
         title={`Atendimento #${atendimento.id}`}
-        icon="📋"
+        icon={<ClipboardList className="w-7 h-7" />}
         breadcrumb={[
           { label: 'Atendimentos', href: '/atendimentos' },
           { label: `#${atendimento.id}` },
@@ -175,7 +176,7 @@ export default function AtendimentoDetalhePage({
                 disabled={finalizando}
                 variant="primary"
               >
-                {finalizando ? 'Finalizando...' : '✅ Finalizar Atendimento'}
+                {finalizando ? 'Finalizando...' : 'Finalizar Atendimento'}
               </Button>
             )}
             {proximoStatus && atendimento.status !== 'em_execucao' && (
@@ -199,7 +200,7 @@ export default function AtendimentoDetalhePage({
       {/* Comissões Geradas (após finalização) */}
       {comissoesGeradas && (
         <div className="p-4 bg-success-50 border border-success-200 rounded-lg">
-          <h3 className="font-semibold text-success-800 mb-2">✅ Atendimento Finalizado!</h3>
+          <h3 className="font-semibold text-success-800 mb-2">Atendimento Finalizado!</h3>
           <p className="text-sm text-success-700 mb-2">Comissões geradas:</p>
           <div className="flex gap-4">
             <div>
@@ -222,7 +223,7 @@ export default function AtendimentoDetalhePage({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Dados do Cliente */}
         <Card>
-          <h2 className="text-lg font-semibold mb-4">👤 Cliente</h2>
+          <h2 className="text-lg font-semibold mb-4">Cliente</h2>
           <div className="space-y-3">
             <div>
               <p className="text-sm text-muted">Nome</p>
@@ -259,7 +260,7 @@ export default function AtendimentoDetalhePage({
 
         {/* Dados do Atendimento */}
         <Card>
-          <h2 className="text-lg font-semibold mb-4">📋 Atendimento</h2>
+          <h2 className="text-lg font-semibold mb-4">Atendimento</h2>
           <div className="space-y-3">
             <div>
               <p className="text-sm text-muted">Status</p>
@@ -297,7 +298,7 @@ export default function AtendimentoDetalhePage({
 
         {/* Resumo Financeiro */}
         <Card>
-          <h2 className="text-lg font-semibold mb-4">💰 Financeiro</h2>
+          <h2 className="text-lg font-semibold mb-4">Financeiro</h2>
           <div className="space-y-3">
             <div>
               <p className="text-sm text-muted">Total</p>
@@ -337,7 +338,7 @@ export default function AtendimentoDetalhePage({
       {/* Procedimentos */}
       <Card>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">🦷 Procedimentos</h2>
+          <h2 className="text-lg font-semibold">Procedimentos</h2>
           {(['triagem', 'avaliacao', 'em_execucao'].includes(atendimento.status)) && (
             <Link href={`/avaliacao/${atendimento.id}`}>
               <Button variant="secondary" size="sm">+ Adicionar Procedimento</Button>

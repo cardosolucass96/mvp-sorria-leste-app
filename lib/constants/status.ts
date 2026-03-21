@@ -4,6 +4,8 @@
  */
 
 import type { AtendimentoStatus, ItemStatus } from '@/lib/types';
+import type { LucideIcon } from 'lucide-react';
+import { ClipboardList, Search, Clock, Activity, CheckCircle, HelpCircle, DollarSign } from 'lucide-react';
 
 // ─── Status de Atendimento ──────────────────────────────────────
 
@@ -11,7 +13,7 @@ export interface StatusConfig {
   label: string;
   cor: string;       // Tailwind text color
   bgCor: string;     // Tailwind bg color
-  icon: string;      // Emoji
+  icon: LucideIcon;
 }
 
 export const STATUS_CONFIG: Record<AtendimentoStatus, StatusConfig> = {
@@ -19,31 +21,31 @@ export const STATUS_CONFIG: Record<AtendimentoStatus, StatusConfig> = {
     label: 'Triagem',
     cor: 'text-neutral-700',
     bgCor: 'bg-neutral-100',
-    icon: '📝',
+    icon: ClipboardList,
   },
   avaliacao: {
     label: 'Avaliação',
     cor: 'text-info-700',
     bgCor: 'bg-info-100',
-    icon: '🔍',
+    icon: Search,
   },
   aguardando_pagamento: {
     label: 'Aguardando Pagamento',
     cor: 'text-warning-700',
     bgCor: 'bg-warning-100',
-    icon: '💰',
+    icon: Clock,
   },
   em_execucao: {
     label: 'Em Execução',
     cor: 'text-purple-700',
     bgCor: 'bg-purple-100',
-    icon: '🦷',
+    icon: Activity,
   },
   finalizado: {
     label: 'Finalizado',
     cor: 'text-success-700',
     bgCor: 'bg-success-100',
-    icon: '✅',
+    icon: CheckCircle,
   },
 };
 
@@ -80,7 +82,7 @@ export interface ItemStatusConfig {
   label: string;
   cor: string;
   bgCor: string;
-  icon: string;
+  icon: LucideIcon;
 }
 
 export const ITEM_STATUS_CONFIG: Record<ItemStatus, ItemStatusConfig> = {
@@ -88,25 +90,25 @@ export const ITEM_STATUS_CONFIG: Record<ItemStatus, ItemStatusConfig> = {
     label: 'Pendente',
     cor: 'text-neutral-600',
     bgCor: 'bg-neutral-100',
-    icon: '⏳',
+    icon: Clock,
   },
   pago: {
     label: 'Pago',
     cor: 'text-info-700',
     bgCor: 'bg-info-100',
-    icon: '💰',
+    icon: DollarSign,
   },
   executando: {
     label: 'Em Execução',
     cor: 'text-primary-700',
     bgCor: 'bg-primary-100',
-    icon: '🦷',
+    icon: Activity,
   },
   concluido: {
     label: 'Concluído',
     cor: 'text-success-700',
     bgCor: 'bg-success-100',
-    icon: '✅',
+    icon: CheckCircle,
   },
 };
 
@@ -158,7 +160,7 @@ export function getAtendimentoStatus(status: string): StatusConfig {
       label: status,
       cor: 'text-neutral-600',
       bgCor: 'bg-neutral-100',
-      icon: '❓',
+      icon: HelpCircle,
     }
   );
 }
@@ -170,7 +172,7 @@ export function getItemStatus(status: string): ItemStatusConfig {
       label: status,
       cor: 'text-neutral-600',
       bgCor: 'bg-neutral-100',
-      icon: '❓',
+      icon: HelpCircle,
     }
   );
 }

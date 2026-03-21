@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -39,7 +40,7 @@ export default class ErrorBoundary extends React.Component<ErrorBoundaryProps, E
       return (
         <div className="p-6 text-center" role="alert">
           <div className="inline-flex flex-col items-center gap-3 max-w-md mx-auto">
-            <span className="text-4xl">⚠️</span>
+            <AlertTriangle className="w-12 h-12 text-warning-500" aria-hidden="true" />
             <h2 className="text-lg font-semibold text-foreground">Algo deu errado</h2>
             <p className="text-sm text-neutral-600">
               Ocorreu um erro inesperado. Tente recarregar a página.

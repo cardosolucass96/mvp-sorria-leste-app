@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Inbox } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -18,7 +19,7 @@ export interface TableProps<T> {
   data: T[];
   loading?: boolean;
   emptyMessage?: string;
-  emptyIcon?: string;
+  emptyIcon?: React.ReactNode;
   onRowClick?: (item: T) => void;
   keyExtractor: (item: T) => string | number;
   stickyHeader?: boolean;
@@ -47,7 +48,7 @@ export default function Table<T>({
   data,
   loading = false,
   emptyMessage = 'Nenhum registro encontrado',
-  emptyIcon = '📭',
+  emptyIcon = <Inbox className="w-8 h-8 text-neutral-300" />,
   onRowClick,
   keyExtractor,
   stickyHeader = false,
@@ -92,7 +93,7 @@ export default function Table<T>({
             <tr>
               <td colSpan={columns.length} className="px-4 py-12 text-center">
                 <div className="flex flex-col items-center gap-2 text-muted">
-                  <span className="text-3xl" aria-hidden="true">{emptyIcon}</span>
+                  <div aria-hidden="true">{emptyIcon}</div>
                   <p className="text-sm">{emptyMessage}</p>
                 </div>
               </td>

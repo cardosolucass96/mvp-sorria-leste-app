@@ -1,7 +1,8 @@
+import { Inbox } from 'lucide-react';
 import Button from './Button';
 
 export interface EmptyStateProps {
-  icon?: string;
+  icon?: React.ReactNode;
   title: string;
   description?: string;
   actionLabel?: string;
@@ -11,7 +12,7 @@ export interface EmptyStateProps {
 }
 
 export default function EmptyState({
-  icon = '📭',
+  icon = <Inbox className="w-12 h-12 text-neutral-300" />,
   title,
   description,
   actionLabel,
@@ -20,9 +21,9 @@ export default function EmptyState({
 }: EmptyStateProps) {
   return (
     <div className={`flex flex-col items-center justify-center py-12 px-4 text-center ${className}`}>
-      <span className="text-5xl mb-4" aria-hidden="true">
+      <div className="mb-4" aria-hidden="true">
         {icon}
-      </span>
+      </div>
       <h3 className="text-lg font-semibold text-foreground mb-1">{title}</h3>
       {description && <p className="text-sm text-muted max-w-md mb-4">{description}</p>}
       {actionLabel && onAction && (

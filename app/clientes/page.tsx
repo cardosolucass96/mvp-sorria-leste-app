@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Cliente } from '@/lib/types';
 import { formatarCPF, formatarTelefone } from '@/lib/utils/formatters';
+import { Users } from 'lucide-react';
 import { PageHeader, Table, Button, Alert, SearchInput } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -135,7 +136,7 @@ export default function ClientesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Clientes"
-        icon="👥"
+        icon={<Users className="w-7 h-7" />}
         description="Gerenciar clientes da clínica"
         actions={
           <Button onClick={() => router.push('/clientes/novo')}>+ Novo Cliente</Button>
@@ -160,7 +161,6 @@ export default function ClientesPage() {
         loading={isLoading}
         keyExtractor={(c) => c.id}
         emptyMessage={busca ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}
-        emptyIcon="👥"
         caption="Lista de clientes"
       />
 

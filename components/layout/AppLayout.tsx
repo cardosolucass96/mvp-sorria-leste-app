@@ -6,6 +6,7 @@ import Header from './Header';
 import Sidebar from './Sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
+import Spinner from '@/components/ui/Spinner';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -42,9 +43,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface-muted">
-        <div className="text-center">
-          <span className="text-4xl">🦷</span>
-          <p className="mt-2 text-neutral-600">Carregando...</p>
+        <div className="flex flex-col items-center gap-3">
+          <Spinner size="lg" />
+          <p className="text-sm text-neutral-500">Carregando...</p>
         </div>
       </div>
     );
@@ -67,7 +68,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <Header />
       <div className="flex flex-1">
         <Sidebar />
-        <main id="main-content" className="flex-1 bg-surface-muted p-3 md:p-6" role="main">
+        <main id="main-content" className="flex-1 min-w-0 bg-surface-muted p-3 md:p-6 overflow-x-hidden" role="main">
           <ErrorBoundary>
             {children}
           </ErrorBoundary>

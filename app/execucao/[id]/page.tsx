@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useParams } from 'next/navigation';
 import { formatarDataHora } from '@/lib/utils/formatters';
 import { StatusBadge } from '@/components/domain';
+import { Activity, Save, Paperclip, FileText } from 'lucide-react';
 import { Alert, LoadingState, Modal, PageHeader, Card, Button, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -67,7 +68,7 @@ export default function ExecucaoProcedimentoPage() {
   const params = useParams();
   const { user } = useAuth();
   const router = useRouter();
-  const { addToast } = useToast();
+  const { toast } = useToast();
   const [item, setItem] = useState<ItemAtendimento | null>(null);
   const [error, setError] = useState('');
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
@@ -172,7 +173,7 @@ export default function ExecucaoProcedimentoPage() {
       if (response.ok) {
         const data = await response.json();
         setProntuario(data.prontuario);
-        addToast('Prontuário salvo com sucesso!', 'success');
+        toast.success('Prontuário salvo com sucesso!');
       } else {
         const data = await response.json();
         setErroProntuario(data.error || 'Erro ao salvar prontuário');
@@ -208,7 +209,7 @@ export default function ExecucaoProcedimentoPage() {
         }
       } else {
         const data = await response.json();
-        addToast(data.error || 'Erro ao enviar arquivo', 'error');
+        toast.error(data.error || 'Erro ao enviar arquivo');
       }
     } catch (error) {
       console.error('Erro ao enviar anexo:', error);
@@ -237,7 +238,7 @@ export default function ExecucaoProcedimentoPage() {
     
     // Verificar se o prontuário foi preenchido
     if (!prontuario) {
-      addToast('Preencha o PRONTUÁRIO antes de concluir o procedimento.', 'warning');
+      toast.warning('Preencha o PRONTUÁRIO antes de concluir o procedimento.');
       return;
     }
     
@@ -305,7 +306,7 @@ export default function ExecucaoProcedimentoPage() {
 
   async function adicionarProcedimento() {
     if (!item || !novoProcedimento.procedimento_id) {
-      addToast('Selecione um procedimento', 'warning');
+      toast.warning('Selecione um procedimento');
       return;
     }
 
@@ -323,7 +324,7 @@ export default function ExecucaoProcedimentoPage() {
       if (response.ok) {
         setShowNovoProcedimento(false);
         setNovoProcedimento({ procedimento_id: '' });
-        addToast(`Procedimento adicionado para ${item.cliente_nome}! Atendimento voltou para Aguardando Pagamento.`, 'success');
+        toast.success(`Procedimento adicionado para ${item.cliente_nome}! Atendimento voltou para Aguardando Pagamento.`);
         router.push('/execucao');
       }
     } catch (error) {
@@ -338,7 +339,7 @@ export default function ExecucaoProcedimentoPage() {
   if (!item) {
     return (
       <EmptyState
-        icon="🦷"
+        icon={<Activity className="w-7 h-7" />}
         title="Procedimento não encontrado"
         actionLabel="Voltar para fila"
         onAction={() => router.push('/execucao')}
@@ -353,7 +354,7 @@ export default function ExecucaoProcedimentoPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       <PageHeader
         title={item.procedimento_nome}
-        icon="🦷"
+        icon={<Activity className="w-7 h-7" />}
         description={`${item.cliente_nome} · Atendimento #${item.atendimento_id}`}
         breadcrumb={[
           { label: 'Execução', href: '/execucao' },
@@ -377,7 +378,7 @@ export default function ExecucaoProcedimentoPage() {
               return (
                 <div className="mb-4 p-4 bg-primary-50 border border-primary-200 rounded-lg">
                   <p className="text-sm font-semibold text-primary-800 mb-2">
-                    🦷 Dentes a serem tratados ({dentesArray.length}):
+                    Dentes a serem tratados ({dentesArray.length}):
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {dentesArray.sort((a, b) => Number(a) - Number(b)).map((dente) => (
@@ -402,12 +403,12 @@ export default function ExecucaoProcedimentoPage() {
         <div className="mb-4">
           {isDisponivel && (
             <span className="inline-block px-3 py-1 text-sm font-semibold rounded bg-yellow-100 text-yellow-800">
-              📋 Disponível para execução
+              Disponível para execução
             </span>
           )}
           {isMeuProcedimento && item.status !== 'concluido' && (
             <span className="inline-block px-3 py-1 text-sm font-semibold rounded bg-info-100 text-info-800">
-              👤 Meu procedimento
+              Meu procedimento
             </span>
           )}
         </div>
@@ -416,7 +417,7 @@ export default function ExecucaoProcedimentoPage() {
         {item.concluido_at && (
           <div className="bg-success-50 border border-success-200 p-3 rounded mb-4">
             <p className="text-sm text-success-800">
-              ✓ Concluído em {formatarDataHora(item.concluido_at)}
+              Concluído em {formatarDataHora(item.concluido_at)}
             </p>
           </div>
         )}
@@ -436,7 +437,7 @@ export default function ExecucaoProcedimentoPage() {
               className="w-full text-lg py-3"
               variant="secondary"
             >
-              🙋 Pegar Este Procedimento
+              Pegar Este Procedimento
             </Button>
           )}
 
@@ -446,7 +447,7 @@ export default function ExecucaoProcedimentoPage() {
               onClick={iniciarExecucao}
               className="w-full text-lg py-3"
             >
-              ▶️ Iniciar Execução
+              Iniciar Execução
             </Button>
           )}
 
@@ -455,7 +456,7 @@ export default function ExecucaoProcedimentoPage() {
             <div className="space-y-2">
               {!prontuario && (
                 <div className="p-3 bg-yellow-50 border border-yellow-300 rounded-lg text-sm text-yellow-800">
-                  ⚠️ <strong>Prontuário pendente:</strong> Preencha o prontuário abaixo antes de concluir.
+                  <strong>Prontuário pendente:</strong> Preencha o prontuário abaixo antes de concluir.
                 </div>
               )}
               <Button
@@ -463,7 +464,7 @@ export default function ExecucaoProcedimentoPage() {
                 disabled={!prontuario}
                 className="w-full text-lg py-3"
               >
-                {prontuario ? '✅ Marcar como Concluído' : '🔒 Preencha o Prontuário para Concluir'}
+                {prontuario ? 'Marcar como Concluído' : 'Preencha o Prontuário para Concluir'}
               </Button>
             </div>
           )}
@@ -471,7 +472,7 @@ export default function ExecucaoProcedimentoPage() {
           {/* Procedimento concluído */}
           {item.status === 'concluido' && (
             <div className="w-full text-center text-neutral-600 py-3 bg-surface-muted rounded-lg">
-              ✓ Procedimento concluído
+              Procedimento concluído
             </div>
           )}
         </div>
@@ -486,7 +487,7 @@ export default function ExecucaoProcedimentoPage() {
             onClick={() => setShowNovoProcedimento(true)}
             className="w-full"
           >
-            ➕ Adicionar Procedimento para {item.cliente_nome}
+            Adicionar Procedimento para {item.cliente_nome}
           </Button>
         </Card>
       )}
@@ -496,11 +497,11 @@ export default function ExecucaoProcedimentoPage() {
         <Card className={!prontuario && item.status === 'executando' ? 'ring-2 ring-error-400' : ''}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-neutral-800">
-              📋 Prontuário {!prontuario && item.status === 'executando' && <span className="text-error-600">*</span>}
+              Prontuário {!prontuario && item.status === 'executando' && <span className="text-error-600">*</span>}
             </h2>
             {prontuario && (
               <span className="px-3 py-1 text-sm font-semibold rounded bg-success-100 text-success-800">
-                ✓ Preenchido
+                Preenchido
               </span>
             )}
           </div>
@@ -508,7 +509,7 @@ export default function ExecucaoProcedimentoPage() {
           {!prontuario && item.status === 'executando' && (
             <div className="mb-4 p-3 bg-error-50 border border-error-200 rounded-lg">
               <p className="text-sm text-error-700">
-                <strong>⚠️ Obrigatório:</strong> Preencha a descrição do procedimento realizado com no mínimo {MIN_CARACTERES_PRONTUARIO} caracteres para poder concluir.
+                <strong>Obrigatório:</strong> Preencha a descrição do procedimento realizado com no mínimo {MIN_CARACTERES_PRONTUARIO} caracteres para poder concluir.
               </p>
             </div>
           )}
@@ -540,7 +541,7 @@ export default function ExecucaoProcedimentoPage() {
                     {descricaoProntuario.length}/{MIN_CARACTERES_PRONTUARIO} caracteres mínimos
                   </span>
                   {descricaoProntuario.length >= MIN_CARACTERES_PRONTUARIO && (
-                    <span className="text-xs text-success-600">✓ Mínimo atingido</span>
+                    <span className="text-xs text-success-600">Mínimo atingido</span>
                   )}
                 </div>
               </div>
@@ -564,12 +565,13 @@ export default function ExecucaoProcedimentoPage() {
                 loading={salvandoProntuario}
                 className="w-full"
               >
-                {prontuario ? '💾 Atualizar Prontuário' : '💾 Salvar Prontuário'}
+                <Save className="w-4 h-4 mr-1.5 inline-block" aria-hidden="true" />
+                {prontuario ? 'Atualizar Prontuário' : 'Salvar Prontuário'}
               </Button>
 
               {/* Anexos dentro do prontuário */}
               <div className="pt-4 border-t border-neutral-200">
-                <h3 className="text-md font-semibold text-neutral-700 mb-3">📎 Anexos e Imagens</h3>
+                <h3 className="text-md font-semibold text-neutral-700 mb-3 flex items-center gap-2"><Paperclip className="w-4 h-4" aria-hidden="true" /> Anexos e Imagens</h3>
                 
                 <div className="p-4 border-2 border-dashed border-neutral-300 rounded-lg mb-4">
                   <div className="mb-2">
@@ -590,10 +592,10 @@ export default function ExecucaoProcedimentoPage() {
                     className="block w-full text-sm text-muted file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
                   />
                   <p className="mt-2 text-xs text-muted">
-                    📷 Imagens (máx. 10MB) | 🎬 Vídeos (máx. 50MB) | 📄 Documentos (máx. 10MB)
+                    Imagens (máx. 10MB) · Vídeos (máx. 50MB) · Documentos (máx. 10MB)
                   </p>
                   {enviandoAnexo && (
-                    <p className="mt-2 text-sm text-primary-600">⏳ Enviando arquivo...</p>
+                    <p className="mt-2 text-sm text-primary-600">Enviando arquivo...</p>
                   )}
                 </div>
 
@@ -628,7 +630,7 @@ export default function ExecucaoProcedimentoPage() {
                               rel="noopener noreferrer"
                               className="flex items-center justify-center h-32 bg-surface-muted hover:bg-neutral-200"
                             >
-                              <span className="text-3xl">📄</span>
+                              <FileText className="w-8 h-8 text-neutral-400" aria-hidden="true" />
                             </a>
                           )}
                           <div className="p-2">
@@ -642,7 +644,7 @@ export default function ExecucaoProcedimentoPage() {
                               onClick={() => removerAnexo(anexo.id)}
                               className="mt-1 text-xs text-error-600 hover:text-error-800"
                             >
-                              🗑️ Remover
+                              Remover
                             </button>
                           </div>
                         </div>
@@ -690,7 +692,7 @@ export default function ExecucaoProcedimentoPage() {
       {isDisponivel && (
         <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
           <p className="text-sm text-yellow-800">
-            📋 Este procedimento está disponível. <strong>Pegue-o primeiro</strong> para poder adicionar novos procedimentos para este cliente.
+            Este procedimento está disponível. <strong>Pegue-o primeiro</strong> para poder adicionar novos procedimentos para este cliente.
           </p>
         </div>
       )}

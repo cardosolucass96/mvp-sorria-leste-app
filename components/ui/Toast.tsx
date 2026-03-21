@@ -1,6 +1,8 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -75,11 +77,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 // ─── Container ──────────────────────────────────────────────────
 
-const typeConfig: Record<ToastType, { bg: string; icon: string }> = {
-  success: { bg: 'bg-success-600', icon: '✅' },
-  error: { bg: 'bg-error-600', icon: '❌' },
-  warning: { bg: 'bg-warning-600', icon: '⚠️' },
-  info: { bg: 'bg-info-600', icon: 'ℹ️' },
+const typeConfig: Record<ToastType, { bg: string; Icon: LucideIcon }> = {
+  success: { bg: 'bg-success-600', Icon: CheckCircle },
+  error: { bg: 'bg-error-600', Icon: XCircle },
+  warning: { bg: 'bg-warning-600', Icon: AlertTriangle },
+  info: { bg: 'bg-info-600', Icon: Info },
 };
 
 function ToastContainer({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: string) => void }) {
@@ -100,7 +102,7 @@ function ToastContainer({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: st
           `.trim()}
           role={t.type === 'error' || t.type === 'warning' ? 'alert' : 'status'}
         >
-          <span aria-hidden="true">{typeConfig[t.type].icon}</span>
+          {(() => { const Icon = typeConfig[t.type].Icon; return <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />; })()}
           <p className="flex-1">{t.message}</p>
           <button
             onClick={() => dismiss(t.id)}

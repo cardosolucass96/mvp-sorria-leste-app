@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { UserPlus } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
 import ClienteForm from '@/components/domain/ClienteForm';
@@ -44,7 +45,7 @@ export default function NovoClientePage() {
     <div className="space-y-6">
       <PageHeader
         title="Novo Cliente"
-        icon="➕"
+        icon={<UserPlus className="w-7 h-7" />}
         description="Cadastrar novo cliente na clínica"
         breadcrumb={[
           { label: 'Clientes', href: '/clientes' },

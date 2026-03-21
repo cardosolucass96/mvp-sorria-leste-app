@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 export interface StatCardProps {
-  icon: string;
+  icon: React.ReactNode;
   label: string;
   value: string | number;
   color?: string;
@@ -29,9 +29,9 @@ export default function StatCard({
       `.trim()}
     >
       <div className="flex items-start gap-4">
-        <span className="text-2xl shrink-0" aria-hidden="true">
+        <div className="shrink-0 text-neutral-400" aria-hidden="true">
           {icon}
-        </span>
+        </div>
         <div className="min-w-0">
           <p className="text-sm text-muted truncate">{label}</p>
           <p className="text-2xl font-bold text-foreground mt-0.5">{value}</p>

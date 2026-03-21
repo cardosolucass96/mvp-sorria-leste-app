@@ -2,6 +2,11 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import {
+  Users, ClipboardList, Clock, CheckCircle, Search, Activity,
+  AlertTriangle, UserPlus, FileEdit, Banknote, User, CreditCard,
+  ChevronRight, Stethoscope, LayoutDashboard,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatarMoeda } from '@/lib/utils/formatters';
 import LoadingState from '@/components/ui/LoadingState';
@@ -58,20 +63,21 @@ export default function Home() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">
-            🏥 Painel Administrativo
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <LayoutDashboard className="w-8 h-8 text-primary-500" aria-hidden="true" />
+            Painel Administrativo
           </h1>
           <p className="mt-2 text-neutral-600">
             Olá, {user?.nome?.split(' ')[0]}! Visão geral do sistema.
           </p>
         </div>
 
-        {/* Cards de Resumo - Admin vê tudo */}
+        {/* Cards de Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link href="/clientes" className="card hover:shadow-lg transition-all hover:-translate-y-1">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-primary-100 rounded-full">
-                <span className="text-2xl">👥</span>
+                <Users className="w-6 h-6 text-primary-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Total Clientes</p>
@@ -83,7 +89,7 @@ export default function Home() {
           <Link href="/atendimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-warning-100 rounded-full">
-                <span className="text-2xl">📋</span>
+                <ClipboardList className="w-6 h-6 text-warning-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Atendimentos Hoje</p>
@@ -95,7 +101,7 @@ export default function Home() {
           <Link href="/pagamentos" className="card hover:shadow-lg transition-shadow">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-primary-100 rounded-full">
-                <span className="text-2xl">⏳</span>
+                <Clock className="w-6 h-6 text-primary-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Aguardando Pagamento</p>
@@ -107,7 +113,7 @@ export default function Home() {
           <div className="card">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-success-100 rounded-full">
-                <span className="text-2xl">✅</span>
+                <CheckCircle className="w-6 h-6 text-success-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Finalizados Hoje</p>
@@ -125,7 +131,7 @@ export default function Home() {
                 <p className="text-sm text-muted">Fila de Avaliação</p>
                 <p className="text-2xl font-bold text-primary-600">{stats?.emAvaliacao || 0}</p>
               </div>
-              <span className="text-3xl">🔍</span>
+              <Search className="w-8 h-8 text-primary-300" aria-hidden="true" />
             </div>
           </Link>
 
@@ -135,7 +141,7 @@ export default function Home() {
                 <p className="text-sm text-muted">Em Execução</p>
                 <p className="text-2xl font-bold text-primary-700">{stats?.emExecucao || 0}</p>
               </div>
-              <span className="text-3xl">🦷</span>
+              <Activity className="w-8 h-8 text-primary-300" aria-hidden="true" />
             </div>
           </Link>
 
@@ -145,35 +151,27 @@ export default function Home() {
                 <p className="text-sm text-muted">Parcelas Vencidas</p>
                 <p className="text-2xl font-bold text-error-600">{stats?.parcelasVencidas || 0}</p>
               </div>
-              <span className="text-3xl">⚠️</span>
+              <AlertTriangle className="w-8 h-8 text-error-300" aria-hidden="true" />
             </div>
           </Link>
         </div>
 
         {/* Ações Rápidas */}
         <div className="card bg-gradient-to-r from-primary-50 to-warning-50">
-          <h2 className="text-xl font-semibold mb-4 text-primary-800">⚡ Ações Rápidas</h2>
+          <h2 className="text-base font-semibold mb-4 text-primary-800">Ações Rápidas</h2>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <Link href="/clientes/novo" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
-              <span className="text-3xl">➕</span>
-              <span className="text-sm font-medium text-center text-primary-800">Novo Cliente</span>
-            </Link>
-            <Link href="/atendimentos/novo" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
-              <span className="text-3xl">📝</span>
-              <span className="text-sm font-medium text-center text-primary-800">Novo Atendimento</span>
-            </Link>
-            <Link href="/avaliacao" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
-              <span className="text-3xl">🔍</span>
-              <span className="text-sm font-medium text-center text-primary-800">Fila Avaliação</span>
-            </Link>
-            <Link href="/comissoes" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
-              <span className="text-3xl">💵</span>
-              <span className="text-sm font-medium text-center text-primary-800">Comissões</span>
-            </Link>
-            <Link href="/usuarios" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
-              <span className="text-3xl">👤</span>
-              <span className="text-sm font-medium text-center text-primary-800">Usuários</span>
-            </Link>
+            {[
+              { href: '/clientes/novo', Icon: UserPlus, label: 'Novo Cliente' },
+              { href: '/atendimentos/novo', Icon: FileEdit, label: 'Novo Atendimento' },
+              { href: '/avaliacao', Icon: Search, label: 'Fila Avaliação' },
+              { href: '/comissoes', Icon: Banknote, label: 'Comissões' },
+              { href: '/usuarios', Icon: User, label: 'Usuários' },
+            ].map(({ href, Icon, label }) => (
+              <Link key={href} href={href} className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
+                <Icon className="w-7 h-7 text-primary-500" aria-hidden="true" />
+                <span className="text-sm font-medium text-center text-primary-800">{label}</span>
+              </Link>
+            ))}
           </div>
         </div>
       </div>
@@ -188,19 +186,18 @@ export default function Home() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            👋 Olá, {user?.nome?.split(' ')[0]}!
+            Olá, {user?.nome?.split(' ')[0]}!
           </h1>
           <p className="mt-2 text-neutral-600">
-            Área de Recepção - Atendimento ao Cliente
+            Área de Recepção — Atendimento ao Cliente
           </p>
         </div>
 
-        {/* Cards principais para atendente */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link href="/clientes" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-primary-100 rounded-full">
-                <span className="text-2xl">👥</span>
+                <Users className="w-6 h-6 text-primary-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Clientes Cadastrados</p>
@@ -212,7 +209,7 @@ export default function Home() {
           <Link href="/atendimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-warning-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-warning-100 rounded-full">
-                <span className="text-2xl">📋</span>
+                <ClipboardList className="w-6 h-6 text-warning-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Atendimentos Hoje</p>
@@ -224,7 +221,7 @@ export default function Home() {
           <Link href="/pagamentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-400">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-primary-100 rounded-full">
-                <span className="text-2xl">💰</span>
+                <CreditCard className="w-6 h-6 text-primary-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Aguardando Pagamento</p>
@@ -236,7 +233,7 @@ export default function Home() {
           <Link href="/pagamentos" className="card hover:shadow-lg transition-shadow border-l-4 border-error-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-error-100 rounded-full">
-                <span className="text-2xl">⚠️</span>
+                <AlertTriangle className="w-6 h-6 text-error-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Parcelas Vencidas</p>
@@ -251,7 +248,7 @@ export default function Home() {
           <Link href="/clientes/novo" className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-primary-50 border-2 border-primary-200">
             <div className="flex items-center gap-4">
               <div className="p-4 bg-primary-500 rounded-full">
-                <span className="text-3xl">➕</span>
+                <UserPlus className="w-7 h-7 text-white" aria-hidden="true" />
               </div>
               <div>
                 <h3 className="text-xl font-bold text-primary-900">Cadastrar Novo Cliente</h3>
@@ -263,7 +260,7 @@ export default function Home() {
           <Link href="/atendimentos/novo" className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-warning-50 border-2 border-warning-200">
             <div className="flex items-center gap-4">
               <div className="p-4 bg-warning-500 rounded-full">
-                <span className="text-3xl">📝</span>
+                <FileEdit className="w-7 h-7 text-white" aria-hidden="true" />
               </div>
               <div>
                 <h3 className="text-xl font-bold text-warning-900">Novo Atendimento</h3>
@@ -273,26 +270,21 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Links secundários */}
+        {/* Acesso Rápido */}
         <div className="card bg-gradient-to-r from-primary-50 to-warning-50">
-          <h2 className="text-lg font-semibold mb-4 text-primary-800">🔗 Acesso Rápido</h2>
+          <h2 className="text-base font-semibold mb-4 text-primary-800">Acesso Rápido</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Link href="/clientes" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all border border-primary-100">
-              <span className="text-2xl">🔍</span>
-              <span className="text-sm text-primary-800">Buscar Cliente</span>
-            </Link>
-            <Link href="/atendimentos" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all border border-primary-100">
-              <span className="text-2xl">📋</span>
-              <span className="text-sm text-primary-800">Ver Atendimentos</span>
-            </Link>
-            <Link href="/pagamentos" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all border border-primary-100">
-              <span className="text-2xl">💳</span>
-              <span className="text-sm text-primary-800">Pagamentos</span>
-            </Link>
-            <Link href="/minhas-comissoes" className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all border border-primary-100">
-              <span className="text-2xl">💰</span>
-              <span className="text-sm text-primary-800">Minhas Comissões</span>
-            </Link>
+            {[
+              { href: '/clientes', Icon: Search, label: 'Buscar Cliente' },
+              { href: '/atendimentos', Icon: ClipboardList, label: 'Ver Atendimentos' },
+              { href: '/pagamentos', Icon: CreditCard, label: 'Pagamentos' },
+              { href: '/minhas-comissoes', Icon: Banknote, label: 'Minhas Comissões' },
+            ].map(({ href, Icon, label }) => (
+              <Link key={href} href={href} className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all border border-primary-100">
+                <Icon className="w-6 h-6 text-primary-500" aria-hidden="true" />
+                <span className="text-sm text-primary-800">{label}</span>
+              </Link>
+            ))}
           </div>
         </div>
       </div>
@@ -306,20 +298,20 @@ export default function Home() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">
-            🔍 Área do Avaliador
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <Search className="w-8 h-8 text-primary-500" aria-hidden="true" />
+            Área do Avaliador
           </h1>
           <p className="mt-2 text-neutral-600">
             Olá, Dr(a). {user?.nome?.split(' ')[0]}! Sua fila de avaliações.
           </p>
         </div>
 
-        {/* Cards principais para avaliador */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-primary-100 rounded-full">
-                <span className="text-2xl">👤</span>
+                <User className="w-6 h-6 text-primary-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Meus Atendimentos</p>
@@ -331,7 +323,7 @@ export default function Home() {
           <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-warning-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-warning-100 rounded-full">
-                <span className="text-2xl">📋</span>
+                <ClipboardList className="w-6 h-6 text-warning-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Disponíveis para Pegar</p>
@@ -343,7 +335,7 @@ export default function Home() {
           <Link href="/minhas-comissoes" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-success-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-success-100 rounded-full">
-                <span className="text-2xl">💰</span>
+                <Banknote className="w-6 h-6 text-success-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Comissões (Este Mês)</p>
@@ -359,7 +351,7 @@ export default function Home() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="p-4 bg-primary-500 rounded-full">
-                  <span className="text-4xl">🔍</span>
+                  <Search className="w-8 h-8 text-white" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="text-2xl font-bold text-primary-900">Acessar Fila de Avaliação</h3>
@@ -368,7 +360,7 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-              <span className="text-4xl text-primary-500">→</span>
+              <ChevronRight className="w-8 h-8 text-primary-400" aria-hidden="true" />
             </div>
           </div>
         </Link>
@@ -377,7 +369,10 @@ export default function Home() {
         <div className="card bg-success-50 border border-success-200">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-semibold text-success-900">💵 Suas Comissões de Venda</h3>
+              <h3 className="font-semibold text-success-900 flex items-center gap-2">
+                <Banknote className="w-4 h-4" aria-hidden="true" />
+                Suas Comissões de Venda
+              </h3>
               <p className="text-sm text-success-700">Comissão sobre procedimentos que você vendeu</p>
             </div>
             <Link href="/minhas-comissoes" className="btn bg-success-600 text-white hover:bg-success-700">
@@ -397,21 +392,21 @@ export default function Home() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">
-            🦷 {isDentista ? 'Área do Dentista' : 'Área do Executor'}
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <Stethoscope className="w-8 h-8 text-primary-500" aria-hidden="true" />
+            {isDentista ? 'Área do Dentista' : 'Área do Executor'}
           </h1>
           <p className="mt-2 text-neutral-600">
             Olá, Dr(a). {user?.nome?.split(' ')[0]}! {isDentista ? 'Suas filas de avaliação e execução.' : 'Sua fila de procedimentos.'}
           </p>
         </div>
 
-        {/* Cards principais */}
         <div className={`grid grid-cols-1 md:grid-cols-2 ${isDentista ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
           {isDentista && (
             <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-purple-500">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-purple-100 rounded-full">
-                  <span className="text-2xl">🔍</span>
+                  <Search className="w-6 h-6 text-purple-600" aria-hidden="true" />
                 </div>
                 <div>
                   <p className="text-sm text-muted">Fila Avaliação</p>
@@ -424,7 +419,7 @@ export default function Home() {
           <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-primary-100 rounded-full">
-                <span className="text-2xl">👤</span>
+                <User className="w-6 h-6 text-primary-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Meus Procedimentos</p>
@@ -436,7 +431,7 @@ export default function Home() {
           <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-warning-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-warning-100 rounded-full">
-                <span className="text-2xl">📋</span>
+                <ClipboardList className="w-6 h-6 text-warning-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Disponíveis para Pegar</p>
@@ -448,7 +443,7 @@ export default function Home() {
           <Link href="/meus-procedimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-success-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-success-100 rounded-full">
-                <span className="text-2xl">💰</span>
+                <Banknote className="w-6 h-6 text-success-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm text-muted">Comissões (Este Mês)</p>
@@ -466,7 +461,7 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="p-4 bg-purple-500 rounded-full">
-                      <span className="text-3xl">🔍</span>
+                      <Search className="w-7 h-7 text-white" aria-hidden="true" />
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-purple-900">Fila de Avaliação</h3>
@@ -475,7 +470,7 @@ export default function Home() {
                       </p>
                     </div>
                   </div>
-                  <span className="text-3xl text-purple-500">→</span>
+                  <ChevronRight className="w-7 h-7 text-purple-400" aria-hidden="true" />
                 </div>
               </div>
             </Link>
@@ -486,7 +481,7 @@ export default function Home() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="p-4 bg-primary-500 rounded-full">
-                    <span className="text-3xl">🦷</span>
+                    <Activity className="w-7 h-7 text-white" aria-hidden="true" />
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-primary-900">Fila de Execução</h3>
@@ -495,7 +490,7 @@ export default function Home() {
                     </p>
                   </div>
                 </div>
-                <span className="text-3xl text-primary-500">→</span>
+                <ChevronRight className="w-7 h-7 text-primary-400" aria-hidden="true" />
               </div>
             </div>
           </Link>
@@ -506,7 +501,10 @@ export default function Home() {
           <div className="card bg-success-50 border border-success-200 hover:shadow-lg transition-all">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-success-900">📋 Meus Procedimentos</h3>
+                <h3 className="font-semibold text-success-900 flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4" aria-hidden="true" />
+                  Meus Procedimentos
+                </h3>
                 <p className="text-sm text-success-700">Histórico completo de avaliações e execuções</p>
               </div>
               <span className="btn bg-success-600 text-white hover:bg-success-700">
@@ -525,8 +523,9 @@ export default function Home() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">
-          🦷 Bem-vindo ao Sorria Leste!
+        <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+          <Stethoscope className="w-8 h-8 text-primary-500" aria-hidden="true" />
+          Bem-vindo ao Sorria Leste!
         </h1>
         <p className="mt-2 text-neutral-600">
           Sistema de Gestão Odontológica
@@ -534,9 +533,10 @@ export default function Home() {
       </div>
 
       <div className="card bg-yellow-50 border border-yellow-200">
-        <p className="text-yellow-800">
-          ⚠️ Seu perfil não está configurado corretamente. Entre em contato com o administrador.
-        </p>
+        <div className="flex items-center gap-2 text-yellow-800">
+          <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
+          <p>Seu perfil não está configurado corretamente. Entre em contato com o administrador.</p>
+        </div>
       </div>
     </div>
   );

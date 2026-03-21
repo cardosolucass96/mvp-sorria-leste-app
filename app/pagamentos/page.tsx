@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { CreditCard, Clock, AlertTriangle, Banknote } from 'lucide-react';
 import { PageHeader, Alert, StatCard, Tabs, Table, LoadingState, Button } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda, formatarData } from '@/lib/utils/formatters';
@@ -97,7 +98,7 @@ export default function PagamentosPage() {
     { key: 'cliente_nome', label: 'Cliente' },
     { key: 'atendimento_id', label: 'Atendimento', render: (p) => `#${p.atendimento_id}` },
     { key: 'numero', label: 'Parcela', render: (p) => `${p.numero}ª Parcela` },
-    { key: 'data_vencimento', label: 'Vencimento', render: (p) => <span className="text-error-600 font-medium">{formatarData(p.data_vencimento)} ⚠️</span> },
+    { key: 'data_vencimento', label: 'Vencimento', render: (p) => <span className="text-error-600 font-medium">{formatarData(p.data_vencimento)}</span> },
     { key: 'valor', label: 'Valor', align: 'right', render: (p) => <span className="font-bold text-error-600">{formatarMoeda(p.valor)}</span> },
     { key: 'acoes', label: 'Ações', align: 'right', render: (p) => <Link href={`/atendimentos/${p.atendimento_id}/pagamento`}><Button size="sm">💳 Receber</Button></Link> },
   ];
@@ -106,13 +107,13 @@ export default function PagamentosPage() {
     <div className="space-y-6">
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
-      <PageHeader title="Pagamentos" icon="💰" description="Gerencie pagamentos e parcelas pendentes" />
+      <PageHeader title="Pagamentos" icon={<CreditCard className="w-7 h-7" />} description="Gerencie pagamentos e parcelas pendentes" />
 
       {/* Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard icon="⏳" label="Aguardando Pagamento" value={String(atendimentos.length)} color="border-yellow-500" />
-        <StatCard icon="⚠️" label="Parcelas Vencidas" value={String(parcelasVencidas.length)} color="border-error-500" />
-        <StatCard icon="💵" label="Total a Receber" value={formatarMoeda(atendimentos.reduce((acc, a) => acc + (a.total - a.total_pago), 0))} color="border-success-500" />
+        <StatCard icon={<Clock className="w-6 h-6" />} label="Aguardando Pagamento" value={String(atendimentos.length)} color="border-yellow-500" />
+        <StatCard icon={<AlertTriangle className="w-6 h-6" />} label="Parcelas Vencidas" value={String(parcelasVencidas.length)} color="border-error-500" />
+        <StatCard icon={<Banknote className="w-6 h-6" />} label="Total a Receber" value={formatarMoeda(atendimentos.reduce((acc, a) => acc + (a.total - a.total_pago), 0))} color="border-success-500" />
       </div>
 
       {/* Tabs */}

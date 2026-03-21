@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatarMoeda } from '@/lib/utils/formatters';
+import { ClipboardList, Search, Activity } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Card, Button, Input, Select } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
@@ -166,7 +167,7 @@ export default function NovoAtendimentoPage() {
     <div className="space-y-6 max-w-3xl">
       <PageHeader
         title="Novo Atendimento"
-        icon="📋"
+        icon={<ClipboardList className="w-7 h-7" />}
         description="Iniciar atendimento para um cliente"
         breadcrumb={[
           { label: 'Atendimentos', href: '/atendimentos' },
@@ -191,7 +192,7 @@ export default function NovoAtendimentoPage() {
                   : 'border-neutral-200 hover:border-neutral-300'
               }`}
             >
-              <div className="text-2xl mb-1">🔍</div>
+              <Search className="w-6 h-6 mb-1 text-primary-500" aria-hidden="true" />
               <div className="font-semibold text-foreground">Normal</div>
               <p className="text-xs text-muted mt-1">
                 Triagem → Avaliação → Pagamento → Execução
@@ -207,7 +208,7 @@ export default function NovoAtendimentoPage() {
                   : 'border-neutral-200 hover:border-neutral-300'
               }`}
             >
-              <div className="text-2xl mb-1">🦷</div>
+              <Activity className="w-6 h-6 mb-1 text-info-500" aria-hidden="true" />
               <div className="font-semibold text-foreground">Orto / Aparelho</div>
               <p className="text-xs text-muted mt-1">
                 Direto para Pagamento → Execução pelo dentista
@@ -296,7 +297,7 @@ export default function NovoAtendimentoPage() {
         {/* Fluxo Orto: Dentista + Procedimento */}
         {tipoAtendimento === 'orto' && (
           <Card className="border-l-4 border-l-info-500">
-            <h2 className="text-lg font-semibold mb-4">🦷 Configuração Orto</h2>
+            <h2 className="text-lg font-semibold mb-4">Configuração Orto</h2>
             
             <div className="space-y-4">
               <div>
@@ -349,7 +350,7 @@ export default function NovoAtendimentoPage() {
             loading={saving}
           >
             {tipoAtendimento === 'orto' 
-              ? '🦷 Criar Atendimento Orto' 
+              ? 'Criar Atendimento Orto'
               : 'Criar Atendimento'
             }
           </Button>

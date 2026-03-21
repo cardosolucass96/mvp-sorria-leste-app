@@ -152,7 +152,7 @@ export default function ProcedimentoForm({
 
         <div className="p-3 bg-primary-50 border border-primary-200 rounded-lg">
           <Checkbox
-            label="🦷 Cobrar por dente"
+            label="Cobrar por dente"
             name="por_dente"
             checked={formData.por_dente}
             onChange={(checked) => setFormData((prev) => ({ ...prev, por_dente: checked }))}

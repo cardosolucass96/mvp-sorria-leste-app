@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { ClipboardList } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingState from '@/components/ui/LoadingState';
 import Alert from '@/components/ui/Alert';
@@ -90,7 +91,7 @@ export default function AtendimentosPage() {
 
       <PageHeader
         title="Atendimentos"
-        icon="📋"
+        icon={<ClipboardList className="w-7 h-7" />}
         description="Pipeline de atendimentos"
         actions={
           <div className="flex gap-2">

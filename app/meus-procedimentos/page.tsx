@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { ClipboardList, Search, Activity } from 'lucide-react';
 import { PageHeader, StatCard, Badge, LoadingState, Tabs, Alert, Table } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { StatusBadge } from '@/components/domain';
@@ -68,8 +69,8 @@ export default function MeusProcedimentosPage() {
 
   const tabs = [
     { key: 'todos', label: 'Todos', count: procedimentos.length },
-    ...(hasRole(['avaliador', 'admin']) ? [{ key: 'avaliacao', label: '🔍 Avaliações', count: totalAvaliados }] : []),
-    ...(hasRole(['executor', 'admin']) ? [{ key: 'execucao', label: '🦷 Execuções', count: totalExecutados }] : []),
+    ...(hasRole(['avaliador', 'admin']) ? [{ key: 'avaliacao', label: 'Avaliações', count: totalAvaliados }] : []),
+    ...(hasRole(['executor', 'admin']) ? [{ key: 'execucao', label: 'Execuções', count: totalExecutados }] : []),
   ];
 
   if (loading) {
@@ -81,14 +82,15 @@ export default function MeusProcedimentosPage() {
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
       <PageHeader
-        title="📋 Meus Procedimentos"
+        title="Meus Procedimentos"
+        icon={<ClipboardList className="w-7 h-7" />}
         description="Histórico de procedimentos que você avaliou ou executou"
       />
 
       {/* Cards de resumo */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
-          icon="📋"
+          icon={<ClipboardList className="w-6 h-6" />}
           label="Total de Procedimentos"
           value={procedimentos.length}
           color="border-info-400"
@@ -96,7 +98,7 @@ export default function MeusProcedimentosPage() {
         
         {hasRole(['avaliador', 'admin']) && (
           <StatCard
-            icon="🔍"
+            icon={<Search className="w-6 h-6" />}
             label="Avaliações Realizadas"
             value={totalAvaliados}
             color="border-purple-400"
@@ -105,7 +107,7 @@ export default function MeusProcedimentosPage() {
         
         {hasRole(['executor', 'admin']) && (
           <StatCard
-            icon="🦷"
+            icon={<Activity className="w-6 h-6" />}
             label="Procedimentos Executados"
             value={totalExecutados}
             color="border-success-400"
@@ -139,8 +141,8 @@ export default function MeusProcedimentosPage() {
             label: 'Tipo',
             align: 'center',
             render: (proc) => proc.tipo === 'avaliacao'
-              ? <Badge color="purple">🔍 Avaliação</Badge>
-              : <Badge color="green">🦷 Execução</Badge>,
+              ? <Badge color="purple">Avaliação</Badge>
+              : <Badge color="green">Execução</Badge>,
           },
           {
             key: 'dentes',

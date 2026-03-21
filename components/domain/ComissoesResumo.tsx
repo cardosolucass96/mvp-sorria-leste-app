@@ -8,6 +8,7 @@
 import Table from '@/components/ui/Table';
 import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda } from '@/lib/utils/formatters';
+import { Banknote } from 'lucide-react';
 
 export interface ComissaoResumoData {
   id: number;
@@ -84,7 +85,7 @@ export default function ComissoesResumo({
         loading={loading}
         keyExtractor={(c) => c.id}
         emptyMessage="Nenhuma comissão registrada"
-        emptyIcon="💰"
+        emptyIcon={<Banknote className="w-8 h-8 text-neutral-300" />}
         caption="Resumo de comissões por profissional"
       />
       {comissoes.length > 0 && (

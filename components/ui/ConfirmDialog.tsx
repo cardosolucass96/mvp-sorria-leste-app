@@ -2,6 +2,8 @@
 
 import Modal from './Modal';
 import Button from './Button';
+import { Trash2, AlertTriangle, Info } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -15,10 +17,10 @@ export interface ConfirmDialogProps {
   loading?: boolean;
 }
 
-const typeIcons: Record<NonNullable<ConfirmDialogProps['type']>, string> = {
-  danger: '🗑️',
-  warning: '⚠️',
-  info: 'ℹ️',
+const typeIcons: Record<NonNullable<ConfirmDialogProps['type']>, LucideIcon> = {
+  danger: Trash2,
+  warning: AlertTriangle,
+  info: Info,
 };
 
 const typeVariants: Record<NonNullable<ConfirmDialogProps['type']>, 'danger' | 'primary'> = {
@@ -60,9 +62,7 @@ export default function ConfirmDialog({
       }
     >
       <div className="flex gap-4 items-start">
-        <span className="text-3xl shrink-0" aria-hidden="true">
-          {typeIcons[type]}
-        </span>
+        {(() => { const Icon = typeIcons[type]; return <Icon className="w-6 h-6 shrink-0 text-neutral-500 mt-0.5" aria-hidden="true" />; })()}
         <p className="text-sm text-neutral-600 leading-relaxed">{message}</p>
       </div>
     </Modal>

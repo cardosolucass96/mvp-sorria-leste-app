@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { Activity } from 'lucide-react';
 import { PageHeader, Card, LoadingState, EmptyState, Alert } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -90,7 +91,7 @@ export default function ExecucaoPage() {
 
       {totalProcedimentos === 0 ? (
         <EmptyState
-          icon="🦷"
+          icon={<Activity className="w-7 h-7" />}
           title="Nenhum procedimento na fila"
           description="Quando houver procedimentos pagos, eles aparecerão aqui."
         />
@@ -100,7 +101,7 @@ export default function ExecucaoPage() {
           <section>
             <h2 className="text-lg font-bold text-neutral-800 mb-4 flex items-center gap-2">
               <span className="bg-info-100 text-info-800 px-3 py-1 rounded-full text-sm">
-                👤 Meus Procedimentos
+                Meus Procedimentos
               </span>
               <span className="text-muted text-sm font-normal">
                 ({fila.meusProcedimentos.length})
@@ -124,7 +125,7 @@ export default function ExecucaoPage() {
           <section>
             <h2 className="text-lg font-bold text-neutral-800 mb-4 flex items-center gap-2">
               <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm">
-                📋 Disponíveis para Pegar
+                Disponíveis para Pegar
               </span>
               <span className="text-muted text-sm font-normal">
                 ({fila.disponiveis.length})

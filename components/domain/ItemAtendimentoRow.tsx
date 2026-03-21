@@ -64,7 +64,7 @@ export default function ItemAtendimentoRow({
       </td>
       <td className="px-4 py-3 text-center">
         {dentesFormatados ? (
-          <Badge color="orange" size="sm">🦷 {dentesFormatados}</Badge>
+          <Badge color="orange" size="sm">{dentesFormatados}</Badge>
         ) : (
           <span className="text-neutral-400">-</span>
         )}
