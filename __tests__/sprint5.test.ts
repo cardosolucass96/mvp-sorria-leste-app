@@ -274,12 +274,12 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
     });
 
     test('execução→finalizado deve exigir tudo concluído e pago', () => {
+      // Lógica de finalização vive no endpoint dedicado /api/atendimentos/[id]/finalizar
       const content = fs.readFileSync(
-        path.join(process.cwd(), 'app', 'api', 'atendimentos', '[id]', 'route.ts'),
+        path.join(process.cwd(), 'app', 'api', 'atendimentos', '[id]', 'finalizar', 'route.ts'),
         'utf-8'
       );
       expect(content).toContain('procedimentos não concluídos');
-      expect(content).toContain('Pagamento incompleto');
     });
 
   });

@@ -33,9 +33,11 @@ export function resetMockDb() {
   executedQueries = [];
 }
 
-/** Configura o próximo retorno para uma query que contenha a substring dada */
-export function mockQueryResponse(sqlSubstring: string, rows: MockRow[]) {
-  mockResponses.set(sqlSubstring.toLowerCase(), rows);
+/** Configura o próximo retorno para uma query que contenha a substring dada.
+ *  Aceita tanto um array de rows quanto um único objeto (para queryOne/first). */
+export function mockQueryResponse(sqlSubstring: string, rows: MockRow[] | MockRow) {
+  const rowArray = Array.isArray(rows) ? rows : [rows];
+  mockResponses.set(sqlSubstring.toLowerCase(), rowArray);
 }
 
 /** Define o último ID inserido (para simular AUTO_INCREMENT) */
@@ -112,16 +114,24 @@ export const mockDb = {
 };
 
 /** Mock do R2Bucket completo */
-const r2Store = new Map<string, { body: Buffer; httpMetadata?: Record<string, string> }>();
+const r2Store = new Map<string, { body: Buffer; httpMetadata?: Record<string, string>; customMetadata?: Record<string, string> }>();
 
 export function resetR2Store() {
   r2Store.clear();
 }
 
+export function getR2Store() {
+  return r2Store;
+}
+
 export const mockR2Bucket = {
   async put(key: string, value: unknown, options?: Record<string, unknown>) {
-    const body = value instanceof Buffer ? value : Buffer.from(String(value));
-    r2Store.set(key, { body, httpMetadata: options?.httpMetadata as Record<string, string> });
+    const body = value instanceof Buffer ? value : Buffer.from(value instanceof ArrayBuffer ? new Uint8Array(value) : String(value));
+    r2Store.set(key, {
+      body,
+      httpMetadata: options?.httpMetadata as Record<string, string>,
+      customMetadata: options?.customMetadata as Record<string, string>,
+    });
     return {
       key,
       version: '1',
@@ -131,6 +141,7 @@ export const mockR2Bucket = {
       checksums: {},
       uploaded: new Date(),
       httpMetadata: options?.httpMetadata,
+      customMetadata: options?.customMetadata,
     };
   },
   async get(key: string) {
@@ -145,6 +156,7 @@ export const mockR2Bucket = {
       checksums: {},
       uploaded: new Date(),
       httpMetadata: item.httpMetadata,
+      customMetadata: item.customMetadata,
       body: new ReadableStream({
         start(controller) {
           controller.enqueue(item.body);

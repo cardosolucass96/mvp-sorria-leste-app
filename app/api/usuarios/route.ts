@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { Usuario } from '@/lib/types';
+import { hashPassword } from '@/lib/auth';
 
 // GET /api/usuarios - Listar todos os usuários
 export async function GET() {
@@ -32,6 +33,20 @@ export async function POST(request: Request) {
       );
     }
 
+    if (typeof nome === 'string' && nome.trim() === '') {
+      return NextResponse.json(
+        { error: 'Nome não pode ser vazio' },
+        { status: 400 }
+      );
+    }
+
+    if (typeof email === 'string' && email.trim() === '') {
+      return NextResponse.json(
+        { error: 'Email não pode ser vazio' },
+        { status: 400 }
+      );
+    }
+
     const validRoles = ['admin', 'atendente', 'avaliador', 'executor'];
     if (!validRoles.includes(role)) {
       return NextResponse.json(
@@ -53,12 +68,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Hash da senha padrão
+    const senhaHash = await hashPassword('Sorria@123');
+
     // Importar execute dinamicamente para evitar problemas
     const { execute } = await import('@/lib/db');
     
     const result = await execute(
-      'INSERT INTO usuarios (nome, email, role) VALUES (?, ?, ?)',
-      [nome.trim(), email.toLowerCase().trim(), role]
+      'INSERT INTO usuarios (nome, email, role, senha) VALUES (?, ?, ?, ?)',
+      [nome.trim(), email.toLowerCase().trim(), role, senhaHash]
     );
 
     const novoUsuario = await query<Usuario>(

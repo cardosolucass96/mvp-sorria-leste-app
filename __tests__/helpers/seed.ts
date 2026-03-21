@@ -275,6 +275,84 @@ export const ITEM_CANAL_EXECUTANDO: ItemAtendimento = {
 };
 
 // ===========================================
+// PAGAMENTOS DE ATENDIMENTOS
+// ===========================================
+
+export interface PagamentoSeed {
+  id: number;
+  atendimento_id: number;
+  recebido_por_id: number;
+  valor: number;
+  metodo: string;
+  parcelas: number;
+  observacoes: string | null;
+  created_at: string;
+}
+
+export const PAGAMENTO_PIX: PagamentoSeed = {
+  id: 1,
+  atendimento_id: 3,
+  recebido_por_id: 2,
+  valor: 400.0,
+  metodo: 'pix',
+  parcelas: 1,
+  observacoes: null,
+  created_at: '2025-02-05 09:00:00',
+};
+
+// ===========================================
+// PARCELAS
+// ===========================================
+
+export interface ParcelaSeed {
+  id: number;
+  atendimento_id: number;
+  numero: number;
+  valor: number;
+  data_vencimento: string;
+  pago: number;
+  pagamento_id: number | null;
+  observacoes: string | null;
+  created_at: string;
+}
+
+export const PARCELA_PENDENTE: ParcelaSeed = {
+  id: 1,
+  atendimento_id: 3,
+  numero: 1,
+  valor: 200.0,
+  data_vencimento: '2025-03-01',
+  pago: 0,
+  pagamento_id: null,
+  observacoes: null,
+  created_at: '2025-02-05 10:00:00',
+};
+
+export const PARCELA_PAGA: ParcelaSeed = {
+  id: 2,
+  atendimento_id: 3,
+  numero: 2,
+  valor: 200.0,
+  data_vencimento: '2025-02-15',
+  pago: 1,
+  pagamento_id: 1,
+  observacoes: null,
+  created_at: '2025-02-05 10:00:00',
+};
+
+export const PARCELA_VENCIDA: ParcelaSeed = {
+  id: 3,
+  atendimento_id: 3,
+  numero: 3,
+  valor: 150.0,
+  data_vencimento: '2025-01-15',
+  pago: 0,
+  pagamento_id: null,
+  observacoes: 'Atrasada',
+  created_at: '2025-02-05 10:00:00',
+};
+
+// ===========================================
 // CPFs VÁLIDOS E INVÁLIDOS para testes
 // ===========================================
 

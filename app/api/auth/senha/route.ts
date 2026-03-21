@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db';
+import { verifyPassword, hashPassword } from '@/lib/auth';
 
 interface Usuario {
   id: number;
@@ -53,18 +54,20 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Verificar senha atual
-    if (usuario.senha !== senha_atual) {
+    // Verificar senha atual (suporta hash e texto plano legado)
+    const senhaValida = await verifyPassword(senha_atual, usuario.senha);
+    if (!senhaValida) {
       return NextResponse.json(
         { error: 'Senha atual incorreta' },
         { status: 401 }
       );
     }
 
-    // Atualizar senha
+    // Fazer hash da nova senha e salvar
+    const hashedPassword = await hashPassword(nova_senha);
     await execute(
       'UPDATE usuarios SET senha = ? WHERE id = ?',
-      [nova_senha, usuario_id]
+      [hashedPassword, usuario_id]
     );
 
     return NextResponse.json({ success: true, message: 'Senha alterada com sucesso' });

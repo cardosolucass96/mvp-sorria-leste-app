@@ -229,6 +229,8 @@ async function validarTransicao(
   const statusAtual = atendimento.status;
   
   // Transições permitidas
+  // NOTA: em_execucao → finalizado é tratado pelo endpoint dedicado
+  //       /api/atendimentos/[id]/finalizar (Sprint 7)
   const transicoesPermitidas: Record<string, string[]> = {
     triagem: ['avaliacao'],
     avaliacao: ['aguardando_pagamento'],
@@ -278,41 +280,10 @@ async function validarTransicao(
     }
   }
   
-  // Em Execução → Finalizado: todos procedimentos concluídos e tudo pago
-  if (statusAtual === 'em_execucao' && novoStatus === 'finalizado') {
-    const pendentes = await queryOne<CountResult>(
-      `SELECT COUNT(*) as count FROM itens_atendimento 
-       WHERE atendimento_id = ? AND status != 'concluido'`,
-      [atendimentoId]
-    );
-    
-    if (pendentes && pendentes.count > 0) {
-      return {
-        valido: false,
-        mensagem: 'Existem procedimentos não concluídos',
-      };
-    }
-    
-    const total = await queryOne<SumResult>(
-      'SELECT SUM(valor) as total FROM itens_atendimento WHERE atendimento_id = ?',
-      [atendimentoId]
-    );
-    
-    const pago = await queryOne<SumResult>(
-      'SELECT SUM(valor) as total FROM pagamentos WHERE atendimento_id = ?',
-      [atendimentoId]
-    );
-    
-    const valorTotal = total?.total || 0;
-    const valorPago = pago?.total || 0;
-    
-    if (valorPago < valorTotal) {
-      return {
-        valido: false,
-        mensagem: `Pagamento incompleto. Total: R$ ${valorTotal.toFixed(2)}, Pago: R$ ${valorPago.toFixed(2)}`,
-      };
-    }
-  }
+  // NOTA: Em Execução → Finalizado é validado pelo endpoint dedicado
+  // /api/atendimentos/[id]/finalizar (Sprint 7) que verifica:
+  //   - todos procedimentos concluídos
+  //   - pagamento completo
   
   return { valido: true, mensagem: '' };
 }

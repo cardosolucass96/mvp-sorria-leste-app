@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne } from '@/lib/db';
+import { queryOne, execute } from '@/lib/db';
 import { Usuario } from '@/lib/types';
+import { verifyPassword, needsMigration, hashPassword, generateToken } from '@/lib/auth';
 
 interface UsuarioComSenha extends Usuario {
   senha: string;
@@ -36,18 +37,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verificar senha (comparação simples)
-    if (user.senha !== senha) {
+    // Verificar senha (suporta hash e texto plano legado)
+    const senhaValida = await verifyPassword(senha, user.senha);
+    if (!senhaValida) {
       return NextResponse.json(
         { error: 'Email ou senha inválidos' },
         { status: 401 }
       );
     }
 
+    // Migração gradual: se a senha ainda é texto plano, fazer hash
+    if (needsMigration(user.senha)) {
+      const hashedPassword = await hashPassword(senha);
+      await execute(
+        'UPDATE usuarios SET senha = ? WHERE id = ?',
+        [hashedPassword, user.id]
+      );
+    }
+
+    // Gerar JWT
+    const token = await generateToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      nome: user.nome,
+    });
+
     // Remover senha do retorno
     const { senha: _, ...userSemSenha } = user;
 
-    return NextResponse.json({ user: userSemSenha });
+    // Retornar token + user (cookie HttpOnly para segurança)
+    const response = NextResponse.json({ user: userSemSenha, token });
+    response.cookies.set('auth-token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60, // 24h
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     console.error('Erro no login:', error);
     return NextResponse.json(
