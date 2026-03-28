@@ -9,9 +9,20 @@ export type AtendimentoStatus =
   | 'em_execucao' 
   | 'finalizado';
 
+export type AtendimentoTipo = 'normal' | 'sessao' | 'orto';
+
 export type ItemStatus = 'pendente' | 'pago' | 'executando' | 'concluido';
 
 export type MetodoPagamento = 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito';
+
+export type AgendamentoStatus =
+  | 'pendente'    // gerado, sem data definida
+  | 'agendado'    // tem data_agendada
+  | 'realizado'   // cliente chegou, atendimento_sessao_id preenchido
+  | 'faltou'      // não compareceu
+  | 'cancelado';
+
+export type MotivoSaida = 'sem_tratamento' | 'tratamento_completo' | 'continuacao';
 
 export type OrigemCliente = 
   | 'fachada'
@@ -59,7 +70,10 @@ export interface Atendimento {
   cliente_id: number;
   avaliador_id: number | null;
   liberado_por_id: number | null;
+  agendamento_id: number | null;
   status: AtendimentoStatus;
+  tipo: AtendimentoTipo;
+  motivo_saida: MotivoSaida | null;
   observacoes: string | null;
   created_at: string;
   liberado_em: string | null;
@@ -78,6 +92,7 @@ export interface ItemAtendimento {
   quantidade: number; // Quantidade de dentes
   group_id: string | null; // UUID compartilhado entre itens do mesmo procedimento por_dente
   dente_unico: string | null; // Número do dente individual quando group_id presente
+  origem_agendamento_id: number | null;
   status: ItemStatus;
   observacoes: string | null;
   created_at: string;
@@ -118,4 +133,49 @@ export interface ItemAtendimentoCompleto extends ItemAtendimento {
   procedimento_nome: string;
   executor_nome: string | null;
   criado_por_nome: string;
+}
+
+export interface Agendamento {
+  id: number;
+  cliente_id: number;
+  atendimento_origem_id: number;
+  item_atendimento_origem_id: number | null;
+  atendimento_sessao_id: number | null;
+  procedimento_id: number;
+  executor_id: number | null;
+  status: AgendamentoStatus;
+  data_agendada: string | null;
+  observacoes: string | null;
+  motivo_cancelamento: string | null;
+  reagendado_de_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgendamentoCompleto extends Agendamento {
+  cliente_nome: string;
+  cliente_telefone: string | null;
+  procedimento_nome: string;
+  executor_nome: string | null;
+  dias_desde_criacao: number;
+}
+
+export interface SaldoCliente {
+  id: number;
+  cliente_id: number;
+  saldo: number;
+  updated_at: string;
+}
+
+export interface MovimentacaoSaldo {
+  id: number;
+  cliente_id: number;
+  tipo: 'credito' | 'debito' | 'estorno' | 'transferencia_saida' | 'transferencia_entrada';
+  valor: number;
+  pagamento_id: number | null;
+  item_atendimento_id: number | null;
+  atendimento_id: number | null;
+  cliente_destino_id: number | null;
+  observacoes: string | null;
+  created_at: string;
 }

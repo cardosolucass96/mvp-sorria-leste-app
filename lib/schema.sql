@@ -46,17 +46,20 @@ CREATE TABLE IF NOT EXISTS atendimentos (
   cliente_id INTEGER NOT NULL,
   avaliador_id INTEGER, -- Pode ser null até ser atribuído
   liberado_por_id INTEGER, -- Quem liberou para execução
-  status TEXT NOT NULL DEFAULT 'triagem' 
+  status TEXT NOT NULL DEFAULT 'triagem'
     CHECK (status IN ('triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao', 'finalizado')),
-  tipo TEXT DEFAULT NULL, -- NULL = normal, 'sessao' = continuação de agendamento
-  motivo_saida TEXT DEFAULT NULL, -- sem_tratamento, tratamento_completo, continuacao
+  agendamento_id INTEGER,
+  tipo TEXT NOT NULL DEFAULT 'normal'
+    CHECK (tipo IN ('normal','sessao','orto')),
+  motivo_saida TEXT,
   observacoes TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   liberado_em TEXT, -- Data/hora da liberação para execução
   finalizado_at TEXT,
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
   FOREIGN KEY (avaliador_id) REFERENCES usuarios(id),
-  FOREIGN KEY (liberado_por_id) REFERENCES usuarios(id)
+  FOREIGN KEY (liberado_por_id) REFERENCES usuarios(id),
+  FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id)
 );
 
 -- Itens do Atendimento (Procedimentos vinculados)
@@ -72,6 +75,7 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   quantidade INTEGER NOT NULL DEFAULT 1, -- Quantidade de dentes (para cálculo do valor)
   group_id TEXT, -- UUID compartilhado entre itens do mesmo procedimento por_dente
   dente_unico TEXT, -- Número do dente individual (ex: "11") quando group_id presente
+  origem_agendamento_id INTEGER, -- Qual agendamento originou este item
   status TEXT NOT NULL DEFAULT 'pendente'
     CHECK (status IN ('pendente', 'pago', 'executando', 'concluido')),
   observacoes TEXT,
@@ -80,7 +84,8 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
   FOREIGN KEY (executor_id) REFERENCES usuarios(id),
-  FOREIGN KEY (criado_por_id) REFERENCES usuarios(id)
+  FOREIGN KEY (criado_por_id) REFERENCES usuarios(id),
+  FOREIGN KEY (origem_agendamento_id) REFERENCES agendamentos(id)
 );
 
 -- Pagamentos
@@ -209,24 +214,63 @@ CREATE TABLE IF NOT EXISTS prontuarios_etapa (
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
 
--- Agendamentos (sessões agendadas)
+-- Sessões futuras agendadas
 CREATE TABLE IF NOT EXISTS agendamentos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   cliente_id INTEGER NOT NULL,
-  atendimento_origem_id INTEGER, -- Atendimento que gerou este agendamento
-  atendimento_id INTEGER, -- Atendimento criado quando o cliente chegou
+  atendimento_origem_id INTEGER NOT NULL,
+  item_atendimento_origem_id INTEGER,
+  atendimento_sessao_id INTEGER,
   procedimento_id INTEGER NOT NULL,
   executor_id INTEGER,
-  data_agendada TEXT, -- NULL = pendente sem data
-  observacoes TEXT,
   status TEXT NOT NULL DEFAULT 'pendente'
-    CHECK (status IN ('pendente', 'agendado', 'chegou', 'cancelado')),
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    CHECK (status IN ('pendente','agendado','realizado','faltou','cancelado')),
+  data_agendada TEXT,
+  observacoes TEXT,
+  motivo_cancelamento TEXT,
+  reagendado_de_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
   FOREIGN KEY (atendimento_origem_id) REFERENCES atendimentos(id),
-  FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
+  FOREIGN KEY (item_atendimento_origem_id) REFERENCES itens_atendimento(id),
+  FOREIGN KEY (atendimento_sessao_id) REFERENCES atendimentos(id),
   FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
-  FOREIGN KEY (executor_id) REFERENCES usuarios(id)
+  FOREIGN KEY (executor_id) REFERENCES usuarios(id),
+  FOREIGN KEY (reagendado_de_id) REFERENCES agendamentos(id)
+);
+
+-- Saldo disponível por cliente
+CREATE TABLE IF NOT EXISTS saldo_clientes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cliente_id INTEGER NOT NULL UNIQUE,
+  saldo REAL NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+);
+
+-- Ledger de movimentações do saldo
+CREATE TABLE IF NOT EXISTS movimentacoes_saldo (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cliente_id INTEGER NOT NULL,
+  tipo TEXT NOT NULL CHECK (tipo IN (
+    'credito', 'debito', 'estorno',
+    'transferencia_saida', 'transferencia_entrada'
+  )),
+  valor REAL NOT NULL,
+  saldo_anterior REAL NOT NULL,
+  saldo_novo REAL NOT NULL,
+  pagamento_id INTEGER,
+  item_atendimento_id INTEGER,
+  atendimento_id INTEGER,
+  cliente_destino_id INTEGER,
+  observacoes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+  FOREIGN KEY (pagamento_id) REFERENCES pagamentos(id),
+  FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
+  FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
+  FOREIGN KEY (cliente_destino_id) REFERENCES clientes(id)
 );
 
 -- Índices para melhor performance
@@ -250,3 +294,7 @@ CREATE INDEX IF NOT EXISTS idx_etapas_status ON etapas_procedimento(status);
 CREATE INDEX IF NOT EXISTS idx_prontuarios_etapa ON prontuarios_etapa(etapa_id);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_cliente ON agendamentos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_status ON agendamentos(status);
+CREATE INDEX IF NOT EXISTS idx_agendamentos_data ON agendamentos(data_agendada);
+CREATE INDEX IF NOT EXISTS idx_movimentacoes_cliente ON movimentacoes_saldo(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_movimentacoes_tipo ON movimentacoes_saldo(tipo);
+CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes_saldo(created_at);

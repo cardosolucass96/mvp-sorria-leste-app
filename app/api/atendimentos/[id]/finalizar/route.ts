@@ -6,15 +6,6 @@ interface ItemAtendimento {
   valor: number;
   valor_pago: number;
   status: string;
-  criado_por_id: number | null;
-  executor_id: number | null;
-  procedimento_id: number;
-}
-
-interface Procedimento {
-  id: number;
-  comissao_venda: number;
-  comissao_execucao: number;
 }
 
 interface Atendimento {
@@ -22,7 +13,9 @@ interface Atendimento {
   status: string;
 }
 
-// POST /api/atendimentos/[id]/finalizar - Finaliza atendimento e gera comissões
+type MotivoSaida = 'sem_tratamento' | 'tratamento_completo' | 'continuacao';
+
+// POST /api/atendimentos/[id]/finalizar - Finaliza atendimento
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -31,14 +24,8 @@ export async function POST(
     const { id } = await params;
     const atendimentoId = parseInt(id);
 
-    // Parse motivo_saida from body (optional for backwards compat)
-    let motivoSaida: string | null = null;
-    try {
-      const body = await request.json();
-      motivoSaida = body.motivo_saida || null;
-    } catch {
-      // No body or invalid JSON — backwards compatible
-    }
+    const body = await request.json().catch(() => ({}));
+    const motivo_saida: MotivoSaida = body.motivo_saida || 'tratamento_completo';
 
     // 1. Verificar se atendimento existe e está em execução
     const atendimentos = await query<Atendimento>(
@@ -62,124 +49,66 @@ export async function POST(
       );
     }
 
-    // 2. Buscar itens
+    // 2. Para 'sem_tratamento', pular todas as validações
+    if (motivo_saida === 'sem_tratamento') {
+      await execute(
+        `UPDATE atendimentos SET status = 'finalizado', finalizado_at = datetime('now', 'localtime'), motivo_saida = ? WHERE id = ?`,
+        [motivo_saida, atendimentoId]
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: 'Atendimento finalizado com sucesso',
+      });
+    }
+
+    // 3. Verificar se todos os itens estão concluídos
     const itens = await query<ItemAtendimento>(
-      `SELECT id, valor, valor_pago, status, criado_por_id, executor_id, procedimento_id
+      `SELECT id, valor, valor_pago, status
        FROM itens_atendimento WHERE atendimento_id = ?`,
       [atendimentoId]
     );
 
-    // "Avaliação apenas" skips item/payment validations
-    if (motivoSaida !== 'sem_tratamento') {
-      if (itens.length === 0) {
-        return NextResponse.json(
-          { error: 'Atendimento não possui procedimentos' },
-          { status: 400 }
-        );
-      }
-
-      const itensNaoConcluidos = itens.filter(i => i.status !== 'concluido');
-      if (itensNaoConcluidos.length > 0) {
-        return NextResponse.json(
-          {
-            error: 'Existem procedimentos não concluídos',
-            pendentes: itensNaoConcluidos.length
-          },
-          { status: 400 }
-        );
-      }
-
-      // 3. Verificar se todos os itens estão pagos
-      const itensNaoPagos = itens.filter(i => i.valor_pago < i.valor);
-      if (itensNaoPagos.length > 0) {
-        const valorFaltante = itensNaoPagos.reduce((sum, i) => sum + (i.valor - i.valor_pago), 0);
-        return NextResponse.json(
-          {
-            error: 'Existem procedimentos com pagamento pendente',
-            valorFaltante
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    // 4. Gerar comissões para cada item
-    const comissoesGeradas: Array<{
-      tipo: string;
-      usuario_id: number;
-      valor: number;
-    }> = [];
-
-    for (const item of itens) {
-      // Buscar % de comissão do procedimento
-      const procedimentos = await query<Procedimento>(
-        'SELECT id, comissao_venda, comissao_execucao FROM procedimentos WHERE id = ?',
-        [item.procedimento_id]
+    if (itens.length === 0) {
+      return NextResponse.json(
+        { error: 'Atendimento não possui procedimentos' },
+        { status: 400 }
       );
-
-      if (procedimentos.length === 0) continue;
-
-      const proc = procedimentos[0];
-
-      // Comissão de venda (vai para quem criou o procedimento)
-      if (item.criado_por_id && proc.comissao_venda > 0) {
-        const valorComissaoVenda = item.valor * (proc.comissao_venda / 100);
-        
-        await execute(
-          `INSERT INTO comissoes (atendimento_id, item_atendimento_id, usuario_id, tipo, percentual, valor_base, valor_comissao)
-           VALUES (?, ?, ?, 'venda', ?, ?, ?)`,
-          [atendimentoId, item.id, item.criado_por_id, proc.comissao_venda, item.valor, valorComissaoVenda]
-        );
-
-        comissoesGeradas.push({
-          tipo: 'venda',
-          usuario_id: item.criado_por_id,
-          valor: valorComissaoVenda
-        });
-      }
-
-      // Comissão de execução (vai para quem executou)
-      if (item.executor_id && proc.comissao_execucao > 0) {
-        const valorComissaoExecucao = item.valor * (proc.comissao_execucao / 100);
-        
-        await execute(
-          `INSERT INTO comissoes (atendimento_id, item_atendimento_id, usuario_id, tipo, percentual, valor_base, valor_comissao)
-           VALUES (?, ?, ?, 'execucao', ?, ?, ?)`,
-          [atendimentoId, item.id, item.executor_id, proc.comissao_execucao, item.valor, valorComissaoExecucao]
-        );
-
-        comissoesGeradas.push({
-          tipo: 'execucao',
-          usuario_id: item.executor_id,
-          valor: valorComissaoExecucao
-        });
-      }
     }
 
-    // 5. Finalizar atendimento
-    await execute(
-      `UPDATE atendimentos SET status = 'finalizado', finalizado_at = datetime('now', 'localtime')${motivoSaida ? ", motivo_saida = ?" : ""} WHERE id = ?`,
-      motivoSaida ? [motivoSaida, atendimentoId] : [atendimentoId]
-    );
+    const itensNaoConcluidos = itens.filter(i => i.status !== 'concluido');
+    if (itensNaoConcluidos.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Existem procedimentos não concluídos',
+          pendentes: itensNaoConcluidos.length
+        },
+        { status: 400 }
+      );
+    }
 
-    // 6. Calcular totais de comissões
-    const totalComissaoVenda = comissoesGeradas
-      .filter(c => c.tipo === 'venda')
-      .reduce((sum, c) => sum + c.valor, 0);
-    
-    const totalComissaoExecucao = comissoesGeradas
-      .filter(c => c.tipo === 'execucao')
-      .reduce((sum, c) => sum + c.valor, 0);
+    // 4. Verificar se todos os itens estão pagos
+    const itensNaoPagos = itens.filter(i => i.valor_pago < i.valor);
+    if (itensNaoPagos.length > 0) {
+      const valorFaltante = itensNaoPagos.reduce((sum, i) => sum + (i.valor - i.valor_pago), 0);
+      return NextResponse.json(
+        {
+          error: 'Existem procedimentos com pagamento pendente',
+          valorFaltante
+        },
+        { status: 400 }
+      );
+    }
+
+    // 5. Finalizar atendimento (comissões são geradas na execução de cada item)
+    await execute(
+      `UPDATE atendimentos SET status = 'finalizado', finalizado_at = datetime('now', 'localtime'), motivo_saida = ? WHERE id = ?`,
+      [motivo_saida, atendimentoId]
+    );
 
     return NextResponse.json({
       success: true,
       message: 'Atendimento finalizado com sucesso',
-      comissoes: {
-        venda: totalComissaoVenda,
-        execucao: totalComissaoExecucao,
-        total: totalComissaoVenda + totalComissaoExecucao,
-        detalhes: comissoesGeradas
-      }
     });
   } catch (error) {
     console.error('Erro ao finalizar atendimento:', error);

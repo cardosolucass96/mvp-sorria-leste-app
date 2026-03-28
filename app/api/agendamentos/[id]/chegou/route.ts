@@ -1,66 +1,131 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, execute } from '@/lib/db';
+import { queryOne, execute } from '@/lib/db';
+import { withAuth, AuthenticatedContext } from '@/lib/auth/middleware';
+import { Agendamento } from '@/lib/types';
 
-interface AgendamentoRow {
-  id: number;
-  cliente_id: number;
-  procedimento_id: number;
-  executor_id: number | null;
-  status: string;
+interface ItemOrigem {
+  criado_por_id: number;
 }
 
-// POST /api/agendamentos/[id]/chegou — Client arrived for scheduled session
-export async function POST(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const agendamentoId = parseInt(id);
+interface AtendimentoExistente {
+  id: number;
+}
 
-    const rows = await query<AgendamentoRow>(
-      'SELECT id, cliente_id, procedimento_id, executor_id, status FROM agendamentos WHERE id = ?',
+// POST /api/agendamentos/[id]/chegou - Ação "Chegou" da tela Agenda
+export const POST = withAuth(async (
+  request: NextRequest,
+  context: AuthenticatedContext
+) => {
+  try {
+    const { id } = await context.params!;
+    const agendamentoId = parseInt(id as string);
+
+    // 1. Buscar agendamento e validar status
+    const agendamento = await queryOne<Agendamento>(
+      'SELECT * FROM agendamentos WHERE id = ?',
       [agendamentoId]
     );
 
-    if (rows.length === 0) {
+    if (!agendamento) {
       return NextResponse.json({ error: 'Agendamento não encontrado' }, { status: 404 });
     }
 
-    const ag = rows[0];
-
-    if (ag.status !== 'pendente' && ag.status !== 'agendado') {
-      return NextResponse.json({ error: 'Agendamento já foi processado' }, { status: 400 });
+    if (agendamento.status !== 'pendente' && agendamento.status !== 'agendado') {
+      return NextResponse.json(
+        { error: `Não é possível registrar chegada para agendamento com status "${agendamento.status}"` },
+        { status: 400 }
+      );
     }
 
-    // Create atendimento of type 'sessao'
-    const result = await execute(
-      `INSERT INTO atendimentos (cliente_id, status, tipo) VALUES (?, 'triagem', 'sessao')`,
-      [ag.cliente_id]
+    // 2. Verificar que o cliente não tem atendimento aberto hoje
+    const atendimentoAberto = await queryOne<AtendimentoExistente>(
+      `SELECT id FROM atendimentos
+       WHERE cliente_id = ? AND status != 'finalizado'
+       AND date(created_at) = date('now','localtime')`,
+      [agendamento.cliente_id]
     );
 
-    const atendimentoId = result.lastInsertRowid;
+    if (atendimentoAberto) {
+      return NextResponse.json(
+        {
+          error: 'Cliente já possui atendimento aberto hoje',
+          atendimento_existente_id: atendimentoAberto.id,
+        },
+        { status: 409 }
+      );
+    }
 
-    // Add procedure item to the new atendimento
+    // Buscar valor do procedimento
+    const procedimento = await queryOne<{ id: number; valor: number }>(
+      'SELECT id, valor FROM procedimentos WHERE id = ?',
+      [agendamento.procedimento_id]
+    );
+
+    if (!procedimento) {
+      return NextResponse.json({ error: 'Procedimento não encontrado' }, { status: 404 });
+    }
+
+    // Buscar criado_por_id do item de origem se existir
+    let criadoPorId = context.user.sub;
+    if (agendamento.item_atendimento_origem_id) {
+      const itemOrigem = await queryOne<ItemOrigem>(
+        'SELECT criado_por_id FROM itens_atendimento WHERE id = ?',
+        [agendamento.item_atendimento_origem_id]
+      );
+      if (itemOrigem) {
+        criadoPorId = itemOrigem.criado_por_id;
+      }
+    }
+
+    // 3. Criar novo atendimento tipo sessão
+    const atendimentoResult = await execute(
+      `INSERT INTO atendimentos (cliente_id, status, tipo, agendamento_id, observacoes)
+       VALUES (?, 'aguardando_pagamento', 'sessao', ?, ?)`,
+      [
+        agendamento.cliente_id,
+        agendamentoId,
+        `Sessão originada do agendamento #${agendamentoId}`,
+      ]
+    );
+    const novoAtendimentoId = atendimentoResult.lastInsertRowid;
+
+    // 4. Criar item no novo atendimento
     await execute(
-      `INSERT INTO itens_atendimento (atendimento_id, procedimento_id, executor_id, valor, status)
-       SELECT ?, ?, ?, p.valor, 'pendente'
-       FROM procedimentos p WHERE p.id = ?`,
-      [atendimentoId, ag.procedimento_id, ag.executor_id, ag.procedimento_id]
+      `INSERT INTO itens_atendimento
+        (atendimento_id, procedimento_id, valor, executor_id, criado_por_id, origem_agendamento_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        novoAtendimentoId,
+        agendamento.procedimento_id,
+        procedimento.valor,
+        agendamento.executor_id || null,
+        criadoPorId,
+        agendamentoId,
+      ]
     );
 
-    // Mark agendamento as arrived
+    // 5. Atualizar agendamento: status = realizado, atendimento_sessao_id
     await execute(
-      `UPDATE agendamentos SET status = 'chegou', atendimento_id = ? WHERE id = ?`,
-      [atendimentoId, agendamentoId]
+      `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = ? WHERE id = ?`,
+      [novoAtendimentoId, agendamentoId]
     );
 
-    return NextResponse.json({
-      success: true,
-      atendimento_id: atendimentoId,
-    });
+    // 6. Retornar o novo atendimento para redirecionamento
+    const novoAtendimento = await queryOne(
+      `SELECT
+        a.*,
+        c.nome as cliente_nome,
+        c.cpf as cliente_cpf,
+        c.telefone as cliente_telefone
+      FROM atendimentos a
+      INNER JOIN clientes c ON a.cliente_id = c.id
+      WHERE a.id = ?`,
+      [novoAtendimentoId]
+    );
+
+    return NextResponse.json(novoAtendimento, { status: 201 });
   } catch (error) {
     console.error('Erro ao registrar chegada:', error);
     return NextResponse.json({ error: 'Erro ao registrar chegada' }, { status: 500 });
   }
-}
+});
