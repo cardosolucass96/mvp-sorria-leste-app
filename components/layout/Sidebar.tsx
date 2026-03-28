@@ -28,7 +28,7 @@ export default function Sidebar() {
             className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
               viewMode === 'admin'
                 ? 'bg-sidebar-active/20 text-sidebar-text-active border border-sidebar-active/40 hover:bg-sidebar-active/30'
-                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
+                : 'bg-dentist-500/20 text-dentist-400 border border-dentist-500/40 hover:bg-dentist-500/30'
             }`}
           >
             {viewMode === 'admin'
