@@ -17,6 +17,7 @@ interface Procedimento {
   status: string;
   created_at: string;
   concluido_at: string | null;
+  dente_unico: string | null;
 }
 
 interface FilaData {
@@ -311,7 +312,7 @@ function PacienteSection({
                           <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-info-500" title="Meu procedimento" />
                         )}
                         <span className="text-sm font-medium text-foreground truncate group-hover:text-primary-700">
-                          {proc.procedimento_nome}
+                          {proc.dente_unico ? `${proc.procedimento_nome} • Dente ${proc.dente_unico}` : proc.procedimento_nome}
                         </span>
                       </div>
                       <StatusBadge type="item" status={proc.status} />
@@ -332,7 +333,9 @@ function ProcedimentoCard({ proc, onClick }: { proc: Procedimento; onClick: () =
     <Card variant="outlined" borderColor="border-info-500" onClick={onClick}>
       <div className="flex justify-between items-start">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-foreground">{proc.procedimento_nome}</h3>
+          <h3 className="text-lg font-semibold text-foreground">
+            {proc.dente_unico ? `${proc.procedimento_nome} • Dente ${proc.dente_unico}` : proc.procedimento_nome}
+          </h3>
           <p className="text-sm text-neutral-600">{proc.cliente_nome}</p>
           <p className="text-xs text-neutral-400">Atendimento #{proc.atendimento_id}</p>
         </div>

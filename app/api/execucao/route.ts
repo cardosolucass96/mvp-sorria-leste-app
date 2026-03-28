@@ -12,6 +12,7 @@ interface ProcedimentoExecucao {
   status: string;
   created_at: string;
   concluido_at: string | null;
+  dente_unico: string | null;
 }
 
 // GET /api/execucao?executor_id=X - Lista PROCEDIMENTOS individuais para o executor
@@ -41,7 +42,8 @@ export async function GET(request: NextRequest) {
         c.nome as cliente_nome,
         i.status,
         i.created_at,
-        i.concluido_at
+        i.concluido_at,
+        json_extract(i.dentes, '$[0]') as dente_unico
       FROM itens_atendimento i
       INNER JOIN atendimentos a ON i.atendimento_id = a.id
       INNER JOIN clientes c ON a.cliente_id = c.id
