@@ -132,43 +132,75 @@ export async function POST(
     }
     
     // Usa valor do procedimento se não fornecido
-    const valorFinal = valor !== undefined ? valor : procedimento.valor;
-    const quantidadeFinal = quantidade || 1;
-    
-    // Insere item
-    const result = await execute(
-      `INSERT INTO itens_atendimento
-        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente')`,
-      [
-        parseInt(id),
-        procedimento_id,
-        executor_id || null,
-        criado_por_id || null,
-        valorFinal,
-        dentes || null,
-        quantidadeFinal
-      ]
-    );
+    const valorBase = valor !== undefined ? valor : procedimento.valor;
 
-    const itemId = result.lastInsertRowid as number;
-
-    // Cria etapas se for procedimento por dente com faces definidas
+    // Para procedimentos por_dente, cria um item por dente com group_id compartilhado
+    interface DenteFaceDB { dente: string; faces: Array<{ nome: string }> }
+    let dentesArray: DenteFaceDB[] = [];
     if (dentes) {
-      try {
-        interface DenteFaceDB { dente: string; faces: Array<{ nome: string }> }
-        const dentesArray: DenteFaceDB[] = JSON.parse(dentes);
-        for (const d of dentesArray) {
-          for (const f of d.faces) {
-            await execute(
-              `INSERT INTO etapas_procedimento (item_atendimento_id, dente, face) VALUES (?, ?, ?)`,
-              [itemId, d.dente, f.nome]
-            );
-          }
+      try { dentesArray = JSON.parse(dentes); } catch { /* ignora */ }
+    }
+
+    const isPorDente = dentesArray.length > 0;
+    const groupId = isPorDente ? crypto.randomUUID() : null;
+    const createdItemIds: number[] = [];
+
+    if (isPorDente) {
+      // Valor por dente individual
+      const valorPorDente = valorBase / dentesArray.length;
+
+      for (const d of dentesArray) {
+        const denteFaces = JSON.stringify([{
+          dente: d.dente,
+          faces: d.faces,
+        }]);
+
+        const result = await execute(
+          `INSERT INTO itens_atendimento
+            (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, group_id, dente_unico, status)
+           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 'pendente')`,
+          [
+            parseInt(id),
+            procedimento_id,
+            executor_id || null,
+            criado_por_id || null,
+            valorPorDente,
+            denteFaces,
+            groupId,
+            d.dente,
+          ]
+        );
+
+        const itemId = result.lastInsertRowid as number;
+        createdItemIds.push(itemId);
+
+        // Cria etapas para este dente
+        for (const f of d.faces) {
+          await execute(
+            `INSERT INTO etapas_procedimento (item_atendimento_id, dente, face) VALUES (?, ?, ?)`,
+            [itemId, d.dente, f.nome]
+          );
         }
-      } catch {
-        // dentes inválido ou formato antigo — não cria etapas
       }
+    } else {
+      // Procedimento normal (não por_dente): cria item único
+      const quantidadeFinal = quantidade || 1;
+      const result = await execute(
+        `INSERT INTO itens_atendimento
+          (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente')`,
+        [
+          parseInt(id),
+          procedimento_id,
+          executor_id || null,
+          criado_por_id || null,
+          valorBase,
+          dentes || null,
+          quantidadeFinal,
+        ]
+      );
+
+      createdItemIds.push(result.lastInsertRowid as number);
     }
 
     // Se adicionou durante execução, volta para aguardando_pagamento
@@ -178,21 +210,12 @@ export async function POST(
         [parseInt(id)]
       );
     }
-    
-    // Retorna item criado
-    const novoItem = await queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null }>(
-      `SELECT
-        i.*,
-        p.nome as procedimento_nome,
-        u.nome as executor_nome
-      FROM itens_atendimento i
-      INNER JOIN procedimentos p ON i.procedimento_id = p.id
-      LEFT JOIN usuarios u ON i.executor_id = u.id
-      WHERE i.id = ?`,
-      [itemId]
+
+    // Retorna resposta com group_id e IDs criados
+    return NextResponse.json(
+      { group_id: groupId, itens: createdItemIds },
+      { status: 201 }
     );
-    
-    return NextResponse.json(novoItem, { status: 201 });
   } catch (error) {
     console.error('Erro ao adicionar item:', error);
     return NextResponse.json(
@@ -202,7 +225,8 @@ export async function POST(
   }
 }
 
-// DELETE /api/atendimentos/[id]/itens - Remove item (só na avaliação, pelo criador)
+// DELETE /api/atendimentos/[id]/itens - Remove item ou grupo (só na avaliação)
+// Query params: item_id=X (remove um item) OU group_id=UUID (remove todos do grupo)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -211,62 +235,75 @@ export async function DELETE(
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const itemId = searchParams.get('item_id');
-    const usuarioId = searchParams.get('usuario_id');
-    
-    if (!itemId) {
+    const groupId = searchParams.get('group_id');
+
+    if (!itemId && !groupId) {
       return NextResponse.json(
-        { error: 'ID do item é obrigatório' },
+        { error: 'item_id ou group_id é obrigatório' },
         { status: 400 }
       );
     }
-    
+
     // Verifica se atendimento existe e está em avaliação
     const atendimento = await queryOne<Atendimento>(
       'SELECT * FROM atendimentos WHERE id = ?',
       [parseInt(id)]
     );
-    
+
     if (!atendimento) {
       return NextResponse.json(
         { error: 'Atendimento não encontrado' },
         { status: 404 }
       );
     }
-    
+
     if (atendimento.status !== 'avaliacao') {
       return NextResponse.json(
         { error: 'Só é possível remover procedimentos durante a avaliação' },
         { status: 400 }
       );
     }
-    
-    // Verifica se item existe e pertence ao atendimento
-    const item = await queryOne<ItemAtendimento>(
-      'SELECT * FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
-      [parseInt(itemId), parseInt(id)]
-    );
-    
-    if (!item) {
-      return NextResponse.json(
-        { error: 'Item não encontrado' },
-        { status: 404 }
-      );
-    }
-    
-    // Remove etapas e prontuários de etapa em cascata
-    const etapas = await query<{ id: number }>(
-      'SELECT id FROM etapas_procedimento WHERE item_atendimento_id = ?',
-      [parseInt(itemId)]
-    );
-    for (const etapa of etapas) {
-      await execute('DELETE FROM prontuarios_etapa WHERE etapa_id = ?', [etapa.id]);
-    }
-    await execute('DELETE FROM etapas_procedimento WHERE item_atendimento_id = ?', [parseInt(itemId)]);
 
-    // Remove item
-    await execute('DELETE FROM itens_atendimento WHERE id = ?', [parseInt(itemId)]);
-    
-    return NextResponse.json({ message: 'Item removido com sucesso' });
+    // Determina quais itens remover
+    let itensParaRemover: { id: number }[];
+
+    if (groupId) {
+      itensParaRemover = await query<{ id: number }>(
+        'SELECT id FROM itens_atendimento WHERE group_id = ? AND atendimento_id = ?',
+        [groupId, parseInt(id)]
+      );
+      if (itensParaRemover.length === 0) {
+        return NextResponse.json({ error: 'Grupo não encontrado' }, { status: 404 });
+      }
+    } else {
+      const item = await queryOne<{ id: number }>(
+        'SELECT id FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
+        [parseInt(itemId!), parseInt(id)]
+      );
+      if (!item) {
+        return NextResponse.json({ error: 'Item não encontrado' }, { status: 404 });
+      }
+      itensParaRemover = [item];
+    }
+
+    // Remove etapas, prontuários e itens em cascata
+    for (const item of itensParaRemover) {
+      const etapas = await query<{ id: number }>(
+        'SELECT id FROM etapas_procedimento WHERE item_atendimento_id = ?',
+        [item.id]
+      );
+      for (const etapa of etapas) {
+        await execute('DELETE FROM prontuarios_etapa WHERE etapa_id = ?', [etapa.id]);
+      }
+      await execute('DELETE FROM etapas_procedimento WHERE item_atendimento_id = ?', [item.id]);
+      await execute('DELETE FROM itens_atendimento WHERE id = ?', [item.id]);
+    }
+
+    return NextResponse.json({
+      message: groupId
+        ? `${itensParaRemover.length} itens do grupo removidos`
+        : 'Item removido com sucesso',
+    });
   } catch (error) {
     console.error('Erro ao remover item:', error);
     return NextResponse.json(

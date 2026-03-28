@@ -68,6 +68,8 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   valor_pago REAL NOT NULL DEFAULT 0, -- Quanto já foi pago deste procedimento
   dentes TEXT, -- Dentes selecionados (JSON array: ["11", "21", "31"])
   quantidade INTEGER NOT NULL DEFAULT 1, -- Quantidade de dentes (para cálculo do valor)
+  group_id TEXT, -- UUID compartilhado entre itens do mesmo procedimento por_dente
+  dente_unico TEXT, -- Número do dente individual (ex: "11") quando group_id presente
   status TEXT NOT NULL DEFAULT 'pendente'
     CHECK (status IN ('pendente', 'pago', 'executando', 'concluido')),
   observacoes TEXT,
@@ -212,6 +214,7 @@ CREATE INDEX IF NOT EXISTS idx_atendimentos_cliente ON atendimentos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_atendimentos_status ON atendimentos(status);
 CREATE INDEX IF NOT EXISTS idx_itens_atendimento ON itens_atendimento(atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_itens_executor ON itens_atendimento(executor_id);
+CREATE INDEX IF NOT EXISTS idx_itens_group ON itens_atendimento(group_id);
 CREATE INDEX IF NOT EXISTS idx_pagamentos_atendimento ON pagamentos(atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_parcelas_atendimento ON parcelas(atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_parcelas_vencimento ON parcelas(data_vencimento);
