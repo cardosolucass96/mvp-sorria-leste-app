@@ -379,21 +379,133 @@ export default function ExecucaoProcedimentoPage() {
   const etapasConcluidas = item.etapas.filter(e => e.status === 'concluido').length;
   const progresso = temEtapas ? Math.round((etapasConcluidas / item.etapas.length) * 100) : 0;
 
-  // Agrupa etapas por dente
-  const etapasPorDente = item.etapas.reduce<Record<string, Etapa[]>>((acc, e) => {
-    if (!acc[e.dente]) acc[e.dente] = [];
-    acc[e.dente].push(e);
-    return acc;
-  }, {});
+  // Detecta se item tem múltiplos dentes (legado) ou dente único (novo modelo)
+  const dentesUnicos = new Set(item.etapas.map(e => e.dente));
+  const temMultiplosDentes = dentesUnicos.size > 1;
 
+  // Agrupa etapas por dente (usado apenas para itens legados com múltiplos dentes)
+  const etapasPorDente = temMultiplosDentes
+    ? item.etapas.reduce<Record<string, Etapa[]>>((acc, e) => {
+        if (!acc[e.dente]) acc[e.dente] = [];
+        acc[e.dente].push(e);
+        return acc;
+      }, {})
+    : {};
+
+  const denteLabel = temEtapas && !temMultiplosDentes ? ` · Dente ${item.etapas[0].dente}` : '';
   const canAct = isMeu && item.status === 'executando';
+
+  function renderEtapaItem(etapa: Etapa) {
+    const concluida = etapa.status === 'concluido';
+    const aberta = etapaAberta === etapa.id;
+    const descricao = etapaDescricao[etapa.id] ?? '';
+    const salvando = salvandoEtapa === etapa.id;
+
+    return (
+      <div key={etapa.id} className={`rounded-lg border transition-colors ${
+        concluida ? 'border-success-200 bg-success-50' : 'border-neutral-200 bg-surface'
+      }`}>
+        {/* Linha da etapa */}
+        <button
+          type="button"
+          className="w-full flex items-center gap-3 px-4 py-3 text-left"
+          onClick={() => {
+            if (concluida || !canAct) return;
+            setEtapaAberta(aberta ? null : etapa.id);
+          }}
+          disabled={concluida || !canAct}
+        >
+          {concluida
+            ? <CheckCircle2 className="w-5 h-5 text-success-500 shrink-0" />
+            : <Circle className="w-5 h-5 text-neutral-300 shrink-0" />
+          }
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">{etapa.face}</span>
+              <span className="text-sm text-muted">— {FACE_LABELS[etapa.face] ?? etapa.face}</span>
+            </div>
+            {concluida && etapa.concluido_por_nome && (
+              <p className="text-xs text-muted mt-0.5">
+                Concluída por {etapa.concluido_por_nome} · {formatarDataHora(etapa.concluido_at!)}
+              </p>
+            )}
+          </div>
+          {!concluida && canAct && (
+            aberta
+              ? <ChevronUp className="w-4 h-4 text-muted shrink-0" />
+              : <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+          )}
+        </button>
+
+        {/* Prontuário de etapa concluída (leitura) */}
+        {concluida && etapa.prontuario_descricao && (
+          <div className="px-4 pb-3 ml-8">
+            <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Prontuário</p>
+            <p className="text-sm text-neutral-700 whitespace-pre-wrap">{etapa.prontuario_descricao}</p>
+            {etapa.prontuario_observacoes && (
+              <p className="text-xs text-muted mt-1 italic">{etapa.prontuario_observacoes}</p>
+            )}
+            <p className="text-xs text-muted mt-1">por {etapa.prontuario_autor}</p>
+          </div>
+        )}
+
+        {/* Formulário de prontuário inline */}
+        {aberta && !concluida && canAct && (
+          <div className="px-4 pb-4 ml-8 space-y-3 border-t border-neutral-100 pt-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Descrição do que foi feito *
+              </label>
+              <textarea
+                value={descricao}
+                onChange={e => setEtapaDescricao(prev => ({ ...prev, [etapa.id]: e.target.value }))}
+                placeholder="Descreva detalhadamente o que foi feito nesta face do dente..."
+                rows={4}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none resize-none ${
+                  descricao.length < MIN_CHARS && descricao.length > 0
+                    ? 'border-error-300'
+                    : descricao.length >= MIN_CHARS
+                      ? 'border-success-300'
+                      : 'border-neutral-300'
+                }`}
+              />
+              <div className="flex justify-between mt-1">
+                <span className={`text-xs ${descricao.length < MIN_CHARS ? 'text-error-600' : 'text-success-600'}`}>
+                  {descricao.length}/{MIN_CHARS} mín.
+                </span>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Observações (opcional)</label>
+              <textarea
+                value={etapaObservacoes[etapa.id] ?? ''}
+                onChange={e => setEtapaObservacoes(prev => ({ ...prev, [etapa.id]: e.target.value }))}
+                placeholder="Cuidados pós-procedimento, retornos, etc..."
+                rows={2}
+                className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none resize-none"
+              />
+            </div>
+            <Button
+              onClick={() => salvarEConcluirEtapa(etapa)}
+              disabled={descricao.trim().length < MIN_CHARS || salvando}
+              loading={salvando}
+              className="w-full"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-1.5 inline-block" />
+              Salvar e Concluir Etapa
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <PageHeader
         title={item.procedimento_nome}
         icon={<Activity className="w-7 h-7" />}
-        description={`${item.cliente_nome} · Atendimento #${item.atendimento_id}`}
+        description={`${item.cliente_nome} · Atendimento #${item.atendimento_id}${denteLabel}`}
         breadcrumb={[{ label: 'Execução', href: '/execucao' }, { label: item.procedimento_nome }]}
       />
 
@@ -469,7 +581,9 @@ export default function ExecucaoProcedimentoPage() {
       {temEtapas && (
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">Etapas do Procedimento</h2>
+            <h2 className="text-lg font-bold">
+              {temMultiplosDentes ? 'Etapas do Procedimento' : `Faces do Dente ${item.etapas[0]?.dente}`}
+            </h2>
             <div className="flex items-center gap-3">
               <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
                 etapasConcluidas === item.etapas.length
@@ -489,130 +603,34 @@ export default function ExecucaoProcedimentoPage() {
             />
           </div>
 
-          {/* Lista por dente */}
-          <div className="space-y-4">
-            {Object.entries(etapasPorDente)
-              .sort(([a], [b]) => Number(a) - Number(b))
-              .map(([dente, etapas]) => {
-                const concluidas = etapas.filter(e => e.status === 'concluido').length;
-                return (
-                  <div key={dente}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-bold text-primary-700 bg-primary-50 px-2.5 py-1 rounded-full">
-                        Dente {dente}
-                      </span>
-                      <span className="text-xs text-muted">{concluidas}/{etapas.length}</span>
+          {temMultiplosDentes ? (
+            /* Layout legado: agrupado por dente */
+            <div className="space-y-4">
+              {Object.entries(etapasPorDente)
+                .sort(([a], [b]) => Number(a) - Number(b))
+                .map(([dente, etapas]) => {
+                  const concluidas = etapas.filter(e => e.status === 'concluido').length;
+                  return (
+                    <div key={dente}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm font-bold text-primary-700 bg-primary-50 px-2.5 py-1 rounded-full">
+                          Dente {dente}
+                        </span>
+                        <span className="text-xs text-muted">{concluidas}/{etapas.length}</span>
+                      </div>
+                      <div className="space-y-1 ml-2">
+                        {etapas.map(etapa => renderEtapaItem(etapa))}
+                      </div>
                     </div>
-                    <div className="space-y-1 ml-2">
-                      {etapas.map(etapa => {
-                        const concluida = etapa.status === 'concluido';
-                        const aberta = etapaAberta === etapa.id;
-                        const descricao = etapaDescricao[etapa.id] ?? '';
-                        const salvando = salvandoEtapa === etapa.id;
-
-                        return (
-                          <div key={etapa.id} className={`rounded-lg border transition-colors ${
-                            concluida ? 'border-success-200 bg-success-50' : 'border-neutral-200 bg-surface'
-                          }`}>
-                            {/* Linha da etapa */}
-                            <button
-                              type="button"
-                              className="w-full flex items-center gap-3 px-4 py-3 text-left"
-                              onClick={() => {
-                                if (concluida || !canAct) return;
-                                setEtapaAberta(aberta ? null : etapa.id);
-                              }}
-                              disabled={concluida || !canAct}
-                            >
-                              {concluida
-                                ? <CheckCircle2 className="w-5 h-5 text-success-500 shrink-0" />
-                                : <Circle className="w-5 h-5 text-neutral-300 shrink-0" />
-                              }
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-semibold">{etapa.face}</span>
-                                  <span className="text-sm text-muted">— {FACE_LABELS[etapa.face] ?? etapa.face}</span>
-                                </div>
-                                {concluida && etapa.concluido_por_nome && (
-                                  <p className="text-xs text-muted mt-0.5">
-                                    Concluída por {etapa.concluido_por_nome} · {formatarDataHora(etapa.concluido_at!)}
-                                  </p>
-                                )}
-                              </div>
-                              {!concluida && canAct && (
-                                aberta
-                                  ? <ChevronUp className="w-4 h-4 text-muted shrink-0" />
-                                  : <ChevronDown className="w-4 h-4 text-muted shrink-0" />
-                              )}
-                            </button>
-
-                            {/* Prontuário de etapa concluída (leitura) */}
-                            {concluida && etapa.prontuario_descricao && (
-                              <div className="px-4 pb-3 ml-8">
-                                <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Prontuário</p>
-                                <p className="text-sm text-neutral-700 whitespace-pre-wrap">{etapa.prontuario_descricao}</p>
-                                {etapa.prontuario_observacoes && (
-                                  <p className="text-xs text-muted mt-1 italic">{etapa.prontuario_observacoes}</p>
-                                )}
-                                <p className="text-xs text-muted mt-1">por {etapa.prontuario_autor}</p>
-                              </div>
-                            )}
-
-                            {/* Formulário de prontuário inline */}
-                            {aberta && !concluida && canAct && (
-                              <div className="px-4 pb-4 ml-8 space-y-3 border-t border-neutral-100 pt-3">
-                                <div>
-                                  <label className="block text-sm font-medium mb-1">
-                                    Descrição do que foi feito *
-                                  </label>
-                                  <textarea
-                                    value={descricao}
-                                    onChange={e => setEtapaDescricao(prev => ({ ...prev, [etapa.id]: e.target.value }))}
-                                    placeholder="Descreva detalhadamente o que foi feito nesta face do dente..."
-                                    rows={4}
-                                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none resize-none ${
-                                      descricao.length < MIN_CHARS && descricao.length > 0
-                                        ? 'border-error-300'
-                                        : descricao.length >= MIN_CHARS
-                                          ? 'border-success-300'
-                                          : 'border-neutral-300'
-                                    }`}
-                                  />
-                                  <div className="flex justify-between mt-1">
-                                    <span className={`text-xs ${descricao.length < MIN_CHARS ? 'text-error-600' : 'text-success-600'}`}>
-                                      {descricao.length}/{MIN_CHARS} mín.
-                                    </span>
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className="block text-sm font-medium mb-1">Observações (opcional)</label>
-                                  <textarea
-                                    value={etapaObservacoes[etapa.id] ?? ''}
-                                    onChange={e => setEtapaObservacoes(prev => ({ ...prev, [etapa.id]: e.target.value }))}
-                                    placeholder="Cuidados pós-procedimento, retornos, etc..."
-                                    rows={2}
-                                    className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none resize-none"
-                                  />
-                                </div>
-                                <Button
-                                  onClick={() => salvarEConcluirEtapa(etapa)}
-                                  disabled={descricao.trim().length < MIN_CHARS || salvando}
-                                  loading={salvando}
-                                  className="w-full"
-                                >
-                                  <CheckCircle2 className="w-4 h-4 mr-1.5 inline-block" />
-                                  Salvar e Concluir Etapa
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
+                  );
+                })}
+            </div>
+          ) : (
+            /* Layout simplificado: lista direta de faces */
+            <div className="space-y-1">
+              {item.etapas.map(etapa => renderEtapaItem(etapa))}
+            </div>
+          )}
         </Card>
       )}
 
