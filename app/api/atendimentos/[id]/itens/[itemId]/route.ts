@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db';
+import { gerarComissoesItem } from '@/lib/helpers/gerarComissoes';
 
 interface ItemAtendimento {
   id: number;
@@ -104,7 +105,12 @@ export async function PUT(
       `UPDATE itens_atendimento SET ${updates.join(', ')} WHERE id = ?`,
       updateParams
     );
-    
+
+    // Gera comissões quando item é marcado como concluído
+    if (status === 'concluido') {
+      await gerarComissoesItem(parseInt(itemId));
+    }
+
     // Retorna item atualizado
     const atualizado = await queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null }>(
       `SELECT 

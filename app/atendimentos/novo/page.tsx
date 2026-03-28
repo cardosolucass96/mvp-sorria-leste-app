@@ -3,11 +3,18 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatarMoeda } from '@/lib/utils/formatters';
-import { ClipboardList, Search, Activity } from 'lucide-react';
+import { ClipboardList, Search, Activity, Calendar } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Card, Button, Select, SearchInput, Modal } from '@/components/ui';
 import { ClienteForm, ClienteFormData } from '@/components/domain';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
+
+interface Agendamento {
+  id: number;
+  procedimento_nome: string;
+  data_agendada: string | null;
+  created_at: string;
+}
 
 interface Cliente {
   id: number;
@@ -28,7 +35,7 @@ interface Procedimento {
   valor: number;
 }
 
-type TipoAtendimento = 'normal' | 'orto';
+type TipoAtendimento = 'normal' | 'orto' | 'sessao';
 
 function NovoAtendimentoForm() {
   usePageTitle('Novo Atendimento');
@@ -60,6 +67,12 @@ function NovoAtendimentoForm() {
   const [modalNovoCliente, setModalNovoCliente] = useState(false);
   const [savingNovoCliente, setSavingNovoCliente] = useState(false);
   const [erroNovoCliente, setErroNovoCliente] = useState('');
+
+  // Sessão agendada
+  const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
+  const [loadingAgendamentos, setLoadingAgendamentos] = useState(false);
+  const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
+  const [confirmandoSessao, setConfirmandoSessao] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -121,6 +134,46 @@ function NovoAtendimentoForm() {
   const handleSelecionarCliente = (c: Cliente) => {
     setClienteId(String(c.id));
     setClienteSelecionado(c);
+    setAgendamentoSelecionado(null);
+    if (tipoAtendimento === 'sessao') {
+      buscarAgendamentos(c.id);
+    }
+  };
+
+  const buscarAgendamentos = async (cId: number) => {
+    setLoadingAgendamentos(true);
+    try {
+      const res = await fetch(`/api/agendamentos?cliente_id=${cId}&status=pendente,agendado`);
+      const data = await res.json();
+      setAgendamentos(data.agendamentos ?? data ?? []);
+    } finally {
+      setLoadingAgendamentos(false);
+    }
+  };
+
+  const handleConfirmarSessao = async () => {
+    if (!agendamentoSelecionado) return;
+    setConfirmandoSessao(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/agendamentos/${agendamentoSelecionado.id}/chegou`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao confirmar chegada');
+      router.push(`/atendimentos/${data.atendimento_id ?? data.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao confirmar sessão');
+      setConfirmandoSessao(false);
+    }
+  };
+
+  const diasAtras = (dataStr: string) => {
+    const diff = Math.floor((Date.now() - new Date(dataStr).getTime()) / (1000 * 60 * 60 * 24));
+    if (diff === 0) return 'Criado hoje';
+    if (diff === 1) return 'Criado há 1 dia';
+    return `Criado há ${diff} dias`;
   };
 
   // Criar novo cliente via modal e auto-selecionar
@@ -259,7 +312,7 @@ function NovoAtendimentoForm() {
         {/* 2 — Tipo */}
         <Card>
           <h2 className="text-lg font-semibold mb-3">2. Tipo de Atendimento</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <button type="button" onClick={() => setTipoAtendimento('normal')}
               className={`p-4 rounded-lg border-2 text-left transition-all ${
                 tipoAtendimento === 'normal' ? 'border-primary-500 bg-primary-50' : 'border-neutral-200 hover:border-neutral-300'
@@ -276,10 +329,21 @@ function NovoAtendimentoForm() {
               <div className="font-semibold text-sm">Orto / Aparelho</div>
               <p className="text-xs text-muted mt-1">Direto para Pagamento → Execução pelo dentista</p>
             </button>
+            <button type="button" onClick={() => {
+              setTipoAtendimento('sessao');
+              if (clienteSelecionado) buscarAgendamentos(clienteSelecionado.id);
+            }}
+              className={`p-4 rounded-lg border-2 text-left transition-all ${
+                tipoAtendimento === 'sessao' ? 'border-warning-500 bg-warning-50' : 'border-neutral-200 hover:border-neutral-300'
+              }`}>
+              <Calendar className="w-5 h-5 mb-1 text-warning-500" aria-hidden="true" />
+              <div className="font-semibold text-sm">Sessão Agendada</div>
+              <p className="text-xs text-muted mt-1">Cliente chegou para sessão já marcada</p>
+            </button>
           </div>
         </Card>
 
-        {/* 3 — Avaliador ou Orto */}
+        {/* 3 — Avaliador, Orto ou Sessão */}
         {tipoAtendimento === 'normal' ? (
           <Card>
             <h2 className="text-lg font-semibold mb-1">3. Avaliador</h2>
@@ -288,7 +352,7 @@ function NovoAtendimentoForm() {
               options={avaliadores.map((a) => ({ value: String(a.id), label: a.nome }))}
               placeholder="-- Definir depois --" />
           </Card>
-        ) : (
+        ) : tipoAtendimento === 'orto' ? (
           <Card className="border-l-4 border-l-info-500">
             <h2 className="text-lg font-semibold mb-3">3. Configuração Orto</h2>
             <div className="space-y-4">
@@ -306,6 +370,47 @@ function NovoAtendimentoForm() {
               )}
             </div>
           </Card>
+        ) : (
+          <Card className="border-l-4 border-l-warning-500">
+            <h2 className="text-lg font-semibold mb-3">3. Sessão Agendada</h2>
+            {!clienteSelecionado ? (
+              <p className="text-sm text-muted">Selecione um cliente acima para ver os agendamentos pendentes.</p>
+            ) : loadingAgendamentos ? (
+              <div className="py-4 text-center text-sm text-muted">Buscando agendamentos...</div>
+            ) : agendamentos.length === 0 ? (
+              <div className="py-4 text-center text-sm text-muted">
+                Nenhum agendamento pendente para {clienteSelecionado.nome}.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-muted mb-2">Selecione o agendamento do cliente:</p>
+                <div className="border rounded-lg divide-y max-h-60 overflow-y-auto">
+                  {agendamentos.map((ag) => (
+                    <button key={ag.id} type="button"
+                      onClick={() => setAgendamentoSelecionado(ag)}
+                      className={`w-full flex items-center justify-between p-3 text-left transition-colors ${
+                        agendamentoSelecionado?.id === ag.id
+                          ? 'bg-warning-50 border-l-4 border-l-warning-500'
+                          : 'hover:bg-surface-secondary'
+                      }`}>
+                      <div>
+                        <p className="font-medium text-sm">{ag.procedimento_nome}</p>
+                        <p className="text-xs text-muted">
+                          {ag.data_agendada
+                            ? new Date(ag.data_agendada).toLocaleDateString('pt-BR')
+                            : 'Sem data'}
+                          {' • '}{diasAtras(ag.created_at)}
+                        </p>
+                      </div>
+                      {agendamentoSelecionado?.id === ag.id && (
+                        <span className="text-warning-600 text-xs font-medium">Selecionado</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
         )}
 
         {/* Botões */}
@@ -313,11 +418,20 @@ function NovoAtendimentoForm() {
           <Button variant="secondary" type="button" onClick={() => router.push('/atendimentos')}>
             Cancelar
           </Button>
-          <Button type="submit"
-            disabled={!clienteId || saving || (tipoAtendimento === 'orto' && !procedimentoOrtoId)}
-            loading={saving}>
-            {tipoAtendimento === 'orto' ? 'Criar Atendimento Orto' : 'Criar Atendimento'}
-          </Button>
+          {tipoAtendimento === 'sessao' ? (
+            <Button type="button"
+              onClick={handleConfirmarSessao}
+              disabled={!agendamentoSelecionado || confirmandoSessao}
+              loading={confirmandoSessao}>
+              Confirmar Chegada
+            </Button>
+          ) : (
+            <Button type="submit"
+              disabled={!clienteId || saving || (tipoAtendimento === 'orto' && !procedimentoOrtoId)}
+              loading={saving}>
+              {tipoAtendimento === 'orto' ? 'Criar Atendimento Orto' : 'Criar Atendimento'}
+            </Button>
+          )}
         </div>
       </form>
 
