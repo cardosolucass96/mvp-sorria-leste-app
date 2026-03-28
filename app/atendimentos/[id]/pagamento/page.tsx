@@ -16,6 +16,8 @@ interface ItemAtendimento {
   valor: number;
   valor_pago: number;
   status: string;
+  group_id: string | null;
+  dente_unico: string | null;
 }
 
 interface ItemPagamento {
@@ -497,7 +499,11 @@ export default function PagamentoPage({
                     return (
                       <div key={item.id} className="flex items-center gap-3 px-3 py-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{item.procedimento_nome}</p>
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {item.dente_unico
+                              ? `${item.procedimento_nome} • Dente ${item.dente_unico}`
+                              : item.procedimento_nome}
+                          </p>
                           <p className="text-xs text-muted">
                             Falta pagar: {formatarMoeda(devido)}
                             {quitado && <span className="ml-2 text-success-600 font-medium">✓ Quitado</span>}
@@ -630,7 +636,9 @@ export default function PagamentoPage({
               return (
                 <tr key={item.id} className={saldoDevedor === 0 ? 'bg-success-50' : ''}>
                   <td className="px-4 py-3 font-medium text-foreground">
-                    {item.procedimento_nome}
+                    {item.dente_unico
+                      ? `${item.procedimento_nome} • Dente ${item.dente_unico}`
+                      : item.procedimento_nome}
                   </td>
                   <td className="px-4 py-3 text-right">
                     {formatarMoeda(item.valor)}
