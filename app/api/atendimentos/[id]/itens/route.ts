@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { query, queryOne, execute } from '@/lib/db';
 
 interface ItemAtendimento {
@@ -11,12 +12,16 @@ interface ItemAtendimento {
   status: string;
   created_at: string;
   concluido_at: string | null;
+  group_id: string | null;
+  dente_unico: string | null;
+  por_dente: number;
 }
 
 interface Procedimento {
   id: number;
   nome: string;
   valor: number;
+  por_dente: number;
 }
 
 interface Atendimento {
@@ -33,9 +38,10 @@ export async function GET(
     const { id } = await params;
     
     const itens = await query<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null; criado_por_nome: string | null }>(
-      `SELECT 
+      `SELECT
         i.*,
         p.nome as procedimento_nome,
+        p.por_dente,
         u.nome as executor_nome,
         c.nome as criado_por_nome
       FROM itens_atendimento i
@@ -43,7 +49,7 @@ export async function GET(
       LEFT JOIN usuarios u ON i.executor_id = u.id
       LEFT JOIN usuarios c ON i.criado_por_id = c.id
       WHERE i.atendimento_id = ?
-      ORDER BY i.created_at ASC`,
+      ORDER BY i.group_id NULLS LAST, i.created_at ASC`,
       [parseInt(id)]
     );
     
@@ -132,30 +138,20 @@ export async function POST(
     }
     
     // Usa valor do procedimento se não fornecido
-    const valorBase = valor !== undefined ? valor : procedimento.valor;
+    const valorFinal = valor !== undefined ? valor : procedimento.valor;
+    const quantidadeFinal = quantidade || 1;
 
-    // Para procedimentos por_dente, cria um item por dente com group_id compartilhado
     interface DenteFaceDB { dente: string; faces: Array<{ nome: string }> }
-    let dentesArray: DenteFaceDB[] = [];
-    if (dentes) {
-      try { dentesArray = JSON.parse(dentes); } catch { /* ignora */ }
-    }
+    const dentesArray: DenteFaceDB[] = dentes ? JSON.parse(dentes) : [];
 
-    const isPorDente = dentesArray.length > 0;
-    const groupId = isPorDente ? crypto.randomUUID() : null;
-    const createdItemIds: number[] = [];
-
-    if (isPorDente) {
-      // Valor por dente individual
-      const valorPorDente = valorBase / dentesArray.length;
+    // Fluxo por_dente: cria 1 item por dente com group_id compartilhado
+    if (procedimento.por_dente && dentesArray.length > 0) {
+      const groupId = randomUUID();
+      const valorPorDente = valorFinal / dentesArray.length;
+      const itemIds: number[] = [];
 
       for (const d of dentesArray) {
-        const denteFaces = JSON.stringify([{
-          dente: d.dente,
-          faces: d.faces,
-        }]);
-
-        const result = await execute(
+        const res = await execute(
           `INSERT INTO itens_atendimento
             (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, group_id, dente_unico, status)
            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 'pendente')`,
@@ -165,16 +161,14 @@ export async function POST(
             executor_id || null,
             criado_por_id || null,
             valorPorDente,
-            denteFaces,
+            JSON.stringify([d]),
             groupId,
             d.dente,
           ]
         );
+        const itemId = res.lastInsertRowid as number;
+        itemIds.push(itemId);
 
-        const itemId = result.lastInsertRowid as number;
-        createdItemIds.push(itemId);
-
-        // Cria etapas para este dente
         for (const f of d.faces) {
           await execute(
             `INSERT INTO etapas_procedimento (item_atendimento_id, dente, face) VALUES (?, ?, ?)`,
@@ -182,25 +176,44 @@ export async function POST(
           );
         }
       }
-    } else {
-      // Procedimento normal (não por_dente): cria item único
-      const quantidadeFinal = quantidade || 1;
-      const result = await execute(
-        `INSERT INTO itens_atendimento
-          (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente')`,
-        [
-          parseInt(id),
-          procedimento_id,
-          executor_id || null,
-          criado_por_id || null,
-          valorBase,
-          dentes || null,
-          quantidadeFinal,
-        ]
-      );
 
-      createdItemIds.push(result.lastInsertRowid as number);
+      // Se adicionou durante execução, volta para aguardando_pagamento
+      if (atendimento.status === 'em_execucao') {
+        await execute(
+          "UPDATE atendimentos SET status = 'aguardando_pagamento' WHERE id = ?",
+          [parseInt(id)]
+        );
+      }
+
+      return NextResponse.json({ group_id: groupId, itens: itemIds }, { status: 201 });
+    }
+
+    // Fluxo original para procedimentos NÃO por_dente
+    const result = await execute(
+      `INSERT INTO itens_atendimento
+        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente')`,
+      [
+        parseInt(id),
+        procedimento_id,
+        executor_id || null,
+        criado_por_id || null,
+        valorFinal,
+        dentes || null,
+        quantidadeFinal
+      ]
+    );
+
+    const itemId = result.lastInsertRowid as number;
+
+    // Cria etapas se tiver dentes com faces definidas
+    for (const d of dentesArray) {
+      for (const f of d.faces) {
+        await execute(
+          `INSERT INTO etapas_procedimento (item_atendimento_id, dente, face) VALUES (?, ?, ?)`,
+          [itemId, d.dente, f.nome]
+        );
+      }
     }
 
     // Se adicionou durante execução, volta para aguardando_pagamento
@@ -211,11 +224,20 @@ export async function POST(
       );
     }
 
-    // Retorna resposta com group_id e IDs criados
-    return NextResponse.json(
-      { group_id: groupId, itens: createdItemIds },
-      { status: 201 }
+    // Retorna item criado
+    const novoItem = await queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null }>(
+      `SELECT
+        i.*,
+        p.nome as procedimento_nome,
+        u.nome as executor_nome
+      FROM itens_atendimento i
+      INNER JOIN procedimentos p ON i.procedimento_id = p.id
+      LEFT JOIN usuarios u ON i.executor_id = u.id
+      WHERE i.id = ?`,
+      [itemId]
     );
+
+    return NextResponse.json(novoItem, { status: 201 });
   } catch (error) {
     console.error('Erro ao adicionar item:', error);
     return NextResponse.json(

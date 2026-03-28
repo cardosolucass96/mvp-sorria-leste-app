@@ -214,7 +214,7 @@ CREATE INDEX IF NOT EXISTS idx_atendimentos_cliente ON atendimentos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_atendimentos_status ON atendimentos(status);
 CREATE INDEX IF NOT EXISTS idx_itens_atendimento ON itens_atendimento(atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_itens_executor ON itens_atendimento(executor_id);
-CREATE INDEX IF NOT EXISTS idx_itens_group ON itens_atendimento(group_id);
+CREATE INDEX IF NOT EXISTS idx_itens_group_id ON itens_atendimento(group_id);
 CREATE INDEX IF NOT EXISTS idx_pagamentos_atendimento ON pagamentos(atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_parcelas_atendimento ON parcelas(atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_parcelas_vencimento ON parcelas(data_vencimento);
