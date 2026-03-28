@@ -10,6 +10,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { formatarMoeda } from '@/lib/utils/formatters';
 import LoadingState from '@/components/ui/LoadingState';
+import StatCard from '@/components/ui/StatCard';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface DashboardStats {
@@ -74,86 +75,58 @@ export default function Home() {
 
         {/* Cards de Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link href="/clientes" className="card hover:shadow-lg transition-all hover:-translate-y-1">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary-100 rounded-full">
-                <Users className="w-6 h-6 text-primary-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Total Clientes</p>
-                <p className="text-2xl font-bold text-primary-600">{stats?.totalClientes || 0}</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/atendimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-warning-100 rounded-full">
-                <ClipboardList className="w-6 h-6 text-warning-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Atendimentos Hoje</p>
-                <p className="text-2xl font-bold text-warning-600">{stats?.atendimentosHoje || 0}</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/pagamentos" className="card hover:shadow-lg transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary-100 rounded-full">
-                <Clock className="w-6 h-6 text-primary-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Aguardando Pagamento</p>
-                <p className="text-2xl font-bold">{stats?.aguardandoPagamento || 0}</p>
-              </div>
-            </div>
-          </Link>
-
-          <div className="card">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-success-100 rounded-full">
-                <CheckCircle className="w-6 h-6 text-success-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Finalizados Hoje</p>
-                <p className="text-2xl font-bold">{stats?.finalizadosHoje || 0}</p>
-              </div>
-            </div>
-          </div>
+          <StatCard
+            label="Total Clientes"
+            value={stats?.totalClientes || 0}
+            icon={<Users className="w-5 h-5" />}
+            color="border-primary-400"
+            href="/clientes"
+          />
+          <StatCard
+            label="Atendimentos Hoje"
+            value={stats?.atendimentosHoje || 0}
+            icon={<ClipboardList className="w-5 h-5" />}
+            color="border-primary-400"
+            href="/atendimentos"
+          />
+          <StatCard
+            label="Aguardando Pagamento"
+            value={stats?.aguardandoPagamento || 0}
+            icon={<Clock className="w-5 h-5" />}
+            color="border-primary-400"
+            href="/pagamentos"
+          />
+          <StatCard
+            label="Finalizados Hoje"
+            value={stats?.finalizadosHoje || 0}
+            icon={<CheckCircle className="w-5 h-5" />}
+            color="border-primary-400"
+          />
         </div>
 
         {/* Segunda linha de cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-400">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted">Fila de Avaliação</p>
-                <p className="text-2xl font-bold text-primary-600">{stats?.emAvaliacao || 0}</p>
-              </div>
-              <Search className="w-8 h-8 text-primary-300" aria-hidden="true" />
-            </div>
-          </Link>
-
-          <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted">Em Execução</p>
-                <p className="text-2xl font-bold text-primary-700">{stats?.emExecucao || 0}</p>
-              </div>
-              <Activity className="w-8 h-8 text-primary-300" aria-hidden="true" />
-            </div>
-          </Link>
-
-          <Link href="/pagamentos" className="card hover:shadow-lg transition-shadow border-l-4 border-error-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted">Parcelas Vencidas</p>
-                <p className="text-2xl font-bold text-error-600">{stats?.parcelasVencidas || 0}</p>
-              </div>
-              <AlertTriangle className="w-8 h-8 text-error-300" aria-hidden="true" />
-            </div>
-          </Link>
+          <StatCard
+            label="Fila de Avaliação"
+            value={stats?.emAvaliacao || 0}
+            icon={<Search className="w-5 h-5" />}
+            color="border-primary-400"
+            href="/avaliacao"
+          />
+          <StatCard
+            label="Em Execução"
+            value={stats?.emExecucao || 0}
+            icon={<Activity className="w-5 h-5" />}
+            color="border-primary-400"
+            href="/execucao"
+          />
+          <StatCard
+            label="Parcelas Vencidas"
+            value={stats?.parcelasVencidas || 0}
+            icon={<AlertTriangle className="w-5 h-5" />}
+            color="border-error-500"
+            href="/pagamentos"
+          />
         </div>
 
         {/* Ações Rápidas */}
@@ -194,53 +167,34 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link href="/clientes" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-500">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary-100 rounded-full">
-                <Users className="w-6 h-6 text-primary-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Clientes Cadastrados</p>
-                <p className="text-2xl font-bold text-primary-600">{stats?.totalClientes || 0}</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/atendimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-warning-500">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-warning-100 rounded-full">
-                <ClipboardList className="w-6 h-6 text-warning-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Atendimentos Hoje</p>
-                <p className="text-2xl font-bold text-warning-600">{stats?.atendimentosHoje || 0}</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/pagamentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-400">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary-100 rounded-full">
-                <CreditCard className="w-6 h-6 text-primary-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Aguardando Pagamento</p>
-                <p className="text-2xl font-bold text-primary-600">{stats?.aguardandoPagamento || 0}</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/pagamentos" className="card hover:shadow-lg transition-shadow border-l-4 border-error-500">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-error-100 rounded-full">
-                <AlertTriangle className="w-6 h-6 text-error-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Parcelas Vencidas</p>
-                <p className="text-2xl font-bold text-error-600">{stats?.parcelasVencidas || 0}</p>
-              </div>
-            </div>
-          </Link>
+          <StatCard
+            label="Clientes Cadastrados"
+            value={stats?.totalClientes || 0}
+            icon={<Users className="w-5 h-5" />}
+            color="border-primary-400"
+            href="/clientes"
+          />
+          <StatCard
+            label="Atendimentos Hoje"
+            value={stats?.atendimentosHoje || 0}
+            icon={<ClipboardList className="w-5 h-5" />}
+            color="border-primary-400"
+            href="/atendimentos"
+          />
+          <StatCard
+            label="Aguardando Pagamento"
+            value={stats?.aguardandoPagamento || 0}
+            icon={<CreditCard className="w-5 h-5" />}
+            color="border-primary-400"
+            href="/pagamentos"
+          />
+          <StatCard
+            label="Parcelas Vencidas"
+            value={stats?.parcelasVencidas || 0}
+            icon={<AlertTriangle className="w-5 h-5" />}
+            color="border-error-500"
+            href="/pagamentos"
+          />
         </div>
 
         {/* Ações Principais */}
@@ -308,41 +262,27 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-500">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary-100 rounded-full">
-                <User className="w-6 h-6 text-primary-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Meus Atendimentos</p>
-                <p className="text-2xl font-bold text-primary-600">{stats?.meusAtendimentosAvaliacao || 0}</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-warning-500">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-warning-100 rounded-full">
-                <ClipboardList className="w-6 h-6 text-warning-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Na Fila sem Avaliador</p>
-                <p className="text-2xl font-bold text-warning-600">{stats?.atendimentosDisponiveisAvaliacao || 0}</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/minhas-comissoes" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-success-500">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-success-100 rounded-full">
-                <Banknote className="w-6 h-6 text-success-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Comissões (Este Mês)</p>
-                <p className="text-2xl font-bold text-success-600">{formatarMoeda(stats?.minhasComissoes || 0)}</p>
-              </div>
-            </div>
-          </Link>
+          <StatCard
+            label="Meus Atendimentos"
+            value={stats?.meusAtendimentosAvaliacao || 0}
+            icon={<User className="w-5 h-5" />}
+            color="border-evaluation-500"
+            href="/avaliacao"
+          />
+          <StatCard
+            label="Na Fila sem Avaliador"
+            value={stats?.atendimentosDisponiveisAvaliacao || 0}
+            icon={<ClipboardList className="w-5 h-5" />}
+            color="border-evaluation-500"
+            href="/avaliacao"
+          />
+          <StatCard
+            label="Comissões (Este Mês)"
+            value={formatarMoeda(stats?.minhasComissoes || 0)}
+            icon={<Banknote className="w-5 h-5" />}
+            color="border-evaluation-500"
+            href="/minhas-comissoes"
+          />
         </div>
 
         {/* Ação Principal */}
@@ -403,43 +343,28 @@ export default function Home() {
 
         <div className={`grid grid-cols-1 md:grid-cols-2 ${isDentista ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-4`}>
           {isDentista && (
-            <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-evaluation-500">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-evaluation-100 rounded-full">
-                  <Search className="w-6 h-6 text-evaluation-600" aria-hidden="true" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted">Fila Avaliação</p>
-                  <p className="text-2xl font-bold text-evaluation-600">{(stats?.meusAtendimentosAvaliacao || 0) + (stats?.atendimentosDisponiveisAvaliacao || 0)}</p>
-                </div>
-              </div>
-            </Link>
+            <StatCard
+              label="Fila Avaliação"
+              value={(stats?.meusAtendimentosAvaliacao || 0) + (stats?.atendimentosDisponiveisAvaliacao || 0)}
+              icon={<Search className="w-5 h-5" />}
+              color="border-evaluation-500"
+              href="/avaliacao"
+            />
           )}
-
-          <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-primary-500">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary-100 rounded-full">
-                <User className="w-6 h-6 text-primary-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Meus Procedimentos</p>
-                <p className="text-2xl font-bold text-primary-600">{stats?.meusProcedimentos || 0}</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/execucao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-warning-500">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-warning-100 rounded-full">
-                <ClipboardList className="w-6 h-6 text-warning-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Disponíveis para Pegar</p>
-                <p className="text-2xl font-bold text-warning-600">{stats?.procedimentosDisponiveis || 0}</p>
-              </div>
-            </div>
-          </Link>
-
+          <StatCard
+            label="Meus Procedimentos"
+            value={stats?.meusProcedimentos || 0}
+            icon={<User className="w-5 h-5" />}
+            color="border-dentist-500"
+            href="/execucao"
+          />
+          <StatCard
+            label="Disponíveis para Pegar"
+            value={stats?.procedimentosDisponiveis || 0}
+            icon={<ClipboardList className="w-5 h-5" />}
+            color="border-dentist-500"
+            href="/execucao"
+          />
           {/* Comissões: feature oculta temporariamente, lógica mantida */}
         </div>
 
