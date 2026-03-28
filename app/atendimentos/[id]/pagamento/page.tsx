@@ -7,6 +7,7 @@ import { formatarMoeda, formatarData, formatarDataHora } from '@/lib/utils/forma
 import { StatusBadge } from '@/components/domain';
 import Alert from '@/components/ui/Alert';
 import LoadingState from '@/components/ui/LoadingState';
+import { ConfirmDialog } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface ItemAtendimento {
@@ -29,6 +30,8 @@ interface Pagamento {
   parcelas: number;
   observacoes: string | null;
   recebido_por_nome?: string;
+  cancelado: number;
+  motivo_cancelamento: string | null;
   created_at: string;
 }
 
@@ -89,6 +92,22 @@ export default function PagamentoPage({
   
   // Avançar status
   const [avancando, setAvancando] = useState(false);
+
+  // Cancelar pagamento
+  const [cancelandoId, setCancelandoId] = useState<number | null>(null);
+  const [motivoCancelamento, setMotivoCancelamento] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void | Promise<void>;
+    type?: 'danger' | 'warning' | 'info';
+    confirmLabel?: string;
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
+  const openConfirm = (config: Omit<typeof confirmDialog, 'isOpen'>) => {
+    setConfirmDialog({ ...config, isOpen: true });
+  };
 
   useEffect(() => {
     carregarDados();
@@ -162,11 +181,27 @@ export default function PagamentoPage({
         throw new Error(data.error || 'Erro ao registrar');
       }
       
-      // Limpa form e recarrega
       setValorPagamento('');
       setObservacoesPagamento('');
       setItensSelecionados({});
       await carregarDados();
+      // Verifica se todos os procedimentos estão pagos
+      const resAtend = await fetch(`/api/atendimentos/${id}`);
+      const dadosAtend = await resAtend.json();
+      const todosPagos = dadosAtend.itens?.length > 0 &&
+        dadosAtend.itens.every((item: { valor: number; valor_pago: number }) => item.valor_pago >= item.valor);
+      if (todosPagos && dadosAtend.status === 'aguardando_pagamento') {
+        openConfirm({
+          title: 'Todos os procedimentos pagos',
+          message: 'Todos os procedimentos estão quitados. Deseja avançar o atendimento para execução agora?',
+          confirmLabel: 'Avançar para Execução',
+          type: 'info',
+          onConfirm: async () => {
+            setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+            await handleAvancarStatus();
+          },
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao registrar');
     } finally {
@@ -209,24 +244,31 @@ export default function PagamentoPage({
     }
   };
 
-  const handleRemoverParcela = async (parcelaId: number) => {
-    if (!confirm('Deseja remover esta parcela?')) return;
-    
-    try {
-      const res = await fetch(
-        `/api/atendimentos/${id}/parcelas?parcela_id=${parcelaId}`,
-        { method: 'DELETE' }
-      );
-      
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erro ao remover');
-      }
-      
-      await carregarDados();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao remover');
-    }
+  const handleRemoverParcela = (parcelaId: number) => {
+    openConfirm({
+      title: 'Remover Parcela',
+      message: 'Deseja remover esta parcela?',
+      confirmLabel: 'Remover',
+      type: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(
+            `/api/atendimentos/${id}/parcelas?parcela_id=${parcelaId}`,
+            { method: 'DELETE' }
+          );
+
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Erro ao remover');
+          }
+
+          await carregarDados();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Erro ao remover');
+        }
+      },
+    });
   };
 
   const handleAvancarStatus = async () => {
@@ -255,6 +297,26 @@ export default function PagamentoPage({
     }
   };
 
+  const handleCancelarPagamento = async (pagamentoId: number) => {
+    if (!motivoCancelamento.trim()) return;
+    try {
+      const res = await fetch(`/api/atendimentos/${id}/pagamentos/${pagamentoId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo: motivoCancelamento }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Erro ao cancelar');
+      }
+      setCancelandoId(null);
+      setMotivoCancelamento('');
+      await carregarDados();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao cancelar');
+    }
+  };
+
   // Funções auxiliares para itens selecionados
   const handleItemChange = (itemId: number, valor: string) => {
     const valorNum = parseFloat(valor) || 0;
@@ -264,40 +326,25 @@ export default function PagamentoPage({
     }));
   };
   
-  const distribuirValorProporcional = () => {
-    if (!atendimento || !valorPagamento) return;
-    
-    const valor = parseFloat(valorPagamento);
-    const itensPendentes = atendimento.itens.filter(item => {
-      const saldoDevedor = item.valor - item.valor_pago;
-      return saldoDevedor > 0;
-    });
-    
+  const distribuirValorProporcional = (valorOverride?: number) => {
+    if (!atendimento) return;
+    const valor = valorOverride ?? (valorPagamento ? parseFloat(valorPagamento) : 0);
+    if (!valor) return;
+
+    const itensPendentes = atendimento.itens.filter(item => item.valor - item.valor_pago > 0);
     if (itensPendentes.length === 0) return;
-    
-    // Calcula o total devido pendente
-    const totalDevido = itensPendentes.reduce((sum, item) => 
-      sum + (item.valor - item.valor_pago), 0
-    );
-    
-    // Distribui proporcionalmente
+
     const novosItens: { [key: number]: number } = {};
     let restante = valor;
-    
-    itensPendentes.forEach((item, index) => {
-      const saldoDevedor = item.valor - item.valor_pago;
-      
-      if (index === itensPendentes.length - 1) {
-        // Último item recebe o restante para evitar erro de arredondamento
-        novosItens[item.id] = Math.min(restante, saldoDevedor);
-      } else {
-        const proporcao = saldoDevedor / totalDevido;
-        const valorAplicado = Math.min(valor * proporcao, saldoDevedor);
-        novosItens[item.id] = Math.round(valorAplicado * 100) / 100;
-        restante -= novosItens[item.id];
-      }
-    });
-    
+
+    for (const item of itensPendentes) {
+      if (restante <= 0) break;
+      const devido = item.valor - item.valor_pago;
+      const aplicado = Math.min(restante, devido);
+      novosItens[item.id] = Math.round(aplicado * 100) / 100;
+      restante -= aplicado;
+    }
+
     setItensSelecionados(novosItens);
   };
   
@@ -318,7 +365,7 @@ export default function PagamentoPage({
     );
   }
 
-  const totalPago = pagamentos.reduce((acc, p) => acc + p.valor, 0);
+  const totalPago = pagamentos.filter(p => !p.cancelado).reduce((acc, p) => acc + p.valor, 0);
   const totalParcelas = parcelas.reduce((acc, p) => acc + p.valor, 0);
   const parcelasPagas = parcelas.filter(p => p.pago).reduce((acc, p) => acc + p.valor, 0);
   const parcelasPendentes = parcelas.filter(p => !p.pago);
@@ -375,108 +422,54 @@ export default function PagamentoPage({
       </div>
 
       {/* Grid Principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Resumo Financeiro */}
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Resumo Financeiro</h2>
-          
-          <div className="space-y-3">
-            <div className="flex justify-between p-3 bg-surface-secondary rounded-lg">
-              <span className="text-neutral-600">Total do Tratamento</span>
-              <span className="font-bold text-lg">{formatarMoeda(atendimento.total)}</span>
-            </div>
-            
-            <div className="flex justify-between p-3 bg-success-50 rounded-lg">
-              <span className="text-success-700">Pago</span>
-              <span className="font-bold text-lg text-success-700">{formatarMoeda(totalPago)}</span>
-            </div>
-            
-            <div className={`flex justify-between p-3 rounded-lg ${
-              saldoDevedor > 0 ? 'bg-error-50' : 'bg-success-50'
-            }`}>
-              <span className={saldoDevedor > 0 ? 'text-error-700' : 'text-success-700'}>
-                {saldoDevedor > 0 ? 'Saldo Devedor' : 'Quitado'}
-              </span>
-              <span className={`font-bold text-lg ${
-                saldoDevedor > 0 ? 'text-error-700' : 'text-success-700'
-              }`}>
-                {formatarMoeda(saldoDevedor)}
-              </span>
-            </div>
-            
-            {parcelasPendentes.length > 0 && (
-              <div className="flex justify-between p-3 bg-yellow-50 rounded-lg">
-                <span className="text-yellow-700">
-                  Parcelas Pendentes ({parcelasPendentes.length})
-                </span>
-                <span className="font-bold text-yellow-700">
-                  {formatarMoeda(totalParcelas - parcelasPagas)}
-                </span>
-              </div>
-            )}
-          </div>
-          
-          {/* Botão Avançar */}
-          {atendimento.status === 'aguardando_pagamento' && temProcedimentoPago && (
-            <div className="mt-6 pt-4 border-t">
-              <button
-                onClick={handleAvancarStatus}
-                disabled={avancando}
-                className="btn btn-primary w-full"
-              >
-                {avancando ? 'Avançando...' : '✓ Liberar para Execução'}
-              </button>
-              <p className="text-xs text-muted mt-2 text-center">
-                {itensPagos.length} procedimento(s) pago(s) e pronto(s) para execução
-              </p>
-            </div>
-          )}
-          
-          {atendimento.status === 'aguardando_pagamento' && !temProcedimentoPago && (
-            <div className="mt-6 pt-4 border-t">
-              <div className="p-3 bg-yellow-50 rounded-lg text-center">
-                <p className="text-yellow-800 font-medium">Pagamento necessário</p>
-                <p className="text-yellow-600 text-sm">
-                  Pague pelo menos 1 procedimento completo para liberar
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Registrar Pagamento */}
         <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Registrar Pagamento</h2>
-          
+          <h2 className="text-lg font-semibold mb-1">Registrar Pagamento</h2>
+          {saldoDevedor > 0 && (
+            <p className="text-sm text-muted mb-4">
+              Saldo restante: <span className="font-semibold text-error-600">{formatarMoeda(saldoDevedor)}</span>
+            </p>
+          )}
+
           <form onSubmit={handleRegistrarPagamento} className="space-y-4">
+
+            {/* Valor + Pagar tudo */}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Valor (R$) *
+                Valor recebido (R$) *
               </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={valorPagamento}
-                onChange={(e) => setValorPagamento(e.target.value)}
-                placeholder="0,00"
-                className="input"
-                required
-              />
-              {saldoDevedor > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setValorPagamento(saldoDevedor.toString())}
-                  className="text-xs text-info-600 hover:text-info-800 mt-1"
-                >
-                  Preencher saldo devedor: {formatarMoeda(saldoDevedor)}
-                </button>
-              )}
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={valorPagamento}
+                  onChange={(e) => setValorPagamento(e.target.value)}
+                  onBlur={(e) => distribuirValorProporcional(parseFloat(e.target.value) || undefined)}
+                  placeholder="0,00"
+                  className="input flex-1"
+                  required
+                />
+                {saldoDevedor > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValorPagamento(saldoDevedor.toString());
+                      distribuirValorProporcional(saldoDevedor);
+                    }}
+                    className="btn btn-secondary whitespace-nowrap text-sm"
+                  >
+                    Pagar tudo
+                  </button>
+                )}
+              </div>
             </div>
-            
+
+            {/* Método */}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Método *
+                Forma de pagamento *
               </label>
               <select
                 value={metodoPagamento}
@@ -491,10 +484,64 @@ export default function PagamentoPage({
                 ))}
               </select>
             </div>
-            
+
+            {/* Distribuição — só aparece quando há valor */}
+            {valorPagamento && parseFloat(valorPagamento) > 0 && (
+              <div className="border rounded-lg overflow-hidden">
+                <div className="px-3 py-2 bg-surface-secondary">
+                  <span className="text-sm font-medium text-neutral-700">Como distribuir nos procedimentos</span>
+                </div>
+                <div className="divide-y">
+                  {atendimento.itens.map((item) => {
+                    const devido = item.valor - item.valor_pago;
+                    if (devido <= 0) return null;
+                    const alocado = itensSelecionados[item.id] || 0;
+                    const quitado = alocado >= devido;
+                    return (
+                      <div key={item.id} className="flex items-center gap-3 px-3 py-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{item.procedimento_nome}</p>
+                          <p className="text-xs text-muted">
+                            Falta pagar: {formatarMoeda(devido)}
+                            {quitado && <span className="ml-2 text-success-600 font-medium">✓ Quitado</span>}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-xs text-muted">R$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max={devido}
+                            value={itensSelecionados[item.id] ?? ''}
+                            onChange={(e) => handleItemChange(item.id, e.target.value)}
+                            className="input w-28 text-right"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Rodapé de conferência */}
+                {(() => {
+                  const val = parseFloat(valorPagamento);
+                  const diff = Math.abs(totalAplicado - val);
+                  const ok = diff < 0.01;
+                  const falta = val - totalAplicado;
+                  return (
+                    <div className={`flex justify-between items-center px-3 py-2 text-sm font-medium ${ok ? 'bg-success-50 text-success-700' : 'bg-error-50 text-error-700'}`}>
+                      <span>{ok ? '✓ Valor totalmente alocado' : falta > 0 ? `Falta alocar: ${formatarMoeda(falta)}` : `Excesso: ${formatarMoeda(-falta)}`}</span>
+                      <span>{formatarMoeda(totalAplicado)} / {formatarMoeda(val)}</span>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Observações */}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Observações
+                Observações <span className="text-neutral-400 font-normal">(opcional)</span>
               </label>
               <input
                 type="text"
@@ -504,70 +551,13 @@ export default function PagamentoPage({
                 className="input"
               />
             </div>
-            
-            {/* Distribuição do Pagamento */}
-            {valorPagamento && parseFloat(valorPagamento) > 0 && (
-              <div className="border-t pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm font-medium text-neutral-700">
-                    Distribuir entre procedimentos *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={distribuirValorProporcional}
-                    className="text-xs text-info-600 hover:text-info-800"
-                  >
-                    Distribuir Proporcional
-                  </button>
-                </div>
-                
-                <div className="space-y-2 max-h-60 overflow-y-auto bg-surface-secondary p-3 rounded">
-                  {atendimento.itens.map((item) => {
-                    const saldoDevedor = item.valor - item.valor_pago;
-                    if (saldoDevedor <= 0) return null;
-                    
-                    return (
-                      <div key={item.id} className="flex items-center gap-2">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-foreground">{item.procedimento_nome}</p>
-                          <p className="text-xs text-muted">
-                            Saldo devedor: {formatarMoeda(saldoDevedor)}
-                          </p>
-                        </div>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max={saldoDevedor}
-                          value={itensSelecionados[item.id] || ''}
-                          onChange={(e) => handleItemChange(item.id, e.target.value)}
-                          placeholder="0,00"
-                          className="input w-32"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-                
-                <div className="mt-3 p-3 bg-info-50 rounded flex justify-between items-center">
-                  <span className="text-sm font-medium text-info-900">Total aplicado:</span>
-                  <span className={`font-bold text-lg ${
-                    Math.abs(totalAplicado - parseFloat(valorPagamento)) < 0.01
-                      ? 'text-success-600'
-                      : 'text-error-600'
-                  }`}>
-                    {formatarMoeda(totalAplicado)} / {formatarMoeda(parseFloat(valorPagamento))}
-                  </span>
-                </div>
-              </div>
-            )}
-            
+
             <button
               type="submit"
               disabled={!valorPagamento || registrando}
-              className="btn btn-secondary w-full disabled:opacity-50"
+              className="btn btn-primary w-full disabled:opacity-50"
             >
-              {registrando ? 'Registrando...' : 'Registrar Pagamento'}
+              {registrando ? 'Registrando...' : 'Confirmar Pagamento'}
             </button>
           </form>
         </div>
@@ -710,58 +700,98 @@ export default function PagamentoPage({
           <table className="min-w-full divide-y divide-neutral-200">
             <thead className="bg-surface-secondary">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
-                  Data/Hora
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
-                  Recebido por
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
-                  Método
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
-                  Valor
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
-                  Observações
-                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data/Hora</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Recebido por</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Método</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Valor</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Observações</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Ações</th>
               </tr>
             </thead>
             <tbody className="bg-surface divide-y divide-neutral-200">
               {pagamentos.map((pag) => (
-                <tr key={pag.id}>
-                  <td className="px-4 py-3 text-neutral-600">
-                    {formatarDataHora(pag.created_at)}
-                  </td>
-                  <td className="px-4 py-3 text-foreground">
-                    {pag.recebido_por_nome || 'N/A'}
-                  </td>
-                  <td className="px-4 py-3">
-                    {METODOS_PAGAMENTO.find(m => m.value === pag.metodo)?.label || pag.metodo}
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium text-success-600">
-                    {formatarMoeda(pag.valor)}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {pag.observacoes || '-'}
-                  </td>
-                </tr>
+                <>
+                  <tr key={pag.id} className={pag.cancelado ? 'opacity-50 bg-neutral-50' : ''}>
+                    <td className="px-4 py-3 text-neutral-600">{formatarDataHora(pag.created_at)}</td>
+                    <td className="px-4 py-3 text-foreground">{pag.recebido_por_nome || 'N/A'}</td>
+                    <td className="px-4 py-3">{METODOS_PAGAMENTO.find(m => m.value === pag.metodo)?.label || pag.metodo}</td>
+                    <td className={`px-4 py-3 text-right font-medium ${pag.cancelado ? 'line-through text-neutral-400' : 'text-success-600'}`}>
+                      {formatarMoeda(pag.valor)}
+                    </td>
+                    <td className="px-4 py-3 text-muted">{pag.observacoes || '-'}</td>
+                    <td className="px-4 py-3 text-right">
+                      {pag.cancelado ? (
+                        <span className="text-xs font-medium text-error-600 bg-error-50 px-2 py-1 rounded">Cancelado</span>
+                      ) : (
+                        <button
+                          onClick={() => { setCancelandoId(pag.id); setMotivoCancelamento(''); }}
+                          className="text-sm text-error-600 hover:text-error-800"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {pag.cancelado && pag.motivo_cancelamento && (
+                    <tr key={`${pag.id}-motivo`} className="bg-error-50">
+                      <td colSpan={6} className="px-4 py-2 text-xs text-error-700">
+                        <span className="font-medium">Motivo:</span> {pag.motivo_cancelamento}
+                      </td>
+                    </tr>
+                  )}
+                  {cancelandoId === pag.id && (
+                    <tr key={`${pag.id}-cancel`}>
+                      <td colSpan={6} className="px-4 py-3 bg-warning-50 border-l-4 border-warning-400">
+                        <p className="text-sm font-medium text-warning-800 mb-2">Informe o motivo do cancelamento:</p>
+                        <div className="flex gap-2">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={motivoCancelamento}
+                            onChange={(e) => setMotivoCancelamento(e.target.value)}
+                            placeholder="Ex: Digitação errada, pagamento duplicado..."
+                            className="input flex-1 text-sm"
+                          />
+                          <button
+                            onClick={() => handleCancelarPagamento(pag.id)}
+                            disabled={!motivoCancelamento.trim()}
+                            className="btn btn-primary text-sm disabled:opacity-50"
+                          >
+                            Confirmar
+                          </button>
+                          <button
+                            onClick={() => setCancelandoId(null)}
+                            className="btn btn-secondary text-sm"
+                          >
+                            Voltar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
             </tbody>
             <tfoot className="bg-success-50">
               <tr>
-                <td colSpan={3} className="px-4 py-3 font-semibold text-success-700">
-                  Total Pago
-                </td>
-                <td className="px-4 py-3 text-right font-bold text-lg text-success-700">
-                  {formatarMoeda(totalPago)}
-                </td>
-                <td></td>
+                <td colSpan={3} className="px-4 py-3 font-semibold text-success-700">Total Pago</td>
+                <td className="px-4 py-3 text-right font-bold text-lg text-success-700">{formatarMoeda(totalPago)}</td>
+                <td colSpan={2}></td>
               </tr>
             </tfoot>
           </table>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        type={confirmDialog.type}
+      />
 
       {/* Parcelas Agendadas */}
       <div className="card">

@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { formatarMoeda } from '@/lib/utils/formatters';
 import { ClipboardList, Search, Activity } from 'lucide-react';
-import { Alert, LoadingState, PageHeader, Card, Button, Input, Select } from '@/components/ui';
+import { Alert, LoadingState, PageHeader, Card, Button, Select, SearchInput, Modal } from '@/components/ui';
+import { ClienteForm, ClienteFormData } from '@/components/domain';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Cliente {
   id: number;
@@ -25,101 +26,133 @@ interface Procedimento {
   id: number;
   nome: string;
   valor: number;
-  por_dente: number;
 }
 
 type TipoAtendimento = 'normal' | 'orto';
 
-export default function NovoAtendimentoPage() {
+function NovoAtendimentoForm() {
   usePageTitle('Novo Atendimento');
   const router = useRouter();
+  const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const clienteIdParam = searchParams.get('cliente');
+
+  // Clientes (busca via API)
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [avaliadores, setAvaliadores] = useState<Usuario[]>([]);
-  const [executores, setExecutores] = useState<Usuario[]>([]);
-  const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [loadError, setLoadError] = useState('');
-  
-  const [clienteId, setClienteId] = useState('');
-  const [avaliadorId, setAvaliadorId] = useState('');
-  const [busca, setBusca] = useState('');
-  
-  // Orto
+  const [buscaCliente, setBuscaCliente] = useState('');
+  const [loadingClientes, setLoadingClientes] = useState(true);
+
+  // Seleções
+  const [clienteId, setClienteId] = useState(clienteIdParam || '');
+  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
   const [tipoAtendimento, setTipoAtendimento] = useState<TipoAtendimento>('normal');
+  const [avaliadorId, setAvaliadorId] = useState('');
   const [executorId, setExecutorId] = useState('');
   const [procedimentoOrtoId, setProcedimentoOrtoId] = useState('');
 
-  useEffect(() => {
-    carregarDados();
+  // Dados estáticos
+  const [avaliadores, setAvaliadores] = useState<Usuario[]>([]);
+  const [executores, setExecutores] = useState<Usuario[]>([]);
+  const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
+  const [loadingDados, setLoadingDados] = useState(true);
+
+  // Modal novo cliente
+  const [modalNovoCliente, setModalNovoCliente] = useState(false);
+  const [savingNovoCliente, setSavingNovoCliente] = useState(false);
+  const [erroNovoCliente, setErroNovoCliente] = useState('');
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // Busca clientes via API
+  const buscarClientes = useCallback(async (termo: string) => {
+    setLoadingClientes(true);
+    try {
+      const params = new URLSearchParams({ limit: '10', ordem: 'recente' });
+      if (termo) params.set('busca', termo);
+      const res = await fetch(`/api/clientes?${params}`);
+      const data = await res.json();
+      setClientes(data.clientes ?? []);
+    } finally {
+      setLoadingClientes(false);
+    }
   }, []);
 
-  const carregarDados = async () => {
-    try {
-      const [resClientes, resUsuarios, resProc] = await Promise.all([
-        fetch('/api/clientes'),
-        fetch('/api/usuarios'),
-        fetch('/api/procedimentos'),
-      ]);
-      
-      const clientesData = await resClientes.json();
-      const usuariosData = await resUsuarios.json();
-      const procData = await resProc.json();
-      
-      setClientes(clientesData);
-      setAvaliadores(
-        usuariosData.filter((u: Usuario) => u.role === 'avaliador' || u.role === 'admin')
-      );
-      setExecutores(
-        usuariosData.filter((u: Usuario) => u.role === 'executor' || u.role === 'admin')
-      );
-      setProcedimentos(procData);
-      
-      // Pre-selecionar procedimento de orto se existir
-      const orto = procData.find((p: Procedimento) => 
-        p.nome.toLowerCase().includes('orto') || 
-        p.nome.toLowerCase().includes('aparelho') ||
-        p.nome.toLowerCase().includes('manutenção')
-      );
-      if (orto) {
-        setProcedimentoOrtoId(orto.id.toString());
+  // Carga inicial
+  useEffect(() => {
+    buscarClientes('');
+
+    const carregarDados = async () => {
+      try {
+        const [resUsuarios, resProc] = await Promise.all([
+          fetch('/api/usuarios'),
+          fetch('/api/procedimentos'),
+        ]);
+        const usuariosData: Usuario[] = await resUsuarios.json();
+        const procData: Procedimento[] = await resProc.json();
+
+        setAvaliadores(usuariosData.filter((u) => u.role === 'avaliador' || u.role === 'admin'));
+        setExecutores(usuariosData.filter((u) => u.role === 'executor' || u.role === 'admin'));
+        setProcedimentos(procData);
+
+        const orto = procData.find((p) =>
+          p.nome.toLowerCase().includes('orto') ||
+          p.nome.toLowerCase().includes('aparelho') ||
+          p.nome.toLowerCase().includes('manutenção')
+        );
+        if (orto) setProcedimentoOrtoId(String(orto.id));
+      } finally {
+        setLoadingDados(false);
       }
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-      setLoadError('Erro ao carregar dados. Tente recarregar a página.');
+    };
+    carregarDados();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Pré-selecionar cliente vindo de ?cliente=
+  useEffect(() => {
+    if (!clienteIdParam) return;
+    fetch(`/api/clientes/${clienteIdParam}`)
+      .then((r) => r.json())
+      .then((c: Cliente) => { setClienteSelecionado(c); setClienteId(String(c.id)); })
+      .catch(() => {});
+  }, [clienteIdParam]);
+
+  const handleSelecionarCliente = (c: Cliente) => {
+    setClienteId(String(c.id));
+    setClienteSelecionado(c);
+  };
+
+  // Criar novo cliente via modal e auto-selecionar
+  const handleCriarNovoCliente = async (formData: ClienteFormData) => {
+    setErroNovoCliente('');
+    setSavingNovoCliente(true);
+    try {
+      const res = await fetch('/api/clientes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErroNovoCliente(data.error || 'Erro ao cadastrar'); return; }
+      handleSelecionarCliente(data);
+      setModalNovoCliente(false);
     } finally {
-      setLoading(false);
+      setSavingNovoCliente(false);
     }
   };
 
-  const clientesFiltrados = clientes.filter((c) => {
-    if (!busca) return true;
-    const termo = busca.toLowerCase();
-    return (
-      c.nome.toLowerCase().includes(termo) ||
-      c.cpf?.includes(termo) ||
-      c.telefone?.includes(termo)
-    );
-  });
-
-  const procedimentoSelecionado = procedimentos.find(
-    (p) => p.id === parseInt(procedimentoOrtoId)
-  );
+  const procedimentoSelecionado = procedimentos.find((p) => p.id === parseInt(procedimentoOrtoId));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!clienteId) return;
     setSaving(true);
     setError('');
 
     try {
-      if (tipoAtendimento === 'orto') {
-        if (!executorId) {
-          throw new Error('Selecione o dentista para atendimento orto');
-        }
-        if (!procedimentoOrtoId) {
-          throw new Error('Selecione o procedimento');
-        }
+      if (tipoAtendimento === 'orto' && !procedimentoOrtoId) {
+        throw new Error('Selecione o procedimento para atendimento orto');
       }
 
       const payload: Record<string, unknown> = {
@@ -129,9 +162,10 @@ export default function NovoAtendimentoPage() {
 
       if (tipoAtendimento === 'orto') {
         payload.tipo_orto = true;
-        payload.executor_id = parseInt(executorId);
+        payload.executor_id = executorId ? parseInt(executorId) : null;
         payload.procedimento_id = parseInt(procedimentoOrtoId);
         payload.valor = procedimentoSelecionado?.valor || 0;
+        payload.criado_por_id = user?.id;
       }
 
       const res = await fetch('/api/atendimentos', {
@@ -140,28 +174,20 @@ export default function NovoAtendimentoPage() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erro ao criar atendimento');
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao criar atendimento');
 
-      const atendimento = await res.json();
-      
-      if (tipoAtendimento === 'orto') {
-        router.push(`/atendimentos/${atendimento.id}/pagamento`);
-      } else {
-        router.push(`/atendimentos/${atendimento.id}`);
-      }
+      router.push(tipoAtendimento === 'orto'
+        ? `/atendimentos/${data.id}/pagamento`
+        : `/atendimentos/${data.id}`
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar');
-    } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
-    return <LoadingState text="Carregando dados..." />;
-  }
+  if (loadingDados) return <LoadingState text="Carregando dados..." />;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -175,164 +201,107 @@ export default function NovoAtendimentoPage() {
         ]}
       />
 
-      {loadError && <Alert type="error">{loadError}</Alert>}
-      {error && <Alert type="error">{error}</Alert>}
+      {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Tipo de Atendimento */}
+
+        {/* 1 — Cliente */}
         <Card>
-          <h2 className="text-lg font-semibold mb-4">Tipo de Atendimento</h2>
+          <h2 className="text-lg font-semibold mb-3">1. Cliente</h2>
+
+          {clienteSelecionado ? (
+            <div className="flex items-center justify-between p-3 bg-primary-50 border border-primary-200 rounded-lg">
+              <div>
+                <p className="font-medium">{clienteSelecionado.nome}</p>
+                <p className="text-sm text-muted">{clienteSelecionado.telefone || 'Sem telefone'}</p>
+              </div>
+              <Button type="button" variant="ghost" size="sm"
+                onClick={() => { setClienteSelecionado(null); setClienteId(''); }}>
+                Trocar
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <SearchInput
+                value={buscaCliente}
+                onChange={setBuscaCliente}
+                onSearch={buscarClientes}
+                placeholder="Buscar por nome, CPF, telefone ou email..."
+              />
+              <div className="border rounded-lg divide-y max-h-60 overflow-y-auto">
+                {loadingClientes ? (
+                  <div className="p-4 text-center text-sm text-muted">Buscando...</div>
+                ) : clientes.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted">Nenhum cliente encontrado</div>
+                ) : (
+                  clientes.map((c) => (
+                    <button key={c.id} type="button"
+                      onClick={() => handleSelecionarCliente(c)}
+                      className="w-full flex items-center gap-3 p-3 text-left hover:bg-surface-secondary transition-colors">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{c.nome}</p>
+                        <p className="text-xs text-muted">
+                          {[c.cpf && `CPF: ${c.cpf}`, c.telefone && `Tel: ${c.telefone}`].filter(Boolean).join(' • ')}
+                        </p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+              <button type="button" onClick={() => setModalNovoCliente(true)}
+                className="text-info-600 hover:text-info-800 text-sm">
+                + Cadastrar novo cliente
+              </button>
+            </div>
+          )}
+        </Card>
+
+        {/* 2 — Tipo */}
+        <Card>
+          <h2 className="text-lg font-semibold mb-3">2. Tipo de Atendimento</h2>
           <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => setTipoAtendimento('normal')}
+            <button type="button" onClick={() => setTipoAtendimento('normal')}
               className={`p-4 rounded-lg border-2 text-left transition-all ${
-                tipoAtendimento === 'normal'
-                  ? 'border-primary-500 bg-primary-50'
-                  : 'border-neutral-200 hover:border-neutral-300'
-              }`}
-            >
-              <Search className="w-6 h-6 mb-1 text-primary-500" aria-hidden="true" />
-              <div className="font-semibold text-foreground">Normal</div>
-              <p className="text-xs text-muted mt-1">
-                Triagem → Avaliação → Pagamento → Execução
-              </p>
+                tipoAtendimento === 'normal' ? 'border-primary-500 bg-primary-50' : 'border-neutral-200 hover:border-neutral-300'
+              }`}>
+              <Search className="w-5 h-5 mb-1 text-primary-500" aria-hidden="true" />
+              <div className="font-semibold text-sm">Normal</div>
+              <p className="text-xs text-muted mt-1">Triagem → Avaliação → Pagamento → Execução</p>
             </button>
-            
-            <button
-              type="button"
-              onClick={() => setTipoAtendimento('orto')}
+            <button type="button" onClick={() => setTipoAtendimento('orto')}
               className={`p-4 rounded-lg border-2 text-left transition-all ${
-                tipoAtendimento === 'orto'
-                  ? 'border-info-500 bg-info-50'
-                  : 'border-neutral-200 hover:border-neutral-300'
-              }`}
-            >
-              <Activity className="w-6 h-6 mb-1 text-info-500" aria-hidden="true" />
-              <div className="font-semibold text-foreground">Orto / Aparelho</div>
-              <p className="text-xs text-muted mt-1">
-                Direto para Pagamento → Execução pelo dentista
-              </p>
+                tipoAtendimento === 'orto' ? 'border-info-500 bg-info-50' : 'border-neutral-200 hover:border-neutral-300'
+              }`}>
+              <Activity className="w-5 h-5 mb-1 text-info-500" aria-hidden="true" />
+              <div className="font-semibold text-sm">Orto / Aparelho</div>
+              <p className="text-xs text-muted mt-1">Direto para Pagamento → Execução pelo dentista</p>
             </button>
           </div>
         </Card>
 
-        {/* Seleção de Cliente */}
-        <Card>
-          <h2 className="text-lg font-semibold mb-4">Selecione o Cliente</h2>
-          
-          <div className="mb-4">
-            <Input
-              label="Buscar cliente"
-              name="busca"
-              value={busca}
-              onChange={(value) => setBusca(value)}
-              placeholder="Buscar por nome, CPF ou telefone..."
-            />
-          </div>
-          
-          <div className="max-h-64 overflow-y-auto border rounded-lg divide-y">
-            {clientesFiltrados.length === 0 ? (
-              <div className="p-4 text-center text-muted">
-                Nenhum cliente encontrado
-              </div>
-            ) : (
-              clientesFiltrados.map((cliente) => (
-                <label
-                  key={cliente.id}
-                  className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-surface-secondary transition-colors ${
-                    clienteId === cliente.id.toString() ? 'bg-info-50' : ''
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="cliente"
-                    value={cliente.id}
-                    checked={clienteId === cliente.id.toString()}
-                    onChange={(e) => setClienteId(e.target.value)}
-                    className="text-info-600"
-                  />
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{cliente.nome}</p>
-                    <p className="text-sm text-muted">
-                      {cliente.cpf && `CPF: ${cliente.cpf}`}
-                      {cliente.cpf && cliente.telefone && ' • '}
-                      {cliente.telefone && `Tel: ${cliente.telefone}`}
-                    </p>
-                  </div>
-                </label>
-              ))
-            )}
-          </div>
-          
-          <div className="mt-4 pt-4 border-t">
-            <Link 
-              href="/clientes/novo" 
-              className="text-info-600 hover:text-info-800 text-sm"
-            >
-              + Cadastrar novo cliente
-            </Link>
-          </div>
-        </Card>
-
-        {/* Fluxo Normal: Avaliador */}
-        {tipoAtendimento === 'normal' && (
+        {/* 3 — Avaliador ou Orto */}
+        {tipoAtendimento === 'normal' ? (
           <Card>
-            <h2 className="text-lg font-semibold mb-4">Avaliador (opcional)</h2>
-            <p className="text-sm text-muted mb-4">
-              Selecione um avaliador ou deixe em branco para definir depois
-            </p>
-            
-            <Select
-              label="Avaliador"
-              name="avaliador"
-              value={avaliadorId}
-              onChange={(value) => setAvaliadorId(value)}
-              options={avaliadores.map((a) => ({ value: String(a.id), label: `${a.nome} (${a.role})` }))}
-              placeholder="-- Definir depois --"
-            />
+            <h2 className="text-lg font-semibold mb-1">3. Avaliador</h2>
+            <p className="text-sm text-muted mb-3">Opcional — pode ser definido depois</p>
+            <Select label="Avaliador" name="avaliador" value={avaliadorId} onChange={setAvaliadorId}
+              options={avaliadores.map((a) => ({ value: String(a.id), label: a.nome }))}
+              placeholder="-- Definir depois --" />
           </Card>
-        )}
-
-        {/* Fluxo Orto: Dentista + Procedimento */}
-        {tipoAtendimento === 'orto' && (
+        ) : (
           <Card className="border-l-4 border-l-info-500">
-            <h2 className="text-lg font-semibold mb-4">Configuração Orto</h2>
-            
+            <h2 className="text-lg font-semibold mb-3">3. Configuração Orto</h2>
             <div className="space-y-4">
-              <div>
-                <Select
-                  label="Dentista (executor) *"
-                  name="executor"
-                  value={executorId}
-                  onChange={(value) => setExecutorId(value)}
-                  options={executores.map((e) => ({ value: String(e.id), label: e.nome }))}
-                  placeholder="Selecione o dentista..."
-                  required
-                />
-              </div>
-
-              <div>
-                <Select
-                  label="Procedimento *"
-                  name="procedimento"
-                  value={procedimentoOrtoId}
-                  onChange={(value) => setProcedimentoOrtoId(value)}
-                  options={procedimentos.map((p) => ({ value: String(p.id), label: `${p.nome} - ${formatarMoeda(p.valor)}` }))}
-                  placeholder="Selecione o procedimento..."
-                  required
-                />
-              </div>
-
+              <Select label="Dentista (executor)" name="executor" value={executorId} onChange={setExecutorId}
+                options={executores.map((e) => ({ value: String(e.id), label: e.nome }))}
+                placeholder="-- Disponível para qualquer dentista --" />
+              <Select label="Procedimento *" name="procedimento" value={procedimentoOrtoId} onChange={setProcedimentoOrtoId}
+                options={procedimentos.map((p) => ({ value: String(p.id), label: `${p.nome} — ${formatarMoeda(p.valor)}` }))}
+                placeholder="Selecione o procedimento..." required />
               {procedimentoSelecionado && (
-                <div className="bg-info-50 border border-info-200 rounded-lg p-4">
-                  <p className="text-sm text-info-800">
-                    <strong>Resumo:</strong> {procedimentoSelecionado.nome} — {formatarMoeda(procedimentoSelecionado.valor)}
-                  </p>
-                  <p className="text-xs text-info-600 mt-1">
-                    O atendimento será criado e irá direto para a fila de pagamento.
-                    Após o pagamento, entrará na fila de execução do dentista selecionado.
-                  </p>
+                <div className="bg-info-50 border border-info-200 rounded-lg p-3 text-sm text-info-800">
+                  <strong>Resumo:</strong> {procedimentoSelecionado.nome} — {formatarMoeda(procedimentoSelecionado.valor)}<br />
+                  <span className="text-xs text-info-600">Será criado e irá direto para a fila de pagamento.</span>
                 </div>
               )}
             </div>
@@ -341,21 +310,36 @@ export default function NovoAtendimentoPage() {
 
         {/* Botões */}
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => router.push('/atendimentos')} type="button">
+          <Button variant="secondary" type="button" onClick={() => router.push('/atendimentos')}>
             Cancelar
           </Button>
-          <Button
-            type="submit"
-            disabled={!clienteId || saving || (tipoAtendimento === 'orto' && (!executorId || !procedimentoOrtoId))}
-            loading={saving}
-          >
-            {tipoAtendimento === 'orto' 
-              ? 'Criar Atendimento Orto'
-              : 'Criar Atendimento'
-            }
+          <Button type="submit"
+            disabled={!clienteId || saving || (tipoAtendimento === 'orto' && !procedimentoOrtoId)}
+            loading={saving}>
+            {tipoAtendimento === 'orto' ? 'Criar Atendimento Orto' : 'Criar Atendimento'}
           </Button>
         </div>
       </form>
+
+      {/* Modal: novo cliente */}
+      <Modal isOpen={modalNovoCliente} onClose={() => setModalNovoCliente(false)}
+        title="Cadastrar Novo Cliente" size="lg">
+        <ClienteForm
+          onSubmit={handleCriarNovoCliente}
+          onCancel={() => setModalNovoCliente(false)}
+          loading={savingNovoCliente}
+          error={erroNovoCliente}
+          submitLabel="Cadastrar e Selecionar"
+        />
+      </Modal>
     </div>
+  );
+}
+
+export default function NovoAtendimentoPage() {
+  return (
+    <Suspense fallback={<LoadingState text="Carregando..." />}>
+      <NovoAtendimentoForm />
+    </Suspense>
   );
 }

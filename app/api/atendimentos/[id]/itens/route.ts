@@ -137,8 +137,8 @@ export async function POST(
     
     // Insere item
     const result = await execute(
-      `INSERT INTO itens_atendimento 
-        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, status) 
+      `INSERT INTO itens_atendimento
+        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente')`,
       [
         parseInt(id),
@@ -150,7 +150,27 @@ export async function POST(
         quantidadeFinal
       ]
     );
-    
+
+    const itemId = result.lastInsertRowid as number;
+
+    // Cria etapas se for procedimento por dente com faces definidas
+    if (dentes) {
+      try {
+        interface DenteFaceDB { dente: string; faces: Array<{ nome: string }> }
+        const dentesArray: DenteFaceDB[] = JSON.parse(dentes);
+        for (const d of dentesArray) {
+          for (const f of d.faces) {
+            await execute(
+              `INSERT INTO etapas_procedimento (item_atendimento_id, dente, face) VALUES (?, ?, ?)`,
+              [itemId, d.dente, f.nome]
+            );
+          }
+        }
+      } catch {
+        // dentes inválido ou formato antigo — não cria etapas
+      }
+    }
+
     // Se adicionou durante execução, volta para aguardando_pagamento
     if (atendimento.status === 'em_execucao') {
       await execute(
@@ -161,7 +181,7 @@ export async function POST(
     
     // Retorna item criado
     const novoItem = await queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null }>(
-      `SELECT 
+      `SELECT
         i.*,
         p.nome as procedimento_nome,
         u.nome as executor_nome
@@ -169,7 +189,7 @@ export async function POST(
       INNER JOIN procedimentos p ON i.procedimento_id = p.id
       LEFT JOIN usuarios u ON i.executor_id = u.id
       WHERE i.id = ?`,
-      [result.lastInsertRowid]
+      [itemId]
     );
     
     return NextResponse.json(novoItem, { status: 201 });
@@ -233,6 +253,16 @@ export async function DELETE(
       );
     }
     
+    // Remove etapas e prontuários de etapa em cascata
+    const etapas = await query<{ id: number }>(
+      'SELECT id FROM etapas_procedimento WHERE item_atendimento_id = ?',
+      [parseInt(itemId)]
+    );
+    for (const etapa of etapas) {
+      await execute('DELETE FROM prontuarios_etapa WHERE etapa_id = ?', [etapa.id]);
+    }
+    await execute('DELETE FROM etapas_procedimento WHERE item_atendimento_id = ?', [parseInt(itemId)]);
+
     // Remove item
     await execute('DELETE FROM itens_atendimento WHERE id = ?', [parseInt(itemId)]);
     

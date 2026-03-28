@@ -3,10 +3,10 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import SeletorDentes from '@/components/SeletorDentes';
+import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 import { formatarMoeda } from '@/lib/utils/formatters';
 import { Search } from 'lucide-react';
-import { Alert, LoadingState, PageHeader, Card, Button, Select, Input, EmptyState } from '@/components/ui';
+import { Alert, LoadingState, PageHeader, Card, Button, Select, Input, EmptyState, ConfirmDialog } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface Procedimento {
@@ -63,9 +63,23 @@ export default function AvaliacaoDetalhePage({
   const [procedimentoId, setProcedimentoId] = useState('');
   const [executorId, setExecutorId] = useState('');
   const [valorCustom, setValorCustom] = useState('');
-  const [dentesSelecionados, setDentesSelecionados] = useState<string[]>([]);
+  const [dentesFaces, setDentesFaces] = useState<DenteFaceInput[]>([]);
   const [adicionando, setAdicionando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
+  const [editingValorId, setEditingValorId] = useState<number | null>(null);
+  const [editingValorValue, setEditingValorValue] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void | Promise<void>;
+    type?: 'danger' | 'warning' | 'info';
+    confirmLabel?: string;
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
+  const openConfirm = (config: Omit<typeof confirmDialog, 'isOpen'>) => {
+    setConfirmDialog({ ...config, isOpen: true });
+  };
 
   useEffect(() => {
     carregarDados();
@@ -105,8 +119,12 @@ export default function AvaliacaoDetalhePage({
     const proc = procedimentos.find(p => p.id === parseInt(procedimentoId));
     
     // Validar se precisa de dentes selecionados
-    if (proc?.por_dente && dentesSelecionados.length === 0) {
+    if (proc?.por_dente && dentesFaces.length === 0) {
       setError('Selecione pelo menos um dente para este procedimento');
+      return;
+    }
+    if (proc?.por_dente && dentesFaces.some(d => d.faces.length === 0)) {
+      setError('Selecione ao menos uma face para cada dente');
       return;
     }
     
@@ -115,10 +133,18 @@ export default function AvaliacaoDetalhePage({
     
     try {
       // Calcular valor baseado em quantidade de dentes (se aplicável)
-      const quantidade = proc?.por_dente ? dentesSelecionados.length : 1;
+      const quantidade = proc?.por_dente ? dentesFaces.length : 1;
       const valorBase = valorCustom ? parseFloat(valorCustom) : proc?.valor || 0;
       const valorTotal = valorBase * quantidade;
-      
+
+      // Converte para formato de armazenamento com concluido por face
+      const dentesParaSalvar = proc?.por_dente
+        ? JSON.stringify(dentesFaces.map(d => ({
+            dente: d.dente,
+            faces: d.faces.map(f => ({ nome: f, concluido: false })),
+          })))
+        : null;
+
       const res = await fetch(`/api/atendimentos/${id}/itens`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -127,7 +153,7 @@ export default function AvaliacaoDetalhePage({
           executor_id: executorId ? parseInt(executorId) : null,
           criado_por_id: user?.id,
           valor: valorTotal,
-          dentes: proc?.por_dente ? JSON.stringify(dentesSelecionados) : null,
+          dentes: dentesParaSalvar,
           quantidade: quantidade,
         }),
       });
@@ -141,7 +167,7 @@ export default function AvaliacaoDetalhePage({
       setProcedimentoId('');
       setExecutorId('');
       setValorCustom('');
-      setDentesSelecionados([]);
+      setDentesFaces([]);
       await carregarDados();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao adicionar');
@@ -150,24 +176,31 @@ export default function AvaliacaoDetalhePage({
     }
   };
 
-  const handleRemoverItem = async (itemId: number) => {
-    if (!confirm('Deseja remover este procedimento?')) return;
-    
-    try {
-      const res = await fetch(
-        `/api/atendimentos/${id}/itens?item_id=${itemId}&usuario_id=${user?.id}`,
-        { method: 'DELETE' }
-      );
-      
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erro ao remover');
-      }
-      
-      await carregarDados();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao remover');
-    }
+  const handleRemoverItem = (itemId: number) => {
+    openConfirm({
+      title: 'Remover Procedimento',
+      message: 'Deseja remover este procedimento?',
+      confirmLabel: 'Remover',
+      type: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(
+            `/api/atendimentos/${id}/itens?item_id=${itemId}&usuario_id=${user?.id}`,
+            { method: 'DELETE' }
+          );
+
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Erro ao remover');
+          }
+
+          await carregarDados();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Erro ao remover');
+        }
+      },
+    });
   };
 
   const handleAtualizarExecutor = async (itemId: number, novoExecutorId: string) => {
@@ -183,6 +216,22 @@ export default function AvaliacaoDetalhePage({
       await carregarDados();
     } catch (err) {
       console.error('Erro ao atualizar executor:', err);
+    }
+  };
+
+  const handleAtualizarValor = async (itemId: number) => {
+    const novoValor = parseFloat(editingValorValue);
+    setEditingValorId(null);
+    if (isNaN(novoValor) || novoValor <= 0) return;
+    try {
+      await fetch(`/api/atendimentos/${id}/itens/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valor: novoValor }),
+      });
+      await carregarDados();
+    } catch (err) {
+      console.error('Erro ao atualizar valor:', err);
     }
   };
 
@@ -223,7 +272,7 @@ export default function AvaliacaoDetalhePage({
   const calcularValorTotal = () => {
     if (!procedimentoSelecionado) return 0;
     const valorBase = valorCustom ? parseFloat(valorCustom) : procedimentoSelecionado.valor;
-    const quantidade = procedimentoSelecionado.por_dente ? dentesSelecionados.length : 1;
+    const quantidade = procedimentoSelecionado.por_dente ? dentesFaces.length : 1;
     return valorBase * quantidade;
   };
 
@@ -252,26 +301,9 @@ export default function AvaliacaoDetalhePage({
           { label: 'Avaliações', href: '/avaliacao' },
           { label: atendimento.cliente_nome },
         ]}
-        actions={
-          <Button
-            onClick={handleFinalizarAvaliacao}
-            disabled={finalizando || atendimento.itens.length === 0}
-            loading={finalizando}
-          >
-            ✓ Finalizar Avaliação
-          </Button>
-        }
       />
 
       {error && <Alert type="error">{error}</Alert>}
-
-      {/* Aviso de privacidade */}
-      <Card className="bg-yellow-50 border border-yellow-200">
-        <p className="text-sm text-yellow-800">
-          <strong>Modo Avaliação:</strong> Você está vendo apenas o nome do paciente.
-          Os dados pessoais (CPF, telefone, email) estão ocultos por privacidade.
-        </p>
-      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Adicionar Procedimento */}
@@ -287,7 +319,7 @@ export default function AvaliacaoDetalhePage({
                 onChange={(value) => {
                   setProcedimentoId(value);
                   setValorCustom('');
-                  setDentesSelecionados([]);
+                  setDentesFaces([]);
                 }}
                 options={procedimentos.map((proc) => ({
                   value: String(proc.id),
@@ -305,13 +337,13 @@ export default function AvaliacaoDetalhePage({
                   Dentes *
                 </label>
                 <SeletorDentes
-                  dentesSelecionados={dentesSelecionados}
-                  onChange={setDentesSelecionados}
+                  valor={dentesFaces}
+                  onChange={setDentesFaces}
                   disabled={adicionando}
                 />
-                {dentesSelecionados.length > 0 && (
+                {dentesFaces.length > 0 && (
                   <p className="text-sm text-info-600 mt-2">
-                    Valor: {formatarMoeda(procedimentoSelecionado.valor)} × {dentesSelecionados.length} dentes = <strong>{formatarMoeda(calcularValorTotal())}</strong>
+                    Valor: {formatarMoeda(procedimentoSelecionado.valor)} × {dentesFaces.length} dentes = <strong>{formatarMoeda(calcularValorTotal())}</strong>
                   </p>
                 )}
               </div>
@@ -356,24 +388,6 @@ export default function AvaliacaoDetalhePage({
           </form>
         </Card>
 
-        {/* Resumo Financeiro */}
-        <Card>
-          <h2 className="text-lg font-semibold mb-4">Resumo</h2>
-          
-          <div className="space-y-4">
-            <div className="flex justify-between items-center p-4 bg-surface-secondary rounded-lg">
-              <span className="text-neutral-600">Total de Procedimentos</span>
-              <span className="text-xl font-bold">{atendimento.itens.length}</span>
-            </div>
-            
-            <div className="flex justify-between items-center p-4 bg-info-50 rounded-lg">
-              <span className="text-info-700">Valor Total</span>
-              <span className="text-2xl font-bold text-info-700">
-                {formatarMoeda(atendimento.total)}
-              </span>
-            </div>
-          </div>
-        </Card>
       </div>
 
       {/* Lista de Procedimentos */}
@@ -432,17 +446,38 @@ export default function AvaliacaoDetalhePage({
                     </select>
                   </td>
                   <td className="px-4 py-3 text-right font-medium">
-                    {formatarMoeda(item.valor)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {atendimento.status === 'avaliacao' && (
+                    {editingValorId === item.id ? (
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        autoFocus
+                        value={editingValorValue}
+                        onChange={(e) => setEditingValorValue(e.target.value)}
+                        onBlur={() => handleAtualizarValor(item.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAtualizarValor(item.id);
+                          if (e.key === 'Escape') setEditingValorId(null);
+                        }}
+                        className="input text-sm py-1 w-28 text-right"
+                      />
+                    ) : (
                       <button
-                        onClick={() => handleRemoverItem(item.id)}
-                        className="text-error-600 hover:text-error-800 text-sm"
+                        onClick={() => { setEditingValorId(item.id); setEditingValorValue(String(item.valor)); }}
+                        className="hover:text-info-600 hover:underline cursor-pointer"
+                        title="Clique para editar"
                       >
-                        Remover
+                        {formatarMoeda(item.valor)}
                       </button>
                     )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => handleRemoverItem(item.id)}
+                      className="text-error-600 hover:text-error-800 text-sm"
+                    >
+                      Remover
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -461,6 +496,16 @@ export default function AvaliacaoDetalhePage({
           </table>
         )}
       </Card>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        type={confirmDialog.type}
+      />
 
       {/* Aviso para finalizar */}
       {atendimento.itens.length > 0 && (

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Cliente } from '@/lib/types';
 import { formatarCPF, formatarTelefone } from '@/lib/utils/formatters';
 import { Users } from 'lucide-react';
-import { PageHeader, Table, Button, Alert, SearchInput } from '@/components/ui';
+import { PageHeader, Table, Button, Alert, SearchInput, Pagination, ConfirmDialog } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
@@ -17,19 +17,35 @@ export default function ClientesPage() {
   const [busca, setBusca] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const router = useRouter();
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void | Promise<void>;
+    type?: 'danger' | 'warning' | 'info';
+    confirmLabel?: string;
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
+  const openConfirm = (config: Omit<typeof confirmDialog, 'isOpen'>) => {
+    setConfirmDialog({ ...config, isOpen: true });
+  };
 
   // Carregar clientes
-  const loadClientes = async (searchTerm = '') => {
+  const loadClientes = async (searchTerm = '', pageNum = 1) => {
     try {
       setIsLoading(true);
-      const url = searchTerm 
-        ? `/api/clientes?busca=${encodeURIComponent(searchTerm)}`
-        : '/api/clientes';
-      
-      const response = await fetch(url);
+      const params = new URLSearchParams({ page: String(pageNum) });
+      if (searchTerm) params.set('busca', searchTerm);
+
+      const response = await fetch(`/api/clientes?${params}`);
       const data = await response.json();
-      setClientes(data);
+      setClientes(data.clientes);
+      setTotal(data.total);
+      setTotalPages(data.totalPages);
     } catch {
       setError('Erro ao carregar clientes');
     } finally {
@@ -54,30 +70,43 @@ export default function ClientesPage() {
 
   // Busca com debounce (SearchInput handles debounce internally)
   const handleSearch = useCallback((term: string) => {
-    loadClientes(term);
+    setPage(1);
+    loadClientes(term, 1);
   }, []);
 
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    loadClientes(busca, newPage);
+  };
+
   // Excluir cliente
-  const handleDelete = async (id: number, nome: string) => {
-    if (!confirm(`Deseja excluir o cliente "${nome}"?`)) return;
+  const handleDelete = (id: number, nome: string) => {
+    openConfirm({
+      title: 'Excluir Cliente',
+      message: `Deseja excluir o cliente "${nome}"?`,
+      confirmLabel: 'Excluir',
+      type: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const response = await fetch(`/api/clientes/${id}`, {
+            method: 'DELETE',
+          });
 
-    try {
-      const response = await fetch(`/api/clientes/${id}`, {
-        method: 'DELETE',
-      });
+          const data = await response.json();
 
-      const data = await response.json();
+          if (!response.ok) {
+            setError(data.error || 'Erro ao excluir');
+            return;
+          }
 
-      if (!response.ok) {
-        setError(data.error || 'Erro ao excluir');
-        return;
-      }
-
-      setSuccess('Cliente excluído!');
-      loadClientes(busca);
-    } catch {
-      setError('Erro ao excluir cliente');
-    }
+          setSuccess('Cliente excluído!');
+          loadClientes(busca, page);
+        } catch {
+          setError('Erro ao excluir cliente');
+        }
+      },
+    });
   };
 
   const columns: TableColumn<Cliente>[] = [
@@ -164,9 +193,23 @@ export default function ClientesPage() {
         caption="Lista de clientes"
       />
 
-      {!isLoading && clientes.length > 0 && (
-        <p className="text-sm text-muted">{clientes.length} cliente(s) encontrado(s)</p>
+      <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+
+      {!isLoading && total > 0 && (
+        <p className="text-sm text-muted text-center">
+          {((page - 1) * 50) + 1}–{Math.min(page * 50, total)} de {total} cliente(s)
+        </p>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        type={confirmDialog.type}
+      />
     </div>
   );
 }

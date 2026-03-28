@@ -36,6 +36,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { href: '/pagamentos', label: 'Pagamentos', icon: CreditCard, roles: ['admin', 'atendente'] },
   { href: '/procedimentos', label: 'Procedimentos', icon: FileText, roles: ['admin'] },
   { href: '/usuarios', label: 'Usuários', icon: User, roles: ['admin'] },
+  { href: '/minhas-comissoes', label: 'Minhas Comissões', icon: Banknote, roles: ['avaliador'] },
   { href: '/comissoes', label: 'Comissões', icon: Banknote, roles: ['admin'] },
 ];
 

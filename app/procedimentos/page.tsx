@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FileText, Activity } from 'lucide-react';
-import { PageHeader, Button, Input, Checkbox, Badge, Alert, Modal, LoadingState, Card, Table } from '@/components/ui';
+import { PageHeader, Button, Input, Checkbox, Badge, Alert, Modal, LoadingState, Card, Table, ConfirmDialog } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -52,6 +52,18 @@ export default function ProcedimentosPage() {
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void | Promise<void>;
+    type?: 'danger' | 'warning' | 'info';
+    confirmLabel?: string;
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
+  const openConfirm = (config: Omit<typeof confirmDialog, 'isOpen'>) => {
+    setConfirmDialog({ ...config, isOpen: true });
+  };
 
   const carregarProcedimentos = useCallback(async () => {
     try {
@@ -144,17 +156,24 @@ export default function ProcedimentosPage() {
     }
   };
 
-  const handleDesativar = async (id: number) => {
-    if (!confirm('Deseja desativar este procedimento?')) return;
-
-    try {
-      const res = await fetch(`/api/procedimentos/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        carregarProcedimentos();
-      }
-    } catch (error) {
-      console.error('Erro ao desativar:', error);
-    }
+  const handleDesativar = (id: number) => {
+    openConfirm({
+      title: 'Desativar Procedimento',
+      message: 'Deseja desativar este procedimento?',
+      confirmLabel: 'Desativar',
+      type: 'warning',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/procedimentos/${id}`, { method: 'DELETE' });
+          if (res.ok) {
+            carregarProcedimentos();
+          }
+        } catch (error) {
+          console.error('Erro ao desativar:', error);
+        }
+      },
+    });
   };
 
   const handleReativar = async (id: number) => {
@@ -289,6 +308,16 @@ export default function ProcedimentosPage() {
         Total: {procedimentos.length} procedimento(s)
         {mostrarInativos && ` (${procedimentos.filter(p => !p.ativo).length} inativo(s))`}
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        type={confirmDialog.type}
+      />
 
       {/* Modal de Criar/Editar */}
       <Modal

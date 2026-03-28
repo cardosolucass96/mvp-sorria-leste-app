@@ -92,17 +92,6 @@ export default function AvaliacaoPage() {
         description="Gerencie suas avaliações odontológicas"
       />
 
-      {/* Info do Avaliador */}
-      <Alert type="info">
-        <p className="text-sm">
-          <strong>Avaliador:</strong> {user?.nome}
-        </p>
-        <p className="text-xs mt-1 opacity-80">
-          Você verá apenas o nome do cliente durante a avaliação. 
-          Dados pessoais (CPF, telefone, email) ficam ocultos.
-        </p>
-      </Alert>
-
       {/* Seção: Meus Atendimentos */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
@@ -162,13 +151,9 @@ export default function AvaliacaoPage() {
       {/* Seção: Atendimentos Disponíveis */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-xl font-semibold text-foreground">Atendimentos Disponíveis</h2>
-          <Badge color="gray">{atendimentosDisponiveis.length}</Badge>
+          <h2 className="text-xl font-semibold text-foreground">Disponíveis para Atendimento</h2>
+          <Badge color="amber">{atendimentosDisponiveis.length}</Badge>
         </div>
-        
-        <p className="text-sm text-muted">
-          Atendimentos sem avaliador definido. Clique em &quot;Assumir&quot; para se tornar responsável.
-        </p>
 
         {atendimentosDisponiveis.length === 0 ? (
           <Card variant="outlined">
@@ -205,8 +190,8 @@ export default function AvaliacaoPage() {
                   <div className="flex items-center gap-4">
                     <Badge color="amber">Sem Avaliador</Badge>
                     
-                    <Button variant="secondary" onClick={() => handleAssumirAtendimento(atendimento.id)}>
-                      ✋ Assumir
+                    <Button onClick={() => handleAssumirAtendimento(atendimento.id)}>
+                      Atender
                     </Button>
                   </div>
                 </div>

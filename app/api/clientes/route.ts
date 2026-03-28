@@ -1,28 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, execute } from '@/lib/db';
+import { query, execute, batch } from '@/lib/db';
 import { Cliente } from '@/lib/types';
 
-// GET /api/clientes - Listar clientes com busca opcional
+const PAGE_SIZE = 50;
+
+// GET /api/clientes - Listar clientes com busca e paginação
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const busca = searchParams.get('busca');
+    const busca  = searchParams.get('busca') || '';
+    const page   = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit  = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || String(PAGE_SIZE), 10)));
+    const offset = (page - 1) * limit;
+    const ordem  = searchParams.get('ordem') === 'recente' ? 'created_at DESC' : 'nome';
 
     let clientes: Cliente[];
+    let total: number;
 
     if (busca) {
-      // Busca por nome, CPF, telefone ou email
-      clientes = await query<Cliente>(
-        `SELECT * FROM clientes 
-         WHERE nome LIKE ? OR cpf LIKE ? OR telefone LIKE ? OR email LIKE ?
-         ORDER BY nome`,
-        [`%${busca}%`, `%${busca}%`, `%${busca}%`, `%${busca}%`]
-      );
+      const like = `%${busca}%`;
+      const [countResult, dataResult] = await batch([
+        {
+          sql: `SELECT COUNT(*) as total FROM clientes WHERE nome LIKE ? OR cpf LIKE ? OR telefone LIKE ? OR email LIKE ?`,
+          params: [like, like, like, like],
+        },
+        {
+          sql: `SELECT * FROM clientes WHERE nome LIKE ? OR cpf LIKE ? OR telefone LIKE ? OR email LIKE ? ORDER BY ${ordem} LIMIT ? OFFSET ?`,
+          params: [like, like, like, like, limit, offset],
+        },
+      ]);
+      total    = (countResult.results[0] as { total: number }).total;
+      clientes = dataResult.results as Cliente[];
     } else {
-      clientes = await query<Cliente>('SELECT * FROM clientes ORDER BY nome');
+      const [countResult, dataResult] = await batch([
+        { sql: 'SELECT COUNT(*) as total FROM clientes' },
+        { sql: `SELECT * FROM clientes ORDER BY ${ordem} LIMIT ? OFFSET ?`, params: [limit, offset] },
+      ]);
+      total    = (countResult.results[0] as { total: number }).total;
+      clientes = dataResult.results as Cliente[];
     }
 
-    return NextResponse.json(clientes);
+    return NextResponse.json({
+      clientes,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      limit,
+    });
   } catch (error) {
     console.error('Erro ao buscar clientes:', error);
     return NextResponse.json(

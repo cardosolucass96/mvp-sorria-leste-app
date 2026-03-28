@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { cliente_id, avaliador_id, tipo_orto, executor_id, procedimento_id, valor } = body;
+    const { cliente_id, avaliador_id, tipo_orto, executor_id, procedimento_id, valor, criado_por_id } = body;
     
     // Validações
     if (!cliente_id) {
@@ -149,23 +149,33 @@ export async function POST(request: NextRequest) {
     
     // === FLUXO ORTO ===
     if (tipo_orto) {
-      // Validações orto
-      if (!executor_id || !procedimento_id) {
+      if (!procedimento_id) {
         return NextResponse.json(
-          { error: 'Executor e procedimento são obrigatórios para atendimento orto' },
+          { error: 'Procedimento é obrigatório para atendimento orto' },
           { status: 400 }
         );
       }
-      
-      // Verifica executor
-      const executor = await queryOne<{ id: number; role: string }>(
-        'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
-        [executor_id]
-      );
-      if (!executor) {
-        return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
+
+      // executor_id é opcional — se não informado, fica disponível para alguém assumir
+      if (executor_id) {
+        const executor = await queryOne<{ id: number; role: string }>(
+          'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
+          [executor_id]
+        );
+        if (!executor) {
+          return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
+        }
       }
-      
+
+      // criado_por_id: usa executor se informado, senão usa quem criou (passado pelo frontend)
+      const criadoPorId = executor_id || criado_por_id;
+      if (!criadoPorId) {
+        return NextResponse.json(
+          { error: 'Não foi possível identificar o criador do atendimento' },
+          { status: 400 }
+        );
+      }
+
       // Verifica procedimento
       const procedimento = await queryOne<{ id: number; valor: number; nome: string }>(
         'SELECT id, valor, nome FROM procedimentos WHERE id = ? AND ativo = 1',
@@ -174,23 +184,23 @@ export async function POST(request: NextRequest) {
       if (!procedimento) {
         return NextResponse.json({ error: 'Procedimento não encontrado' }, { status: 404 });
       }
-      
+
       const valorFinal = valor || procedimento.valor;
-      
+
       // Cria atendimento já em aguardando_pagamento
       const result = await execute(
-        `INSERT INTO atendimentos (cliente_id, avaliador_id, status, observacoes) 
+        `INSERT INTO atendimentos (cliente_id, avaliador_id, status, observacoes)
          VALUES (?, NULL, 'aguardando_pagamento', ?)`,
         [cliente_id, 'Atendimento Orto']
       );
-      
+
       const atendimentoId = result.lastInsertRowid;
-      
-      // Cria o item do atendimento com executor e criado_por já definidos
+
+      // Cria item — executor_id pode ser null (disponível para alguém assumir)
       await execute(
-        `INSERT INTO itens_atendimento (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, quantidade, status) 
+        `INSERT INTO itens_atendimento (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, quantidade, status)
          VALUES (?, ?, ?, ?, ?, 1, 'pendente')`,
-        [atendimentoId, procedimento_id, executor_id, executor_id, valorFinal]
+        [atendimentoId, procedimento_id, executor_id || null, criadoPorId, valorFinal]
       );
       
       // Busca atendimento criado

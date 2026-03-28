@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Usuario, UserRole } from '@/lib/types';
 import { Users } from 'lucide-react';
-import { PageHeader, Card, Button, Input, Select, Badge, Alert, LoadingState, Table } from '@/components/ui';
+import { PageHeader, Card, Button, Input, Select, Badge, Alert, LoadingState, Table, ConfirmDialog } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { ROLE_LABELS_DESCRITIVOS } from '@/lib/constants/roles';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -34,6 +34,18 @@ export default function UsuariosPage() {
   const [formData, setFormData] = useState<UsuarioFormData>(initialFormData);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void | Promise<void>;
+    type?: 'danger' | 'warning' | 'info';
+    confirmLabel?: string;
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
+  const openConfirm = (config: Omit<typeof confirmDialog, 'isOpen'>) => {
+    setConfirmDialog({ ...config, isOpen: true });
+  };
 
   // Carregar usuários
   const loadUsuarios = async () => {
@@ -122,25 +134,32 @@ export default function UsuariosPage() {
   };
 
   // Desativar usuário
-  const handleDelete = async (id: number, nome: string) => {
-    if (!confirm(`Deseja desativar o usuário "${nome}"?`)) return;
+  const handleDelete = (id: number, nome: string) => {
+    openConfirm({
+      title: 'Desativar Usuário',
+      message: `Deseja desativar o usuário "${nome}"?`,
+      confirmLabel: 'Desativar',
+      type: 'warning',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const response = await fetch(`/api/usuarios/${id}`, {
+            method: 'DELETE',
+          });
 
-    try {
-      const response = await fetch(`/api/usuarios/${id}`, {
-        method: 'DELETE',
-      });
+          if (!response.ok) {
+            const data = await response.json();
+            setError(data.error || 'Erro ao desativar');
+            return;
+          }
 
-      if (!response.ok) {
-        const data = await response.json();
-        setError(data.error || 'Erro ao desativar');
-        return;
-      }
-
-      setSuccess('Usuário desativado!');
-      loadUsuarios();
-    } catch {
-      setError('Erro ao desativar usuário');
-    }
+          setSuccess('Usuário desativado!');
+          loadUsuarios();
+        } catch {
+          setError('Erro ao desativar usuário');
+        }
+      },
+    });
   };
 
   // Reativar usuário
@@ -236,6 +255,16 @@ export default function UsuariosPage() {
       )}
 
       {/* Tabela de Usuários */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        type={confirmDialog.type}
+      />
+
       <Table<Usuario>
         columns={[
           {

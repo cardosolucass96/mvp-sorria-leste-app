@@ -58,13 +58,30 @@ export async function GET(
     );
 
     if (itens.length === 0) {
-      return NextResponse.json(
-        { error: 'Item não encontrado' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Item não encontrado' }, { status: 404 });
     }
 
-    return NextResponse.json(itens[0]);
+    const item = itens[0];
+
+    // Busca etapas com prontuários
+    const etapas = await query(
+      `SELECT e.*,
+              u.nome as concluido_por_nome,
+              pe.id as prontuario_id,
+              pe.descricao as prontuario_descricao,
+              pe.observacoes as prontuario_observacoes,
+              pe.created_at as prontuario_created_at,
+              pu.nome as prontuario_autor
+       FROM etapas_procedimento e
+       LEFT JOIN usuarios u ON e.concluido_por_id = u.id
+       LEFT JOIN prontuarios_etapa pe ON pe.etapa_id = e.id
+       LEFT JOIN usuarios pu ON pe.usuario_id = pu.id
+       WHERE e.item_atendimento_id = ?
+       ORDER BY e.dente ASC, e.face ASC`,
+      [parseInt(id)]
+    );
+
+    return NextResponse.json({ ...item, etapas });
   } catch (error) {
     console.error('Erro ao buscar item:', error);
     return NextResponse.json(

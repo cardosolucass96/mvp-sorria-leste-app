@@ -34,6 +34,27 @@ export default function LoginPage() {
     setIsLoading(false);
   };
 
+  const loginRapido = async (emailDev: string) => {
+    setError('');
+    setIsLoading(true);
+    setEmail(emailDev);
+    setSenha('Sorria@123');
+    const result = await login(emailDev, 'Sorria@123');
+    if (result.success) {
+      router.push('/');
+    } else {
+      setError(result.error || 'Erro ao fazer login');
+      setIsLoading(false);
+    }
+  };
+
+  const DEV_USERS = [
+    { label: 'Admin',     email: 'admin@sorrialeste.com' },
+    { label: 'Atendente', email: 'maria@sorrialeste.com' },
+    { label: 'Avaliador', email: 'dr.carlos@sorrialeste.com' },
+    { label: 'Executor',  email: 'dr.pedro@sorrialeste.com' },
+  ];
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-400 via-primary-500 to-primary-600">
       <div className="max-w-md w-full mx-4">
@@ -94,6 +115,26 @@ export default function LoginPage() {
           </form>
 
         </div>
+
+        {/* Atalhos de dev — visíveis apenas em localhost */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 bg-surface/80 rounded-xl p-4 text-sm">
+            <p className="text-neutral-500 mb-2 text-center">Clique para entrar (senha: Sorria@123):</p>
+            <div className="grid grid-cols-4 gap-2">
+              {DEV_USERS.map((u) => (
+                <button
+                  key={u.email}
+                  type="button"
+                  onClick={() => loginRapido(u.email)}
+                  disabled={isLoading}
+                  className="py-1.5 px-2 rounded-lg bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium transition-colors disabled:opacity-50 text-xs"
+                >
+                  {u.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Rodapé */}
         <p className="text-center text-sm text-primary-100 mt-6">

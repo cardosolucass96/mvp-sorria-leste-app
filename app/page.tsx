@@ -326,7 +326,7 @@ export default function Home() {
                 <ClipboardList className="w-6 h-6 text-warning-600" aria-hidden="true" />
               </div>
               <div>
-                <p className="text-sm text-muted">Disponíveis para Pegar</p>
+                <p className="text-sm text-muted">Na Fila sem Avaliador</p>
                 <p className="text-2xl font-bold text-warning-600">{stats?.atendimentosDisponiveisAvaliacao || 0}</p>
               </div>
             </div>
@@ -401,7 +401,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className={`grid grid-cols-1 md:grid-cols-2 ${isDentista ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${isDentista ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-4`}>
           {isDentista && (
             <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-purple-500">
               <div className="flex items-center gap-4">
@@ -440,17 +440,7 @@ export default function Home() {
             </div>
           </Link>
 
-          <Link href="/meus-procedimentos" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-success-500">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-success-100 rounded-full">
-                <Banknote className="w-6 h-6 text-success-600" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Comissões (Este Mês)</p>
-                <p className="text-2xl font-bold text-success-600">{formatarMoeda(stats?.minhasComissoes || 0)}</p>
-              </div>
-            </div>
-          </Link>
+          {/* Comissões: feature oculta temporariamente, lógica mantida */}
         </div>
 
         {/* Ações Rápidas */}

@@ -34,13 +34,17 @@ export default function Modal({
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const titleId = useId();
 
-  // Focus trap
+  // Mantém referência atualizada sem recriar handleKeyDown
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  // Focus trap — só muda quando closeOnEsc mudar (estático na prática)
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape' && closeOnEsc) {
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -64,30 +68,32 @@ export default function Modal({
         }
       }
     },
-    [onClose, closeOnEsc]
+    [closeOnEsc]
   );
 
+  // Registro do listener — só quando handleKeyDown ou isOpen mudar
   useEffect(() => {
-    if (isOpen) {
-      previousFocusRef.current = document.activeElement as HTMLElement;
-      document.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
-
-      // Focus first focusable element
-      requestAnimationFrame(() => {
-        const first = panelRef.current?.querySelector<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        first?.focus();
-      });
-
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown);
-        document.body.style.overflow = '';
-        previousFocusRef.current?.focus();
-      };
-    }
+    if (!isOpen) return;
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
   }, [isOpen, handleKeyDown]);
+
+  // Foco inicial — só quando o modal abre/fecha
+  useEffect(() => {
+    if (!isOpen) return;
+    previousFocusRef.current = document.activeElement as HTMLElement;
+    requestAnimationFrame(() => {
+      const first = panelRef.current?.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      first?.focus();
+    });
+    return () => { previousFocusRef.current?.focus(); };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

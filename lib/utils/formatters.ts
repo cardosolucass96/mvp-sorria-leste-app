@@ -8,18 +8,32 @@ export function formatarMoeda(valor: number): string {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+/**
+ * Converte string de data do SQLite para objeto Date tratando como horário local.
+ * SQLite retorna "YYYY-MM-DD HH:MM:SS" (sem fuso) ou "YYYY-MM-DD".
+ * new Date("YYYY-MM-DD") interpreta como UTC, causando bug de dia errado no Brasil (UTC-3).
+ */
+function parseSqliteDate(data: string | null | undefined): Date | null {
+  if (!data) return null;
+  const s = data.trim();
+  // Só data "YYYY-MM-DD" → adiciona T00:00:00 para forçar horário local
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T00:00:00');
+  // Datetime "YYYY-MM-DD HH:MM:SS" → substitui espaço por T (sem Z = horário local)
+  return new Date(s.replace(' ', 'T'));
+}
+
 /** Formata data como dd/mm/aaaa */
-export function formatarData(data: string): string {
-  return new Date(data).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+export function formatarData(data: string | null | undefined): string {
+  const d = parseSqliteDate(data);
+  if (!d || isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 /** Formata data como dd/mm/aaaa HH:mm */
-export function formatarDataHora(data: string): string {
-  return new Date(data).toLocaleDateString('pt-BR', {
+export function formatarDataHora(data: string | null | undefined): string {
+  const d = parseSqliteDate(data);
+  if (!d || isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -29,8 +43,10 @@ export function formatarDataHora(data: string): string {
 }
 
 /** Formata data completa com segundos (para logs/prontuário) */
-export function formatarDataCompleta(data: string): string {
-  return new Date(data).toLocaleString('pt-BR');
+export function formatarDataCompleta(data: string | null | undefined): string {
+  const d = parseSqliteDate(data);
+  if (!d || isNaN(d.getTime())) return '-';
+  return d.toLocaleString('pt-BR');
 }
 
 /** Formata CPF: 123.456.789-00 */

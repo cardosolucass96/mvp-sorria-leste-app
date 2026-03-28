@@ -228,6 +228,67 @@ export async function PUT(
   }
 }
 
+// DELETE /api/atendimentos/[id] - Exclui atendimento
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const atendimentoId = parseInt(id);
+
+    const atendimento = await queryOne<Atendimento>(
+      'SELECT * FROM atendimentos WHERE id = ?',
+      [atendimentoId]
+    );
+
+    if (!atendimento) {
+      return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 });
+    }
+
+    if (atendimento.status === 'finalizado') {
+      return NextResponse.json(
+        { error: 'Atendimentos finalizados não podem ser excluídos' },
+        { status: 400 }
+      );
+    }
+
+    const temPagamento = await queryOne<CountResult>(
+      'SELECT COUNT(*) as count FROM pagamentos WHERE atendimento_id = ?',
+      [atendimentoId]
+    );
+
+    if (temPagamento && temPagamento.count > 0) {
+      return NextResponse.json(
+        { error: 'Atendimento com pagamentos registrados não pode ser excluído' },
+        { status: 400 }
+      );
+    }
+
+    // Cascade manual (FK sem ON DELETE CASCADE no SQLite)
+    const itens = await query<{ id: number }>(
+      'SELECT id FROM itens_atendimento WHERE atendimento_id = ?',
+      [atendimentoId]
+    );
+
+    for (const item of itens) {
+      await execute('DELETE FROM prontuarios WHERE item_atendimento_id = ?', [item.id]);
+      await execute('DELETE FROM notas_execucao WHERE item_atendimento_id = ?', [item.id]);
+      await execute('DELETE FROM anexos_execucao WHERE item_atendimento_id = ?', [item.id]);
+      await execute('DELETE FROM comissoes WHERE item_atendimento_id = ?', [item.id]);
+    }
+
+    await execute('DELETE FROM itens_atendimento WHERE atendimento_id = ?', [atendimentoId]);
+    await execute('DELETE FROM parcelas WHERE atendimento_id = ?', [atendimentoId]);
+    await execute('DELETE FROM atendimentos WHERE id = ?', [atendimentoId]);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Erro ao excluir atendimento:', error);
+    return NextResponse.json({ error: 'Erro ao excluir atendimento' }, { status: 500 });
+  }
+}
+
 // Função para validar transições de status
 async function validarTransicao(
   atendimento: Atendimento,

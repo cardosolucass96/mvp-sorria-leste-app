@@ -24,7 +24,7 @@ export async function PUT(
   try {
     const { id, itemId } = await params;
     const body = await request.json();
-    const { executor_id, valor, status, usuario_id } = body;
+    const { executor_id, valor, status, usuario_id, dentes } = body;
     
     // Verifica se atendimento existe
     const atendimento = await queryOne<Atendimento>(
@@ -86,6 +86,11 @@ export async function PUT(
       }
     }
     
+    if (dentes !== undefined) {
+      updates.push('dentes = ?');
+      updateParams.push(dentes);
+    }
+
     if (updates.length === 0) {
       return NextResponse.json(
         { error: 'Nenhum campo para atualizar' },

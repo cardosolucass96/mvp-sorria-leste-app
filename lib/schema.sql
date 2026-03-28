@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS pagamentos (
   metodo TEXT NOT NULL CHECK (metodo IN ('dinheiro', 'pix', 'cartao_debito', 'cartao_credito')),
   parcelas INTEGER DEFAULT 1,
   observacoes TEXT,
+  cancelado INTEGER DEFAULT 0,
+  motivo_cancelamento TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (recebido_por_id) REFERENCES usuarios(id)
@@ -174,6 +176,35 @@ CREATE TABLE IF NOT EXISTS prontuarios (
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
 
+-- Etapas de Procedimento (uma por dente+face, para itens por_dente)
+CREATE TABLE IF NOT EXISTS etapas_procedimento (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_atendimento_id INTEGER NOT NULL,
+  dente TEXT NOT NULL,           -- Número do dente (notação FDI, ex: "11")
+  face TEXT NOT NULL             -- V | L | M | D | O
+    CHECK (face IN ('V', 'L', 'M', 'D', 'O')),
+  status TEXT NOT NULL DEFAULT 'pendente'
+    CHECK (status IN ('pendente', 'concluido')),
+  concluido_at TEXT,
+  concluido_por_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
+  FOREIGN KEY (concluido_por_id) REFERENCES usuarios(id)
+);
+
+-- Prontuários de Etapa (um por etapa concluída)
+CREATE TABLE IF NOT EXISTS prontuarios_etapa (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  etapa_id INTEGER NOT NULL UNIQUE,
+  usuario_id INTEGER NOT NULL,
+  descricao TEXT NOT NULL,       -- Mínimo 50 caracteres
+  observacoes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (etapa_id) REFERENCES etapas_procedimento(id),
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+);
+
 -- Índices para melhor performance
 CREATE INDEX IF NOT EXISTS idx_clientes_cpf ON clientes(cpf);
 CREATE INDEX IF NOT EXISTS idx_clientes_nome ON clientes(nome);
@@ -189,3 +220,6 @@ CREATE INDEX IF NOT EXISTS idx_comissoes_usuario ON comissoes(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_comissoes_tipo ON comissoes(tipo);
 CREATE INDEX IF NOT EXISTS idx_notas_item ON notas_execucao(item_atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_anexos_item ON anexos_execucao(item_atendimento_id);
+CREATE INDEX IF NOT EXISTS idx_etapas_item ON etapas_procedimento(item_atendimento_id);
+CREATE INDEX IF NOT EXISTS idx_etapas_status ON etapas_procedimento(status);
+CREATE INDEX IF NOT EXISTS idx_prontuarios_etapa ON prontuarios_etapa(etapa_id);
