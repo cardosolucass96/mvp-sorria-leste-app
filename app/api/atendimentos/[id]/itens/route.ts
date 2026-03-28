@@ -11,6 +11,9 @@ interface ItemAtendimento {
   status: string;
   created_at: string;
   concluido_at: string | null;
+  group_id: string | null;
+  dente_unico: string | null;
+  por_dente: number;
 }
 
 interface Procedimento {
@@ -33,9 +36,16 @@ export async function GET(
     const { id } = await params;
     
     const itens = await query<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null; criado_por_nome: string | null }>(
-      `SELECT 
+      `SELECT
         i.*,
+        i.group_id,
+        CASE
+          WHEN i.group_id IS NOT NULL
+          THEN json_extract(i.dentes, '$[0].dente')
+          ELSE NULL
+        END as dente_unico,
         p.nome as procedimento_nome,
+        p.por_dente,
         u.nome as executor_nome,
         c.nome as criado_por_nome
       FROM itens_atendimento i
@@ -43,7 +53,7 @@ export async function GET(
       LEFT JOIN usuarios u ON i.executor_id = u.id
       LEFT JOIN usuarios c ON i.criado_por_id = c.id
       WHERE i.atendimento_id = ?
-      ORDER BY i.created_at ASC`,
+      ORDER BY i.group_id NULLS LAST, i.created_at ASC`,
       [parseInt(id)]
     );
     
