@@ -293,6 +293,7 @@ CREATE INDEX IF NOT EXISTS idx_etapas_item ON etapas_procedimento(item_atendimen
 CREATE INDEX IF NOT EXISTS idx_etapas_status ON etapas_procedimento(status);
 CREATE INDEX IF NOT EXISTS idx_prontuarios_etapa ON prontuarios_etapa(etapa_id);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_cliente ON agendamentos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_agendamentos_atendimento ON agendamentos(atendimento_origem_id);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_status ON agendamentos(status);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_data ON agendamentos(data_agendada);
 CREATE INDEX IF NOT EXISTS idx_movimentacoes_cliente ON movimentacoes_saldo(cliente_id);

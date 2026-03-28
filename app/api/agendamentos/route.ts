@@ -13,6 +13,7 @@ export const GET = withAuth(async (request: NextRequest) => {
     const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
     const semData = searchParams.get('sem_data');
+    const atendimentoOrigemId = searchParams.get('atendimento_origem_id');
 
     const conditions: string[] = [];
     const params: unknown[] = [];
@@ -28,6 +29,11 @@ export const GET = withAuth(async (request: NextRequest) => {
     if (clienteId) {
       conditions.push('a.cliente_id = ?');
       params.push(parseInt(clienteId));
+    }
+
+    if (atendimentoOrigemId) {
+      conditions.push('a.atendimento_origem_id = ?');
+      params.push(parseInt(atendimentoOrigemId));
     }
 
     // Busca por nome do cliente
