@@ -6,21 +6,27 @@
 
 import { CheckCircle } from 'lucide-react';
 import { STATUS_CONFIG, STATUS_ORDER } from '@/lib/constants/status';
-import type { AtendimentoStatus } from '@/lib/types';
+import type { AtendimentoStatus, AtendimentoTipo } from '@/lib/types';
 
 export interface StatusPipelineProps {
   currentStatus: AtendimentoStatus;
+  tipo?: AtendimentoTipo;
   className?: string;
 }
 
-export default function StatusPipeline({ currentStatus, className = '' }: StatusPipelineProps) {
-  const currentIndex = STATUS_ORDER.indexOf(currentStatus);
+const SESSAO_SKIPPED: AtendimentoStatus[] = ['triagem', 'avaliacao'];
+
+export default function StatusPipeline({ currentStatus, tipo, className = '' }: StatusPipelineProps) {
+  const steps = tipo === 'sessao'
+    ? STATUS_ORDER.filter((s) => !SESSAO_SKIPPED.includes(s))
+    : STATUS_ORDER;
+  const currentIndex = steps.indexOf(currentStatus);
 
   return (
     <div className={`w-full ${className}`}>
       {/* Desktop: horizontal */}
       <div className="hidden sm:flex items-center gap-1">
-        {STATUS_ORDER.map((status, index) => {
+        {steps.map((status, index) => {
           const config = STATUS_CONFIG[status];
           const isCurrent = status === currentStatus;
           const isPast = index < currentIndex;
@@ -47,7 +53,7 @@ export default function StatusPipeline({ currentStatus, className = '' }: Status
               </div>
 
               {/* Conector */}
-              {index < STATUS_ORDER.length - 1 && (
+              {index < steps.length - 1 && (
                 <div
                   className={`
                     w-4 h-0.5 shrink-0 mx-0.5
@@ -62,7 +68,7 @@ export default function StatusPipeline({ currentStatus, className = '' }: Status
 
       {/* Mobile: vertical */}
       <div className="sm:hidden space-y-2">
-        {STATUS_ORDER.map((status, index) => {
+        {steps.map((status, index) => {
           const config = STATUS_CONFIG[status];
           const isCurrent = status === currentStatus;
           const isPast = index < currentIndex;
@@ -86,7 +92,7 @@ export default function StatusPipeline({ currentStatus, className = '' }: Status
                     : <Icon className="w-3 h-3" aria-hidden="true" />
                   }
                 </div>
-                {index < STATUS_ORDER.length - 1 && (
+                {index < steps.length - 1 && (
                   <div
                     className={`w-0.5 h-4 ${index < currentIndex ? 'bg-success-300' : 'bg-neutral-200'}`}
                   />

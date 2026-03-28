@@ -9,6 +9,8 @@ export type AtendimentoStatus =
   | 'em_execucao' 
   | 'finalizado';
 
+export type AtendimentoTipo = 'normal' | 'sessao' | 'orto';
+
 export type ItemStatus = 'pendente' | 'pago' | 'executando' | 'concluido';
 
 export type MetodoPagamento = 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito';
