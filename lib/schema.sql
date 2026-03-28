@@ -68,12 +68,13 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   valor_pago REAL NOT NULL DEFAULT 0, -- Quanto já foi pago deste procedimento
   dentes TEXT, -- Dentes selecionados (JSON array: ["11", "21", "31"])
   quantidade INTEGER NOT NULL DEFAULT 1, -- Quantidade de dentes (para cálculo do valor)
+  group_id TEXT, -- UUID compartilhado entre itens do mesmo procedimento por_dente
+  dente_unico TEXT, -- Número do dente individual (ex: "11") quando group_id presente
   status TEXT NOT NULL DEFAULT 'pendente'
     CHECK (status IN ('pendente', 'pago', 'executando', 'concluido')),
   observacoes TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   concluido_at TEXT,
-  group_id TEXT, -- UUID compartilhado entre itens criados juntos (por_dente)
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
   FOREIGN KEY (executor_id) REFERENCES usuarios(id),

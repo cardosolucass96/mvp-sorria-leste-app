@@ -1,15 +1,14 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatarMoeda, formatarDataHora } from '@/lib/utils/formatters';
 import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PROXIMOS_STATUS } from '@/lib/constants/status';
 import type { AtendimentoStatus, ItemStatus } from '@/lib/types';
 import { StatusBadge, StatusPipeline } from '@/components/domain';
-import { ClipboardList } from 'lucide-react';
-import { Alert, LoadingState, PageHeader, Button, Card, Table, EmptyState, ConfirmDialog, Modal, Select, Input } from '@/components/ui';
-import type { TableColumn } from '@/components/ui/Table';
+import { ClipboardList, ChevronDown, ChevronRight, X, Trash2 } from 'lucide-react';
+import { Alert, LoadingState, PageHeader, Button, Card, EmptyState, ConfirmDialog, Modal, Select, Input } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
@@ -42,6 +41,8 @@ interface ItemAtendimento {
   valor: number;
   valor_pago: number;
   status: string;
+  group_id: string | null;
+  dente_unico: string | null;
 }
 
 interface Atendimento {
@@ -121,6 +122,18 @@ export default function AtendimentoDetalhePage({
     execucao: number;
     total: number;
   } | null>(null);
+
+  // Estado para grupos expandidos
+  const [gruposExpandidos, setGruposExpandidos] = useState<Set<string>>(new Set());
+
+  const toggleGrupo = (groupId: string) => {
+    setGruposExpandidos(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
 
   useEffect(() => {
     carregarAtendimento();
@@ -381,6 +394,52 @@ export default function AtendimentoDetalhePage({
     }
   };
 
+  const handleRemoverItem = (itemId: number) => {
+    openConfirm({
+      title: 'Remover Dente',
+      message: 'Deseja remover este dente do procedimento?',
+      confirmLabel: 'Remover',
+      type: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/atendimentos/${id}/itens?item_id=${itemId}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const data = await res.json();
+            setError(data.error || 'Erro ao remover');
+            return;
+          }
+          await carregarAtendimento();
+        } catch {
+          setError('Erro ao remover item');
+        }
+      },
+    });
+  };
+
+  const handleRemoverGrupo = (groupId: string) => {
+    openConfirm({
+      title: 'Remover Procedimento',
+      message: 'Deseja remover todos os dentes deste procedimento?',
+      confirmLabel: 'Remover Todos',
+      type: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/atendimentos/${id}/itens?group_id=${groupId}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const data = await res.json();
+            setError(data.error || 'Erro ao remover');
+            return;
+          }
+          await carregarAtendimento();
+        } catch {
+          setError('Erro ao remover grupo');
+        }
+      },
+    });
+  };
+
   if (loading) {
     return <LoadingState text="Carregando atendimento..." />;
   }
@@ -399,13 +458,45 @@ export default function AtendimentoDetalhePage({
   const statusConfig = STATUS_CONFIG[atendimento.status as AtendimentoStatus];
   const proximoStatus = PROXIMOS_STATUS[atendimento.status as AtendimentoStatus];
 
-  const itensColumns: TableColumn<ItemAtendimento>[] = [
-    { key: 'procedimento_nome', label: 'Procedimento' },
-    { key: 'criado_por_nome', label: 'Vendedor', render: (item) => item.criado_por_nome || '-' },
-    { key: 'executor_nome', label: 'Executor', render: (item) => item.executor_nome || '-' },
-    { key: 'valor', label: 'Valor', align: 'right' as const, render: (item) => formatarMoeda(item.valor) },
-    { key: 'status', label: 'Status', align: 'center' as const, render: (item) => <StatusBadge type="item" status={item.status} /> },
-  ];
+  // Agrupar itens por group_id
+  type GrupoOuItem =
+    | { tipo: 'grupo'; groupId: string; itens: ItemAtendimento[] }
+    | { tipo: 'solo'; item: ItemAtendimento };
+
+  const itensAgrupados: GrupoOuItem[] = (() => {
+    if (!atendimento) return [];
+    const grupos: Record<string, ItemAtendimento[]> = {};
+    const solos: ItemAtendimento[] = [];
+
+    for (const item of atendimento.itens) {
+      if (item.group_id) {
+        if (!grupos[item.group_id]) grupos[item.group_id] = [];
+        grupos[item.group_id].push(item);
+      } else {
+        solos.push(item);
+      }
+    }
+
+    const result: GrupoOuItem[] = [];
+    for (const [groupId, itens] of Object.entries(grupos)) {
+      result.push({ tipo: 'grupo', groupId, itens });
+    }
+    for (const item of solos) {
+      result.push({ tipo: 'solo', item });
+    }
+    return result;
+  })();
+
+  const getStatusAgregado = (itens: ItemAtendimento[]): string => {
+    const statuses = itens.map(i => i.status);
+    if (statuses.every(s => s === 'concluido')) return 'concluido';
+    if (statuses.some(s => s === 'executando')) return 'executando';
+    if (statuses.every(s => s === 'pendente')) return 'pendente';
+    if (statuses.some(s => s === 'pago') && !statuses.some(s => s === 'executando')) return 'pago';
+    return 'pendente';
+  };
+
+  const podRemover = atendimento?.status === 'avaliacao';
 
   return (
     <div className="space-y-6">
@@ -588,13 +679,108 @@ export default function AtendimentoDetalhePage({
           )}
         </div>
         
-        <Table
-          columns={itensColumns}
-          data={atendimento.itens}
-          keyExtractor={(item) => item.id}
-          emptyMessage="Nenhum procedimento adicionado"
-          caption="Procedimentos do atendimento"
-        />
+        {atendimento.itens.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 text-muted py-12">
+            <p className="text-sm">Nenhum procedimento adicionado</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-border-light">
+            <table className="w-full text-sm">
+              <thead className="bg-primary-50">
+                <tr>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-left">Procedimento</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-left">Vendedor</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-left">Executor</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-right">Valor</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-center">Status</th>
+                  {podRemover && (
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-center w-20">Ações</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 bg-surface">
+                {itensAgrupados.map((entry) => {
+                  if (entry.tipo === 'solo') {
+                    const item = entry.item;
+                    return (
+                      <tr key={item.id}>
+                        <td className="px-4 py-3">{item.procedimento_nome}</td>
+                        <td className="px-4 py-3">{item.criado_por_nome || '-'}</td>
+                        <td className="px-4 py-3">{item.executor_nome || '-'}</td>
+                        <td className="px-4 py-3 text-right">{formatarMoeda(item.valor)}</td>
+                        <td className="px-4 py-3 text-center"><StatusBadge type="item" status={item.status} /></td>
+                        {podRemover && (
+                          <td className="px-4 py-3 text-center">
+                            <button onClick={() => handleRemoverItem(item.id)} className="text-error-500 hover:text-error-700 p-1" title="Remover">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  }
+
+                  const { groupId, itens: grupoItens } = entry;
+                  const expandido = gruposExpandidos.has(groupId);
+                  const totalGrupo = grupoItens.reduce((s, i) => s + i.valor, 0);
+                  const statusAgregado = getStatusAgregado(grupoItens);
+                  const primeiro = grupoItens[0];
+
+                  return (
+                    <React.Fragment key={groupId}>
+                      {/* Header do grupo */}
+                      <tr
+                        className="bg-neutral-50 cursor-pointer hover:bg-neutral-100 transition-colors"
+                        onClick={() => toggleGrupo(groupId)}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {expandido ? <ChevronDown className="w-4 h-4 text-muted" /> : <ChevronRight className="w-4 h-4 text-muted" />}
+                            <span className="font-medium">{primeiro.procedimento_nome}</span>
+                            <span className="text-xs text-muted bg-neutral-200 px-1.5 py-0.5 rounded">
+                              {grupoItens.length} {grupoItens.length === 1 ? 'dente' : 'dentes'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">{primeiro.criado_por_nome || '-'}</td>
+                        <td className="px-4 py-3">{primeiro.executor_nome || '-'}</td>
+                        <td className="px-4 py-3 text-right font-medium">{formatarMoeda(totalGrupo)}</td>
+                        <td className="px-4 py-3 text-center"><StatusBadge type="item" status={statusAgregado} /></td>
+                        {podRemover && (
+                          <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => handleRemoverGrupo(groupId)} className="text-error-500 hover:text-error-700 p-1" title="Remover procedimento">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+
+                      {/* Sub-linhas dos dentes */}
+                      {expandido && grupoItens.map((item) => (
+                        <tr key={item.id} className="bg-neutral-50/50">
+                          <td className="px-4 py-2 pl-12">
+                            <span className="text-muted">Dente {item.dente_unico}</span>
+                          </td>
+                          <td className="px-4 py-2" />
+                          <td className="px-4 py-2" />
+                          <td className="px-4 py-2 text-right text-muted">{formatarMoeda(item.valor)}</td>
+                          <td className="px-4 py-2 text-center"><StatusBadge type="item" status={item.status} size="sm" /></td>
+                          {podRemover && (
+                            <td className="px-4 py-2 text-center">
+                              <button onClick={() => handleRemoverItem(item.id)} className="text-error-400 hover:text-error-600 p-1" title="Remover dente">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {atendimento.itens.length > 0 && (
           <div className="mt-4 pt-4 border-t flex justify-end">

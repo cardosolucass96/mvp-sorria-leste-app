@@ -76,11 +76,12 @@ export interface ItemAtendimento {
   valor_pago: number;
   dentes: string | null; // JSON array com números dos dentes
   quantidade: number; // Quantidade de dentes
+  group_id: string | null; // UUID compartilhado entre itens do mesmo procedimento por_dente
+  dente_unico: string | null; // Número do dente individual quando group_id presente
   status: ItemStatus;
   observacoes: string | null;
   created_at: string;
   concluido_at: string | null;
-  group_id: string | null; // UUID compartilhado entre itens criados juntos (por_dente)
 }
 
 export interface Pagamento {
