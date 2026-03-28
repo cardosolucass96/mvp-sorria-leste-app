@@ -111,7 +111,7 @@ export default function PagamentosPage() {
 
       {/* Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard icon={<Clock className="w-6 h-6" />} label="Aguardando Pagamento" value={String(atendimentos.length)} color="border-yellow-500" />
+        <StatCard icon={<Clock className="w-6 h-6" />} label="Aguardando Pagamento" value={String(atendimentos.length)} color="border-warning-500" />
         <StatCard icon={<AlertTriangle className="w-6 h-6" />} label="Parcelas Vencidas" value={String(parcelasVencidas.length)} color="border-error-500" />
         <StatCard icon={<Banknote className="w-6 h-6" />} label="Total a Receber" value={formatarMoeda(atendimentos.reduce((acc, a) => acc + (a.total - a.total_pago), 0))} color="border-success-500" />
       </div>

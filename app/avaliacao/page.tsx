@@ -170,7 +170,7 @@ export default function AvaliacaoPage() {
               <Card 
                 key={atendimento.id} 
                 variant="outlined"
-                borderColor="border-yellow-500"
+                borderColor="border-warning-500"
               >
                 <div className="flex items-center justify-between">
                   <div>
