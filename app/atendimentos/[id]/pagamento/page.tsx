@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatarMoeda, formatarData, formatarDataHora } from '@/lib/utils/formatters';
 import { StatusBadge } from '@/components/domain';
 import Alert from '@/components/ui/Alert';
 import LoadingState from '@/components/ui/LoadingState';
-import { ConfirmDialog, Input, Select } from '@/components/ui';
+import { ConfirmDialog, Input, Select, Modal } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface ItemAtendimento {
@@ -48,6 +48,7 @@ interface Parcela {
 
 interface Atendimento {
   id: number;
+  cliente_id: number;
   cliente_nome: string;
   cliente_cpf: string | null;
   cliente_telefone: string | null;
@@ -56,6 +57,22 @@ interface Atendimento {
   total: number;
   total_pago: number;
 }
+
+interface MovimentacaoSaldo {
+  id: number;
+  tipo: string;
+  valor: number;
+  observacoes: string | null;
+  created_at: string;
+}
+
+interface ClienteBusca {
+  id: number;
+  nome: string;
+  cpf: string | null;
+}
+
+type DestinoSaldo = 'itens' | 'saldo';
 
 const METODOS_PAGAMENTO = [
   { value: 'dinheiro', label: 'Dinheiro' },
@@ -98,6 +115,31 @@ export default function PagamentoPage({
   // Cancelar pagamento
   const [cancelandoId, setCancelandoId] = useState<number | null>(null);
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
+
+  // Saldo do cliente
+  const [saldoCliente, setSaldoCliente] = useState(0);
+  const [destinoSaldo, setDestinoSaldo] = useState<DestinoSaldo>('itens');
+
+  // Modal de estorno
+  const [estornoModalOpen, setEstornoModalOpen] = useState(false);
+  const [estornoValor, setEstornoValor] = useState('');
+  const [estornoObs, setEstornoObs] = useState('');
+  const [estornando, setEstornando] = useState(false);
+
+  // Modal de transferência
+  const [transferenciaModalOpen, setTransferenciaModalOpen] = useState(false);
+  const [transferenciaValor, setTransferenciaValor] = useState('');
+  const [transferenciaObs, setTransferenciaObs] = useState('');
+  const [transferenciaDestinoId, setTransferenciaDestinoId] = useState<number | null>(null);
+  const [transferenciaDestinoNome, setTransferenciaDestinoNome] = useState('');
+  const [buscaCliente, setBuscaCliente] = useState('');
+  const [clientesBusca, setClientesBusca] = useState<ClienteBusca[]>([]);
+  const [buscandoClientes, setBuscandoClientes] = useState(false);
+  const [transferindo, setTransferindo] = useState(false);
+
+  // Extrato
+  const [extratoAberto, setExtratoAberto] = useState(false);
+  const [movimentacoes, setMovimentacoes] = useState<MovimentacaoSaldo[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -115,6 +157,21 @@ export default function PagamentoPage({
     carregarDados();
   }, [id]);
 
+  const carregarSaldo = useCallback(async (clienteId: number) => {
+    try {
+      const res = await fetch(`/api/clientes/${clienteId}/saldo`);
+      if (res.ok) {
+        const data = await res.json();
+        setSaldoCliente(data.saldo ?? 0);
+        if (data.movimentacoes) {
+          setMovimentacoes(data.movimentacoes);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao carregar saldo:', err);
+    }
+  }, []);
+
   const carregarDados = async () => {
     try {
       // Carrega atendimento
@@ -122,12 +179,17 @@ export default function PagamentoPage({
       if (!resAtend.ok) throw new Error('Atendimento não encontrado');
       const atendData = await resAtend.json();
       setAtendimento(atendData);
-      
+
+      // Carrega saldo do cliente
+      if (atendData.cliente_id) {
+        carregarSaldo(atendData.cliente_id);
+      }
+
       // Carrega pagamentos
       const resPag = await fetch(`/api/atendimentos/${id}/pagamentos`);
       const pagData = await resPag.json();
       setPagamentos(pagData);
-      
+
       // Carrega parcelas
       const resParc = await fetch(`/api/atendimentos/${id}/parcelas`);
       const parcData = await resParc.json();
@@ -142,47 +204,98 @@ export default function PagamentoPage({
 
   const handleRegistrarPagamento = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valorPagamento) return;
-    
-    // Constrói array de itens com valores aplicados
+    if (!valorPagamento || !atendimento) return;
+
+    const valorNum = parseFloat(valorPagamento);
+
+    // Modo "Adicionar ao saldo"
+    if (destinoSaldo === 'saldo') {
+      setRegistrando(true);
+      setError('');
+      try {
+        // 1. Cria pagamento normalmente (para histórico)
+        const resPag = await fetch(`/api/atendimentos/${id}/pagamentos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            valor: valorNum,
+            metodo: metodoPagamento,
+            observacoes: observacoesPagamento ? `[Saldo] ${observacoesPagamento}` : '[Saldo] Crédito ao saldo do cliente',
+            itens: [],
+          }),
+        });
+        if (!resPag.ok) {
+          const data = await resPag.json();
+          throw new Error(data.error || 'Erro ao registrar pagamento');
+        }
+        const pagamento = await resPag.json();
+
+        // 2. Credita ao saldo referenciando o pagamento
+        const resCred = await fetch(`/api/clientes/${atendimento.cliente_id}/saldo/creditar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            valor: valorNum,
+            pagamento_id: pagamento.id,
+            observacoes: observacoesPagamento || null,
+          }),
+        });
+        if (!resCred.ok) {
+          const data = await resCred.json();
+          throw new Error(data.error || 'Erro ao creditar saldo');
+        }
+
+        setValorPagamento('');
+        setObservacoesPagamento('');
+        setDestinoSaldo('itens');
+        await carregarDados();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao registrar');
+      } finally {
+        setRegistrando(false);
+      }
+      return;
+    }
+
+    // Modo normal — distribuir diretamente aos itens
     const itens = Object.entries(itensSelecionados)
       .filter(([_, valor]) => valor > 0)
       .map(([item_id, valor_aplicado]) => ({
         item_id: parseInt(item_id),
         valor_aplicado
       }));
-    
+
     if (itens.length === 0) {
       setError('Selecione pelo menos um procedimento para aplicar o pagamento');
       return;
     }
-    
+
     const totalAplicado = itens.reduce((sum, item) => sum + item.valor_aplicado, 0);
-    if (Math.abs(totalAplicado - parseFloat(valorPagamento)) > 0.01) {
-      setError(`Total aplicado (${totalAplicado.toFixed(2)}) deve ser igual ao valor do pagamento (${parseFloat(valorPagamento).toFixed(2)})`);
+    if (Math.abs(totalAplicado - valorNum) > 0.01) {
+      setError(`Total aplicado (${totalAplicado.toFixed(2)}) deve ser igual ao valor do pagamento (${valorNum.toFixed(2)})`);
       return;
     }
-    
+
     setRegistrando(true);
     setError('');
-    
+
     try {
       const res = await fetch(`/api/atendimentos/${id}/pagamentos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          valor: parseFloat(valorPagamento),
+          valor: valorNum,
           metodo: metodoPagamento,
           observacoes: observacoesPagamento || null,
           itens
         }),
       });
-      
+
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Erro ao registrar');
       }
-      
+
       setValorPagamento('');
       setObservacoesPagamento('');
       setItensSelecionados({});
@@ -325,6 +438,143 @@ export default function PagamentoPage({
     }
   };
 
+  // Usar saldo para pagar item
+  const handleUsarSaldo = async (item: ItemAtendimento) => {
+    if (!atendimento) return;
+    const valorRestante = item.valor - item.valor_pago;
+
+    openConfirm({
+      title: 'Usar saldo',
+      message: `Usar ${formatarMoeda(valorRestante)} do saldo para pagar "${item.dente_unico ? `${item.procedimento_nome} • Dente ${item.dente_unico}` : item.procedimento_nome}"?`,
+      confirmLabel: 'Usar saldo',
+      type: 'info',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        setError('');
+        try {
+          const res = await fetch(`/api/clientes/${atendimento.cliente_id}/saldo/debitar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              item_atendimento_id: item.id,
+              atendimento_id: atendimento.id,
+            }),
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Erro ao debitar saldo');
+          }
+          await carregarDados();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Erro ao usar saldo');
+        }
+      },
+    });
+  };
+
+  // Estorno de saldo
+  const handleEstornar = async () => {
+    if (!atendimento || !estornoValor || !estornoObs.trim()) return;
+    setEstornando(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/clientes/${atendimento.cliente_id}/saldo/estornar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          valor: parseFloat(estornoValor),
+          observacoes: estornoObs,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Erro ao estornar');
+      }
+      setEstornoModalOpen(false);
+      setEstornoValor('');
+      setEstornoObs('');
+      await carregarDados();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao estornar');
+    } finally {
+      setEstornando(false);
+    }
+  };
+
+  // Transferência de saldo
+  const handleBuscarClientes = async (termo: string) => {
+    setBuscaCliente(termo);
+    if (termo.length < 2) {
+      setClientesBusca([]);
+      return;
+    }
+    setBuscandoClientes(true);
+    try {
+      const res = await fetch(`/api/clientes?busca=${encodeURIComponent(termo)}&limit=5`);
+      if (res.ok) {
+        const data = await res.json();
+        const lista = (data.clientes || data).filter(
+          (c: ClienteBusca) => c.id !== atendimento?.cliente_id
+        );
+        setClientesBusca(lista);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setBuscandoClientes(false);
+    }
+  };
+
+  const handleTransferir = async () => {
+    if (!atendimento || !transferenciaDestinoId || !transferenciaValor) return;
+    setTransferindo(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/clientes/${atendimento.cliente_id}/saldo/transferir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cliente_destino_id: transferenciaDestinoId,
+          valor: parseFloat(transferenciaValor),
+          observacoes: transferenciaObs || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Erro ao transferir');
+      }
+      setTransferenciaModalOpen(false);
+      setTransferenciaValor('');
+      setTransferenciaObs('');
+      setTransferenciaDestinoId(null);
+      setTransferenciaDestinoNome('');
+      setBuscaCliente('');
+      setClientesBusca([]);
+      await carregarDados();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao transferir');
+    } finally {
+      setTransferindo(false);
+    }
+  };
+
+  // Carregar extrato (movimentacoes already loaded from GET /saldo, just refresh)
+  const handleToggleExtrato = async () => {
+    if (!extratoAberto && atendimento) {
+      try {
+        const res = await fetch(`/api/clientes/${atendimento.cliente_id}/saldo`);
+        if (res.ok) {
+          const data = await res.json();
+          setSaldoCliente(data.saldo ?? 0);
+          setMovimentacoes(data.movimentacoes ?? []);
+        }
+      } catch {
+        // silently fail
+      }
+    }
+    setExtratoAberto(!extratoAberto);
+  };
+
   // Funções auxiliares para itens selecionados
   const handleItemChange = (itemId: number, valor: string) => {
     const valorNum = parseFloat(valor) || 0;
@@ -429,6 +679,89 @@ export default function PagamentoPage({
         </div>
       </div>
 
+      {/* Card de Saldo do Cliente */}
+      <div className="card bg-primary-50 border border-primary-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-primary-600">Saldo disponível de {atendimento.cliente_nome}</p>
+            <p className="text-2xl font-bold text-primary-900 mt-1">{formatarMoeda(saldoCliente)}</p>
+          </div>
+          <div className="flex gap-2">
+            {saldoCliente > 0 && (
+              <>
+                <button
+                  onClick={() => { setEstornoModalOpen(true); setEstornoValor(''); setEstornoObs(''); }}
+                  className="btn btn-secondary text-sm"
+                >
+                  Estornar saldo
+                </button>
+                <button
+                  onClick={() => {
+                    setTransferenciaModalOpen(true);
+                    setTransferenciaValor('');
+                    setTransferenciaObs('');
+                    setTransferenciaDestinoId(null);
+                    setTransferenciaDestinoNome('');
+                    setBuscaCliente('');
+                    setClientesBusca([]);
+                  }}
+                  className="btn btn-secondary text-sm"
+                >
+                  Transferir
+                </button>
+              </>
+            )}
+            <button
+              onClick={handleToggleExtrato}
+              className="btn btn-secondary text-sm"
+            >
+              {extratoAberto ? 'Fechar extrato' : 'Ver extrato'}
+            </button>
+          </div>
+        </div>
+
+        {/* Extrato de movimentações */}
+        {extratoAberto && (
+          <div className="mt-4 border-t border-primary-200 pt-4">
+            <h3 className="text-sm font-semibold text-primary-800 mb-2">Últimas movimentações</h3>
+            {movimentacoes.length === 0 ? (
+              <p className="text-sm text-primary-600">Nenhuma movimentação encontrada.</p>
+            ) : (
+              <div className="space-y-1 max-h-60 overflow-y-auto">
+                {movimentacoes.map((mov) => {
+                  const isPositivo = ['credito', 'transferencia_entrada'].includes(mov.tipo);
+                  const labels: Record<string, string> = {
+                    credito: 'Crédito',
+                    debito: 'Débito',
+                    estorno: 'Estorno',
+                    transferencia_saida: 'Transf. enviada',
+                    transferencia_entrada: 'Transf. recebida',
+                  };
+                  return (
+                    <div key={mov.id} className="flex items-center justify-between text-sm py-1">
+                      <div className="flex-1 min-w-0">
+                        <span className={`font-medium ${isPositivo ? 'text-success-700' : 'text-error-700'}`}>
+                          {labels[mov.tipo] || mov.tipo}
+                        </span>
+                        {mov.observacoes && (
+                          <span className="text-primary-600 ml-2 truncate">{mov.observacoes}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className={`font-medium ${isPositivo ? 'text-success-700' : 'text-error-700'}`}>
+                          {isPositivo ? '+' : '-'}{formatarMoeda(mov.valor)}
+                        </span>
+                        <span className="text-xs text-primary-500">{formatarDataHora(mov.created_at)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Grid Principal */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Registrar Pagamento */}
@@ -484,8 +817,39 @@ export default function PagamentoPage({
               required
             />
 
-            {/* Distribuição — só aparece quando há valor */}
+            {/* Toggle destino: itens ou saldo */}
             {valorPagamento && parseFloat(valorPagamento) > 0 && (
+              <div className="border rounded-lg overflow-hidden">
+                <div className="px-3 py-2 bg-surface-secondary">
+                  <span className="text-sm font-medium text-neutral-700">Destino do pagamento</span>
+                </div>
+                <div className="px-3 py-2 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="destinoSaldo"
+                      checked={destinoSaldo === 'itens'}
+                      onChange={() => setDestinoSaldo('itens')}
+                      className="accent-primary-600"
+                    />
+                    <span className="text-sm">Distribuir diretamente aos itens selecionados</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="destinoSaldo"
+                      checked={destinoSaldo === 'saldo'}
+                      onChange={() => setDestinoSaldo('saldo')}
+                      className="accent-primary-600"
+                    />
+                    <span className="text-sm">Adicionar ao saldo do cliente</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Distribuição — só aparece quando há valor e destino = itens */}
+            {valorPagamento && parseFloat(valorPagamento) > 0 && destinoSaldo === 'itens' && (
               <div className="border rounded-lg overflow-hidden">
                 <div className="px-3 py-2 bg-surface-secondary">
                   <span className="text-sm font-medium text-neutral-700">Como distribuir nos procedimentos</span>
@@ -628,13 +992,17 @@ export default function PagamentoPage({
               <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase">
                 Status
               </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
+                Ações
+              </th>
             </tr>
           </thead>
           <tbody className="bg-surface divide-y divide-neutral-200">
             {atendimento.itens.map((item) => {
-              const saldoDevedor = item.valor - item.valor_pago;
+              const saldoDevedorItem = item.valor - item.valor_pago;
+              const podePagarComSaldo = item.status !== 'pago' && saldoDevedorItem > 0 && saldoCliente >= saldoDevedorItem - 0.01;
               return (
-                <tr key={item.id} className={saldoDevedor === 0 ? 'bg-success-50' : ''}>
+                <tr key={item.id} className={saldoDevedorItem === 0 ? 'bg-success-50' : ''}>
                   <td className="px-4 py-3 font-medium text-foreground">
                     {item.dente_unico
                       ? `${item.procedimento_nome} • Dente ${item.dente_unico}`
@@ -647,12 +1015,22 @@ export default function PagamentoPage({
                     {formatarMoeda(item.valor_pago)}
                   </td>
                   <td className={`px-4 py-3 text-right font-medium ${
-                    saldoDevedor > 0 ? 'text-error-600' : 'text-success-600'
+                    saldoDevedorItem > 0 ? 'text-error-600' : 'text-success-600'
                   }`}>
-                    {formatarMoeda(saldoDevedor)}
+                    {formatarMoeda(saldoDevedorItem)}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <StatusBadge type="item" status={item.status} />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {podePagarComSaldo && (
+                      <button
+                        onClick={() => handleUsarSaldo(item)}
+                        className="text-sm text-primary-600 hover:text-primary-800 font-medium"
+                      >
+                        Usar saldo
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
@@ -670,6 +1048,7 @@ export default function PagamentoPage({
               <td className="px-4 py-3 text-right font-bold text-lg text-error-600">
                 {formatarMoeda(atendimento.total - atendimento.total_pago)}
               </td>
+              <td></td>
               <td></td>
             </tr>
           </tfoot>
@@ -780,6 +1159,155 @@ export default function PagamentoPage({
         confirmLabel={confirmDialog.confirmLabel}
         type={confirmDialog.type}
       />
+
+      {/* Modal de Estorno */}
+      <Modal
+        isOpen={estornoModalOpen}
+        onClose={() => setEstornoModalOpen(false)}
+        title="Estornar saldo"
+        footer={
+          <>
+            <button onClick={() => setEstornoModalOpen(false)} className="btn btn-secondary">
+              Cancelar
+            </button>
+            <button
+              onClick={handleEstornar}
+              disabled={!estornoValor || !estornoObs.trim() || estornando}
+              className="btn btn-primary disabled:opacity-50"
+            >
+              {estornando ? 'Estornando...' : 'Confirmar estorno'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Saldo atual: <span className="font-semibold">{formatarMoeda(saldoCliente)}</span>
+          </p>
+          <Input
+            label="Valor a estornar (R$)"
+            name="estornoValor"
+            type="number"
+            step={0.01}
+            min={0.01}
+            max={saldoCliente}
+            value={estornoValor}
+            onChange={setEstornoValor}
+            placeholder="0,00"
+            required
+          />
+          <Input
+            label="Observações"
+            name="estornoObs"
+            value={estornoObs}
+            onChange={setEstornoObs}
+            placeholder="Motivo do estorno (obrigatório)"
+            required
+          />
+        </div>
+      </Modal>
+
+      {/* Modal de Transferência */}
+      <Modal
+        isOpen={transferenciaModalOpen}
+        onClose={() => setTransferenciaModalOpen(false)}
+        title="Transferir saldo"
+        footer={
+          <>
+            <button onClick={() => setTransferenciaModalOpen(false)} className="btn btn-secondary">
+              Cancelar
+            </button>
+            <button
+              onClick={handleTransferir}
+              disabled={!transferenciaDestinoId || !transferenciaValor || transferindo}
+              className="btn btn-primary disabled:opacity-50"
+            >
+              {transferindo ? 'Transferindo...' : 'Confirmar transferência'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Saldo atual: <span className="font-semibold">{formatarMoeda(saldoCliente)}</span>
+          </p>
+
+          {/* Busca de cliente destino */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">
+              Cliente destino *
+            </label>
+            {transferenciaDestinoId ? (
+              <div className="flex items-center gap-2 p-2 bg-success-50 rounded-lg border border-success-200">
+                <span className="text-sm font-medium text-success-800 flex-1">{transferenciaDestinoNome}</span>
+                <button
+                  onClick={() => {
+                    setTransferenciaDestinoId(null);
+                    setTransferenciaDestinoNome('');
+                    setBuscaCliente('');
+                    setClientesBusca([]);
+                  }}
+                  className="text-sm text-error-600 hover:text-error-800"
+                >
+                  Alterar
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type="text"
+                  value={buscaCliente}
+                  onChange={(e) => handleBuscarClientes(e.target.value)}
+                  placeholder="Buscar por nome ou CPF..."
+                  className="input w-full"
+                />
+                {clientesBusca.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full bg-surface border border-neutral-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {clientesBusca.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => {
+                          setTransferenciaDestinoId(c.id);
+                          setTransferenciaDestinoNome(c.nome);
+                          setClientesBusca([]);
+                          setBuscaCliente('');
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-neutral-50 text-sm"
+                      >
+                        {c.nome}
+                        {c.cpf && <span className="text-muted ml-2">({c.cpf})</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {buscandoClientes && (
+                  <p className="text-xs text-muted mt-1">Buscando...</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <Input
+            label="Valor a transferir (R$)"
+            name="transferenciaValor"
+            type="number"
+            step={0.01}
+            min={0.01}
+            max={saldoCliente}
+            value={transferenciaValor}
+            onChange={setTransferenciaValor}
+            placeholder="0,00"
+            required
+          />
+          <Input
+            label="Observações"
+            name="transferenciaObs"
+            value={transferenciaObs}
+            onChange={setTransferenciaObs}
+            placeholder="Opcional"
+          />
+        </div>
+      </Modal>
 
       {/* Parcelas Agendadas */}
       <div className="card">
