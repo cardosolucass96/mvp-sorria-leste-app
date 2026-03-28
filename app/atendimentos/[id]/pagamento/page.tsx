@@ -7,7 +7,7 @@ import { formatarMoeda, formatarData, formatarDataHora } from '@/lib/utils/forma
 import { StatusBadge } from '@/components/domain';
 import Alert from '@/components/ui/Alert';
 import LoadingState from '@/components/ui/LoadingState';
-import { ConfirmDialog } from '@/components/ui';
+import { ConfirmDialog, Input, Select } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface ItemAtendimento {
@@ -467,23 +467,14 @@ export default function PagamentoPage({
             </div>
 
             {/* Método */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Forma de pagamento *
-              </label>
-              <select
-                value={metodoPagamento}
-                onChange={(e) => setMetodoPagamento(e.target.value)}
-                className="input"
-                required
-              >
-                {METODOS_PAGAMENTO.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              label="Forma de pagamento"
+              name="metodoPagamento"
+              options={METODOS_PAGAMENTO}
+              value={metodoPagamento}
+              onChange={setMetodoPagamento}
+              required
+            />
 
             {/* Distribuição — só aparece quando há valor */}
             {valorPagamento && parseFloat(valorPagamento) > 0 && (
@@ -515,7 +506,7 @@ export default function PagamentoPage({
                             max={devido}
                             value={itensSelecionados[item.id] ?? ''}
                             onChange={(e) => handleItemChange(item.id, e.target.value)}
-                            className="input w-28 text-right"
+                            className="w-28 text-right px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                           />
                         </div>
                       </div>
@@ -539,18 +530,14 @@ export default function PagamentoPage({
             )}
 
             {/* Observações */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Observações <span className="text-neutral-400 font-normal">(opcional)</span>
-              </label>
-              <input
-                type="text"
-                value={observacoesPagamento}
-                onChange={(e) => setObservacoesPagamento(e.target.value)}
-                placeholder="Ex: Entrada do tratamento"
-                className="input"
-              />
-            </div>
+            <Input
+              label="Observações"
+              name="observacoesPagamento"
+              value={observacoesPagamento}
+              onChange={setObservacoesPagamento}
+              placeholder="Ex: Entrada do tratamento"
+              hint="opcional"
+            />
 
             <button
               type="submit"
@@ -567,47 +554,34 @@ export default function PagamentoPage({
           <h2 className="text-lg font-semibold mb-4">📅 Agendar Parcela</h2>
           
           <form onSubmit={handleAdicionarParcela} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Valor (R$) *
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={valorParcela}
-                onChange={(e) => setValorParcela(e.target.value)}
-                placeholder="0,00"
-                className="input"
-                required
-              />
-            </div>
+            <Input
+              label="Valor (R$)"
+              name="valorParcela"
+              type="number"
+              step={0.01}
+              min={0}
+              value={valorParcela}
+              onChange={setValorParcela}
+              placeholder="0,00"
+              required
+            />
             
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Data de Vencimento *
-              </label>
-              <input
-                type="date"
-                value={dataVencimento}
-                onChange={(e) => setDataVencimento(e.target.value)}
-                className="input"
-                required
-              />
-            </div>
+            <Input
+              label="Data de Vencimento"
+              name="dataVencimento"
+              type="date"
+              value={dataVencimento}
+              onChange={setDataVencimento}
+              required
+            />
             
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Observações
-              </label>
-              <input
-                type="text"
-                value={observacoesParcela}
-                onChange={(e) => setObservacoesParcela(e.target.value)}
-                placeholder="Ex: Cartão, PIX, etc."
-                className="input"
-              />
-            </div>
+            <Input
+              label="Observações"
+              name="observacoesParcela"
+              value={observacoesParcela}
+              onChange={setObservacoesParcela}
+              placeholder="Ex: Cartão, PIX, etc."
+            />
             
             <button
               type="submit"
