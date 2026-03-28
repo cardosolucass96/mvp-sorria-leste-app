@@ -22,8 +22,6 @@ export type AgendamentoStatus =
   | 'faltou'      // não compareceu
   | 'cancelado';
 
-export type AtendimentoTipo = 'normal' | 'sessao' | 'orto';
-
 export type MotivoSaida = 'sem_tratamento' | 'tratamento_completo' | 'continuacao';
 
 export type OrigemCliente = 

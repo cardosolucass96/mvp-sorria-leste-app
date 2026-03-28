@@ -258,6 +258,8 @@ CREATE TABLE IF NOT EXISTS movimentacoes_saldo (
     'transferencia_saida', 'transferencia_entrada'
   )),
   valor REAL NOT NULL,
+  saldo_anterior REAL NOT NULL,
+  saldo_novo REAL NOT NULL,
   pagamento_id INTEGER,
   item_atendimento_id INTEGER,
   atendimento_id INTEGER,
@@ -293,3 +295,6 @@ CREATE INDEX IF NOT EXISTS idx_prontuarios_etapa ON prontuarios_etapa(etapa_id);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_cliente ON agendamentos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_status ON agendamentos(status);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_data ON agendamentos(data_agendada);
+CREATE INDEX IF NOT EXISTS idx_movimentacoes_cliente ON movimentacoes_saldo(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_movimentacoes_tipo ON movimentacoes_saldo(tipo);
+CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes_saldo(created_at);
