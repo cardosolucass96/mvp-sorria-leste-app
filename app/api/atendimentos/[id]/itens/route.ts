@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { query, queryOne, execute } from '@/lib/db';
 
 interface ItemAtendimento {
@@ -17,6 +18,7 @@ interface Procedimento {
   id: number;
   nome: string;
   valor: number;
+  por_dente: number;
 }
 
 interface Atendimento {
@@ -134,8 +136,54 @@ export async function POST(
     // Usa valor do procedimento se não fornecido
     const valorFinal = valor !== undefined ? valor : procedimento.valor;
     const quantidadeFinal = quantidade || 1;
-    
-    // Insere item
+
+    interface DenteFaceDB { dente: string; faces: Array<{ nome: string }> }
+    const dentesArray: DenteFaceDB[] = dentes ? JSON.parse(dentes) : [];
+
+    // Fluxo por_dente: cria 1 item por dente
+    if (procedimento.por_dente && dentesArray.length > 0) {
+      const groupId = randomUUID();
+      const valorPorDente = valorFinal / dentesArray.length;
+      const itemIds: number[] = [];
+
+      for (const d of dentesArray) {
+        const res = await execute(
+          `INSERT INTO itens_atendimento
+            (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, status, group_id)
+           VALUES (?, ?, ?, ?, ?, ?, 1, 'pendente', ?)`,
+          [
+            parseInt(id),
+            procedimento_id,
+            executor_id || null,
+            criado_por_id || null,
+            valorPorDente,
+            JSON.stringify([d]),
+            groupId
+          ]
+        );
+        const itemId = res.lastInsertRowid as number;
+        itemIds.push(itemId);
+
+        for (const f of d.faces) {
+          await execute(
+            `INSERT INTO etapas_procedimento (item_atendimento_id, dente, face) VALUES (?, ?, ?)`,
+            [itemId, d.dente, f.nome]
+          );
+        }
+      }
+
+      // Se adicionou durante execução, volta para aguardando_pagamento
+      if (atendimento.status === 'em_execucao') {
+        await execute(
+          "UPDATE atendimentos SET status = 'aguardando_pagamento' WHERE id = ?",
+          [parseInt(id)]
+        );
+      }
+
+      return NextResponse.json({ group_id: groupId, itens: itemIds }, { status: 201 });
+    }
+
+    // Fluxo original para procedimentos NÃO por_dente
     const result = await execute(
       `INSERT INTO itens_atendimento
         (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, status)
@@ -153,21 +201,13 @@ export async function POST(
 
     const itemId = result.lastInsertRowid as number;
 
-    // Cria etapas se for procedimento por dente com faces definidas
-    if (dentes) {
-      try {
-        interface DenteFaceDB { dente: string; faces: Array<{ nome: string }> }
-        const dentesArray: DenteFaceDB[] = JSON.parse(dentes);
-        for (const d of dentesArray) {
-          for (const f of d.faces) {
-            await execute(
-              `INSERT INTO etapas_procedimento (item_atendimento_id, dente, face) VALUES (?, ?, ?)`,
-              [itemId, d.dente, f.nome]
-            );
-          }
-        }
-      } catch {
-        // dentes inválido ou formato antigo — não cria etapas
+    // Cria etapas se tiver dentes com faces definidas
+    for (const d of dentesArray) {
+      for (const f of d.faces) {
+        await execute(
+          `INSERT INTO etapas_procedimento (item_atendimento_id, dente, face) VALUES (?, ?, ?)`,
+          [itemId, d.dente, f.nome]
+        );
       }
     }
 
@@ -178,7 +218,7 @@ export async function POST(
         [parseInt(id)]
       );
     }
-    
+
     // Retorna item criado
     const novoItem = await queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null }>(
       `SELECT
@@ -191,7 +231,7 @@ export async function POST(
       WHERE i.id = ?`,
       [itemId]
     );
-    
+
     return NextResponse.json(novoItem, { status: 201 });
   } catch (error) {
     console.error('Erro ao adicionar item:', error);
