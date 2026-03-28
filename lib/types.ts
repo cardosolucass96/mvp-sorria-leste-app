@@ -80,6 +80,7 @@ export interface ItemAtendimento {
   observacoes: string | null;
   created_at: string;
   concluido_at: string | null;
+  group_id: string | null; // UUID compartilhado entre itens criados juntos (por_dente)
 }
 
 export interface Pagamento {
