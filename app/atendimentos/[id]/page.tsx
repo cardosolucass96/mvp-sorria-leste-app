@@ -759,12 +759,14 @@ export default function AtendimentoDetalhePage({
               </div>
 
               {/* Forma de pagamento */}
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Forma de pagamento *</label>
-                <select value={metodoPagamento} onChange={(e) => setMetodoPagamento(e.target.value)} className="input" required>
-                  {METODOS_PAGAMENTO.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </select>
-              </div>
+              <Select
+                label="Forma de pagamento"
+                name="metodoPagamento"
+                options={METODOS_PAGAMENTO}
+                value={metodoPagamento}
+                onChange={setMetodoPagamento}
+                required
+              />
 
               {/* Distribuição */}
               {val > 0 && (
@@ -792,7 +794,7 @@ export default function AtendimentoDetalhePage({
                               type="number" step="0.01" min="0" max={devido}
                               value={itensPagamento[item.id] ?? ''}
                               onChange={(e) => setItensPagamento(prev => ({ ...prev, [item.id]: parseFloat(e.target.value) || 0 }))}
-                              className="input w-28 text-right"
+                              className="w-28 text-right px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                             />
                           </div>
                         </div>
@@ -807,10 +809,14 @@ export default function AtendimentoDetalhePage({
               )}
 
               {/* Observações */}
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Observações <span className="text-neutral-400 font-normal">(opcional)</span></label>
-                <input type="text" value={observacoesPagamento} onChange={(e) => setObservacoesPagamento(e.target.value)} placeholder="Ex: Entrada do tratamento" className="input" />
-              </div>
+              <Input
+                label="Observações"
+                name="observacoesPagamento"
+                value={observacoesPagamento}
+                onChange={setObservacoesPagamento}
+                placeholder="Ex: Entrada do tratamento"
+                hint="opcional"
+              />
 
               <div className="flex justify-end gap-3 pt-2">
                 <Button type="button" variant="secondary" onClick={fecharModalPagamento}>Cancelar</Button>
