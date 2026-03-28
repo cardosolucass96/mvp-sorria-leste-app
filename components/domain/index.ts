@@ -42,3 +42,6 @@ export type { ComissoesResumoProps, ComissaoResumoData } from './ComissoesResumo
 
 export { default as ViewModeToggle } from './ViewModeToggle';
 export type { ViewModeToggleProps, ViewModeOption } from './ViewModeToggle';
+
+export { default as TrocarSenhaModal } from './TrocarSenhaModal';
+export type { TrocarSenhaModalProps } from './TrocarSenhaModal';
