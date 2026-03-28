@@ -5,11 +5,12 @@ export {
   PROXIMOS_STATUS,
   ITEM_STATUS_CONFIG,
   PARCELA_STATUS_CONFIG,
+  AGENDAMENTO_STATUS_CONFIG,
   METODO_PAGAMENTO_LABELS,
   getAtendimentoStatus,
   getItemStatus,
 } from './status';
-export type { StatusConfig, ItemStatusConfig, ParcelaStatus, ParcelaStatusConfig } from './status';
+export type { StatusConfig, ItemStatusConfig, ParcelaStatus, ParcelaStatusConfig, AgendamentoStatusConfig } from './status';
 
 export {
   ORIGENS_OPTIONS,

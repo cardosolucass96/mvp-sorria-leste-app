@@ -16,6 +16,7 @@ import {
   FileText,
   User,
   Banknote,
+  CalendarDays,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -33,6 +34,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { href: '/avaliacao', label: 'Fila Avaliação', icon: Search, roles: ['admin', 'avaliador'] },
   { href: '/execucao', label: 'Fila Execução', icon: Activity, roles: ['admin', 'executor'] },
   { href: '/meus-procedimentos', label: 'Meus Procedimentos', icon: ClipboardList, roles: ['avaliador', 'executor'] },
+  { href: '/agenda', label: 'Agenda', icon: CalendarDays, roles: ['admin', 'atendente'] },
   { href: '/pagamentos', label: 'Pagamentos', icon: CreditCard, roles: ['admin', 'atendente'] },
   { href: '/procedimentos', label: 'Procedimentos', icon: FileText, roles: ['admin'] },
   { href: '/usuarios', label: 'Usuários', icon: User, roles: ['admin'] },

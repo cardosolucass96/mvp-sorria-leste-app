@@ -11,6 +11,8 @@ export type AtendimentoStatus =
 
 export type ItemStatus = 'pendente' | 'pago' | 'executando' | 'concluido';
 
+export type AgendamentoStatus = 'pendente' | 'agendado' | 'faltou' | 'realizado' | 'cancelado';
+
 export type MetodoPagamento = 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito';
 
 export type OrigemCliente = 

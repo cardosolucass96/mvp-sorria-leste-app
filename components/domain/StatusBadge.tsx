@@ -1,16 +1,16 @@
 /**
  * StatusBadge — exibe badge de status com cor e ícone automáticos.
- * Usa Badge (Sprint 1) + STATUS_CONFIG/ITEM_STATUS_CONFIG/PARCELA_STATUS_CONFIG (Sprint 0).
+ * Usa Badge (Sprint 1) + STATUS_CONFIG/ITEM_STATUS_CONFIG/PARCELA_STATUS_CONFIG/AGENDAMENTO_STATUS_CONFIG (Sprint 0).
  */
 
 import Badge from '@/components/ui/Badge';
 import type { BadgeProps } from '@/components/ui/Badge';
-import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PARCELA_STATUS_CONFIG } from '@/lib/constants/status';
-import type { AtendimentoStatus, ItemStatus } from '@/lib/types';
+import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PARCELA_STATUS_CONFIG, AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/status';
+import type { AtendimentoStatus, ItemStatus, AgendamentoStatus } from '@/lib/types';
 import type { ParcelaStatus } from '@/lib/constants/status';
 import type { LucideIcon } from 'lucide-react';
 
-export type StatusBadgeType = 'atendimento' | 'item' | 'parcela';
+export type StatusBadgeType = 'atendimento' | 'item' | 'parcela' | 'agendamento';
 
 export interface StatusBadgeProps {
   type: StatusBadgeType;
@@ -59,6 +59,11 @@ export default function StatusBadge({
   } else if (type === 'parcela' && status in PARCELA_STATUS_CONFIG) {
     const config = PARCELA_STATUS_CONFIG[status as ParcelaStatus];
     label = config.label;
+    color = getBadgeColor(config.bgCor);
+  } else if (type === 'agendamento' && status in AGENDAMENTO_STATUS_CONFIG) {
+    const config = AGENDAMENTO_STATUS_CONFIG[status as AgendamentoStatus];
+    label = config.label;
+    Icon = config.icon;
     color = getBadgeColor(config.bgCor);
   }
 
