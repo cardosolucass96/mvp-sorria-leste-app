@@ -132,7 +132,7 @@ export default function Header() {
                   className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border-2 ${
                     viewMode === 'admin'
                       ? 'bg-white/20 border-white/40 text-white hover:bg-white/30'
-                      : 'bg-emerald-400/20 border-emerald-300/50 text-emerald-100 hover:bg-emerald-400/30'
+                      : 'bg-dentist-400/20 border-dentist-400/50 text-dentist-100 hover:bg-dentist-400/30'
                   }`}
                   title={viewMode === 'admin' ? 'Trocar para visão Dentista' : 'Trocar para visão Admin'}
                   aria-label={viewMode === 'admin' ? 'Trocar para visão Dentista' : 'Trocar para visão Admin'}
@@ -190,7 +190,7 @@ export default function Header() {
                 className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                   viewMode === 'admin'
                     ? 'bg-sidebar-active/20 text-sidebar-text-active border border-sidebar-active/50'
-                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                    : 'bg-dentist-500/20 text-dentist-400 border border-dentist-500/50'
                 }`}
               >
                 {viewMode === 'admin'
