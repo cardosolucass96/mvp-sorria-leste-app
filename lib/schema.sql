@@ -207,6 +207,35 @@ CREATE TABLE IF NOT EXISTS prontuarios_etapa (
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
 
+-- Saldo de Clientes (crédito pré-pago)
+CREATE TABLE IF NOT EXISTS saldo_clientes (
+  cliente_id INTEGER PRIMARY KEY,
+  saldo REAL NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+);
+
+-- Movimentações de Saldo (histórico de operações)
+CREATE TABLE IF NOT EXISTS movimentacoes_saldo (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cliente_id INTEGER NOT NULL,
+  tipo TEXT NOT NULL CHECK (tipo IN ('credito', 'debito', 'estorno', 'transferencia_entrada', 'transferencia_saida')),
+  valor REAL NOT NULL,
+  saldo_anterior REAL NOT NULL,
+  saldo_novo REAL NOT NULL,
+  pagamento_id INTEGER,
+  item_atendimento_id INTEGER,
+  atendimento_id INTEGER,
+  cliente_destino_id INTEGER,
+  observacoes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+  FOREIGN KEY (pagamento_id) REFERENCES pagamentos(id),
+  FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
+  FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
+  FOREIGN KEY (cliente_destino_id) REFERENCES clientes(id)
+);
+
 -- Índices para melhor performance
 CREATE INDEX IF NOT EXISTS idx_clientes_cpf ON clientes(cpf);
 CREATE INDEX IF NOT EXISTS idx_clientes_nome ON clientes(nome);
@@ -226,3 +255,6 @@ CREATE INDEX IF NOT EXISTS idx_anexos_item ON anexos_execucao(item_atendimento_i
 CREATE INDEX IF NOT EXISTS idx_etapas_item ON etapas_procedimento(item_atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_etapas_status ON etapas_procedimento(status);
 CREATE INDEX IF NOT EXISTS idx_prontuarios_etapa ON prontuarios_etapa(etapa_id);
+CREATE INDEX IF NOT EXISTS idx_movimentacoes_cliente ON movimentacoes_saldo(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_movimentacoes_tipo ON movimentacoes_saldo(tipo);
+CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes_saldo(created_at);
