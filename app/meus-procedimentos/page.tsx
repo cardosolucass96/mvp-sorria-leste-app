@@ -101,7 +101,7 @@ export default function MeusProcedimentosPage() {
             icon={<Search className="w-6 h-6" />}
             label="Avaliações Realizadas"
             value={totalAvaliados}
-            color="border-purple-400"
+            color="border-evaluation-500"
           />
         )}
         

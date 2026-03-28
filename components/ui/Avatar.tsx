@@ -18,7 +18,7 @@ function hashColor(name: string): string {
     'bg-primary-500',
     'bg-info-500',
     'bg-success-500',
-    'bg-purple-500',
+    'bg-evaluation-500',
     'bg-error-500',
     'bg-warning-500',
     'bg-teal-500',

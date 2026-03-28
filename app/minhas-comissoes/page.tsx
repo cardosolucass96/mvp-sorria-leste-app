@@ -100,7 +100,7 @@ export default function MinhasComissoesPage() {
       {dados && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <StatCard icon={<DollarSign className="w-6 h-6" />} label="Comissão de Venda" value={formatarMoeda(dados.totais.venda)} color="border-success-500" />
-          <StatCard icon={<Banknote className="w-6 h-6" />} label="Total Geral" value={formatarMoeda(dados.totais.geral)} color="border-purple-500" />
+          <StatCard icon={<Banknote className="w-6 h-6" />} label="Total Geral" value={formatarMoeda(dados.totais.geral)} color="border-evaluation-500" />
         </div>
       )}
 

@@ -173,7 +173,7 @@ export default function ComissoesPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <StatCard icon={<DollarSign className="w-6 h-6" />} label="Comissão de Venda" value={formatarMoeda(detalhes.totais.venda)} color="border-success-500" />
             <StatCard icon={<Wrench className="w-6 h-6" />} label="Comissão de Execução" value={formatarMoeda(detalhes.totais.execucao)} color="border-info-500" />
-            <StatCard icon={<Banknote className="w-6 h-6" />} label="Total Geral" value={formatarMoeda(detalhes.totais.geral)} color="border-purple-500" />
+            <StatCard icon={<Banknote className="w-6 h-6" />} label="Total Geral" value={formatarMoeda(detalhes.totais.geral)} color="border-evaluation-500" />
           </div>
           <Table columns={detalheColumns} data={detalhes.comissoes} keyExtractor={(c) => c.id} emptyMessage="Nenhuma comissão encontrada" caption="Detalhes de comissões" />
         </>
