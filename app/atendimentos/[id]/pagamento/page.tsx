@@ -185,15 +185,21 @@ export default function PagamentoPage({
       setObservacoesPagamento('');
       setItensSelecionados({});
       await carregarDados();
-      // Verifica se todos os procedimentos estão pagos
+      // Verifica se há procedimentos pagos para liberar execução
       const resAtend = await fetch(`/api/atendimentos/${id}`);
       const dadosAtend = await resAtend.json();
+      const itensPagosAtend = dadosAtend.itens?.filter(
+        (item: { valor: number; valor_pago: number }) => item.valor_pago >= item.valor
+      ) ?? [];
+      const algumPago = itensPagosAtend.length > 0;
       const todosPagos = dadosAtend.itens?.length > 0 &&
-        dadosAtend.itens.every((item: { valor: number; valor_pago: number }) => item.valor_pago >= item.valor);
-      if (todosPagos && dadosAtend.status === 'aguardando_pagamento') {
+        itensPagosAtend.length === dadosAtend.itens.length;
+      if (algumPago && dadosAtend.status === 'aguardando_pagamento') {
         openConfirm({
-          title: 'Todos os procedimentos pagos',
-          message: 'Todos os procedimentos estão quitados. Deseja avançar o atendimento para execução agora?',
+          title: todosPagos ? 'Todos os procedimentos pagos' : 'Procedimentos prontos para execução',
+          message: todosPagos
+            ? 'Todos os procedimentos estão quitados. Deseja avançar o atendimento para execução agora?'
+            : `${itensPagosAtend.length} procedimento(s) pago(s) e pronto(s) para execução. Os demais permanecem pendentes de pagamento. Deseja avançar?`,
           confirmLabel: 'Avançar para Execução',
           type: 'info',
           onConfirm: async () => {
