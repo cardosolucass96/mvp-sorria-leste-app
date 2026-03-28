@@ -52,9 +52,11 @@ CREATE TABLE IF NOT EXISTS atendimentos (
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   liberado_em TEXT, -- Data/hora da liberação para execução
   finalizado_at TEXT,
+  agendamento_id INTEGER, -- Agendamento que originou este atendimento (sessão)
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
   FOREIGN KEY (avaliador_id) REFERENCES usuarios(id),
-  FOREIGN KEY (liberado_por_id) REFERENCES usuarios(id)
+  FOREIGN KEY (liberado_por_id) REFERENCES usuarios(id),
+  FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id)
 );
 
 -- Itens do Atendimento (Procedimentos vinculados)
@@ -75,10 +77,12 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   observacoes TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   concluido_at TEXT,
+  origem_agendamento_id INTEGER, -- Agendamento que originou este item (sessão)
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
   FOREIGN KEY (executor_id) REFERENCES usuarios(id),
-  FOREIGN KEY (criado_por_id) REFERENCES usuarios(id)
+  FOREIGN KEY (criado_por_id) REFERENCES usuarios(id),
+  FOREIGN KEY (origem_agendamento_id) REFERENCES agendamentos(id)
 );
 
 -- Pagamentos
@@ -207,6 +211,29 @@ CREATE TABLE IF NOT EXISTS prontuarios_etapa (
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
 
+-- Agendamentos (próximas sessões)
+CREATE TABLE IF NOT EXISTS agendamentos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cliente_id INTEGER NOT NULL,
+  atendimento_origem_id INTEGER, -- atendimento que gerou este agendamento
+  procedimento_id INTEGER NOT NULL,
+  item_atendimento_origem_id INTEGER, -- item do atendimento de origem
+  executor_id INTEGER,
+  data_agendada TEXT, -- null = sem data definida
+  status TEXT NOT NULL DEFAULT 'pendente'
+    CHECK (status IN ('pendente', 'agendado', 'realizado', 'faltou', 'cancelado')),
+  atendimento_sessao_id INTEGER, -- atendimento criado quando "chegou"
+  observacoes TEXT,
+  motivo_cancelamento TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+  FOREIGN KEY (atendimento_origem_id) REFERENCES atendimentos(id),
+  FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
+  FOREIGN KEY (item_atendimento_origem_id) REFERENCES itens_atendimento(id),
+  FOREIGN KEY (executor_id) REFERENCES usuarios(id),
+  FOREIGN KEY (atendimento_sessao_id) REFERENCES atendimentos(id)
+);
+
 -- Índices para melhor performance
 CREATE INDEX IF NOT EXISTS idx_clientes_cpf ON clientes(cpf);
 CREATE INDEX IF NOT EXISTS idx_clientes_nome ON clientes(nome);
@@ -226,3 +253,6 @@ CREATE INDEX IF NOT EXISTS idx_anexos_item ON anexos_execucao(item_atendimento_i
 CREATE INDEX IF NOT EXISTS idx_etapas_item ON etapas_procedimento(item_atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_etapas_status ON etapas_procedimento(status);
 CREATE INDEX IF NOT EXISTS idx_prontuarios_etapa ON prontuarios_etapa(etapa_id);
+CREATE INDEX IF NOT EXISTS idx_agendamentos_cliente ON agendamentos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_agendamentos_status ON agendamentos(status);
+CREATE INDEX IF NOT EXISTS idx_agendamentos_data ON agendamentos(data_agendada);

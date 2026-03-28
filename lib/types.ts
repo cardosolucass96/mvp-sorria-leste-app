@@ -107,6 +107,31 @@ export interface PagamentoItem {
   created_at: string;
 }
 
+export type AgendamentoStatus = 'pendente' | 'agendado' | 'realizado' | 'faltou' | 'cancelado';
+
+export interface Agendamento {
+  id: number;
+  cliente_id: number;
+  atendimento_origem_id: number | null;
+  procedimento_id: number;
+  item_atendimento_origem_id: number | null;
+  executor_id: number | null;
+  data_agendada: string | null;
+  status: AgendamentoStatus;
+  atendimento_sessao_id: number | null;
+  observacoes: string | null;
+  motivo_cancelamento: string | null;
+  created_at: string;
+}
+
+export interface AgendamentoCompleto extends Agendamento {
+  cliente_nome: string;
+  cliente_telefone: string | null;
+  procedimento_nome: string;
+  executor_nome: string | null;
+  dias_desde_criacao: number;
+}
+
 // Tipos com joins para exibição
 export interface AtendimentoCompleto extends Atendimento {
   cliente_nome: string;
