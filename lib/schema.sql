@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   observacoes TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   concluido_at TEXT,
+  group_id TEXT, -- UUID compartilhado entre itens criados juntos (por_dente)
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
   FOREIGN KEY (executor_id) REFERENCES usuarios(id),
@@ -212,6 +213,7 @@ CREATE INDEX IF NOT EXISTS idx_atendimentos_cliente ON atendimentos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_atendimentos_status ON atendimentos(status);
 CREATE INDEX IF NOT EXISTS idx_itens_atendimento ON itens_atendimento(atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_itens_executor ON itens_atendimento(executor_id);
+CREATE INDEX IF NOT EXISTS idx_itens_group_id ON itens_atendimento(group_id);
 CREATE INDEX IF NOT EXISTS idx_pagamentos_atendimento ON pagamentos(atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_parcelas_atendimento ON parcelas(atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_parcelas_vencimento ON parcelas(data_vencimento);
