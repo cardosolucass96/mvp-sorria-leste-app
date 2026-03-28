@@ -79,8 +79,8 @@ export const POST = withAuth(async (
 
     // 3. Criar novo atendimento tipo sessão
     const atendimentoResult = await execute(
-      `INSERT INTO atendimentos (cliente_id, status, agendamento_id, observacoes)
-       VALUES (?, 'aguardando_pagamento', ?, ?)`,
+      `INSERT INTO atendimentos (cliente_id, status, tipo, agendamento_id, observacoes)
+       VALUES (?, 'aguardando_pagamento', 'sessao', ?, ?)`,
       [
         agendamento.cliente_id,
         agendamentoId,
