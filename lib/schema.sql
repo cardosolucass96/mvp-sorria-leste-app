@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS atendimentos (
   liberado_por_id INTEGER, -- Quem liberou para execução
   status TEXT NOT NULL DEFAULT 'triagem' 
     CHECK (status IN ('triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao', 'finalizado')),
+  tipo TEXT DEFAULT NULL, -- NULL = normal, 'sessao' = continuação de agendamento
+  motivo_saida TEXT DEFAULT NULL, -- sem_tratamento, tratamento_completo, continuacao
   observacoes TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   liberado_em TEXT, -- Data/hora da liberação para execução
@@ -207,6 +209,26 @@ CREATE TABLE IF NOT EXISTS prontuarios_etapa (
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
 
+-- Agendamentos (sessões agendadas)
+CREATE TABLE IF NOT EXISTS agendamentos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cliente_id INTEGER NOT NULL,
+  atendimento_origem_id INTEGER, -- Atendimento que gerou este agendamento
+  atendimento_id INTEGER, -- Atendimento criado quando o cliente chegou
+  procedimento_id INTEGER NOT NULL,
+  executor_id INTEGER,
+  data_agendada TEXT, -- NULL = pendente sem data
+  observacoes TEXT,
+  status TEXT NOT NULL DEFAULT 'pendente'
+    CHECK (status IN ('pendente', 'agendado', 'chegou', 'cancelado')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+  FOREIGN KEY (atendimento_origem_id) REFERENCES atendimentos(id),
+  FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
+  FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
+  FOREIGN KEY (executor_id) REFERENCES usuarios(id)
+);
+
 -- Índices para melhor performance
 CREATE INDEX IF NOT EXISTS idx_clientes_cpf ON clientes(cpf);
 CREATE INDEX IF NOT EXISTS idx_clientes_nome ON clientes(nome);
@@ -226,3 +248,5 @@ CREATE INDEX IF NOT EXISTS idx_anexos_item ON anexos_execucao(item_atendimento_i
 CREATE INDEX IF NOT EXISTS idx_etapas_item ON etapas_procedimento(item_atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_etapas_status ON etapas_procedimento(status);
 CREATE INDEX IF NOT EXISTS idx_prontuarios_etapa ON prontuarios_etapa(etapa_id);
+CREATE INDEX IF NOT EXISTS idx_agendamentos_cliente ON agendamentos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_agendamentos_status ON agendamentos(status);

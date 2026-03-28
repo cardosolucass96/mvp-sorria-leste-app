@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatarMoeda, formatarDataHora } from '@/lib/utils/formatters';
 import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PROXIMOS_STATUS } from '@/lib/constants/status';
 import type { AtendimentoStatus, ItemStatus } from '@/lib/types';
 import { StatusBadge, StatusPipeline } from '@/components/domain';
-import { ClipboardList, ChevronDown, ChevronRight, X, Trash2 } from 'lucide-react';
-import { Alert, LoadingState, PageHeader, Button, Card, EmptyState, ConfirmDialog, Modal, Select, Input } from '@/components/ui';
+import { ClipboardList, ChevronDown, ChevronRight, X, Trash2, CalendarPlus, Info } from 'lucide-react';
+import { Alert, LoadingState, PageHeader, Button, Card, EmptyState, ConfirmDialog, Modal, Select, Input, Textarea, useToast } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
@@ -56,6 +56,7 @@ interface Atendimento {
   avaliador_nome: string | null;
   liberado_por_nome: string | null;
   status: string;
+  tipo: string | null;
   created_at: string;
   liberado_em: string | null;
   finalizado_at: string | null;
@@ -73,6 +74,7 @@ export default function AtendimentoDetalhePage({
   const { id } = use(params);
   const router = useRouter();
   const { hasRole, user } = useAuth();
+  const { toast } = useToast();
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -122,6 +124,21 @@ export default function AtendimentoDetalhePage({
     execucao: number;
     total: number;
   } | null>(null);
+
+  const agendamentoFromFinalizar = useRef(false);
+
+  // Modal agendar próxima sessão
+  const [modalAgendamento, setModalAgendamento] = useState(false);
+  const [agProcId, setAgProcId] = useState('');
+  const [agExecId, setAgExecId] = useState('');
+  const [agData, setAgData] = useState('');
+  const [agObs, setAgObs] = useState('');
+  const [agSalvando, setAgSalvando] = useState(false);
+  const [agError, setAgError] = useState('');
+
+  // Modal finalização com motivo
+  const [modalFinalizar, setModalFinalizar] = useState(false);
+  const [motivoSaida, setMotivoSaida] = useState<'sem_tratamento' | 'tratamento_completo' | 'continuacao' | ''>('');
 
   // Estado para grupos expandidos
   const [gruposExpandidos, setGruposExpandidos] = useState<Set<string>>(new Set());
@@ -366,31 +383,109 @@ export default function AtendimentoDetalhePage({
     }
   };
 
-  const handleFinalizar = async () => {
+  const handleClickFinalizar = () => {
+    setMotivoSaida('');
+    setModalFinalizar(true);
+  };
+
+  const executarFinalizacao = async (motivo: string) => {
     if (!atendimento) return;
-    
     setFinalizando(true);
     setError('');
-    
     try {
       const res = await fetch(`/api/atendimentos/${id}/finalizar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo_saida: motivo }),
       });
-      
       const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error || 'Erro ao finalizar atendimento');
-      }
-      
-      // Salvar comissões geradas para exibir
+      if (!res.ok) throw new Error(data.error || 'Erro ao finalizar atendimento');
       setComissoesGeradas(data.comissoes);
       await carregarAtendimento();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao finalizar');
     } finally {
       setFinalizando(false);
+    }
+  };
+
+  const handleConfirmarFinalizar = async () => {
+    if (!motivoSaida) return;
+    setModalFinalizar(false);
+    if (motivoSaida === 'continuacao') {
+      // Pre-fill agendamento modal with current procedure then finalize after
+      abrirModalAgendamento(true);
+    } else {
+      await executarFinalizacao(motivoSaida);
+    }
+  };
+
+  const abrirModalAgendamento = async (fromFinalizar = false) => {
+    agendamentoFromFinalizar.current = fromFinalizar;
+    setModalAgendamento(true);
+    setAgError('');
+    setAgSalvando(false);
+    // Pre-fill procedure from current items
+    if (atendimento?.itens.length) {
+      const firstItem = atendimento.itens[0];
+      const proc = procedimentos.find(p => p.nome === firstItem.procedimento_nome);
+      if (proc) setAgProcId(String(proc.id));
+    }
+    // Load data if needed
+    if (procedimentos.length === 0) {
+      setLoadingDadosProc(true);
+      try {
+        const [resProc, resUsers] = await Promise.all([
+          fetch('/api/procedimentos'),
+          fetch('/api/usuarios'),
+        ]);
+        setProcedimentos(await resProc.json());
+        const usersData: Usuario[] = await resUsers.json();
+        setExecutores(usersData.filter(u => u.role === 'executor' || u.role === 'admin'));
+      } finally {
+        setLoadingDadosProc(false);
+      }
+    }
+  };
+
+  const fecharModalAgendamento = () => {
+    setModalAgendamento(false);
+    setAgProcId('');
+    setAgExecId('');
+    setAgData('');
+    setAgObs('');
+    setAgError('');
+  };
+
+  const handleSalvarAgendamento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!agProcId) return;
+    setAgSalvando(true);
+    setAgError('');
+    try {
+      const res = await fetch(`/api/atendimentos/${id}/gerar-agendamento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          procedimento_id: parseInt(agProcId),
+          executor_id: agExecId ? parseInt(agExecId) : null,
+          data_agendada: agData || null,
+          observacoes: agObs || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao agendar');
+      fecharModalAgendamento();
+      toast.success('Próxima sessão agendada com sucesso');
+      // If came from finalize flow, now finalize
+      if (agendamentoFromFinalizar.current) {
+        agendamentoFromFinalizar.current = false;
+        await executarFinalizacao('continuacao');
+      }
+    } catch (err) {
+      setAgError(err instanceof Error ? err.message : 'Erro ao agendar');
+    } finally {
+      setAgSalvando(false);
     }
   };
 
@@ -510,9 +605,15 @@ export default function AtendimentoDetalhePage({
         actions={
           <div className="flex gap-2 flex-wrap">
             {atendimento.status === 'em_execucao' && (
-              <Button onClick={handleFinalizar} disabled={finalizando} variant="primary">
-                {finalizando ? 'Finalizando...' : 'Finalizar Atendimento'}
-              </Button>
+              <>
+                <Button onClick={() => abrirModalAgendamento(false)} variant="secondary">
+                  <CalendarPlus className="w-4 h-4 mr-1" />
+                  Agendar próxima sessão
+                </Button>
+                <Button onClick={handleClickFinalizar} disabled={finalizando} variant="primary">
+                  {finalizando ? 'Finalizando...' : 'Finalizar Atendimento'}
+                </Button>
+              </>
             )}
             {proximoStatus && atendimento.status !== 'em_execucao' && (
               <Button onClick={() => handleMudarStatus(proximoStatus)} disabled={mudandoStatus}>
@@ -533,6 +634,14 @@ export default function AtendimentoDetalhePage({
       </Card>
 
       {error && <Alert type="error">{error}</Alert>}
+
+      {/* Banner de sessão de continuação */}
+      {atendimento.tipo === 'sessao' && (
+        <div className="flex items-center gap-2 p-3 bg-info-50 border border-info-200 rounded-lg text-sm text-info-800">
+          <Info className="w-4 h-4 shrink-0" />
+          <span>Este atendimento é uma continuação — sessão agendada para {atendimento.itens[0]?.procedimento_nome || 'procedimento'}.</span>
+        </div>
+      )}
 
       {/* Comissões Geradas (após finalização) */}
       {comissoesGeradas && (
@@ -903,6 +1012,90 @@ export default function AtendimentoDetalhePage({
             </div>
           </div>
         ) : null}
+      </Modal>
+
+      {/* Modal Agendar Próxima Sessão */}
+      <Modal isOpen={modalAgendamento} onClose={fecharModalAgendamento} title="Agendar Próxima Sessão" size="md">
+        {loadingDadosProc ? (
+          <LoadingState text="Carregando..." />
+        ) : (
+          <form onSubmit={handleSalvarAgendamento} className="space-y-4">
+            {agError && <Alert type="error">{agError}</Alert>}
+            <Select
+              label="Procedimento *"
+              name="agProcedimento"
+              value={agProcId}
+              onChange={setAgProcId}
+              options={procedimentos.map(p => ({ value: String(p.id), label: p.nome }))}
+              placeholder="Selecione..."
+              required
+            />
+            <Select
+              label="Executor"
+              name="agExecutor"
+              value={agExecId}
+              onChange={setAgExecId}
+              options={executores.map(e => ({ value: String(e.id), label: e.nome }))}
+              placeholder="Definir depois"
+            />
+            <Input
+              label="Data"
+              name="agData"
+              type="date"
+              value={agData}
+              onChange={setAgData}
+              hint="Opcional — sem data = agendamento pendente"
+            />
+            <Textarea
+              label="Observações"
+              name="agObs"
+              value={agObs}
+              onChange={setAgObs}
+              placeholder="Observações sobre a próxima sessão..."
+            />
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="secondary" onClick={fecharModalAgendamento}>Cancelar</Button>
+              <Button type="submit" disabled={!agProcId || agSalvando} loading={agSalvando}>
+                Agendar Sessão
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Modal Finalizar com Motivo */}
+      <Modal isOpen={modalFinalizar} onClose={() => setModalFinalizar(false)} title="Finalizar Atendimento" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">Selecione o motivo de saída do cliente:</p>
+          <div className="space-y-2">
+            {([
+              { value: 'sem_tratamento', label: 'Avaliação apenas — cliente saiu sem tratamento' },
+              { value: 'tratamento_completo', label: 'Tratamento concluído por hoje' },
+              { value: 'continuacao', label: 'Haverá continuação — cliente retornará' },
+            ] as const).map((opt) => (
+              <label key={opt.value}
+                className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                  motivoSaida === opt.value ? 'border-primary-500 bg-primary-50' : 'border-neutral-200 hover:border-neutral-300'
+                }`}>
+                <input
+                  type="radio"
+                  name="motivoSaida"
+                  value={opt.value}
+                  checked={motivoSaida === opt.value}
+                  onChange={() => setMotivoSaida(opt.value)}
+                  className="accent-primary-500"
+                />
+                <span className="text-sm">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setModalFinalizar(false)}>Cancelar</Button>
+            <Button onClick={handleConfirmarFinalizar} disabled={!motivoSaida || finalizando} loading={finalizando}>
+              Confirmar
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Modal Pagamento */}

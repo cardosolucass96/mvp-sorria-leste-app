@@ -31,6 +31,15 @@ export async function POST(
     const { id } = await params;
     const atendimentoId = parseInt(id);
 
+    // Parse motivo_saida from body (optional for backwards compat)
+    let motivoSaida: string | null = null;
+    try {
+      const body = await request.json();
+      motivoSaida = body.motivo_saida || null;
+    } catch {
+      // No body or invalid JSON — backwards compatible
+    }
+
     // 1. Verificar se atendimento existe e está em execução
     const atendimentos = await query<Atendimento>(
       'SELECT id, status FROM atendimentos WHERE id = ?',
@@ -53,42 +62,45 @@ export async function POST(
       );
     }
 
-    // 2. Verificar se todos os itens estão concluídos
+    // 2. Buscar itens
     const itens = await query<ItemAtendimento>(
       `SELECT id, valor, valor_pago, status, criado_por_id, executor_id, procedimento_id
        FROM itens_atendimento WHERE atendimento_id = ?`,
       [atendimentoId]
     );
 
-    if (itens.length === 0) {
-      return NextResponse.json(
-        { error: 'Atendimento não possui procedimentos' },
-        { status: 400 }
-      );
-    }
+    // "Avaliação apenas" skips item/payment validations
+    if (motivoSaida !== 'sem_tratamento') {
+      if (itens.length === 0) {
+        return NextResponse.json(
+          { error: 'Atendimento não possui procedimentos' },
+          { status: 400 }
+        );
+      }
 
-    const itensNaoConcluidos = itens.filter(i => i.status !== 'concluido');
-    if (itensNaoConcluidos.length > 0) {
-      return NextResponse.json(
-        { 
-          error: 'Existem procedimentos não concluídos',
-          pendentes: itensNaoConcluidos.length 
-        },
-        { status: 400 }
-      );
-    }
+      const itensNaoConcluidos = itens.filter(i => i.status !== 'concluido');
+      if (itensNaoConcluidos.length > 0) {
+        return NextResponse.json(
+          {
+            error: 'Existem procedimentos não concluídos',
+            pendentes: itensNaoConcluidos.length
+          },
+          { status: 400 }
+        );
+      }
 
-    // 3. Verificar se todos os itens estão pagos
-    const itensNaoPagos = itens.filter(i => i.valor_pago < i.valor);
-    if (itensNaoPagos.length > 0) {
-      const valorFaltante = itensNaoPagos.reduce((sum, i) => sum + (i.valor - i.valor_pago), 0);
-      return NextResponse.json(
-        { 
-          error: 'Existem procedimentos com pagamento pendente',
-          valorFaltante 
-        },
-        { status: 400 }
-      );
+      // 3. Verificar se todos os itens estão pagos
+      const itensNaoPagos = itens.filter(i => i.valor_pago < i.valor);
+      if (itensNaoPagos.length > 0) {
+        const valorFaltante = itensNaoPagos.reduce((sum, i) => sum + (i.valor - i.valor_pago), 0);
+        return NextResponse.json(
+          {
+            error: 'Existem procedimentos com pagamento pendente',
+            valorFaltante
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // 4. Gerar comissões para cada item
@@ -146,8 +158,8 @@ export async function POST(
 
     // 5. Finalizar atendimento
     await execute(
-      `UPDATE atendimentos SET status = 'finalizado', finalizado_at = datetime('now', 'localtime') WHERE id = ?`,
-      [atendimentoId]
+      `UPDATE atendimentos SET status = 'finalizado', finalizado_at = datetime('now', 'localtime')${motivoSaida ? ", motivo_saida = ?" : ""} WHERE id = ?`,
+      motivoSaida ? [motivoSaida, atendimentoId] : [atendimentoId]
     );
 
     // 6. Calcular totais de comissões
