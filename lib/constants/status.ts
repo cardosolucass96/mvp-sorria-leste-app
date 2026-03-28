@@ -125,8 +125,8 @@ export interface ParcelaStatusConfig {
 export const PARCELA_STATUS_CONFIG: Record<ParcelaStatus, ParcelaStatusConfig> = {
   pendente: {
     label: 'Pendente',
-    cor: 'text-yellow-700',
-    bgCor: 'bg-yellow-100',
+    cor: 'text-warning-700',
+    bgCor: 'bg-warning-100',
   },
   paga: {
     label: 'Paga',

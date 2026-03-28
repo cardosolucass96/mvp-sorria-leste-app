@@ -86,12 +86,12 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg">
+    <header className="bg-neutral-900 text-white shadow-sm border-b border-neutral-800">
       <div className="flex items-center justify-between px-3 md:px-6 py-3">
         {/* Menu Hamburguer Mobile */}
         <button
           onClick={() => setShowMobileMenu(!showMobileMenu)}
-          className="md:hidden p-2 hover:bg-primary-600 rounded-lg transition-colors"
+          className="md:hidden p-2 hover:bg-neutral-800 rounded-lg transition-colors"
           aria-label={showMobileMenu ? 'Fechar menu de navegação' : 'Abrir menu de navegação'}
           aria-expanded={showMobileMenu}
         >
@@ -117,7 +117,7 @@ export default function Header() {
           </div>
           <div>
             <h1 className="text-lg md:text-xl font-bold tracking-tight">Sorria Leste</h1>
-            <p className="hidden sm:block text-xs text-primary-100">Clínica Odontológica</p>
+            <p className="hidden sm:block text-xs text-neutral-400">Clínica Odontológica</p>
           </div>
         </Link>
 
@@ -131,8 +131,8 @@ export default function Header() {
                   onClick={toggleViewMode}
                   className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border-2 ${
                     viewMode === 'admin'
-                      ? 'bg-white/20 border-white/40 text-white hover:bg-white/30'
-                      : 'bg-emerald-400/20 border-emerald-300/50 text-emerald-100 hover:bg-emerald-400/30'
+                      ? 'bg-neutral-700 border-neutral-600 text-white hover:bg-neutral-600'
+                      : 'bg-dentist-400/20 border-dentist-400/50 text-dentist-100 hover:bg-dentist-400/30'
                   }`}
                   title={viewMode === 'admin' ? 'Trocar para visão Dentista' : 'Trocar para visão Admin'}
                   aria-label={viewMode === 'admin' ? 'Trocar para visão Dentista' : 'Trocar para visão Admin'}
@@ -148,13 +148,13 @@ export default function Header() {
 
               <div className="hidden sm:block text-right">
                 <p className="text-sm font-semibold">{user.nome}</p>
-                <p className="text-xs text-primary-100">
+                <p className="text-xs text-neutral-400">
                   {isAdmin && viewMode === 'dentista' ? 'Dentista' : ROLE_LABELS[user.role]}
                 </p>
               </div>
               <button
                 onClick={() => setShowSenhaModal(true)}
-                className="bg-primary-600 hover:bg-primary-700 px-2 md:px-3 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
+                className="bg-neutral-700 hover:bg-neutral-600 px-2 md:px-3 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
                 title="Alterar senha"
                 aria-label="Alterar senha"
               >
@@ -162,7 +162,7 @@ export default function Header() {
               </button>
               <button
                 onClick={handleLogout}
-                className="bg-primary-700 hover:bg-primary-800 px-3 md:px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
+                className="bg-neutral-700 hover:bg-neutral-600 px-3 md:px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
                 aria-label="Sair do sistema"
               >
                 Sair
@@ -171,7 +171,7 @@ export default function Header() {
           ) : (
             <Link
               href="/login"
-              className="bg-primary-700 hover:bg-primary-800 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
+              className="bg-neutral-700 hover:bg-neutral-600 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
             >
               Entrar
             </Link>
@@ -190,7 +190,7 @@ export default function Header() {
                 className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                   viewMode === 'admin'
                     ? 'bg-sidebar-active/20 text-sidebar-text-active border border-sidebar-active/50'
-                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                    : 'bg-dentist-500/20 text-dentist-400 border border-dentist-500/50'
                 }`}
               >
                 {viewMode === 'admin'

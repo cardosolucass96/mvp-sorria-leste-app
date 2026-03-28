@@ -250,7 +250,7 @@ export default function DashboardAdminPage() {
             <StatCard icon={<ClipboardList className="w-6 h-6" />} label="Total Atendimentos" value={data.resumo.totalAtendimentos} color="border-primary-400" />
             <StatCard icon={<Users className="w-6 h-6" />} label="Total Clientes" value={data.resumo.totalClientes} color="border-info-400" />
             <StatCard icon={<TrendingUp className="w-6 h-6" />} label="Taxa de Conversão" value={`${data.resumo.taxaConversao}%`} color="border-success-400" />
-            <StatCard icon={<Banknote className="w-6 h-6" />} label="Comissões Pagas" value={formatCurrency(data.resumo.comissoesTotal)} color="border-yellow-400" />
+            <StatCard icon={<Banknote className="w-6 h-6" />} label="Comissões Pagas" value={formatCurrency(data.resumo.comissoesTotal)} color="border-warning-400" />
           </div>
 
           {/* Gráficos */}
@@ -374,7 +374,7 @@ export default function DashboardAdminPage() {
                   data.topVendedores.map((v, idx) => (
                     <div key={v.nome} className="flex items-center gap-3 p-3 bg-surface-secondary rounded-lg">
                       <span className={`w-8 h-8 flex items-center justify-center rounded-full text-white font-bold text-sm ${
-                        idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-neutral-400' : idx === 2 ? 'bg-warning-600' : 'bg-neutral-300'
+                        idx === 0 ? 'bg-warning-500' : idx === 1 ? 'bg-neutral-400' : idx === 2 ? 'bg-warning-600' : 'bg-neutral-300'
                       }`}>
                         {idx + 1}
                       </span>
@@ -398,7 +398,7 @@ export default function DashboardAdminPage() {
                   data.topExecutores.map((e, idx) => (
                     <div key={e.nome} className="flex items-center gap-3 p-3 bg-surface-secondary rounded-lg">
                       <span className={`w-8 h-8 flex items-center justify-center rounded-full text-white font-bold text-sm ${
-                        idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-neutral-400' : idx === 2 ? 'bg-warning-600' : 'bg-neutral-300'
+                        idx === 0 ? 'bg-warning-500' : idx === 1 ? 'bg-neutral-400' : idx === 2 ? 'bg-warning-600' : 'bg-neutral-300'
                       }`}>
                         {idx + 1}
                       </span>

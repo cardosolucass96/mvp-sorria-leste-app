@@ -24,11 +24,10 @@ export interface StatusBadgeProps {
 const corToBadgeColor: Record<string, BadgeProps['color']> = {
   'bg-neutral-100': 'gray',
   'bg-info-100': 'blue',
-  'bg-warning-100': 'amber',
+  'bg-warning-100': 'yellow',
   'bg-evaluation-100': 'evaluation',
   'bg-success-100': 'green',
   'bg-primary-100': 'orange',
-  'bg-yellow-100': 'yellow',
   'bg-error-100': 'red',
 };
 
