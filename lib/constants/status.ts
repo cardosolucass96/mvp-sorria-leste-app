@@ -37,8 +37,8 @@ export const STATUS_CONFIG: Record<AtendimentoStatus, StatusConfig> = {
   },
   em_execucao: {
     label: 'Em Execução',
-    cor: 'text-purple-700',
-    bgCor: 'bg-purple-100',
+    cor: 'text-evaluation-700',
+    bgCor: 'bg-evaluation-100',
     icon: Activity,
   },
   finalizado: {
@@ -54,7 +54,7 @@ export const STATUS_CHART_COLORS: Record<AtendimentoStatus, string> = {
   triagem: 'bg-neutral-500',
   avaliacao: 'bg-info-500',
   aguardando_pagamento: 'bg-warning-500',
-  em_execucao: 'bg-purple-500',
+  em_execucao: 'bg-evaluation-500',
   finalizado: 'bg-success-500',
 };
 

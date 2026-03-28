@@ -234,10 +234,10 @@ export default function DashboardAdminPage() {
               </div>
             </Card>
 
-            <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white border-none">
+            <Card className="bg-gradient-to-br from-evaluation-500 to-evaluation-600 text-white border-none">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-purple-100 text-sm">Ticket Médio</p>
+                  <p className="text-evaluation-100 text-sm">Ticket Médio</p>
                   <p className="text-3xl font-bold">{formatCurrency(data.resumo.ticketMedio)}</p>
                 </div>
                 <Target className="w-10 h-10 opacity-30" aria-hidden="true" />
@@ -318,7 +318,7 @@ export default function DashboardAdminPage() {
               </h3>
               <div className="space-y-3">
                 {data.porCanal.map((canal, idx) => {
-                  const colors = ['bg-info-500', 'bg-success-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500'];
+                  const colors = ['bg-info-500', 'bg-success-500', 'bg-evaluation-500', 'bg-pink-500', 'bg-evaluation-500'];
                   return (
                     <div key={canal.origem} className="flex items-center gap-3">
                       <span className="w-28 text-sm text-neutral-600 truncate">{canal.label}</span>

@@ -1,6 +1,6 @@
 export interface BadgeProps {
   children: React.ReactNode;
-  color?: 'gray' | 'orange' | 'amber' | 'green' | 'red' | 'blue' | 'purple' | 'yellow';
+  color?: 'gray' | 'orange' | 'amber' | 'green' | 'red' | 'blue' | 'evaluation' | 'yellow';
   size?: 'sm' | 'md';
   className?: string;
 }
@@ -12,7 +12,7 @@ const colorClasses: Record<NonNullable<BadgeProps['color']>, string> = {
   green: 'bg-success-100 text-success-800',
   red: 'bg-error-100 text-error-800',
   blue: 'bg-info-100 text-info-800',
-  purple: 'bg-purple-100 text-purple-800',
+  evaluation: 'bg-evaluation-100 text-evaluation-800',
   yellow: 'bg-warning-100 text-warning-800',
 };
 

@@ -403,14 +403,14 @@ export default function Home() {
 
         <div className={`grid grid-cols-1 md:grid-cols-2 ${isDentista ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-4`}>
           {isDentista && (
-            <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-purple-500">
+            <Link href="/avaliacao" className="card hover:shadow-lg transition-all hover:-translate-y-1 border-l-4 border-evaluation-500">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-purple-100 rounded-full">
-                  <Search className="w-6 h-6 text-purple-600" aria-hidden="true" />
+                <div className="p-3 bg-evaluation-100 rounded-full">
+                  <Search className="w-6 h-6 text-evaluation-600" aria-hidden="true" />
                 </div>
                 <div>
                   <p className="text-sm text-muted">Fila Avaliação</p>
-                  <p className="text-2xl font-bold text-purple-600">{(stats?.meusAtendimentosAvaliacao || 0) + (stats?.atendimentosDisponiveisAvaliacao || 0)}</p>
+                  <p className="text-2xl font-bold text-evaluation-600">{(stats?.meusAtendimentosAvaliacao || 0) + (stats?.atendimentosDisponiveisAvaliacao || 0)}</p>
                 </div>
               </div>
             </Link>
@@ -447,20 +447,20 @@ export default function Home() {
         <div className={`grid grid-cols-1 ${isDentista ? 'md:grid-cols-2' : ''} gap-4`}>
           {isDentista && (
             <Link href="/avaliacao" className="block">
-              <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-300">
+              <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-evaluation-50 to-evaluation-50 border-2 border-evaluation-100">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="p-4 bg-purple-500 rounded-full">
+                    <div className="p-4 bg-evaluation-500 rounded-full">
                       <Search className="w-7 h-7 text-white" aria-hidden="true" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-purple-900">Fila de Avaliação</h3>
-                      <p className="text-purple-700">
+                      <h3 className="text-xl font-bold text-evaluation-900">Fila de Avaliação</h3>
+                      <p className="text-evaluation-700">
                         {(stats?.meusAtendimentosAvaliacao || 0) + (stats?.atendimentosDisponiveisAvaliacao || 0)} atendimentos aguardando
                       </p>
                     </div>
                   </div>
-                  <ChevronRight className="w-7 h-7 text-purple-400" aria-hidden="true" />
+                  <ChevronRight className="w-7 h-7 text-evaluation-500" aria-hidden="true" />
                 </div>
               </div>
             </Link>

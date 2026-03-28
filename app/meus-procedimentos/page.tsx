@@ -101,7 +101,7 @@ export default function MeusProcedimentosPage() {
             icon={<Search className="w-6 h-6" />}
             label="Avaliações Realizadas"
             value={totalAvaliados}
-            color="border-purple-400"
+            color="border-evaluation-500"
           />
         )}
         
@@ -141,7 +141,7 @@ export default function MeusProcedimentosPage() {
             label: 'Tipo',
             align: 'center',
             render: (proc) => proc.tipo === 'avaliacao'
-              ? <Badge color="purple">Avaliação</Badge>
+              ? <Badge color="evaluation">Avaliação</Badge>
               : <Badge color="green">Execução</Badge>,
           },
           {
