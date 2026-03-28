@@ -9,6 +9,7 @@ export const GET = withAuth(async (request: NextRequest) => {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status') || 'pendente,agendado,faltou';
     const clienteId = searchParams.get('cliente_id');
+    const busca = searchParams.get('busca');
     const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
     const semData = searchParams.get('sem_data');
@@ -27,6 +28,12 @@ export const GET = withAuth(async (request: NextRequest) => {
     if (clienteId) {
       conditions.push('a.cliente_id = ?');
       params.push(parseInt(clienteId));
+    }
+
+    // Busca por nome do cliente
+    if (busca) {
+      conditions.push('c.nome LIKE ?');
+      params.push(`%${busca}%`);
     }
 
     if (semData === 'true') {

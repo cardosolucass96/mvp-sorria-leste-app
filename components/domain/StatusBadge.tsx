@@ -6,11 +6,12 @@
 import Badge from '@/components/ui/Badge';
 import type { BadgeProps } from '@/components/ui/Badge';
 import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PARCELA_STATUS_CONFIG } from '@/lib/constants/status';
-import type { AtendimentoStatus, ItemStatus } from '@/lib/types';
+import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
+import type { AtendimentoStatus, ItemStatus, AgendamentoStatus } from '@/lib/types';
 import type { ParcelaStatus } from '@/lib/constants/status';
 import type { LucideIcon } from 'lucide-react';
 
-export type StatusBadgeType = 'atendimento' | 'item' | 'parcela';
+export type StatusBadgeType = 'atendimento' | 'item' | 'parcela' | 'agendamento';
 
 export interface StatusBadgeProps {
   type: StatusBadgeType;
@@ -29,6 +30,10 @@ const corToBadgeColor: Record<string, BadgeProps['color']> = {
   'bg-success-100': 'green',
   'bg-primary-100': 'orange',
   'bg-error-100': 'red',
+  'bg-blue-100': 'blue',
+  'bg-green-100': 'green',
+  'bg-yellow-100': 'yellow',
+  'bg-red-100': 'red',
 };
 
 function getBadgeColor(bgCor: string): NonNullable<BadgeProps['color']> {
@@ -58,6 +63,10 @@ export default function StatusBadge({
     color = getBadgeColor(config.bgCor);
   } else if (type === 'parcela' && status in PARCELA_STATUS_CONFIG) {
     const config = PARCELA_STATUS_CONFIG[status as ParcelaStatus];
+    label = config.label;
+    color = getBadgeColor(config.bgCor);
+  } else if (type === 'agendamento' && status in AGENDAMENTO_STATUS_CONFIG) {
+    const config = AGENDAMENTO_STATUS_CONFIG[status as AgendamentoStatus];
     label = config.label;
     color = getBadgeColor(config.bgCor);
   }
