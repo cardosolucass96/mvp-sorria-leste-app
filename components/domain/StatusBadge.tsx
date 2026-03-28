@@ -28,7 +28,7 @@ const corToBadgeColor: Record<string, BadgeProps['color']> = {
   'bg-purple-100': 'purple',
   'bg-success-100': 'green',
   'bg-primary-100': 'orange',
-  'bg-yellow-100': 'yellow',
+  'bg-warning-100': 'yellow',
   'bg-error-100': 'red',
 };
 

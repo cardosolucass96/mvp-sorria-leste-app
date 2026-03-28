@@ -13,7 +13,7 @@ const colorClasses: Record<NonNullable<BadgeProps['color']>, string> = {
   red: 'bg-error-100 text-error-800',
   blue: 'bg-info-100 text-info-800',
   purple: 'bg-purple-100 text-purple-800',
-  yellow: 'bg-yellow-100 text-yellow-800',
+  yellow: 'bg-warning-100 text-warning-800',
 };
 
 const sizeClasses: Record<NonNullable<BadgeProps['size']>, string> = {

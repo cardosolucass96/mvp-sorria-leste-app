@@ -844,7 +844,7 @@ export default function PagamentoPage({
                       {parc.pago ? (
                         <span className="text-success-600 font-medium">✓ Pago</span>
                       ) : (
-                        <span className={vencida ? 'text-error-600' : 'text-yellow-600'}>
+                        <span className={vencida ? 'text-error-600' : 'text-warning-600'}>
                           {vencida ? 'Vencida' : 'Pendente'}
                         </span>
                       )}
@@ -866,12 +866,12 @@ export default function PagamentoPage({
                 );
               })}
             </tbody>
-            <tfoot className="bg-yellow-50">
+            <tfoot className="bg-warning-50">
               <tr>
-                <td colSpan={2} className="px-4 py-3 font-semibold text-yellow-700">
+                <td colSpan={2} className="px-4 py-3 font-semibold text-warning-700">
                   Total Parcelas Pendentes
                 </td>
-                <td className="px-4 py-3 text-right font-bold text-lg text-yellow-700">
+                <td className="px-4 py-3 text-right font-bold text-lg text-warning-700">
                   {formatarMoeda(totalParcelas - parcelasPagas)}
                 </td>
                 <td colSpan={3}></td>

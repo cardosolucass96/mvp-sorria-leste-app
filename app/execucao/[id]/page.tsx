@@ -404,7 +404,7 @@ export default function ExecucaoProcedimentoPage() {
         <div className="flex justify-between items-start mb-4">
           <StatusBadge type="item" status={item.status} />
           {isDisponivel && (
-            <span className="px-3 py-1 text-sm font-semibold rounded bg-yellow-100 text-yellow-800">
+            <span className="px-3 py-1 text-sm font-semibold rounded bg-warning-100 text-warning-800">
               Disponível
             </span>
           )}
@@ -442,7 +442,7 @@ export default function ExecucaoProcedimentoPage() {
           {isMeu && item.status === 'executando' && !temEtapas && (
             <div className="space-y-2">
               {!prontuario && (
-                <div className="p-3 bg-yellow-50 border border-yellow-300 rounded-lg text-sm text-yellow-800">
+                <div className="p-3 bg-warning-50 border border-warning-300 rounded-lg text-sm text-warning-800">
                   <strong>Prontuário pendente:</strong> preencha abaixo antes de concluir.
                 </div>
               )}
@@ -758,8 +758,8 @@ export default function ExecucaoProcedimentoPage() {
       )}
 
       {isDisponivel && (
-        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-          <p className="text-sm text-yellow-800">
+        <div className="bg-warning-50 border border-warning-200 p-4 rounded-lg">
+          <p className="text-sm text-warning-800">
             Este procedimento está disponível. <strong>Pegue-o primeiro</strong> para adicionar novos procedimentos.
           </p>
         </div>

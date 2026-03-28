@@ -165,7 +165,7 @@ export default function ExecucaoPage() {
           <Section
             label="Disponíveis para Pegar"
             count={fila.disponiveis.length}
-            badgeClass="bg-yellow-100 text-yellow-800"
+            badgeClass="bg-warning-100 text-warning-800"
             empty="Nenhum procedimento disponível no momento."
           >
             {fila.disponiveis.map(proc => (
@@ -194,7 +194,7 @@ export default function ExecucaoPage() {
               />
               <PacienteSection
                 label="Pacientes Disponíveis"
-                badgeClass="bg-yellow-100 text-yellow-800"
+                badgeClass="bg-warning-100 text-warning-800"
                 grupos={pacientesDisp}
                 empty="Nenhum paciente disponível no momento."
                 userId={user?.id}
