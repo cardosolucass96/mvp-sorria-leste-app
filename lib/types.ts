@@ -159,6 +159,7 @@ export interface AgendamentoCompleto extends Agendamento {
   cliente_telefone: string | null;
   procedimento_nome: string;
   executor_nome: string | null;
+  dias_desde_criacao: number;
 }
 
 export interface SaldoCliente {
