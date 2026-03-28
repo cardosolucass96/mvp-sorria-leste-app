@@ -7,6 +7,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 
 const inter = Inter({
   subsets: ["latin"],
+  variable: "--font-sans",
 });
 
 export const metadata: Metadata = {
@@ -21,7 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.className} antialiased`}>
+      <body className={`${inter.variable} antialiased`}>
         <AuthProvider>
           <ToastProvider>
             <AppLayout>{children}</AppLayout>
