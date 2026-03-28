@@ -8,6 +8,7 @@ import { Shield, Stethoscope, ArrowLeftRight, KeyRound } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { MENU_ITEMS, VIEW_MODE_LABELS } from '@/lib/constants/navigation';
 import { ROLE_LABELS } from '@/lib/constants/roles';
+import TrocarSenhaModal from '@/components/domain/TrocarSenhaModal';
 
 export default function Header() {
   const { user, logout, hasRole, viewMode, toggleViewMode, isAdmin } = useAuth();
@@ -15,74 +16,10 @@ export default function Header() {
   const pathname = usePathname();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showSenhaModal, setShowSenhaModal] = useState(false);
-  const [senhaAtual, setSenhaAtual] = useState('');
-  const [novaSenha, setNovaSenha] = useState('');
-  const [confirmarSenha, setConfirmarSenha] = useState('');
-  const [erro, setErro] = useState('');
-  const [sucesso, setSucesso] = useState('');
-  const [loading, setLoading] = useState(false);
 
   const handleLogout = () => {
     logout();
     router.push('/login');
-  };
-
-  const handleTrocarSenha = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErro('');
-    setSucesso('');
-
-    if (novaSenha !== confirmarSenha) {
-      setErro('As senhas não coincidem');
-      return;
-    }
-
-    if (novaSenha.length < 6) {
-      setErro('A nova senha deve ter pelo menos 6 caracteres');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const res = await fetch('/api/auth/senha', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          usuario_id: user?.id,
-          senha_atual: senhaAtual,
-          nova_senha: novaSenha,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setErro(data.error || 'Erro ao alterar senha');
-      } else {
-        setSucesso('Senha alterada com sucesso!');
-        setSenhaAtual('');
-        setNovaSenha('');
-        setConfirmarSenha('');
-        setTimeout(() => {
-          setShowSenhaModal(false);
-          setSucesso('');
-        }, 2000);
-      }
-    } catch {
-      setErro('Erro de conexão');
-    }
-
-    setLoading(false);
-  };
-
-  const fecharModal = () => {
-    setShowSenhaModal(false);
-    setSenhaAtual('');
-    setNovaSenha('');
-    setConfirmarSenha('');
-    setErro('');
-    setSucesso('');
   };
 
   return (
@@ -229,101 +166,10 @@ export default function Header() {
         </nav>
       )}
 
-      {/* Modal Trocar Senha */}
-      {showSenhaModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-                <KeyRound className="w-5 h-5" aria-hidden="true" />
-                Alterar Senha
-              </h2>
-              <button
-                onClick={fecharModal}
-                className="text-neutral-400 hover:text-neutral-600 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleTrocarSenha} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">
-                  Senha Atual
-                </label>
-                <input
-                  type="password"
-                  value={senhaAtual}
-                  onChange={(e) => setSenhaAtual(e.target.value)}
-                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">
-                  Nova Senha
-                </label>
-                <input
-                  type="password"
-                  value={novaSenha}
-                  onChange={(e) => setNovaSenha(e.target.value)}
-                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  required
-                  disabled={loading}
-                  minLength={6}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">
-                  Confirmar Nova Senha
-                </label>
-                <input
-                  type="password"
-                  value={confirmarSenha}
-                  onChange={(e) => setConfirmarSenha(e.target.value)}
-                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  required
-                  disabled={loading}
-                  minLength={6}
-                />
-              </div>
-
-              {erro && (
-                <div className="bg-error-50 border border-error-200 text-error-700 px-4 py-3 rounded-lg text-sm">
-                  {erro}
-                </div>
-              )}
-
-              {sucesso && (
-                <div className="bg-success-50 border border-success-200 text-success-700 px-4 py-3 rounded-lg text-sm">
-                  {sucesso}
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={fecharModal}
-                  className="flex-1 px-4 py-2 border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors"
-                  disabled={loading}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50"
-                  disabled={loading}
-                >
-                  {loading ? 'Salvando...' : 'Alterar Senha'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <TrocarSenhaModal
+        isOpen={showSenhaModal}
+        onClose={() => setShowSenhaModal(false)}
+      />
     </header>
   );
 }
