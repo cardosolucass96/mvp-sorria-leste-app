@@ -1,106 +1,96 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne, execute } from '@/lib/db';
+import { queryOne, batch } from '@/lib/db';
 
-interface SaldoResult {
-  saldo_disponivel: number;
+interface RouteParams {
+  params: Promise<{ id: string }>;
+}
+
+interface SaldoCliente {
+  saldo: number;
 }
 
 interface ItemAtendimento {
   id: number;
+  atendimento_id: number;
   valor: number;
   valor_pago: number;
   status: string;
 }
 
-const SALDO_QUERY = `SELECT COALESCE(
-  SUM(CASE
-    WHEN tipo IN ('credito', 'transferencia_recebida') THEN valor
-    WHEN tipo IN ('debito', 'estorno', 'transferencia_enviada') THEN -valor
-    ELSE 0
-  END), 0
-) as saldo_disponivel
-FROM movimentacoes_saldo
-WHERE cliente_id = ?`;
-
 // POST /api/clientes/[id]/saldo/debitar - Usa saldo para pagar um item
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const clienteId = parseInt(id);
-    const body = await request.json();
-    const { item_atendimento_id, atendimento_id } = body;
 
-    if (!item_atendimento_id || !atendimento_id) {
-      return NextResponse.json(
-        { error: 'item_atendimento_id e atendimento_id são obrigatórios' },
-        { status: 400 }
-      );
+    const cliente = await queryOne<{ id: number }>('SELECT id FROM clientes WHERE id = ?', [clienteId]);
+    if (!cliente) {
+      return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
     }
 
-    // Verifica saldo disponível
-    const saldoResult = await queryOne<SaldoResult>(SALDO_QUERY, [clienteId]);
-    const saldoDisponivel = saldoResult?.saldo_disponivel ?? 0;
+    const body = await request.json();
+    const { item_atendimento_id, atendimento_id, observacoes } = body;
 
-    // Busca item
+    if (!item_atendimento_id || !atendimento_id) {
+      return NextResponse.json({ error: 'item_atendimento_id e atendimento_id são obrigatórios' }, { status: 400 });
+    }
+
+    // Buscar o item e calcular valor restante
     const item = await queryOne<ItemAtendimento>(
-      'SELECT id, valor, valor_pago, status FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
+      'SELECT id, atendimento_id, valor, valor_pago, status FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
       [item_atendimento_id, atendimento_id]
     );
 
     if (!item) {
-      return NextResponse.json(
-        { error: 'Item não encontrado' },
-        { status: 404 }
-      );
-    }
-
-    if (item.status === 'pago') {
-      return NextResponse.json(
-        { error: 'Item já está pago' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Item de atendimento não encontrado' }, { status: 404 });
     }
 
     const valorRestante = item.valor - item.valor_pago;
+    if (valorRestante <= 0) {
+      return NextResponse.json({ error: 'Item já está totalmente pago' }, { status: 400 });
+    }
 
-    if (saldoDisponivel < valorRestante - 0.01) {
+    // Verificar saldo suficiente
+    const saldoAtual = await queryOne<SaldoCliente>(
+      'SELECT saldo FROM saldo_clientes WHERE cliente_id = ?',
+      [clienteId]
+    );
+    const saldoAnterior = saldoAtual?.saldo ?? 0;
+
+    if (saldoAnterior < valorRestante) {
       return NextResponse.json(
-        { error: 'Saldo insuficiente para cobrir o valor restante do item' },
+        { error: 'Saldo insuficiente', saldo: saldoAnterior, valor_necessario: valorRestante },
         { status: 400 }
       );
     }
 
-    // Debita o saldo
-    await execute(
-      `INSERT INTO movimentacoes_saldo (cliente_id, tipo, valor, item_atendimento_id, atendimento_id, observacoes)
-       VALUES (?, 'debito', ?, ?, ?, ?)`,
-      [clienteId, valorRestante, item_atendimento_id, atendimento_id, `Pagamento via saldo - item #${item_atendimento_id}`]
-    );
+    const saldoNovo = saldoAnterior - valorRestante;
 
-    // Atualiza item como pago
-    await execute(
-      `UPDATE itens_atendimento
-       SET valor_pago = valor, status = 'pago'
-       WHERE id = ?`,
+    await batch([
+      {
+        sql: `UPDATE saldo_clientes SET saldo = ?, updated_at = datetime('now', 'localtime') WHERE cliente_id = ?`,
+        params: [saldoNovo, clienteId],
+      },
+      {
+        sql: `INSERT INTO movimentacoes_saldo
+              (cliente_id, tipo, valor, saldo_anterior, saldo_novo, item_atendimento_id, atendimento_id, observacoes)
+              VALUES (?, 'debito', ?, ?, ?, ?, ?, ?)`,
+        params: [clienteId, valorRestante, saldoAnterior, saldoNovo, item_atendimento_id, atendimento_id, observacoes ?? null],
+      },
+      {
+        sql: `UPDATE itens_atendimento SET valor_pago = valor, status = 'pago' WHERE id = ?`,
+        params: [item_atendimento_id],
+      },
+    ]);
+
+    const itemAtualizado = await queryOne<ItemAtendimento>(
+      'SELECT id, atendimento_id, valor, valor_pago, status FROM itens_atendimento WHERE id = ?',
       [item_atendimento_id]
     );
 
-    // Retorna novo saldo
-    const novoSaldo = await queryOne<SaldoResult>(SALDO_QUERY, [clienteId]);
-
-    return NextResponse.json({
-      cliente_id: clienteId,
-      saldo_disponivel: novoSaldo?.saldo_disponivel ?? 0,
-      valor_debitado: valorRestante,
-    }, { status: 201 });
+    return NextResponse.json({ saldo: saldoNovo, item: itemAtualizado });
   } catch (error) {
     console.error('Erro ao debitar saldo:', error);
-    return NextResponse.json(
-      { error: 'Erro ao debitar saldo' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Erro ao debitar saldo' }, { status: 500 });
   }
 }

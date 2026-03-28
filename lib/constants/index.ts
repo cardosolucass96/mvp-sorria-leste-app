@@ -31,3 +31,5 @@ export {
   VIEW_MODE_LABELS,
 } from './navigation';
 export type { MenuItem } from './navigation';
+
+export { AGENDAMENTO_STATUS_CONFIG } from './agendamentos';

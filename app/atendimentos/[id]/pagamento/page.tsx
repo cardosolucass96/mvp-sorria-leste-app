@@ -162,7 +162,10 @@ export default function PagamentoPage({
       const res = await fetch(`/api/clientes/${clienteId}/saldo`);
       if (res.ok) {
         const data = await res.json();
-        setSaldoCliente(data.saldo_disponivel);
+        setSaldoCliente(data.saldo ?? 0);
+        if (data.movimentacoes) {
+          setMovimentacoes(data.movimentacoes);
+        }
       }
     } catch (err) {
       console.error('Erro ao carregar saldo:', err);
@@ -555,14 +558,15 @@ export default function PagamentoPage({
     }
   };
 
-  // Carregar extrato
+  // Carregar extrato (movimentacoes already loaded from GET /saldo, just refresh)
   const handleToggleExtrato = async () => {
     if (!extratoAberto && atendimento) {
       try {
-        const res = await fetch(`/api/clientes/${atendimento.cliente_id}/saldo/movimentacoes`);
+        const res = await fetch(`/api/clientes/${atendimento.cliente_id}/saldo`);
         if (res.ok) {
           const data = await res.json();
-          setMovimentacoes(data);
+          setSaldoCliente(data.saldo ?? 0);
+          setMovimentacoes(data.movimentacoes ?? []);
         }
       } catch {
         // silently fail
@@ -725,13 +729,13 @@ export default function PagamentoPage({
             ) : (
               <div className="space-y-1 max-h-60 overflow-y-auto">
                 {movimentacoes.map((mov) => {
-                  const isPositivo = ['credito', 'transferencia_recebida'].includes(mov.tipo);
+                  const isPositivo = ['credito', 'transferencia_entrada'].includes(mov.tipo);
                   const labels: Record<string, string> = {
                     credito: 'Crédito',
                     debito: 'Débito',
                     estorno: 'Estorno',
-                    transferencia_enviada: 'Transf. enviada',
-                    transferencia_recebida: 'Transf. recebida',
+                    transferencia_saida: 'Transf. enviada',
+                    transferencia_entrada: 'Transf. recebida',
                   };
                   return (
                     <div key={mov.id} className="flex items-center justify-between text-sm py-1">
