@@ -184,9 +184,9 @@ export default function UsuariosPage() {
     }
   };
 
-  const getRoleBadgeColor = (role: UserRole): 'purple' | 'blue' | 'amber' | 'green' => {
-    const map: Record<UserRole, 'purple' | 'blue' | 'amber' | 'green'> = {
-      admin: 'purple',
+  const getRoleBadgeColor = (role: UserRole): 'evaluation' | 'blue' | 'amber' | 'green' => {
+    const map: Record<UserRole, 'evaluation' | 'blue' | 'amber' | 'green'> = {
+      admin: 'evaluation',
       atendente: 'blue',
       avaliador: 'amber',
       executor: 'green',
