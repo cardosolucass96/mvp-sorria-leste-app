@@ -3,9 +3,9 @@
  * Substitui os 5+ mapas inconsistentes espalhados pelas páginas.
  */
 
-import type { AtendimentoStatus, ItemStatus, AgendamentoStatus } from '@/lib/types';
+import type { AtendimentoStatus, ItemStatus } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
-import { ClipboardList, Search, Clock, Activity, CheckCircle, HelpCircle, DollarSign, Calendar, CalendarCheck, CalendarX, XCircle } from 'lucide-react';
+import { ClipboardList, Search, Clock, Activity, CheckCircle, HelpCircle, DollarSign } from 'lucide-react';
 
 // ─── Status de Atendimento ──────────────────────────────────────
 
@@ -149,48 +149,6 @@ export const METODO_PAGAMENTO_LABELS: Record<MetodoPagamento, string> = {
   pix: 'PIX',
   cartao_debito: 'Cartão Débito',
   cartao_credito: 'Cartão Crédito',
-};
-
-// ─── Status de Agendamento ──────────────────────────────────────
-
-export interface AgendamentoStatusConfig {
-  label: string;
-  cor: string;
-  bgCor: string;
-  icon: LucideIcon;
-}
-
-export const AGENDAMENTO_STATUS_CONFIG: Record<AgendamentoStatus, AgendamentoStatusConfig> = {
-  pendente: {
-    label: 'Pendente',
-    cor: 'text-warning-700',
-    bgCor: 'bg-warning-100',
-    icon: Calendar,
-  },
-  agendado: {
-    label: 'Agendado',
-    cor: 'text-info-700',
-    bgCor: 'bg-info-100',
-    icon: CalendarCheck,
-  },
-  faltou: {
-    label: 'Faltou',
-    cor: 'text-error-700',
-    bgCor: 'bg-error-100',
-    icon: CalendarX,
-  },
-  realizado: {
-    label: 'Realizado',
-    cor: 'text-success-700',
-    bgCor: 'bg-success-100',
-    icon: CheckCircle,
-  },
-  cancelado: {
-    label: 'Cancelado',
-    cor: 'text-neutral-600',
-    bgCor: 'bg-neutral-100',
-    icon: XCircle,
-  },
 };
 
 // ─── Helpers ────────────────────────────────────────────────────

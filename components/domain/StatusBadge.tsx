@@ -1,11 +1,12 @@
 /**
  * StatusBadge — exibe badge de status com cor e ícone automáticos.
- * Usa Badge (Sprint 1) + STATUS_CONFIG/ITEM_STATUS_CONFIG/PARCELA_STATUS_CONFIG/AGENDAMENTO_STATUS_CONFIG (Sprint 0).
+ * Usa Badge (Sprint 1) + STATUS_CONFIG/ITEM_STATUS_CONFIG/PARCELA_STATUS_CONFIG (Sprint 0).
  */
 
 import Badge from '@/components/ui/Badge';
 import type { BadgeProps } from '@/components/ui/Badge';
-import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PARCELA_STATUS_CONFIG, AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/status';
+import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PARCELA_STATUS_CONFIG } from '@/lib/constants/status';
+import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
 import type { AtendimentoStatus, ItemStatus, AgendamentoStatus } from '@/lib/types';
 import type { ParcelaStatus } from '@/lib/constants/status';
 import type { LucideIcon } from 'lucide-react';
@@ -29,6 +30,10 @@ const corToBadgeColor: Record<string, BadgeProps['color']> = {
   'bg-success-100': 'green',
   'bg-primary-100': 'orange',
   'bg-error-100': 'red',
+  'bg-blue-100': 'blue',
+  'bg-green-100': 'green',
+  'bg-yellow-100': 'yellow',
+  'bg-red-100': 'red',
 };
 
 function getBadgeColor(bgCor: string): NonNullable<BadgeProps['color']> {
@@ -63,7 +68,6 @@ export default function StatusBadge({
   } else if (type === 'agendamento' && status in AGENDAMENTO_STATUS_CONFIG) {
     const config = AGENDAMENTO_STATUS_CONFIG[status as AgendamentoStatus];
     label = config.label;
-    Icon = config.icon;
     color = getBadgeColor(config.bgCor);
   }
 

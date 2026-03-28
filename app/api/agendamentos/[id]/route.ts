@@ -1,25 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db';
+import { withAuth } from '@/lib/auth/middleware';
+import { Agendamento, AgendamentoCompleto } from '@/lib/types';
 
-interface Agendamento {
-  id: number;
-  cliente_id: number;
-  status: string;
-  data_agendada: string | null;
-}
+const DETAIL_SQL = `
+  SELECT
+    a.*,
+    c.nome AS cliente_nome, c.telefone AS cliente_telefone,
+    p.nome AS procedimento_nome,
+    u.nome AS executor_nome,
+    CAST((julianday('now') - julianday(a.created_at)) AS INTEGER) AS dias_desde_criacao
+  FROM agendamentos a
+  JOIN clientes c ON c.id = a.cliente_id
+  JOIN procedimentos p ON p.id = a.procedimento_id
+  LEFT JOIN usuarios u ON u.id = a.executor_id
+  WHERE a.id = ?
+`;
 
-// PUT /api/agendamentos/[id] - Atualiza agendamento (status, data_agendada, motivo_cancelamento)
-export async function PUT(
+// GET /api/agendamentos/[id] - Detalhe do agendamento
+export const GET = withAuth(async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  context
+) => {
   try {
-    const { id } = await params;
+    const { id } = await context.params!;
+    const agendamento = await queryOne<AgendamentoCompleto>(DETAIL_SQL, [parseInt(id as string)]);
+
+    if (!agendamento) {
+      return NextResponse.json({ error: 'Agendamento não encontrado' }, { status: 404 });
+    }
+
+    return NextResponse.json(agendamento);
+  } catch (error) {
+    console.error('Erro ao buscar agendamento:', error);
+    return NextResponse.json({ error: 'Erro ao buscar agendamento' }, { status: 500 });
+  }
+});
+
+// PUT /api/agendamentos/[id] - Atualiza agendamento
+export const PUT = withAuth(async (
+  request: NextRequest,
+  context
+) => {
+  try {
+    const { id } = await context.params!;
+    const agendamentoId = parseInt(id as string);
     const body = await request.json();
 
     const agendamento = await queryOne<Agendamento>(
-      'SELECT id, cliente_id, status, data_agendada FROM agendamentos WHERE id = ?',
-      [id]
+      'SELECT * FROM agendamentos WHERE id = ?',
+      [agendamentoId]
     );
 
     if (!agendamento) {
@@ -27,57 +57,90 @@ export async function PUT(
     }
 
     const updates: string[] = [];
-    const updateParams: (string | number | null)[] = [];
+    const params: unknown[] = [];
 
-    if (body.status !== undefined) {
-      updates.push('status = ?');
-      updateParams.push(body.status);
-    }
-
+    // Caso: agendar/reagendar com data
     if (body.data_agendada !== undefined) {
       updates.push('data_agendada = ?');
-      updateParams.push(body.data_agendada);
+      params.push(body.data_agendada);
 
-      // Setting a date automatically sets status to 'agendado' if currently 'pendente' or 'faltou'
-      if (!body.status && ['pendente', 'faltou'].includes(agendamento.status)) {
-        updates.push('status = ?');
-        updateParams.push('agendado');
+      // Se tem data, status vira 'agendado' (a menos que outro status seja explicitamente enviado)
+      if (!body.status) {
+        updates.push("status = 'agendado'");
       }
     }
 
-    if (body.motivo_cancelamento !== undefined) {
-      updates.push('motivo_cancelamento = ?');
-      updateParams.push(body.motivo_cancelamento);
+    // Caso: atualizar executor
+    if (body.executor_id !== undefined) {
+      updates.push('executor_id = ?');
+      params.push(body.executor_id || null);
     }
 
+    // Caso: atualizar observacoes
     if (body.observacoes !== undefined) {
       updates.push('observacoes = ?');
-      updateParams.push(body.observacoes);
+      params.push(body.observacoes);
+    }
+
+    // Caso: mudança de status
+    if (body.status) {
+      const statusAtual = agendamento.status;
+
+      if (body.status === 'faltou') {
+        if (statusAtual !== 'pendente' && statusAtual !== 'agendado') {
+          return NextResponse.json(
+            { error: `Não é possível marcar faltou a partir do status "${statusAtual}"` },
+            { status: 400 }
+          );
+        }
+        updates.push("status = 'faltou'");
+      } else if (body.status === 'cancelado') {
+        if (!body.motivo_cancelamento) {
+          return NextResponse.json(
+            { error: 'motivo_cancelamento é obrigatório para cancelar' },
+            { status: 400 }
+          );
+        }
+        updates.push("status = 'cancelado'");
+        updates.push('motivo_cancelamento = ?');
+        params.push(body.motivo_cancelamento);
+      } else if (body.status === 'agendado') {
+        // Reagendar após faltou
+        if (statusAtual !== 'faltou' && statusAtual !== 'pendente') {
+          return NextResponse.json(
+            { error: `Não é possível reagendar a partir do status "${statusAtual}"` },
+            { status: 400 }
+          );
+        }
+        if (!body.data_agendada) {
+          return NextResponse.json(
+            { error: 'data_agendada é obrigatória para reagendar' },
+            { status: 400 }
+          );
+        }
+        updates.push("status = 'agendado'");
+      } else {
+        return NextResponse.json(
+          { error: `Status "${body.status}" não é permitido via PUT` },
+          { status: 400 }
+        );
+      }
     }
 
     if (updates.length === 0) {
       return NextResponse.json({ error: 'Nenhum campo para atualizar' }, { status: 400 });
     }
 
-    updates.push("updated_at = datetime('now', 'localtime')");
-    updateParams.push(parseInt(id));
-
+    params.push(agendamentoId);
     await execute(
       `UPDATE agendamentos SET ${updates.join(', ')} WHERE id = ?`,
-      updateParams
+      params
     );
 
-    const updated = await queryOne(
-      'SELECT * FROM agendamentos WHERE id = ?',
-      [id]
-    );
-
-    return NextResponse.json(updated);
+    const atualizado = await queryOne<AgendamentoCompleto>(DETAIL_SQL, [agendamentoId]);
+    return NextResponse.json(atualizado);
   } catch (error) {
     console.error('Erro ao atualizar agendamento:', error);
-    return NextResponse.json(
-      { error: 'Erro ao atualizar agendamento' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Erro ao atualizar agendamento' }, { status: 500 });
   }
-}
+});

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CalendarDays, UserCheck, UserX, CalendarPlus, X, Check } from 'lucide-react';
+import { Calendar, UserCheck, UserX, CalendarPlus, X, Check } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingState from '@/components/ui/LoadingState';
 import Alert from '@/components/ui/Alert';
@@ -22,7 +22,7 @@ import usePageTitle from '@/lib/utils/usePageTitle';
 interface Agendamento {
   id: number;
   cliente_id: number;
-  procedimento_id: number | null;
+  procedimento_id: number;
   data_agendada: string | null;
   status: string;
   motivo_cancelamento: string | null;
@@ -30,7 +30,8 @@ interface Agendamento {
   created_at: string;
   cliente_nome: string;
   cliente_telefone: string | null;
-  procedimento_nome: string | null;
+  procedimento_nome: string;
+  executor_nome: string | null;
   dias_desde_criacao: number;
 }
 
@@ -225,7 +226,7 @@ export default function AgendaPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'cancelado',
-          motivo_cancelamento: cancelDialog.motivo || null,
+          motivo_cancelamento: cancelDialog.motivo || 'Cancelado pela agenda',
         }),
       });
 
@@ -391,7 +392,7 @@ export default function AgendaPage() {
 
       <PageHeader
         title="Agenda"
-        icon={<CalendarDays className="w-7 h-7" />}
+        icon={<Calendar className="w-7 h-7" />}
         description="Gestão de retornos agendados"
       />
 

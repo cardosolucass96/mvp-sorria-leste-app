@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query, execute } from '@/lib/db';
+import { gerarComissoesItem } from '@/lib/helpers/gerarComissoes';
 
 interface Etapa {
   id: number;
@@ -113,6 +114,8 @@ export async function PUT(
          WHERE id = ? AND status != 'concluido'`,
         [etapa.item_atendimento_id]
       );
+
+      await gerarComissoesItem(etapa.item_atendimento_id);
     }
 
     return NextResponse.json({ success: true, item_concluido: pendentes.length === 0 });
