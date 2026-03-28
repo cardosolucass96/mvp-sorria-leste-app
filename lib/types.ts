@@ -107,6 +107,26 @@ export interface PagamentoItem {
   created_at: string;
 }
 
+export type TipoMovimentacaoSaldo =
+  | 'credito'
+  | 'debito'
+  | 'estorno'
+  | 'transferencia_enviada'
+  | 'transferencia_recebida';
+
+export interface MovimentacaoSaldo {
+  id: number;
+  cliente_id: number;
+  tipo: TipoMovimentacaoSaldo;
+  valor: number;
+  pagamento_id: number | null;
+  item_atendimento_id: number | null;
+  atendimento_id: number | null;
+  cliente_destino_id: number | null;
+  observacoes: string | null;
+  created_at: string;
+}
+
 // Tipos com joins para exibição
 export interface AtendimentoCompleto extends Atendimento {
   cliente_nome: string;
