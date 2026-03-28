@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, User, Stethoscope } from 'lucide-react';
+import { Search, User, Stethoscope, PlusCircle } from 'lucide-react';
 import { PageHeader, Card, Badge, Button, LoadingState, Alert } from '@/components/ui';
 import { formatarDataHora } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -175,7 +175,7 @@ export default function AvaliacaoPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">🆕</span>
+                      <PlusCircle className="w-6 h-6 text-warning-500" aria-hidden="true" />
                       <div>
                         <h3 className="font-semibold text-lg text-foreground">
                           {atendimento.cliente_nome}
