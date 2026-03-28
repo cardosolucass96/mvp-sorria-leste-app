@@ -134,7 +134,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { status, avaliador_id } = body;
+    const { status, avaliador_id, motivo_saida } = body;
     
     // Verifica se existe
     const atendimento = await queryOne<Atendimento>(
@@ -186,9 +186,13 @@ export async function PUT(
         updates.push('liberado_em = datetime(\'now\', \'localtime\')');
       }
       
-      // Se finalizando, marca a data
+      // Se finalizando, marca a data e motivo de saída (se fornecido)
       if (status === 'finalizado') {
         updates.push('finalizado_at = CURRENT_TIMESTAMP');
+        if (motivo_saida) {
+          updates.push('motivo_saida = ?');
+          updateParams.push(motivo_saida);
+        }
       }
     }
     
@@ -290,6 +294,20 @@ export async function DELETE(
 
     await execute('DELETE FROM itens_atendimento WHERE atendimento_id = ?', [atendimentoId]);
     await execute('DELETE FROM parcelas WHERE atendimento_id = ?', [atendimentoId]);
+
+    // Cascade: delete agendamentos originated from this atendimento
+    await execute('DELETE FROM agendamentos WHERE atendimento_origem_id = ?', [atendimentoId]);
+
+    // Revert agendamentos that point to this atendimento as session (don't delete, preserve history)
+    await execute(
+      `UPDATE agendamentos SET
+        atendimento_sessao_id = NULL,
+        status = 'agendado',
+        updated_at = datetime('now','localtime')
+      WHERE atendimento_sessao_id = ?`,
+      [atendimentoId]
+    );
+
     await execute('DELETE FROM atendimentos WHERE id = ?', [atendimentoId]);
 
     return NextResponse.json({ success: true });
@@ -308,13 +326,11 @@ async function validarTransicao(
   const statusAtual = atendimento.status;
   
   // Transições permitidas
-  // NOTA: em_execucao → finalizado é tratado pelo endpoint dedicado
-  //       /api/atendimentos/[id]/finalizar (Sprint 7)
   const transicoesPermitidas: Record<string, string[]> = {
-    triagem: ['avaliacao'],
-    avaliacao: ['aguardando_pagamento'],
+    triagem: ['avaliacao', 'finalizado'],
+    avaliacao: ['aguardando_pagamento', 'finalizado'],
     aguardando_pagamento: ['em_execucao'],
-    em_execucao: ['aguardando_pagamento'],
+    em_execucao: ['aguardando_pagamento', 'finalizado'],
     finalizado: [],
   };
   
