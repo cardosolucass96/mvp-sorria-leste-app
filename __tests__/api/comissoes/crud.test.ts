@@ -20,6 +20,22 @@ import {
   getExecutedQueries,
 } from '../../helpers/db-mock';
 
+// Mock JWT para bypass de autenticação nos testes
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1,
+    email: 'admin@test.com',
+    role: 'admin',
+    nome: 'Admin Teste',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { GET as getComissoes } from '@/app/api/comissoes/route';
 
 beforeEach(() => {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 
 interface ProcedimentoRow {
   item_id: number;
@@ -14,7 +15,7 @@ interface ProcedimentoRow {
   concluido_at: string | null;
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   const searchParams = request.nextUrl.searchParams;
   const usuarioId = searchParams.get('usuario_id');
 
@@ -40,9 +41,9 @@ export async function GET(request: NextRequest) {
       JOIN procedimentos p ON ia.procedimento_id = p.id
       JOIN atendimentos a ON ia.atendimento_id = a.id
       JOIN clientes c ON a.cliente_id = c.id
-      WHERE ia.criado_por_id = ?
+      WHERE ia.criado_por_id = ? AND a.unidade_id = ?
       ORDER BY ia.created_at DESC`,
-      [usuarioId]
+      [usuarioId, context.unidadeId]
     );
 
     // Buscar procedimentos onde o usuário foi o executor
@@ -62,9 +63,9 @@ export async function GET(request: NextRequest) {
       JOIN procedimentos p ON ia.procedimento_id = p.id
       JOIN atendimentos a ON ia.atendimento_id = a.id
       JOIN clientes c ON a.cliente_id = c.id
-      WHERE ia.executor_id = ?
+      WHERE ia.executor_id = ? AND a.unidade_id = ?
       ORDER BY ia.created_at DESC`,
-      [usuarioId]
+      [usuarioId, context.unidadeId]
     );
 
     // Combinar e ordenar por data
@@ -79,4 +80,4 @@ export async function GET(request: NextRequest) {
     console.error('Erro ao buscar procedimentos:', error);
     return NextResponse.json({ error: 'Erro ao buscar procedimentos' }, { status: 500 });
   }
-}
+});

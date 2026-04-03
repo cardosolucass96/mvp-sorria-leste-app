@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import { Banknote, DollarSign, Wrench } from 'lucide-react';
 import { PageHeader, Alert, StatCard, Badge, Tabs, Table, LoadingState, Button, FilterBar } from '@/components/ui';
@@ -45,6 +46,7 @@ export default function ComissoesPage() {
   usePageTitle('Comissões');
   const { user, isAdmin } = useAuth();
   const router = useRouter();
+  const unitFetch = useUnitFetch();
   const [resumo, setResumo] = useState<ResumoComissao[]>([]);
   const [detalhes, setDetalhes] = useState<ComissoesData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,11 +76,11 @@ export default function ComissoesPage() {
 
       if (viewMode === 'resumo') {
         params.append('resumo', 'true');
-        const response = await fetch(`/api/comissoes?${params}`);
+        const response = await unitFetch(`/api/comissoes?${params}`);
         const data = await response.json();
         setResumo(data);
       } else {
-        const response = await fetch(`/api/comissoes?${params}`);
+        const response = await unitFetch(`/api/comissoes?${params}`);
         const data = await response.json();
         setDetalhes(data);
       }

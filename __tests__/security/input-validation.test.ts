@@ -20,6 +20,22 @@ import {
   teardownCloudflareContextMock,
 } from '../helpers/db-mock';
 
+// Mock JWT para bypass de autenticação nos testes
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1,
+    email: 'admin@test.com',
+    role: 'admin',
+    nome: 'Admin Teste',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { GET as getClientes, POST as postClientes } from '@/app/api/clientes/route';
 import { GET as getAtendimentos } from '@/app/api/atendimentos/route';
 import { GET as getProcedimentos, POST as postProcedimentos } from '@/app/api/procedimentos/route';
@@ -31,6 +47,8 @@ describe('Segurança — Validação de Input', () => {
   beforeEach(() => {
     setupCloudflareContextMock();
     resetMockDb();
+    // Clientes route now uses batch() with COUNT + SELECT; mock the COUNT query globally
+    mockQueryResponse('count(*) as total from clientes', [{ total: 0 }]);
   });
 
   afterEach(() => {

@@ -6,7 +6,7 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-// GET /api/usuarios/[id] - Buscar usuário por ID
+// GET /api/usuarios/[id] - Buscar usuário por ID (com suas unidades)
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
@@ -22,7 +22,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    return NextResponse.json(usuario);
+    // Buscar unidades do usuário
+    const unidades = await query<{ unidade_id: number }>(
+      'SELECT unidade_id FROM usuario_unidades WHERE usuario_id = ? ORDER BY unidade_id',
+      [id]
+    );
+    const unidade_ids = unidades.map(u => u.unidade_id);
+
+    return NextResponse.json({ ...usuario, unidade_ids });
   } catch (error) {
     console.error('Erro ao buscar usuário:', error);
     return NextResponse.json(
@@ -37,7 +44,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nome, email, role, ativo } = body;
+    const { nome, email, role, ativo, unidade_ids } = body;
 
     // Verifica se usuário existe
     const existing = await queryOne<Usuario>(
@@ -95,12 +102,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       ]
     );
 
+    // Atualizar unidades (se informadas)
+    if (Array.isArray(unidade_ids)) {
+      await execute('DELETE FROM usuario_unidades WHERE usuario_id = ?', [id]);
+      for (const uid of unidade_ids) {
+        await execute(
+          'INSERT OR IGNORE INTO usuario_unidades (usuario_id, unidade_id) VALUES (?, ?)',
+          [id, uid]
+        );
+      }
+    }
+
     const updated = await queryOne<Usuario>(
       'SELECT id, nome, email, role, ativo, created_at FROM usuarios WHERE id = ?',
       [id]
     );
 
-    return NextResponse.json(updated);
+    // Buscar unidades atualizadas
+    const unidades = await query<{ unidade_id: number }>(
+      'SELECT unidade_id FROM usuario_unidades WHERE usuario_id = ? ORDER BY unidade_id',
+      [id]
+    );
+
+    return NextResponse.json({ ...updated, unidade_ids: unidades.map(u => u.unidade_id) });
   } catch (error) {
     console.error('Erro ao atualizar usuário:', error);
     return NextResponse.json(

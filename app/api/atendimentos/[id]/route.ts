@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query, execute } from '@/lib/db';
-import { extractToken, verifyToken } from '@/lib/auth/jwt';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 
 interface Atendimento {
   id: number;
@@ -34,6 +34,20 @@ interface ItemAtendimento {
   group_id: string | null;
   dente_unico: string | null;
   por_dente: number;
+  tem_etapas: number;
+  etapa_label: string | null;
+  etapas?: EtapaItem[];
+}
+
+interface EtapaItem {
+  id: number;
+  item_atendimento_id: number;
+  dente: string;
+  face: string;
+  status: string;
+  nome?: string;
+  tipo?: 'face' | 'modelo';
+  valor?: number | null;
 }
 
 interface CountResult {
@@ -45,16 +59,14 @@ interface SumResult {
 }
 
 // GET /api/atendimentos/[id] - Busca atendimento por ID com detalhes
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
-    const { id } = await params;
-    
-    // Busca atendimento com dados do cliente
+    const params = await context.params!;
+    const id = params.id as string;
+
+    // Busca atendimento com dados do cliente (verificando unidade)
     const atendimento = await queryOne<AtendimentoComCliente>(
-      `SELECT 
+      `SELECT
         a.*,
         c.nome as cliente_nome,
         c.cpf as cliente_cpf,
@@ -66,8 +78,8 @@ export async function GET(
       INNER JOIN clientes c ON a.cliente_id = c.id
       LEFT JOIN usuarios u ON a.avaliador_id = u.id
       LEFT JOIN usuarios u2 ON a.liberado_por_id = u2.id
-      WHERE a.id = ?`,
-      [parseInt(id)]
+      WHERE a.id = ? AND a.unidade_id = ?`,
+      [parseInt(id), context.unidadeId]
     );
     
     if (!atendimento) {
@@ -89,6 +101,7 @@ export async function GET(
         END as dente_unico,
         p.nome as procedimento_nome,
         p.por_dente,
+        p.tem_etapas,
         u.nome as executor_nome,
         c.nome as criado_por_nome
       FROM itens_atendimento i
@@ -100,20 +113,104 @@ export async function GET(
       [parseInt(id)]
     );
     
+    // Busca etapas pendentes para os itens
+    // - Procedimentos com tem_etapas=1: usa procedimento_etapas_modelo (sessões)
+    // - Demais procedimentos: usa etapas_procedimento (faces por dente)
+    let itensComEtapas: ItemAtendimento[] = itens;
+    if (itens.length > 0) {
+      const itensFace = itens.filter(i => !i.tem_etapas);
+      const itensModelo = itens.filter(i => i.tem_etapas);
+
+      // Face-level etapas (restauração, por dente+face)
+      let faceEtapas: EtapaItem[] = [];
+      if (itensFace.length > 0) {
+        const placeholders = itensFace.map(() => '?').join(',');
+        faceEtapas = await query<EtapaItem>(
+          `SELECT id, item_atendimento_id, dente, face, status
+           FROM etapas_procedimento
+           WHERE item_atendimento_id IN (${placeholders}) AND status = 'pendente'`,
+          itensFace.map(i => i.id)
+        );
+      }
+
+      // Session-level etapas (canal, implante, etc — usa modelo do procedimento)
+      const modeloEtapasMap = new Map<number, EtapaItem[]>();
+      for (const item of itensModelo) {
+        const modelos = await query<{ id: number; nome: string; valor: number | null; ordem: number }>(
+          `SELECT id, nome, valor, ordem FROM procedimento_etapas_modelo WHERE procedimento_id = ? ORDER BY ordem ASC`,
+          [item.procedimento_id]
+        );
+        // ID virtual único por item: evita colisão quando dois itens usam o mesmo procedimento
+        modeloEtapasMap.set(item.id, modelos.map(m => ({
+          id: item.id * 100000 + m.id,
+          item_atendimento_id: item.id,
+          dente: '',
+          face: '' as 'V',
+          status: 'pendente',
+          nome: m.nome,
+          tipo: 'modelo' as const,
+          valor: m.valor,
+        })));
+      }
+
+      // Para itens com tem_etapas=1, busca progresso geral (etapas concluídas em outros atendimentos do mesmo cliente+procedimento)
+      const progressoMap = new Map<number, { nome: string; status: string }[]>();
+      if (itensModelo.length > 0) {
+        // Pega o cliente_id do atendimento
+        const clienteId = atendimento.cliente_id;
+        // Para cada procedimento com etapas, busca quais etapas_modelo já foram concluídas
+        const procIds = [...new Set(itensModelo.map(i => i.procedimento_id))];
+        for (const procId of procIds) {
+          const etapasModelo = await query<{ id: number; nome: string; ordem: number }>(
+            `SELECT id, nome, ordem FROM procedimento_etapas_modelo WHERE procedimento_id = ? ORDER BY ordem ASC`,
+            [procId]
+          );
+          // Busca quais etapas já foram concluídas para este cliente+procedimento
+          // Suporta tanto etapa_modelo_id (itens novos) quanto etapa_label (itens legados)
+          const concluidas = await query<{ etapa_modelo_id: number | null; etapa_label: string | null }>(
+            `SELECT DISTINCT i.etapa_modelo_id, i.etapa_label
+             FROM itens_atendimento i
+             INNER JOIN atendimentos a ON i.atendimento_id = a.id
+             WHERE a.cliente_id = ? AND i.procedimento_id = ? AND i.status = 'concluido'`,
+            [clienteId, procId]
+          );
+          const concluidasIdSet = new Set(concluidas.filter(c => c.etapa_modelo_id).map(c => c.etapa_modelo_id));
+          const concluidasLabelSet = new Set(concluidas.filter(c => c.etapa_label).map(c => c.etapa_label));
+          const progresso = etapasModelo.map(e => ({
+            nome: e.nome,
+            status: concluidasIdSet.has(e.id) || concluidasLabelSet.has(e.nome) ? 'concluido' : 'pendente',
+          }));
+          // Mapeia para todos os itens deste procedimento neste atendimento
+          for (const item of itensModelo.filter(i => i.procedimento_id === procId)) {
+            progressoMap.set(item.id, progresso);
+          }
+        }
+      }
+
+      itensComEtapas = itens.map(item => ({
+        ...item,
+        etapas: item.tem_etapas
+          ? (modeloEtapasMap.get(item.id) ?? [])
+          : faceEtapas.filter(e => e.item_atendimento_id === item.id),
+        progresso_etapas: progressoMap.get(item.id) ?? null,
+      }));
+    }
+
     // Calcula totais
     const totalResult = await queryOne<SumResult>(
       'SELECT SUM(valor) as total FROM itens_atendimento WHERE atendimento_id = ?',
       [parseInt(id)]
     );
-    
+
+    // total_pago = soma dos pagamentos não cancelados (modelo simplificado sem distribuição por item)
     const totalPagoResult = await queryOne<SumResult>(
-      'SELECT SUM(valor_pago) as total FROM itens_atendimento WHERE atendimento_id = ?',
+      'SELECT COALESCE(SUM(valor), 0) as total FROM pagamentos WHERE atendimento_id = ? AND cancelado = 0',
       [parseInt(id)]
     );
     
     return NextResponse.json({
       ...atendimento,
-      itens,
+      itens: itensComEtapas,
       total: totalResult?.total || 0,
       total_pago: totalPagoResult?.total || 0,
     });
@@ -124,31 +221,29 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // PUT /api/atendimentos/[id] - Atualiza atendimento (muda status)
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PUT = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
-    const { id } = await params;
+    const params = await context.params!;
+    const id = params.id as string;
     const body = await request.json();
-    const { status, avaliador_id, motivo_saida } = body;
+    const { status, avaliador_id, motivo_saida, observacoes_encerramento } = body;
     
-    // Verifica se existe
+    // Verifica se existe (e pertence à unidade)
     const atendimento = await queryOne<Atendimento>(
-      'SELECT * FROM atendimentos WHERE id = ?',
-      [parseInt(id)]
+      'SELECT * FROM atendimentos WHERE id = ? AND unidade_id = ?',
+      [parseInt(id), context.unidadeId]
     );
-    
+
     if (!atendimento) {
       return NextResponse.json(
         { error: 'Atendimento não encontrado' },
         { status: 404 }
       );
     }
-    
+
     // Se está mudando status, valida as regras de transição
     if (status && status !== atendimento.status) {
       const validacao = await validarTransicao(atendimento, status, parseInt(id));
@@ -170,19 +265,8 @@ export async function PUT(
       
       // Se liberando para execução, marca quem liberou e quando
       if (status === 'em_execucao' && atendimento.status === 'aguardando_pagamento') {
-        // Extrai ID do usuário logado via JWT; fallback para primeiro do banco
-        let liberadoPorId = 1;
-        const token = extractToken(request);
-        if (token) {
-          const payload = await verifyToken(token);
-          if (payload) liberadoPorId = payload.sub;
-        } else {
-          const usuario = await queryOne<{ id: number }>('SELECT id FROM usuarios LIMIT 1');
-          if (usuario) liberadoPorId = usuario.id;
-        }
-        
         updates.push('liberado_por_id = ?');
-        updateParams.push(liberadoPorId);
+        updateParams.push(context.user.sub);
         updates.push('liberado_em = datetime(\'now\', \'localtime\')');
       }
       
@@ -192,6 +276,18 @@ export async function PUT(
         if (motivo_saida) {
           updates.push('motivo_saida = ?');
           updateParams.push(motivo_saida);
+        }
+      }
+
+      // Encerramento pelo atendente: salva observações
+      if (status === 'encerrado') {
+        if (motivo_saida) {
+          updates.push('motivo_saida = ?');
+          updateParams.push(motivo_saida);
+        }
+        if (observacoes_encerramento !== undefined) {
+          updates.push('observacoes_encerramento = ?');
+          updateParams.push(observacoes_encerramento);
         }
       }
     }
@@ -240,27 +336,25 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
+});
 
 // DELETE /api/atendimentos/[id] - Exclui atendimento
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withUnit(async (_request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
-    const { id } = await params;
+    const params = await context.params!;
+    const id = params.id as string;
     const atendimentoId = parseInt(id);
 
     const atendimento = await queryOne<Atendimento>(
-      'SELECT * FROM atendimentos WHERE id = ?',
-      [atendimentoId]
+      'SELECT * FROM atendimentos WHERE id = ? AND unidade_id = ?',
+      [atendimentoId, context.unidadeId]
     );
 
     if (!atendimento) {
       return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 });
     }
 
-    if (atendimento.status === 'finalizado') {
+    if (['finalizado', 'encerrado'].includes(atendimento.status)) {
       return NextResponse.json(
         { error: 'Atendimentos finalizados não podem ser excluídos' },
         { status: 400 }
@@ -293,7 +387,6 @@ export async function DELETE(
     }
 
     await execute('DELETE FROM itens_atendimento WHERE atendimento_id = ?', [atendimentoId]);
-    await execute('DELETE FROM parcelas WHERE atendimento_id = ?', [atendimentoId]);
 
     // Cascade: delete agendamentos originated from this atendimento
     await execute('DELETE FROM agendamentos WHERE atendimento_origem_id = ?', [atendimentoId]);
@@ -315,7 +408,7 @@ export async function DELETE(
     console.error('Erro ao excluir atendimento:', error);
     return NextResponse.json({ error: 'Erro ao excluir atendimento' }, { status: 500 });
   }
-}
+});
 
 // Função para validar transições de status
 async function validarTransicao(
@@ -325,13 +418,14 @@ async function validarTransicao(
 ): Promise<{ valido: boolean; mensagem: string }> {
   const statusAtual = atendimento.status;
   
-  // Transições permitidas
+  // Transições permitidas (finalizado só via /finalizar endpoint)
   const transicoesPermitidas: Record<string, string[]> = {
-    triagem: ['avaliacao', 'finalizado'],
-    avaliacao: ['aguardando_pagamento', 'finalizado'],
+    triagem: ['avaliacao'],
+    avaliacao: ['aguardando_pagamento'],
     aguardando_pagamento: ['em_execucao'],
-    em_execucao: ['aguardando_pagamento', 'finalizado'],
-    finalizado: [],
+    em_execucao: ['aguardando_pagamento'],
+    finalizado: ['encerrado'],
+    encerrado: [],
   };
   
   // Verifica se a transição é permitida
@@ -359,18 +453,17 @@ async function validarTransicao(
     }
   }
   
-  // Aguardando Pagamento → Em Execução: precisa ter pelo menos 1 procedimento pago
+  // Aguardando Pagamento → Em Execução: precisa ter ao menos 1 pagamento ativo
   if (statusAtual === 'aguardando_pagamento' && novoStatus === 'em_execucao') {
-    const itensPagos = await queryOne<CountResult>(
-      `SELECT COUNT(*) as count FROM itens_atendimento 
-       WHERE atendimento_id = ? AND status = 'pago'`,
+    const pagamentoAtivo = await queryOne<CountResult>(
+      'SELECT COUNT(*) as count FROM pagamentos WHERE atendimento_id = ? AND cancelado = 0',
       [atendimentoId]
     );
-    
-    if (!itensPagos || itensPagos.count === 0) {
+
+    if (!pagamentoAtivo || pagamentoAtivo.count === 0) {
       return {
         valido: false,
-        mensagem: 'É necessário ter pelo menos um procedimento totalmente pago para liberar',
+        mensagem: 'É necessário registrar ao menos um pagamento para liberar o atendimento',
       };
     }
   }

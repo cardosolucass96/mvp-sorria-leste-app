@@ -24,6 +24,8 @@ export interface ClienteFormData {
   data_nascimento: string;
   endereco: string;
   origem: string;
+  sexo: string;
+  plano_odontologico: string;
   observacoes: string;
 }
 
@@ -37,6 +39,18 @@ export interface ClienteFormProps {
   className?: string;
 }
 
+const SEXO_OPTIONS = [
+  { value: 'feminino', label: 'Feminino' },
+  { value: 'masculino', label: 'Masculino' },
+  { value: 'outro', label: 'Outro' },
+];
+
+const PLANO_OPTIONS = [
+  { value: 'Clin', label: 'Clin' },
+  { value: 'Prime', label: 'Prime' },
+  { value: 'OdontoArt', label: 'OdontoArt' },
+];
+
 const emptyForm: ClienteFormData = {
   nome: '',
   cpf: '',
@@ -45,6 +59,8 @@ const emptyForm: ClienteFormData = {
   data_nascimento: '',
   endereco: '',
   origem: '',
+  sexo: '',
+  plano_odontologico: '',
   observacoes: '',
 };
 
@@ -123,12 +139,34 @@ export default function ClienteForm({
             error={fieldErrors.cpf}
           />
 
-          <Input
-            label="Data de Nascimento"
-            name="data_nascimento"
-            type="date"
-            value={formData.data_nascimento}
-            onChange={handleChange('data_nascimento')}
+          <div>
+            <Input
+              label="Data de Nascimento"
+              name="data_nascimento"
+              type="date"
+              value={formData.data_nascimento}
+              onChange={handleChange('data_nascimento')}
+              disabled={loading}
+            />
+            {formData.data_nascimento && (() => {
+              const hoje = new Date();
+              const nasc = new Date(formData.data_nascimento);
+              let idade = hoje.getFullYear() - nasc.getFullYear();
+              const m = hoje.getMonth() - nasc.getMonth();
+              if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+              return idade >= 0 ? (
+                <p className="text-sm text-gray-500 mt-1">{idade} anos</p>
+              ) : null;
+            })()}
+          </div>
+
+          <Select
+            label="Sexo"
+            name="sexo"
+            value={formData.sexo}
+            onChange={handleChange('sexo')}
+            options={SEXO_OPTIONS}
+            placeholder="Selecione..."
             disabled={loading}
           />
 
@@ -142,6 +180,16 @@ export default function ClienteForm({
             placeholder="Selecione..."
             disabled={loading}
             error={fieldErrors.origem}
+          />
+
+          <Select
+            label="Plano Odontológico"
+            name="plano_odontologico"
+            value={formData.plano_odontologico}
+            onChange={handleChange('plano_odontologico')}
+            options={PLANO_OPTIONS}
+            placeholder="Selecione..."
+            disabled={loading}
           />
         </div>
       </div>

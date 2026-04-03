@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 
 interface ItemAtendimento {
   id: number;
@@ -17,18 +18,19 @@ interface ItemAtendimento {
   status: string;
   created_at: string;
   concluido_at: string | null;
+  etapa_modelo_id: number | null;
+  etapa_label: string | null;
+  tem_etapas: number;
 }
 
 // GET /api/execucao/item/[id] - Busca um item de atendimento específico pelo ID
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
-    const { id } = await params;
+    const params = await context.params!;
+    const id = params.id as string;
 
     const itens = await query<ItemAtendimento>(
-      `SELECT 
+      `SELECT
         i.id,
         i.atendimento_id,
         i.procedimento_id,
@@ -46,15 +48,18 @@ export async function GET(
         i.quantidade,
         i.status,
         i.created_at,
-        i.concluido_at
+        i.concluido_at,
+        i.etapa_modelo_id,
+        i.etapa_label,
+        p.tem_etapas
       FROM itens_atendimento i
       INNER JOIN atendimentos a ON i.atendimento_id = a.id
       INNER JOIN clientes c ON a.cliente_id = c.id
       INNER JOIN procedimentos p ON i.procedimento_id = p.id
       LEFT JOIN usuarios e ON i.executor_id = e.id
       LEFT JOIN usuarios cp ON i.criado_por_id = cp.id
-      WHERE i.id = ?`,
-      [parseInt(id)]
+      WHERE i.id = ? AND a.unidade_id = ?`,
+      [parseInt(id), context.unidadeId]
     );
 
     if (itens.length === 0) {
@@ -89,4 +94,4 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});

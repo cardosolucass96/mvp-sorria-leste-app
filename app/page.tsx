@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import {
   Users, ClipboardList, Clock, CheckCircle, Search, Activity,
   AlertTriangle, UserPlus, FileEdit, Banknote, User, CreditCard,
@@ -20,7 +21,6 @@ interface DashboardStats {
   finalizadosHoje: number;
   emExecucao: number;
   emAvaliacao: number;
-  parcelasVencidas: number;
   minhasComissoes: number;
   meusProcedimentos: number;
   procedimentosDisponiveis: number;
@@ -31,19 +31,14 @@ interface DashboardStats {
 export default function Home() {
   usePageTitle('Início');
   const { user, hasRole, effectiveRole, viewMode } = useAuth();
+  const unitFetch = useUnitFetch();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user?.id) {
-      carregarDados();
-    }
-  }, [user?.id, viewMode]);
-
-  async function carregarDados() {
+  const carregarDados = useCallback(async () => {
     try {
       const roleParaAPI = effectiveRole || user?.role;
-      const response = await fetch(`/api/dashboard?usuario_id=${user?.id}&role=${roleParaAPI}`);
+      const response = await unitFetch(`/api/dashboard?usuario_id=${user?.id}&role=${roleParaAPI}`);
       const data = await response.json();
       setStats(data);
     } catch (error) {
@@ -51,7 +46,13 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [user?.id, user?.role, effectiveRole, unitFetch]);
+
+  useEffect(() => {
+    if (user?.id) {
+      carregarDados();
+    }
+  }, [user?.id, viewMode, carregarDados]);
 
   if (loading) {
     return <LoadingState text="Carregando painel..." />;
@@ -120,13 +121,6 @@ export default function Home() {
             color="border-primary-400"
             href="/execucao"
           />
-          <StatCard
-            label="Parcelas Vencidas"
-            value={stats?.parcelasVencidas || 0}
-            icon={<AlertTriangle className="w-5 h-5" />}
-            color="border-error-500"
-            href="/pagamentos"
-          />
         </div>
 
         {/* Ações Rápidas */}
@@ -186,13 +180,6 @@ export default function Home() {
             value={stats?.aguardandoPagamento || 0}
             icon={<CreditCard className="w-5 h-5" />}
             color="border-primary-400"
-            href="/pagamentos"
-          />
-          <StatCard
-            label="Parcelas Vencidas"
-            value={stats?.parcelasVencidas || 0}
-            icon={<AlertTriangle className="w-5 h-5" />}
-            color="border-error-500"
             href="/pagamentos"
           />
         </div>

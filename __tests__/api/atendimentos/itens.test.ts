@@ -27,6 +27,16 @@ import {
   USUARIO_EXECUTOR,
 } from '../../helpers/seed';
 
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1, email: 'admin@test.com', role: 'admin', nome: 'Admin Teste',
+    unidade_ids: [1, 2], unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { GET as listItens, POST as addItem, DELETE as removeItem } from '@/app/api/atendimentos/[id]/itens/route';
 import { PUT as updateItem } from '@/app/api/atendimentos/[id]/itens/[itemId]/route';
 
@@ -48,6 +58,7 @@ describe('GET /api/atendimentos/[id]/itens', () => {
     const itensComJoin = [
       { ...ITEM_LIMPEZA_PENDENTE, procedimento_nome: 'Limpeza Dental', executor_nome: 'Dr. Carlos Executor', criado_por_nome: 'Dr. João Avaliador' },
     ];
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
     mockQueryResponse('from itens_atendimento i', itensComJoin);
 
     const ctx = createRouteContext({ id: '3' });
@@ -58,6 +69,7 @@ describe('GET /api/atendimentos/[id]/itens', () => {
   });
 
   it('retorna lista vazia se sem itens', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
     mockQueryResponse('from itens_atendimento i', []);
 
     const ctx = createRouteContext({ id: '1' });
@@ -68,13 +80,15 @@ describe('GET /api/atendimentos/[id]/itens', () => {
   });
 
   it('ordena por created_at ASC', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
     mockQueryResponse('from itens_atendimento i', []);
 
     const ctx = createRouteContext({ id: '1' });
     await callRoute(listItens, '/api/atendimentos/1/itens', {}, ctx);
 
     const queries = getExecutedQueries();
-    expect(queries[0].sql).toContain('ORDER BY i.created_at ASC');
+    const itensQuery = queries.find(q => q.sql.includes('itens_atendimento'));
+    expect(itensQuery!.sql).toContain('created_at ASC');
   });
 });
 
@@ -92,7 +106,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
   it('adiciona item em triagem', async () => {
     setLastInsertId(10);
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
     mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
     mockQueryResponse('from itens_atendimento i', novoItem);
 
@@ -107,7 +121,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
   it('adiciona item em avaliacao', async () => {
     setLastInsertId(11);
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
     mockQueryResponse('from itens_atendimento i', novoItem);
 
@@ -122,7 +136,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
   it('adiciona item em em_execucao → volta para aguardando_pagamento', async () => {
     setLastInsertId(12);
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from procedimentos where id', PROC_RESTAURACAO);
     mockQueryResponse('select id, role from usuarios where id', { id: 4, role: 'executor' });
     mockQueryResponse('from itens_atendimento i', novoItem);
@@ -142,7 +156,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
   });
 
   it('rejeita adicionar em aguardando_pagamento', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<{ error: string }>(addItem, '/api/atendimentos/3/itens', {
@@ -156,7 +170,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
   it('rejeita adicionar em finalizado', async () => {
     const atFinalizado = { ...ATENDIMENTO_EM_EXECUCAO, status: 'finalizado' };
-    mockQueryResponse('select * from atendimentos where id', atFinalizado);
+    mockQueryResponse('from atendimentos where id', atFinalizado);
 
     const ctx = createRouteContext({ id: '4' });
     const { status } = await callRoute(addItem, '/api/atendimentos/4/itens', {
@@ -179,7 +193,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
   });
 
   it('rejeita se procedimento_id não enviado', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
 
     const ctx = createRouteContext({ id: '2' });
     const { status, data } = await callRoute<{ error: string }>(addItem, '/api/atendimentos/2/itens', {
@@ -192,7 +206,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
   });
 
   it('rejeita se procedimento não existe ou inativo', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     // procedimento não encontrado (não mockado)
 
     const ctx = createRouteContext({ id: '2' });
@@ -207,7 +221,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
   it('usa valor do procedimento quando não especificado', async () => {
     setLastInsertId(13);
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA); // valor = 150
     mockQueryResponse('from itens_atendimento i', novoItem);
 
@@ -225,7 +239,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
   it('usa valor customizado quando especificado', async () => {
     setLastInsertId(14);
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
     mockQueryResponse('from itens_atendimento i', novoItem);
 
@@ -240,16 +254,17 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     expect(insertQuery!.params[4]).toBe(300);
   });
 
-  it('salva campo dentes quando fornecido', async () => {
+  it('salva campo dentes quando fornecido (procedimento não por_dente)', async () => {
     setLastInsertId(15);
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
-    mockQueryResponse('select * from procedimentos where id', PROC_RESTAURACAO);
+    // PROC_LIMPEZA tem por_dente=0 → dentes armazenado como string diretamente
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
     mockQueryResponse('from itens_atendimento i', novoItem);
 
     const ctx = createRouteContext({ id: '2' });
     await callRoute(addItem, '/api/atendimentos/2/itens', {
       method: 'POST',
-      body: { procedimento_id: 2, dentes: '["11","21"]', quantidade: 2 },
+      body: { procedimento_id: 1, dentes: '["11","21"]', quantidade: 2 },
     }, ctx);
 
     const queries = getExecutedQueries();
@@ -260,7 +275,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
   it('quantidade default é 1', async () => {
     setLastInsertId(16);
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
     mockQueryResponse('from itens_atendimento i', novoItem);
 
@@ -276,7 +291,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
   });
 
   it('rejeita executor que não existe', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
     // Executor não encontrado
 
@@ -291,7 +306,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
   });
 
   it('rejeita se usuário selecionado não é executor', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
     mockQueryResponse('select id, role from usuarios where id', { id: 2, role: 'atendente' });
 
@@ -307,7 +322,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
   it('aceita admin como executor', async () => {
     setLastInsertId(17);
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
     mockQueryResponse('select id, role from usuarios where id', { id: 1, role: 'admin' });
     mockQueryResponse('from itens_atendimento i', novoItem);
@@ -328,8 +343,8 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
 describe('DELETE /api/atendimentos/[id]/itens', () => {
   it('remove item durante avaliação', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
-    mockQueryResponse('select * from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select id from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
 
     const ctx = createRouteContext({ id: '2' });
     const { status, data } = await callRoute<{ message: string }>(removeItem, '/api/atendimentos/2/itens', {
@@ -346,7 +361,7 @@ describe('DELETE /api/atendimentos/[id]/itens', () => {
   });
 
   it('rejeita se atendimento não está em avaliação', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
 
     const ctx = createRouteContext({ id: '1' });
     const { status, data } = await callRoute<{ error: string }>(removeItem, '/api/atendimentos/1/itens', {
@@ -365,7 +380,7 @@ describe('DELETE /api/atendimentos/[id]/itens', () => {
     }, ctx);
 
     expect(status).toBe(400);
-    expect(data.error).toBe('ID do item é obrigatório');
+    expect(data.error).toBe('item_id ou group_id é obrigatório');
   });
 
   it('rejeita se atendimento não existe', async () => {
@@ -379,7 +394,7 @@ describe('DELETE /api/atendimentos/[id]/itens', () => {
   });
 
   it('rejeita se item não encontrado no atendimento', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     // item não encontrado (não mockado)
 
     const ctx = createRouteContext({ id: '2' });
@@ -393,7 +408,7 @@ describe('DELETE /api/atendimentos/[id]/itens', () => {
   });
 
   it('rejeita remover em aguardando_pagamento', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(removeItem, '/api/atendimentos/3/itens', {
@@ -405,7 +420,7 @@ describe('DELETE /api/atendimentos/[id]/itens', () => {
   });
 
   it('rejeita remover em em_execucao', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
 
     const ctx = createRouteContext({ id: '4' });
     const { status } = await callRoute(removeItem, '/api/atendimentos/4/itens', {
@@ -423,7 +438,7 @@ describe('DELETE /api/atendimentos/[id]/itens', () => {
 
 describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   it('atualiza executor_id', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_RESTAURACAO_PAGO);
     mockQueryResponse('from itens_atendimento i', { ...ITEM_RESTAURACAO_PAGO, procedimento_nome: 'Restauração', executor_nome: 'Novo' });
 
@@ -441,7 +456,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('atualiza valor do item', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_RESTAURACAO_PAGO);
     mockQueryResponse('from itens_atendimento i', { ...ITEM_RESTAURACAO_PAGO, procedimento_nome: 'Restauração', executor_nome: 'Dr. Carlos' });
 
@@ -455,7 +470,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('atualiza status para executando', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     const item = { ...ITEM_RESTAURACAO_PAGO, executor_id: 4 };
     mockQueryResponse('select * from itens_atendimento where id', item);
     mockQueryResponse('from itens_atendimento i', { ...item, procedimento_nome: 'Restauração', executor_nome: 'Dr. Carlos' });
@@ -470,7 +485,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('marca concluido_at automaticamente ao concluir', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_CANAL_EXECUTANDO);
     mockQueryResponse('from itens_atendimento i', { ...ITEM_CANAL_EXECUTANDO, procedimento_nome: 'Canal', executor_nome: 'Dr. Carlos' });
 
@@ -486,7 +501,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('bloqueia executor não designado de alterar status para executando', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     const item = { ...ITEM_RESTAURACAO_PAGO, executor_id: 4 };
     mockQueryResponse('select * from itens_atendimento where id', item);
 
@@ -501,7 +516,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('bloqueia executor não designado de concluir', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_CANAL_EXECUTANDO, executor_id: 4 });
 
     const ctx = createRouteContext({ id: '4', itemId: '3' });
@@ -514,7 +529,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('permite status sem restrição de executor se sem usuario_id', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_RESTAURACAO_PAGO, executor_id: 4 });
     mockQueryResponse('from itens_atendimento i', { ...ITEM_RESTAURACAO_PAGO, procedimento_nome: 'Restauração', executor_nome: 'Dr. Carlos' });
 
@@ -539,7 +554,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('retorna 404 se item não existe', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     // item não encontrado
 
     const ctx = createRouteContext({ id: '4', itemId: '999' });
@@ -552,7 +567,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('rejeita body vazio', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_RESTAURACAO_PAGO);
 
     const ctx = createRouteContext({ id: '4', itemId: '2' });

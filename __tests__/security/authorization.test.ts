@@ -68,7 +68,7 @@ describe('Segurança — Autorização & IDOR', () => {
     });
 
     test('token válido → passa user no context', async () => {
-      const token = await generateToken({ id: 5, email: 'a@b.com', role: 'executor', nome: 'X' });
+      const token = await generateToken({ id: 5, email: 'a@b.com', role: 'executor', nome: 'X', unidade_ids: [1], unidade_atual: 1 });
       const wrapped = withAuth(handler);
       const req = new NextRequest('http://localhost/api/test', {
         headers: { Authorization: `Bearer ${token}` },
@@ -80,7 +80,7 @@ describe('Segurança — Autorização & IDOR', () => {
     });
 
     test('token via cookie → funciona', async () => {
-      const token = await generateToken({ id: 3, email: 'a@b.com', role: 'admin', nome: 'A' });
+      const token = await generateToken({ id: 3, email: 'a@b.com', role: 'admin', nome: 'A', unidade_ids: [1, 2], unidade_atual: 1 });
       const wrapped = withAuth(handler);
       const req = new NextRequest('http://localhost/api/test', {
         headers: { Cookie: `auth-token=${token}` },
@@ -97,7 +97,7 @@ describe('Segurança — Autorização & IDOR', () => {
     beforeEach(() => handler.mockClear());
 
     test('admin com role admin permitido', async () => {
-      const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'A' });
+      const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'A', unidade_ids: [1, 2], unidade_atual: 1 });
       const wrapped = withRole(['admin'], handler);
       const req = new NextRequest('http://localhost/api/test', {
         headers: { Authorization: `Bearer ${token}` },
@@ -107,7 +107,7 @@ describe('Segurança — Autorização & IDOR', () => {
     });
 
     test('executor tentando acessar rota admin → 403', async () => {
-      const token = await generateToken({ id: 2, email: 'b@c.com', role: 'executor', nome: 'E' });
+      const token = await generateToken({ id: 2, email: 'b@c.com', role: 'executor', nome: 'E', unidade_ids: [1], unidade_atual: 1 });
       const wrapped = withRole(['admin'], handler);
       const req = new NextRequest('http://localhost/api/test', {
         headers: { Authorization: `Bearer ${token}` },
@@ -119,7 +119,7 @@ describe('Segurança — Autorização & IDOR', () => {
     });
 
     test('atendente tentando acessar rota admin → 403', async () => {
-      const token = await generateToken({ id: 3, email: 'c@d.com', role: 'atendente', nome: 'At' });
+      const token = await generateToken({ id: 3, email: 'c@d.com', role: 'atendente', nome: 'At', unidade_ids: [1], unidade_atual: 1 });
       const wrapped = withRole(['admin'], handler);
       const req = new NextRequest('http://localhost/api/test', {
         headers: { Authorization: `Bearer ${token}` },
@@ -129,7 +129,7 @@ describe('Segurança — Autorização & IDOR', () => {
     });
 
     test('múltiplas roles permitidas funciona', async () => {
-      const token = await generateToken({ id: 4, email: 'd@e.com', role: 'atendente', nome: 'At' });
+      const token = await generateToken({ id: 4, email: 'd@e.com', role: 'atendente', nome: 'At', unidade_ids: [1], unidade_atual: 1 });
       const wrapped = withRole(['admin', 'atendente'], handler);
       const req = new NextRequest('http://localhost/api/test', {
         headers: { Authorization: `Bearer ${token}` },
@@ -203,7 +203,7 @@ describe('Segurança — Autorização & IDOR', () => {
       ['atendente+admin', 'executor', ['admin', 'atendente'], false],
     ])('withRole(%s) role=%s → %s', async (_desc, role, allowed, shouldPass) => {
       const handler = jest.fn(async () => NextResponse.json({ ok: true }));
-      const token = await generateToken({ id: 1, email: 'a@b.com', role, nome: 'Test' });
+      const token = await generateToken({ id: 1, email: 'a@b.com', role, nome: 'Test', unidade_ids: [1, 2], unidade_atual: 1 });
       const wrapped = withRole(
         allowed as Array<'admin' | 'atendente' | 'avaliador' | 'executor'>,
         handler
@@ -255,38 +255,32 @@ describe('Segurança — Autorização & IDOR', () => {
       expect(status).toBe(200);
     });
 
-    test('GET /api/dashboard — pode ver stats de QUALQUER usuário (IDOR)', async () => {
-      // Mock stats
-      mockQueryResponse('count(*) as count', { count: 10 });
-
-      // Atacante com role executor pede dashboard de outro executor
+    test('GET /api/dashboard — agora requer autenticação (withUnit)', async () => {
+      // Sem token → 401 (protegido por withUnit)
       const { status } = await callRoute(getDashboard, '/api/dashboard', {
         searchParams: { usuario_id: '999', role: 'executor' },
       });
 
-      // ⚠ Aceita sem verificar ownership
-      expect(status).toBe(200);
+      // ✅ Corrigido: withUnit exige JWT válido
+      expect(status).toBe(401);
     });
 
-    test('GET /api/meus-procedimentos — pode ver procedimentos de QUALQUER usuário (IDOR)', async () => {
-      // Atacante pede procedimentos de outro usuário
+    test('GET /api/meus-procedimentos — agora requer autenticação (withUnit)', async () => {
+      // Sem token → 401 (protegido por withUnit)
       const { status } = await callRoute(getMeusProcedimentos, '/api/meus-procedimentos', {
         searchParams: { usuario_id: '999' },
       });
 
-      // ⚠ Aceita sem verificar que o token pertence ao usuário 999
-      expect(status).toBe(200);
+      // ✅ Corrigido: withUnit exige JWT válido
+      expect(status).toBe(401);
     });
 
-    test('GET /api/dashboard/admin — acessível sem autenticação (deveria ser admin-only)', async () => {
-      // Nenhum token, nenhuma autenticação
-      mockQueryResponse('sum(p.valor) as total', { total: 50000 });
-      mockQueryResponse('count(*) as count', { count: 5 });
-
+    test('GET /api/dashboard/admin — agora requer autenticação (withUnit)', async () => {
+      // Sem token → 401 (protegido por withUnit)
       const { status } = await callRoute(getDashboardAdmin, '/api/dashboard/admin', {});
 
-      // ⚠ Deveria retornar 401 ou 403 — retorna 200
-      expect(status).toBe(200);
+      // ✅ Corrigido: withUnit exige JWT válido
+      expect(status).toBe(401);
     });
   });
 
@@ -305,6 +299,8 @@ describe('Segurança — Autorização & IDOR', () => {
     });
 
     test('handler de GET clientes protegido com withAuth funciona com token válido', async () => {
+      // Route now uses batch: COUNT(*) + SELECT *
+      mockQueryResponse('count(*) as total from clientes', [{ total: 1 }]);
       mockQueryResponse('select * from clientes', [
         { id: 1, nome: 'João', cpf: '12345678901', origem: 'fachada' },
       ]);
@@ -313,7 +309,7 @@ describe('Segurança — Autorização & IDOR', () => {
         return getClientes(request);
       });
 
-      const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'Admin' });
+      const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'Admin', unidade_ids: [1, 2], unidade_atual: 1 });
       const req = new NextRequest('http://localhost/api/clientes', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -326,7 +322,7 @@ describe('Segurança — Autorização & IDOR', () => {
         return getDashboardAdmin(request);
       });
 
-      const token = await generateToken({ id: 2, email: 'exec@b.com', role: 'executor', nome: 'Exec' });
+      const token = await generateToken({ id: 2, email: 'exec@b.com', role: 'executor', nome: 'Exec', unidade_ids: [1], unidade_atual: 1 });
       const req = new NextRequest('http://localhost/api/dashboard/admin', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -342,7 +338,7 @@ describe('Segurança — Autorização & IDOR', () => {
         return getDashboardAdmin(request);
       });
 
-      const token = await generateToken({ id: 1, email: 'admin@b.com', role: 'admin', nome: 'Admin' });
+      const token = await generateToken({ id: 1, email: 'admin@b.com', role: 'admin', nome: 'Admin', unidade_ids: [1, 2], unidade_atual: 1 });
       const req = new NextRequest('http://localhost/api/dashboard/admin', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -355,7 +351,7 @@ describe('Segurança — Autorização & IDOR', () => {
         return postUsuarios(request);
       });
 
-      const token = await generateToken({ id: 2, email: 'at@b.com', role: 'atendente', nome: 'At' });
+      const token = await generateToken({ id: 2, email: 'at@b.com', role: 'atendente', nome: 'At', unidade_ids: [1], unidade_atual: 1 });
       const req = new NextRequest('http://localhost/api/usuarios', {
         method: 'POST',
         headers: {
@@ -421,10 +417,9 @@ describe('Segurança — Autorização & IDOR', () => {
      * - atendimentos/[id]/pagamentos/route.ts → recebido_por_id
      */
 
-    test('atendimentos PUT usa liberado_por_id hardcoded ao liberar para execução (SELECT LIMIT 1)', async () => {
-      // Documenta que a rota busca primeiro usuário arbitrariamente
-      // Em vez de usar context.user.sub do JWT
-      // A query LIMIT 1 só roda na transição aguardando_pagamento → em_execucao
+    test('atendimentos PUT usa context.user.sub como liberado_por_id ao liberar para execução', async () => {
+      // Documenta que a rota agora usa context.user.sub (do JWT) para liberado_por_id
+      // A antiga query SELECT LIMIT 1 foi removida em favor da autenticação
       const { PUT: putAtendimento } = await import('@/app/api/atendimentos/[id]/route');
 
       // Mock: atendimento em aguardando_pagamento
@@ -432,27 +427,29 @@ describe('Segurança — Autorização & IDOR', () => {
         id: 1, status: 'aguardando_pagamento', cliente_id: 1, avaliador_id: 1,
         valor_total: 1000, valor_pago: 1000, created_at: '2025-01-01',
       });
-      // Mock: validação de transição — pelo menos 1 item com status 'pago'
-      mockQueryResponse('count(*) as count', { count: 1 });
-      // Mock liberado_por_id — query hardcoded
-      mockQueryResponse('select id from usuarios limit 1', { id: 99 });
+      // Mock: validação de transição — pelo menos 1 pagamento ativo
+      mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 1 });
       // Mock: updated atendimento retornado
       mockQueryResponse('select a.*', {
         id: 1, status: 'em_execucao', cliente_id: 1, avaliador_id: 1,
       });
 
+      // Gerar token válido para passar pelo withUnit middleware
+      const token = await generateToken({ id: 1, email: 'admin@b.com', role: 'admin', nome: 'Admin', unidade_ids: [1, 2], unidade_atual: 1 });
       const ctx = { params: Promise.resolve({ id: '1' }) };
       await callRoute(putAtendimento, '/api/atendimentos/1', {
         method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
         body: { status: 'em_execucao' },
       }, ctx);
 
-      // Verifica que a query hardcoded é executada
+      // Verifica que liberado_por_id = user.sub (1) é usado no UPDATE
       const queries = getExecutedQueries();
-      const limitQuery = queries.find((q) =>
-        q.sql.toLowerCase().includes('select id from usuarios limit 1')
-      );
-      expect(limitQuery).toBeDefined();
+      const updateQuery = queries.find(q => q.sql.includes('UPDATE atendimentos'));
+      expect(updateQuery).toBeDefined();
+      expect(updateQuery!.sql).toContain('liberado_por_id');
+      // user.sub = 1 from the token
+      expect(updateQuery!.params).toContain(1);
     });
   });
 });

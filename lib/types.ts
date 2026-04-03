@@ -2,12 +2,13 @@
 
 export type UserRole = 'admin' | 'atendente' | 'avaliador' | 'executor';
 
-export type AtendimentoStatus = 
-  | 'triagem' 
-  | 'avaliacao' 
-  | 'aguardando_pagamento' 
-  | 'em_execucao' 
-  | 'finalizado';
+export type AtendimentoStatus =
+  | 'triagem'
+  | 'avaliacao'
+  | 'aguardando_pagamento'
+  | 'em_execucao'
+  | 'finalizado'
+  | 'encerrado';
 
 export type AtendimentoTipo = 'normal' | 'sessao' | 'orto';
 
@@ -49,6 +50,8 @@ export interface Cliente {
   data_nascimento: string | null;
   endereco: string | null;
   origem: OrigemCliente;
+  sexo: 'masculino' | 'feminino' | 'outro' | null;
+  plano_odontologico: 'Clin' | 'Prime' | 'OdontoArt' | null;
   observacoes: string | null;
   created_at: string;
 }
@@ -65,12 +68,29 @@ export interface Procedimento {
   created_at: string;
 }
 
+export interface Unidade {
+  id: number;
+  nome: string;
+  endereco: string | null;
+  telefone: string | null;
+  ativo: number;
+  created_at: string;
+}
+
+export interface UsuarioUnidade {
+  id: number;
+  usuario_id: number;
+  unidade_id: number;
+  created_at: string;
+}
+
 export interface Atendimento {
   id: number;
   cliente_id: number;
   avaliador_id: number | null;
   liberado_por_id: number | null;
   agendamento_id: number | null;
+  unidade_id: number;
   status: AtendimentoStatus;
   tipo: AtendimentoTipo;
   motivo_saida: MotivoSaida | null;
@@ -93,6 +113,8 @@ export interface ItemAtendimento {
   group_id: string | null; // UUID compartilhado entre itens do mesmo procedimento por_dente
   dente_unico: string | null; // Número do dente individual quando group_id presente
   origem_agendamento_id: number | null;
+  etapa_modelo_id: number | null;
+  etapa_label: string | null;
   status: ItemStatus;
   observacoes: string | null;
   created_at: string;
@@ -105,7 +127,6 @@ export interface Pagamento {
   recebido_por_id: number;
   valor: number;
   metodo: MetodoPagamento;
-  parcelas: number;
   observacoes: string | null;
   created_at: string;
 }
@@ -114,19 +135,12 @@ export interface PagamentoCompleto extends Pagamento {
   recebido_por_nome: string;
 }
 
-export interface PagamentoItem {
-  id: number;
-  pagamento_id: number;
-  item_atendimento_id: number;
-  valor_aplicado: number;
-  created_at: string;
-}
-
 // Tipos com joins para exibição
 export interface AtendimentoCompleto extends Atendimento {
   cliente_nome: string;
   avaliador_nome: string | null;
   liberado_por_nome: string | null;
+  unidade_nome?: string;
 }
 
 export interface ItemAtendimentoCompleto extends ItemAtendimento {
@@ -148,6 +162,8 @@ export interface Agendamento {
   observacoes: string | null;
   motivo_cancelamento: string | null;
   reagendado_de_id: number | null;
+  etapa_modelo_id: number | null;
+  unidade_id: number;
   created_at: string;
   updated_at: string;
 }
@@ -156,8 +172,10 @@ export interface AgendamentoCompleto extends Agendamento {
   cliente_nome: string;
   cliente_telefone: string | null;
   procedimento_nome: string;
+  etapa_modelo_nome: string | null;
   executor_nome: string | null;
   dias_desde_criacao: number;
+  unidade_nome?: string;
 }
 
 export interface SaldoCliente {
@@ -165,6 +183,19 @@ export interface SaldoCliente {
   cliente_id: number;
   saldo: number;
   updated_at: string;
+}
+
+export interface VinculoCliente {
+  id: number;
+  cliente_id: number;
+  cliente_vinculado_id: number;
+  observacao: string | null;
+  created_at: string;
+  // campos do outro cliente (join)
+  outro_cliente_id: number;
+  outro_cliente_nome: string;
+  outro_cliente_cpf: string | null;
+  outro_cliente_telefone: string | null;
 }
 
 export interface MovimentacaoSaldo {

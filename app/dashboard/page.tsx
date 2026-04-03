@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import {
   LayoutDashboard, DollarSign, ArrowDownCircle, AlertTriangle, Target,
@@ -18,8 +19,6 @@ interface DashboardData {
   resumo: {
     faturamento: number;
     aReceber: number;
-    vencidas: number;
-    parcelasVencidas: number;
     totalAtendimentos: number;
     totalClientes: number;
     ticketMedio: number;
@@ -39,6 +38,7 @@ export default function DashboardAdminPage() {
   usePageTitle('Dashboard');
   const { user, isLoading: authLoading, isAdmin } = useAuth();
   const router = useRouter();
+  const unitFetch = useUnitFetch();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -53,7 +53,7 @@ export default function DashboardAdminPage() {
       if (dataInicio) params.append('data_inicio', dataInicio);
       if (dataFim) params.append('data_fim', dataFim);
 
-      const res = await fetch(`/api/dashboard/admin?${params}`);
+      const res = await unitFetch(`/api/dashboard/admin?${params}`);
       const json = await res.json();
       setData(json);
     } catch (error) {
@@ -61,7 +61,7 @@ export default function DashboardAdminPage() {
       setError('Erro ao carregar dashboard');
     }
     setLoading(false);
-  }, [dataInicio, dataFim]);
+  }, [dataInicio, dataFim, unitFetch]);
 
   useEffect(() => {
     // Permite acesso se o role real é admin (mesmo em modo dentista)
@@ -220,17 +220,6 @@ export default function DashboardAdminPage() {
                   <p className="text-3xl font-bold">{formatCurrency(data.resumo.aReceber)}</p>
                 </div>
                 <ArrowDownCircle className="w-10 h-10 opacity-30" aria-hidden="true" />
-              </div>
-            </Card>
-
-            <Card className="bg-gradient-to-br from-error-500 to-error-600 text-white border-none">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-error-100 text-sm">Parcelas Vencidas</p>
-                  <p className="text-3xl font-bold">{formatCurrency(data.resumo.vencidas)}</p>
-                  <p className="text-error-200 text-xs">{data.resumo.parcelasVencidas} parcelas</p>
-                </div>
-                <AlertTriangle className="w-10 h-10 opacity-30" aria-hidden="true" />
               </div>
             </Card>
 

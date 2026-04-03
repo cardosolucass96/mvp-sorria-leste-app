@@ -37,7 +37,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nome, cpf, telefone, email, data_nascimento, endereco, origem, observacoes } = body;
+    const { nome, cpf, telefone, email, data_nascimento, endereco, origem, sexo, plano_odontologico, observacoes } = body;
 
     // Verifica se cliente existe
     const existing = await queryOne<Cliente>(
@@ -86,9 +86,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    const sexosValidos = ['masculino', 'feminino', 'outro'];
+    const planosValidos = ['Clin', 'Prime', 'OdontoArt'];
+
     // Atualiza
     await execute(
-      `UPDATE clientes SET 
+      `UPDATE clientes SET
         nome = COALESCE(?, nome),
         cpf = ?,
         telefone = ?,
@@ -96,6 +99,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         data_nascimento = ?,
         endereco = ?,
         origem = COALESCE(?, origem),
+        sexo = COALESCE(?, sexo),
+        plano_odontologico = ?,
         observacoes = ?
       WHERE id = ?`,
       [
@@ -106,6 +111,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         data_nascimento || null,
         endereco?.trim() || null,
         origem || null,
+        (sexo && sexosValidos.includes(sexo) ? sexo : null),
+        (plano_odontologico && planosValidos.includes(plano_odontologico) ? plano_odontologico : null),
         observacoes?.trim() || null,
         id
       ]

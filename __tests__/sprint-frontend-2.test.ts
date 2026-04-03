@@ -19,8 +19,6 @@ const REQUIRED_COMPONENTS = [
   'AtendimentoCard',
   'ItemAtendimentoRow',
   'PagamentoForm',
-  'PagamentoDistribuicao',
-  'ParcelasTable',
   'ProntuarioEditor',
   'AnexosGallery',
   'ComissoesResumo',
@@ -223,33 +221,6 @@ describe('Sprint 2: componentes têm estrutura correta', () => {
     });
     test('suporta maxValor prop', () => {
       expect(src).toContain('maxValor');
-    });
-    test('suporta parcelas para cartão', () => {
-      expect(src).toContain('parcelas');
-    });
-  });
-
-  describe('PagamentoDistribuicao', () => {
-    let src: string;
-    beforeAll(() => { src = readComp('PagamentoDistribuicao'); });
-
-    test('tem barra de progresso', () => {
-      expect(src).toMatch(/progress|barra|width/i);
-    });
-    test('tem distribuir igualmente', () => {
-      expect(src).toMatch(/distribuir|igualmente/i);
-    });
-  });
-
-  describe('ParcelasTable', () => {
-    let src: string;
-    beforeAll(() => { src = readComp('ParcelasTable'); });
-
-    test('usa StatusBadge com type=parcela', () => {
-      expect(src).toContain('parcela');
-    });
-    test('suporta onMarcarPaga', () => {
-      expect(src).toContain('onMarcarPaga');
     });
   });
 

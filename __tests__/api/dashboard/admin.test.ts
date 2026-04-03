@@ -2,7 +2,7 @@
  * Sprint 9 — Testes do Dashboard Admin
  *
  * Cobre: GET /api/dashboard/admin
- *   - Resumo financeiro (faturamento, a receber, vencidas)
+ *   - Resumo financeiro (faturamento, a receber)
  *   - Atendimentos por status
  *   - Faturamento por canal de aquisição
  *   - Top 10 procedimentos
@@ -24,6 +24,22 @@ import {
   getExecutedQueries,
 } from '../../helpers/db-mock';
 
+// Mock JWT para bypass de autenticação nos testes
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1,
+    email: 'admin@test.com',
+    role: 'admin',
+    nome: 'Admin Teste',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { GET as getAdminDashboard } from '@/app/api/dashboard/admin/route';
 
 beforeEach(() => {
@@ -40,8 +56,6 @@ interface AdminDashboard {
   resumo: {
     faturamento: number;
     aReceber: number;
-    vencidas: number;
-    parcelasVencidas: number;
     totalAtendimentos: number;
     totalClientes: number;
     ticketMedio: number;
@@ -84,8 +98,6 @@ describe('GET /api/dashboard/admin — estrutura', () => {
 
     expect(data.resumo).toHaveProperty('faturamento');
     expect(data.resumo).toHaveProperty('aReceber');
-    expect(data.resumo).toHaveProperty('vencidas');
-    expect(data.resumo).toHaveProperty('parcelasVencidas');
     expect(data.resumo).toHaveProperty('totalAtendimentos');
     expect(data.resumo).toHaveProperty('totalClientes');
     expect(data.resumo).toHaveProperty('ticketMedio');
@@ -108,8 +120,7 @@ describe('GET /api/dashboard/admin — banco vazio', () => {
     expect(status).toBe(200);
     expect(data.resumo.faturamento).toBe(0);
     expect(data.resumo.aReceber).toBe(0);
-    expect(data.resumo.vencidas).toBe(0);
-    expect(data.resumo.parcelasVencidas).toBe(0);
+    // vencidas removido do resumo
     expect(data.resumo.totalAtendimentos).toBe(0);
     expect(data.resumo.totalClientes).toBe(0);
     expect(data.resumo.ticketMedio).toBe(0);
@@ -164,19 +175,8 @@ describe('GET /api/dashboard/admin — resumo financeiro', () => {
     expect(aReceberQuery).toBeDefined();
   });
 
-  it('vencidas = valor total de parcelas vencidas', async () => {
-    mockQueryResponse("pago = 0 and data_vencimento", [{ total: 2000, count: 5 }]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    expect(data.resumo.vencidas).toBe(2000);
-    expect(data.resumo.parcelasVencidas).toBe(5);
-  });
-
   it('comissoesTotal = soma de todas as comissões', async () => {
-    mockQueryResponse('sum(valor_comissao)', [{ total: 8000 }]);
+    mockQueryResponse('sum(c.valor_comissao)', [{ total: 8000 }]);
 
     const { data } = await callRoute<AdminDashboard>(
       getAdminDashboard, '/api/dashboard/admin'
@@ -372,16 +372,12 @@ describe('GET /api/dashboard/admin — métricas derivadas', () => {
     // Ambas queries usam "from atendimentos a" — a de finalizados adiciona WHERE status = 'finalizado'.
     // O mock substring match retorna o PRIMEIRO match. Precisamos registrar o mais específico primeiro.
     // finalizados: query contém "status = 'finalizado'" — registrar primeiro
-    mockQueryResponse("where status = 'finalizado'", [{ count: 40 }]);
-    // total: query NÃO contém WHERE status — usa "count(*) as count\n      from atendimentos a\n      where 1=1"
-    // Mas ambas contêm "from atendimentos a". O mock faz first-match.
-    // Vamos testar que taxa é calculada mesmo que ambas retornem o valor do mock mais específico.
-    // O total vem de query "FROM atendimentos a\n      WHERE 1=1" sem filtro status.
-    // O finalizados vem de "WHERE status = 'finalizado'".
-    // Como o mock retorna o primeiro match, e 'finalizado' match é mais específico, registramos em ordem:
-    // Na verdade, a query de totalAtendimentos não contém 'finalizado', então não vai matchear.
-    // Vamos usar um mock separável:
-    mockQueryResponse("count(*) as count\n      from atendimentos a\n      where 1=1", [{ count: 100 }]);
+    mockQueryResponse("in ('finalizado', 'encerrado') and a.unidade_id", [{ count: 40 }]);
+    // totalAtendimentos: query without status filter, uses "FROM atendimentos a WHERE a.unidade_id = ?"
+    // finalizados: query with "status IN ('finalizado', 'encerrado')"
+    // The more specific mock (with 'finalizado') matches finalizados query.
+    // The generic mock matches totalAtendimentos query.
+    mockQueryResponse("count(*) as count\n      from atendimentos a\n      where a.unidade_id", [{ count: 100 }]);
 
     const { data } = await callRoute<AdminDashboard>(
       getAdminDashboard, '/api/dashboard/admin'

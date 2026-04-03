@@ -1,46 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, execute } from '@/lib/db';
+import { query, queryOne, execute } from '@/lib/db';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 
 interface ItemAtendimento {
   id: number;
+  atendimento_id: number;
+  procedimento_id: number;
+  status: string;
   valor: number;
   valor_pago: number;
-  status: string;
+  criado_por_id: number | null;
+  executor_id: number | null;
+}
+
+interface Procedimento {
+  id: number;
+  comissao_venda: number;
+  comissao_execucao: number;
 }
 
 interface Atendimento {
   id: number;
   status: string;
+  unidade_id: number;
+}
+
+interface ComissaoDetalhe {
+  tipo: string;
+  usuario_id: number;
+  valor: number;
 }
 
 type MotivoSaida = 'sem_tratamento' | 'tratamento_completo' | 'continuacao';
 
 // POST /api/atendimentos/[id]/finalizar - Finaliza atendimento
-export async function POST(
+export const POST = withUnit(async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  context: UnitAuthenticatedContext
+) => {
   try {
-    const { id } = await params;
-    const atendimentoId = parseInt(id);
+    const { id } = await context.params!;
+    const atendimentoId = parseInt(id as string);
 
     const body = await request.json().catch(() => ({}));
     const motivo_saida: MotivoSaida = body.motivo_saida || 'tratamento_completo';
 
-    // 1. Verificar se atendimento existe e está em execução
-    const atendimentos = await query<Atendimento>(
-      'SELECT id, status FROM atendimentos WHERE id = ?',
+    // 1. Verificar se atendimento existe e pertence à unidade
+    const atendimento = await queryOne<Atendimento>(
+      'SELECT id, status, unidade_id FROM atendimentos WHERE id = ?',
       [atendimentoId]
     );
 
-    if (atendimentos.length === 0) {
+    if (!atendimento) {
       return NextResponse.json(
         { error: 'Atendimento não encontrado' },
         { status: 404 }
       );
     }
 
-    const atendimento = atendimentos[0];
+    if (atendimento.unidade_id !== context.unidadeId) {
+      return NextResponse.json(
+        { error: 'Atendimento não pertence a esta unidade' },
+        { status: 403 }
+      );
+    }
 
     if (atendimento.status !== 'em_execucao') {
       return NextResponse.json(
@@ -49,58 +72,15 @@ export async function POST(
       );
     }
 
-    // 2. Para 'sem_tratamento', pular todas as validações
-    if (motivo_saida === 'sem_tratamento') {
-      await execute(
-        `UPDATE atendimentos SET status = 'finalizado', finalizado_at = datetime('now', 'localtime'), motivo_saida = ? WHERE id = ?`,
-        [motivo_saida, atendimentoId]
-      );
-
-      return NextResponse.json({
-        success: true,
-        message: 'Atendimento finalizado com sucesso',
-      });
-    }
-
-    // 3. Verificar se todos os itens estão concluídos
-    const itens = await query<ItemAtendimento>(
-      `SELECT id, valor, valor_pago, status
-       FROM itens_atendimento WHERE atendimento_id = ?`,
-      [atendimentoId]
-    );
-
-    if (itens.length === 0) {
+    // No novo fluxo, a transição em_execucao → finalizado é automática (via conclusão de itens).
+    // Este endpoint existe apenas para o caso 'sem_tratamento' (saída sem procedimentos).
+    if (motivo_saida !== 'sem_tratamento') {
       return NextResponse.json(
-        { error: 'Atendimento não possui procedimentos' },
+        { error: 'Use o fluxo normal: conclua os procedimentos para finalizar o atendimento' },
         { status: 400 }
       );
     }
 
-    const itensNaoConcluidos = itens.filter(i => i.status !== 'concluido');
-    if (itensNaoConcluidos.length > 0) {
-      return NextResponse.json(
-        {
-          error: 'Existem procedimentos não concluídos',
-          pendentes: itensNaoConcluidos.length
-        },
-        { status: 400 }
-      );
-    }
-
-    // 4. Verificar se todos os itens estão pagos
-    const itensNaoPagos = itens.filter(i => i.valor_pago < i.valor);
-    if (itensNaoPagos.length > 0) {
-      const valorFaltante = itensNaoPagos.reduce((sum, i) => sum + (i.valor - i.valor_pago), 0);
-      return NextResponse.json(
-        {
-          error: 'Existem procedimentos com pagamento pendente',
-          valorFaltante
-        },
-        { status: 400 }
-      );
-    }
-
-    // 5. Finalizar atendimento (comissões são geradas na execução de cada item)
     await execute(
       `UPDATE atendimentos SET status = 'finalizado', finalizado_at = datetime('now', 'localtime'), motivo_saida = ? WHERE id = ?`,
       [motivo_saida, atendimentoId]
@@ -117,4 +97,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});

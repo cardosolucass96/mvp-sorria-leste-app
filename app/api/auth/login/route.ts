@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne, execute } from '@/lib/db';
+import { query, queryOne, execute } from '@/lib/db';
 import { Usuario } from '@/lib/types';
 import { verifyPassword, needsMigration, hashPassword, generateToken } from '@/lib/auth';
 
@@ -55,19 +55,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Buscar unidades do usuário (graceful fallback se migração não rodou ainda)
+    let unidadeIds: number[] = [1];
+    let unidadeAtual = 1;
+    try {
+      const unidades = await query<{ unidade_id: number }>(
+        `SELECT uu.unidade_id FROM usuario_unidades uu
+         JOIN unidades u ON u.id = uu.unidade_id
+         WHERE uu.usuario_id = ? AND u.ativo = 1
+         ORDER BY uu.unidade_id ASC`,
+        [user.id]
+      );
+      if (unidades.length > 0) {
+        unidadeIds = unidades.map(u => u.unidade_id);
+        unidadeAtual = unidadeIds[0];
+      }
+    } catch {
+      // Tabelas de unidade ainda não existem — usar padrão
+    }
+
     // Gerar JWT
     const token = await generateToken({
       id: user.id,
       email: user.email,
       role: user.role,
       nome: user.nome,
+      unidade_ids: unidadeIds,
+      unidade_atual: unidadeAtual,
     });
 
     // Remover senha do retorno
     const { senha: _, ...userSemSenha } = user;
+    const userComUnidades = {
+      ...userSemSenha,
+      unidade_ids: unidadeIds,
+      unidade_atual: unidadeAtual,
+    };
 
     // Retornar token + user (cookie HttpOnly para segurança)
-    const response = NextResponse.json({ user: userSemSenha, token });
+    const response = NextResponse.json({ user: userComUnidades, token });
     response.cookies.set('auth-token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

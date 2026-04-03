@@ -17,6 +17,22 @@ import {
   ITEM_CANAL_EXECUTANDO,
 } from '../../helpers/seed';
 
+// Mock JWT para bypass de autenticação nos testes
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1,
+    email: 'admin@test.com',
+    role: 'admin',
+    nome: 'Admin Teste',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { GET as getExecucao } from '@/app/api/execucao/route';
 import { GET as getItemDetail } from '@/app/api/execucao/item/[id]/route';
 

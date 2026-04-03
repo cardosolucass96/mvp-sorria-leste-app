@@ -6,7 +6,7 @@ import { maskCPF, maskTelefone, maskMoeda } from '@/lib/utils/masks';
 export interface InputProps {
   label: string;
   name: string;
-  type?: 'text' | 'email' | 'password' | 'number' | 'date' | 'tel' | 'search';
+  type?: 'text' | 'email' | 'password' | 'number' | 'date' | 'datetime-local' | 'tel' | 'search';
   placeholder?: string;
   value: string | number;
   onChange: (value: string) => void;
@@ -18,8 +18,8 @@ export interface InputProps {
   icon?: React.ReactNode;
   autoFocus?: boolean;
   className?: string;
-  min?: number;
-  max?: number;
+  min?: number | string;
+  max?: number | string;
   step?: string | number;
 }
 

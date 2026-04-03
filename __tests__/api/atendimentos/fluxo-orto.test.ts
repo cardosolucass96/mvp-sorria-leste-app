@@ -27,6 +27,22 @@ import {
   ATENDIMENTO_TRIAGEM,
 } from '../../helpers/seed';
 
+// Mock JWT para bypass de autenticação nos testes
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1,
+    email: 'admin@test.com',
+    role: 'admin',
+    nome: 'Admin Teste',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { POST as createAtendimento } from '@/app/api/atendimentos/route';
 
 beforeEach(() => {
@@ -49,7 +65,7 @@ describe('POST /api/atendimentos — fluxo orto', () => {
   it('cria atendimento com status aguardando_pagamento', async () => {
     setLastInsertId(10);
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 0 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
     mockQueryResponse('SELECT id, role FROM usuarios WHERE id', { id: 4, role: 'executor' });
     mockQueryResponse('SELECT id, valor, nome FROM procedimentos', { id: 1, valor: 150, nome: 'Limpeza Dental' });
     mockQueryResponse('WHERE a.id = ?', {
@@ -70,7 +86,7 @@ describe('POST /api/atendimentos — fluxo orto', () => {
   it('insere no banco com avaliador_id NULL e observação "Atendimento Orto"', async () => {
     setLastInsertId(11);
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 0 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
     mockQueryResponse('SELECT id, role FROM usuarios WHERE id', { id: 4, role: 'executor' });
     mockQueryResponse('SELECT id, valor, nome FROM procedimentos', { id: 1, valor: 150, nome: 'Limpeza' });
     mockQueryResponse('WHERE a.id = ?', { id: 11, status: 'aguardando_pagamento' });
@@ -91,7 +107,7 @@ describe('POST /api/atendimentos — fluxo orto', () => {
   it('cria item automaticamente com o procedimento e executor selecionados', async () => {
     setLastInsertId(12);
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 0 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
     mockQueryResponse('SELECT id, role FROM usuarios WHERE id', { id: 4, role: 'executor' });
     mockQueryResponse('SELECT id, valor, nome FROM procedimentos', { id: 2, valor: 300, nome: 'Restauração' });
     mockQueryResponse('WHERE a.id = ?', { id: 12, status: 'aguardando_pagamento' });
@@ -113,7 +129,7 @@ describe('POST /api/atendimentos — fluxo orto', () => {
   it('usa valor_custom quando fornecido', async () => {
     setLastInsertId(13);
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 0 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
     mockQueryResponse('SELECT id, role FROM usuarios WHERE id', { id: 4, role: 'executor' });
     mockQueryResponse('SELECT id, valor, nome FROM procedimentos', { id: 1, valor: 150, nome: 'Limpeza' });
     mockQueryResponse('WHERE a.id = ?', { id: 13, status: 'aguardando_pagamento' });
@@ -131,7 +147,7 @@ describe('POST /api/atendimentos — fluxo orto', () => {
   it('usa valor do procedimento quando valor não especificado', async () => {
     setLastInsertId(14);
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 0 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
     mockQueryResponse('SELECT id, role FROM usuarios WHERE id', { id: 4, role: 'executor' });
     mockQueryResponse('SELECT id, valor, nome FROM procedimentos', { id: 1, valor: 150, nome: 'Limpeza' });
     mockQueryResponse('WHERE a.id = ?', { id: 14, status: 'aguardando_pagamento' });
@@ -146,9 +162,10 @@ describe('POST /api/atendimentos — fluxo orto', () => {
     expect(insertItem!.params[4]).toBe(150);
   });
 
-  it('rejeita se executor_id não enviado', async () => {
+  it('rejeita se executor_id e criado_por_id não enviados', async () => {
+    // executor_id é agora opcional, mas quando ausente precisa de criado_por_id
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 0 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
 
     const { status, data } = await callRoute<{ error: string }>(createAtendimento, '/api/atendimentos', {
       method: 'POST',
@@ -156,12 +173,12 @@ describe('POST /api/atendimentos — fluxo orto', () => {
     });
 
     expect(status).toBe(400);
-    expect(data.error).toBe('Executor e procedimento são obrigatórios para atendimento orto');
+    expect(data.error).toBe('Não foi possível identificar o criador do atendimento');
   });
 
   it('rejeita se procedimento_id não enviado', async () => {
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 0 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
 
     const { status, data } = await callRoute<{ error: string }>(createAtendimento, '/api/atendimentos', {
       method: 'POST',
@@ -169,12 +186,12 @@ describe('POST /api/atendimentos — fluxo orto', () => {
     });
 
     expect(status).toBe(400);
-    expect(data.error).toBe('Executor e procedimento são obrigatórios para atendimento orto');
+    expect(data.error).toBe('Procedimento é obrigatório para atendimento orto');
   });
 
   it('rejeita se executor não encontrado', async () => {
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 0 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
     // executor não mockado → queryOne retorna null
 
     const { status, data } = await callRoute<{ error: string }>(createAtendimento, '/api/atendimentos', {
@@ -188,7 +205,7 @@ describe('POST /api/atendimentos — fluxo orto', () => {
 
   it('rejeita se procedimento não encontrado', async () => {
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 0 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
     mockQueryResponse('SELECT id, role FROM usuarios WHERE id', { id: 4, role: 'executor' });
     // procedimento não mockado → queryOne retorna null
 
@@ -215,7 +232,7 @@ describe('POST /api/atendimentos — fluxo orto', () => {
 
   it('rejeita se cliente já tem atendimento aberto', async () => {
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 1 });
+    mockQueryResponse("not in ('finalizado'", { count: 1 });
 
     const { status, data } = await callRoute<{ error: string }>(createAtendimento, '/api/atendimentos', {
       method: 'POST',
@@ -229,7 +246,7 @@ describe('POST /api/atendimentos — fluxo orto', () => {
   it('item criado tem status "pendente" e quantidade 1', async () => {
     setLastInsertId(15);
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 0 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
     mockQueryResponse('SELECT id, role FROM usuarios WHERE id', { id: 4, role: 'executor' });
     mockQueryResponse('SELECT id, valor, nome FROM procedimentos', { id: 1, valor: 150, nome: 'Limpeza' });
     mockQueryResponse('WHERE a.id = ?', { id: 15, status: 'aguardando_pagamento' });
@@ -248,7 +265,7 @@ describe('POST /api/atendimentos — fluxo orto', () => {
   it('não verifica avaliador no fluxo orto mesmo se avaliador_id enviado', async () => {
     setLastInsertId(16);
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
-    mockQueryResponse("status != 'finalizado'", { count: 0 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
     mockQueryResponse('SELECT id, role FROM usuarios WHERE id', { id: 4, role: 'executor' });
     mockQueryResponse('SELECT id, valor, nome FROM procedimentos', { id: 1, valor: 150, nome: 'Limpeza' });
     mockQueryResponse('WHERE a.id = ?', { id: 16, status: 'aguardando_pagamento' });

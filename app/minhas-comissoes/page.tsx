@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { Banknote, DollarSign } from 'lucide-react';
 import { PageHeader, Alert, StatCard, Badge, LoadingState, Table, FilterBar } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
@@ -34,6 +35,7 @@ interface ComissoesData {
 export default function MinhasComissoesPage() {
   usePageTitle('Minhas Comissões');
   const { user } = useAuth();
+  const unitFetch = useUnitFetch();
   const [dados, setDados] = useState<ComissoesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -55,7 +57,7 @@ export default function MinhasComissoesPage() {
       if (filtroDataInicio) params.append('data_inicio', filtroDataInicio);
       if (filtroDataFim) params.append('data_fim', filtroDataFim);
 
-      const response = await fetch(`/api/comissoes?${params}`);
+      const response = await unitFetch(`/api/comissoes?${params}`);
       const data = await response.json();
       setDados(data);
     } catch (error) {

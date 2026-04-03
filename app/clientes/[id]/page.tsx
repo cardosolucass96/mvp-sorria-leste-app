@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Cliente } from '@/lib/types';
-import { User, ClipboardList, Activity, CreditCard, Clock, FileText } from 'lucide-react';
+import { Cliente, VinculoCliente } from '@/lib/types';
+import { User, ClipboardList, Activity, CreditCard, Clock, FileText, Users, Plus, Trash2, Search } from 'lucide-react';
 import { PageHeader, Card, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 import { ClienteForm, ClienteFormData } from '@/components/domain';
@@ -22,12 +22,17 @@ const METODOS_LABEL: Record<string, string> = {
 };
 
 const HISTORICO_CONFIG: Record<string, { label: string; cor: string }> = {
-  atendimento_criado: { label: 'Atendimento criado', cor: 'bg-primary-500' },
-  liberado:           { label: 'Liberado para execução', cor: 'bg-info-500' },
-  finalizado:         { label: 'Finalizado', cor: 'bg-success-500' },
-  pagamento:          { label: 'Pagamento', cor: 'bg-warning-500' },
-  procedimento:       { label: 'Procedimento', cor: 'bg-neutral-400' },
-  etapa_concluida:    { label: 'Etapa concluída', cor: 'bg-success-400' },
+  atendimento_criado:     { label: 'Atendimento criado',     cor: 'bg-primary-500' },
+  liberado:               { label: 'Liberado para execução', cor: 'bg-info-500' },
+  finalizado:             { label: 'Finalizado',             cor: 'bg-success-500' },
+  pagamento:              { label: 'Pagamento',              cor: 'bg-warning-500' },
+  procedimento:           { label: 'Procedimento',           cor: 'bg-neutral-400' },
+  etapa_concluida:        { label: 'Etapa concluída',        cor: 'bg-success-400' },
+  credito:                { label: 'Crédito de saldo',       cor: 'bg-success-600' },
+  debito:                 { label: 'Débito de saldo',        cor: 'bg-error-500' },
+  estorno:                { label: 'Estorno',                cor: 'bg-warning-600' },
+  transferencia_saida:    { label: 'Transf. enviada',        cor: 'bg-error-400' },
+  transferencia_entrada:  { label: 'Transf. recebida',       cor: 'bg-success-400' },
 };
 
 interface Atendimento {
@@ -44,6 +49,7 @@ interface ItemProcedimento {
   id: number;
   atendimento_id: number;
   procedimento_nome: string;
+  etapa_label: string | null;
   executor_nome: string | null;
   criado_por_nome: string | null;
   valor: number;
@@ -83,6 +89,7 @@ interface ItemProntuario {
   quantidade: number;
   item_observacoes: string | null;
   procedimento_nome: string;
+  etapa_label: string | null;
   executor_nome: string | null;
   prontuario_id: number | null;
   prontuario_descricao: string | null;
@@ -92,20 +99,23 @@ interface ItemProntuario {
   prontuario_autor: string | null;
 }
 
-interface PagamentoItem {
-  pagamento_id: number;
-  item_atendimento_id: number;
-  valor_aplicado: number;
-  procedimento_nome: string;
+interface Movimentacao {
+  tipo: string;
+  data: string;
+  descricao: string | null;
+  ref_id: number;
+  valor: number;
+  saldo_anterior: number;
+  saldo_novo: number;
 }
 
 interface FichaData {
   atendimentos: Atendimento[];
   procedimentos: ItemProcedimento[];
   pagamentos: Pagamento[];
-  pagamentosItens: PagamentoItem[];
   historico: EventoHistorico[];
   prontuarios: ItemProntuario[];
+  movimentacoes: Movimentacao[];
 }
 
 export default function ClienteDetalhePage({ params }: { params: Promise<{ id: string }> }) {
@@ -121,6 +131,26 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const [abaAtiva, setAbaAtiva] = useState('dados');
   const [modalProcedimento, setModalProcedimento] = useState<ItemProcedimento | null>(null);
   const [modalPagamento, setModalPagamento] = useState<Pagamento | null>(null);
+  const [vinculos, setVinculos] = useState<VinculoCliente[]>([]);
+  const [modalAddVinculo, setModalAddVinculo] = useState(false);
+  const [vinculoBusca, setVinculoBusca] = useState('');
+  const [vinculoBuscaResultados, setVinculoBuscaResultados] = useState<Cliente[]>([]);
+  const [vinculoClienteSelecionado, setVinculoClienteSelecionado] = useState<Cliente | null>(null);
+  const [vinculoObservacao, setVinculoObservacao] = useState('');
+  const [vinculoSaving, setVinculoSaving] = useState(false);
+
+  // Saldo
+  const [saldo, setSaldo] = useState({ saldo: 0, saldo_calculado: 0 });
+  const [modalTransferencia, setModalTransferencia] = useState(false);
+  const [transferenciaDestinoId, setTransferenciaDestinoId] = useState<number | null>(null);
+  const [transferenciaDestinoNome, setTransferenciaDestinoNome] = useState('');
+  const [transferenciaValor, setTransferenciaValor] = useState('');
+  const [transferindo, setTransferindo] = useState(false);
+  const [transferBusca, setTransferBusca] = useState('');
+  const [transferResultados, setTransferResultados] = useState<{ id: number; nome: string; cpf: string | null }[]>([]);
+  const [transferBuscando, setTransferBuscando] = useState(false);
+  const [estornandoItemId, setEstornandoItemId] = useState<number | null>(null);
+
   const router = useRouter();
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -135,6 +165,24 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     setConfirmDialog({ ...config, isOpen: true });
   };
 
+  const loadVinculos = useCallback(async () => {
+    const res = await fetch(`/api/clientes/${id}/vinculos`);
+    if (res.ok) setVinculos(await res.json());
+  }, [id]);
+
+  const carregarSaldo = useCallback(async () => {
+    const res = await fetch(`/api/clientes/${id}/saldo`);
+    if (res.ok) {
+      const data = await res.json();
+      setSaldo({ saldo: data.saldo ?? 0, saldo_calculado: data.saldo_calculado ?? 0 });
+    }
+  }, [id]);
+
+  const carregarFicha = useCallback(async () => {
+    const res = await fetch(`/api/clientes/${id}/ficha`);
+    if (res.ok) setFicha(await res.json());
+  }, [id]);
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -145,6 +193,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         if (!resCliente.ok) { router.push('/clientes'); return; }
         setCliente(await resCliente.json());
         if (resFicha.ok) setFicha(await resFicha.json());
+        await Promise.all([loadVinculos(), carregarSaldo()]);
       } catch {
         setError('Erro ao carregar cliente');
       } finally {
@@ -152,7 +201,23 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       }
     };
     load();
-  }, [id, router]);
+  }, [id, router, loadVinculos, carregarSaldo]);
+
+  useEffect(() => {
+    if (!vinculoBusca.trim()) { setVinculoBuscaResultados([]); return; }
+    const t = setTimeout(async () => {
+      const res = await fetch(`/api/clientes?busca=${encodeURIComponent(vinculoBusca)}&limit=8&ordem=nome`);
+      if (res.ok) {
+        const data = await res.json();
+        // filtra o próprio cliente e já vinculados
+        const vinculadosIds = new Set(vinculos.map(v => v.outro_cliente_id));
+        setVinculoBuscaResultados(
+          (data.clientes ?? data).filter((c: Cliente) => c.id !== parseInt(id, 10) && !vinculadosIds.has(c.id))
+        );
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [vinculoBusca, id, vinculos]);
 
   useEffect(() => {
     if (error || success) {
@@ -214,6 +279,124 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
 
   const totalGasto = ficha?.pagamentos.filter(p => !p.cancelado).reduce((s, p) => s + p.valor, 0) ?? 0;
 
+  const handleAddVinculo = async () => {
+    if (!vinculoClienteSelecionado) return;
+    setVinculoSaving(true);
+    try {
+      const res = await fetch(`/api/clientes/${id}/vinculos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cliente_vinculado_id: vinculoClienteSelecionado.id, observacao: vinculoObservacao }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Erro ao adicionar vínculo'); return; }
+      await loadVinculos();
+      setModalAddVinculo(false);
+      setVinculoBusca('');
+      setVinculoClienteSelecionado(null);
+      setVinculoObservacao('');
+      setSuccess('Vínculo adicionado com sucesso!');
+    } catch {
+      setError('Erro ao adicionar vínculo');
+    } finally {
+      setVinculoSaving(false);
+    }
+  };
+
+  const handleRemoveVinculo = (vinculo: VinculoCliente) => {
+    openConfirm({
+      title: 'Remover Vínculo',
+      message: `Deseja remover o vínculo com "${vinculo.outro_cliente_nome}"?`,
+      confirmLabel: 'Remover',
+      type: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/clientes/${id}/vinculos/${vinculo.id}`, { method: 'DELETE' });
+          if (!res.ok) { setError('Erro ao remover vínculo'); return; }
+          await loadVinculos();
+          setSuccess('Vínculo removido.');
+        } catch {
+          setError('Erro ao remover vínculo');
+        }
+      },
+    });
+  };
+
+  const handleEstornarProcedimento = async (item: ItemProcedimento) => {
+    openConfirm({
+      title: 'Gerar estorno',
+      message: `Converter ${formatarMoeda(item.valor_pago)} de "${item.etapa_label ? `${item.procedimento_nome} — ${item.etapa_label}` : item.procedimento_nome}" em saldo disponível para este cliente?`,
+      confirmLabel: 'Gerar estorno',
+      type: 'info',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        setEstornandoItemId(item.id);
+        try {
+          const res = await fetch(`/api/clientes/${id}/saldo/estornar-procedimento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_atendimento_id: item.id }),
+          });
+          const data = await res.json();
+          if (!res.ok) { setError(data.error || 'Erro ao gerar estorno'); return; }
+          setSuccess(`Estorno de ${formatarMoeda(data.valor_creditado)} gerado com sucesso!`);
+          await Promise.all([carregarSaldo(), carregarFicha()]);
+        } catch {
+          setError('Erro ao gerar estorno');
+        } finally {
+          setEstornandoItemId(null);
+        }
+      },
+    });
+  };
+
+  const handleTransferir = async () => {
+    if (!transferenciaDestinoId || !transferenciaValor) return;
+    setTransferindo(true);
+    try {
+      const res = await fetch(`/api/clientes/${id}/saldo/transferir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cliente_destino_id: transferenciaDestinoId,
+          valor: parseFloat(transferenciaValor),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Erro ao transferir'); setTransferindo(false); return; }
+      setModalTransferencia(false);
+      setTransferenciaDestinoId(null);
+      setTransferenciaDestinoNome('');
+      setTransferenciaValor('');
+      setTransferBusca('');
+      setTransferResultados([]);
+      setSuccess('Saldo transferido com sucesso!');
+      await Promise.all([carregarSaldo(), carregarFicha()]);
+    } catch {
+      setError('Erro ao transferir saldo');
+    } finally {
+      setTransferindo(false);
+    }
+  };
+
+  const handleBuscarTransferDestino = async (termo: string) => {
+    setTransferBusca(termo);
+    if (termo.length < 2) { setTransferResultados([]); return; }
+    setTransferBuscando(true);
+    try {
+      const res = await fetch(`/api/clientes?busca=${encodeURIComponent(termo)}&limit=5`);
+      if (res.ok) {
+        const data = await res.json();
+        setTransferResultados(
+          (data.clientes ?? data).filter((c: { id: number }) => c.id !== parseInt(id, 10))
+        );
+      }
+    } catch { /* silently fail */ } finally {
+      setTransferBuscando(false);
+    }
+  };
+
   const abas = [
     { key: 'dados', label: 'Dados' },
     { key: 'atendimentos', label: 'Atendimentos', count: ficha?.atendimentos.length },
@@ -221,6 +404,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     { key: 'pagamentos', label: 'Pagamentos', count: ficha?.pagamentos.filter(p => !p.cancelado).length },
     { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
     { key: 'historico', label: 'Histórico', count: ficha?.historico.length },
+    { key: 'vinculados', label: 'Vinculados', count: vinculos.length || undefined },
   ];
 
   return (
@@ -264,6 +448,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 data_nascimento: cliente.data_nascimento || '',
                 endereco: cliente.endereco || '',
                 origem: cliente.origem || '',
+                sexo: cliente.sexo || '',
+                plano_odontologico: cliente.plano_odontologico || '',
                 observacoes: cliente.observacoes || '',
               }}
               onSubmit={handleSubmit}
@@ -279,8 +465,23 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div><p className="text-xs text-muted">Nome Completo</p><p className="font-medium">{cliente.nome}</p></div>
                   <div><p className="text-xs text-muted">CPF</p><p className="font-medium">{cliente.cpf ? formatarCPF(cliente.cpf) : '-'}</p></div>
-                  <div><p className="text-xs text-muted">Data de Nascimento</p><p className="font-medium">{cliente.data_nascimento ? formatarData(cliente.data_nascimento) : '-'}</p></div>
+                  <div>
+                    <p className="text-xs text-muted">Data de Nascimento</p>
+                    <p className="font-medium">
+                      {cliente.data_nascimento ? formatarData(cliente.data_nascimento) : '-'}
+                      {cliente.data_nascimento && (() => {
+                        const hoje = new Date();
+                        const nasc = new Date(cliente.data_nascimento);
+                        let idade = hoje.getFullYear() - nasc.getFullYear();
+                        const m = hoje.getMonth() - nasc.getMonth();
+                        if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+                        return idade >= 0 ? <span className="text-sm text-muted ml-1">({idade} anos)</span> : null;
+                      })()}
+                    </p>
+                  </div>
+                  <div><p className="text-xs text-muted">Sexo</p><p className="font-medium">{cliente.sexo ? cliente.sexo.charAt(0).toUpperCase() + cliente.sexo.slice(1) : '-'}</p></div>
                   <div><p className="text-xs text-muted">Origem</p><p className="font-medium">{getOrigemLabel(cliente.origem)}</p></div>
+                  <div><p className="text-xs text-muted">Plano Odontológico</p><p className="font-medium">{cliente.plano_odontologico || '-'}</p></div>
                 </div>
               </div>
               <div>
@@ -297,6 +498,42 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                   <p className="text-neutral-700 whitespace-pre-wrap">{cliente.observacoes}</p>
                 </div>
               )}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Card de Saldo — sempre visível no topo quando na aba dados */}
+      {abaAtiva === 'dados' && !isEditing && (
+        <Card>
+          <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">Saldo do Cliente</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-muted">Crédito em procedimentos</p>
+              <p className="font-semibold text-lg">{formatarMoeda(saldo.saldo_calculado)}</p>
+              <p className="text-xs text-muted mt-0.5">Soma dos valores pagos em procedimentos não concluídos</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">Saldo disponível</p>
+              <p className={`font-semibold text-lg ${saldo.saldo > 0 ? 'text-success-700' : ''}`}>{formatarMoeda(saldo.saldo)}</p>
+              <p className="text-xs text-muted mt-0.5">Saldo real gerado por estornos</p>
+            </div>
+          </div>
+          {saldo.saldo > 0 && (
+            <div className="mt-4">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setModalTransferencia(true);
+                  setTransferenciaDestinoId(null);
+                  setTransferenciaDestinoNome('');
+                  setTransferenciaValor('');
+                  setTransferBusca('');
+                  setTransferResultados([]);
+                }}
+              >
+                Transferir saldo →
+              </Button>
             </div>
           )}
         </Card>
@@ -360,28 +597,42 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Procedimento</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Atend.</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Executor</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Valor</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Valor Pago</th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
-                  <th className="px-4 py-3"></th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-200">
-                {ficha.procedimentos.map(p => (
+                {ficha.procedimentos.map(p => {
+                  const podeEstornar = p.valor_pago > 0 && p.status !== 'concluido';
+                  return (
                   <tr key={p.id} className="hover:bg-surface-secondary">
-                    <td className="px-4 py-3 font-medium">{p.procedimento_nome}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {p.etapa_label ? `${p.procedimento_nome} — ${p.etapa_label}` : p.procedimento_nome}
+                    </td>
                     <td className="px-4 py-3 text-sm">
                       <Link href={`/atendimentos/${p.atendimento_id}`} className="text-info-600 hover:text-info-800">#{p.atendimento_id}</Link>
                     </td>
                     <td className="px-4 py-3 text-sm">{p.executor_nome || '-'}</td>
-                    <td className="px-4 py-3 text-right font-medium">{formatarMoeda(p.valor)}</td>
+                    <td className="px-4 py-3 text-right font-medium">{formatarMoeda(p.valor_pago)}</td>
                     <td className="px-4 py-3 text-center"><StatusBadge type="item" status={p.status} /></td>
                     <td className="px-4 py-3 text-sm text-muted">{formatarData(p.created_at)}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right space-x-3">
+                      {podeEstornar && (
+                        <button
+                          onClick={() => handleEstornarProcedimento(p)}
+                          disabled={estornandoItemId === p.id}
+                          className="text-sm text-warning-600 hover:text-warning-800 font-medium disabled:opacity-50"
+                        >
+                          {estornandoItemId === p.id ? 'Gerando...' : 'Gerar estorno'}
+                        </button>
+                      )}
                       <button onClick={() => setModalProcedimento(p)} className="text-sm text-info-600 hover:text-info-800">Ver →</button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -390,50 +641,93 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
 
       {/* ABA: PAGAMENTOS */}
       {abaAtiva === 'pagamentos' && (
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <CreditCard className="w-5 h-5" /> Pagamentos
-            </h2>
-            <span className="text-sm font-semibold text-success-700">
-              Total: {formatarMoeda(totalGasto)}
-            </span>
-          </div>
-          {!ficha?.pagamentos.length ? (
-            <p className="text-center py-8 text-muted">Nenhum pagamento registrado</p>
-          ) : (
-            <table className="min-w-full divide-y divide-neutral-200">
-              <thead className="bg-surface-secondary">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Atend.</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Método</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Valor</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Recebido por</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-200">
-                {ficha.pagamentos.map(p => (
-                  <tr key={p.id} className={p.cancelado ? 'opacity-50 bg-neutral-50' : 'hover:bg-surface-secondary'}>
-                    <td className="px-4 py-3 text-sm">{formatarDataHora(p.created_at)}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <Link href={`/atendimentos/${p.atendimento_id}`} className="text-info-600 hover:text-info-800">#{p.atendimento_id}</Link>
-                    </td>
-                    <td className="px-4 py-3 text-sm">{METODOS_LABEL[p.metodo] || p.metodo}</td>
-                    <td className={`px-4 py-3 text-right font-medium ${p.cancelado ? 'line-through text-neutral-400' : 'text-success-600'}`}>
-                      {formatarMoeda(p.valor)}
-                    </td>
-                    <td className="px-4 py-3 text-sm">{p.recebido_por_nome || '-'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button onClick={() => setModalPagamento(p)} className="text-sm text-info-600 hover:text-info-800">Ver →</button>
-                    </td>
+        <div className="space-y-6">
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <CreditCard className="w-5 h-5" /> Pagamentos
+              </h2>
+              <span className="text-sm font-semibold text-success-700">
+                Total: {formatarMoeda(totalGasto)}
+              </span>
+            </div>
+            {!ficha?.pagamentos.length ? (
+              <p className="text-center py-8 text-muted">Nenhum pagamento registrado</p>
+            ) : (
+              <table className="min-w-full divide-y divide-neutral-200">
+                <thead className="bg-surface-secondary">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Atend.</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Método</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Valor</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Recebido por</th>
+                    <th className="px-4 py-3"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-neutral-200">
+                  {ficha.pagamentos.map(p => (
+                    <tr key={p.id} className={p.cancelado ? 'opacity-50 bg-neutral-50' : 'hover:bg-surface-secondary'}>
+                      <td className="px-4 py-3 text-sm">{formatarDataHora(p.created_at)}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <Link href={`/atendimentos/${p.atendimento_id}`} className="text-info-600 hover:text-info-800">#{p.atendimento_id}</Link>
+                      </td>
+                      <td className="px-4 py-3 text-sm">{METODOS_LABEL[p.metodo] || p.metodo}</td>
+                      <td className={`px-4 py-3 text-right font-medium ${p.cancelado ? 'line-through text-neutral-400' : 'text-success-600'}`}>
+                        {formatarMoeda(p.valor)}
+                      </td>
+                      <td className="px-4 py-3 text-sm">{p.recebido_por_nome || '-'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => setModalPagamento(p)} className="text-sm text-info-600 hover:text-info-800">Ver →</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+
+          {ficha?.movimentacoes && ficha.movimentacoes.length > 0 && (
+            <Card>
+              <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
+                <CreditCard className="w-5 h-5" /> Movimentações de Saldo
+              </h2>
+              <table className="min-w-full divide-y divide-neutral-200">
+                <thead className="bg-surface-secondary">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Tipo</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Descrição</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Valor</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Saldo após</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-200">
+                  {ficha.movimentacoes.map((m, i) => {
+                    const isEntrada = ['credito', 'transferencia_entrada'].includes(m.tipo);
+                    const cfg = HISTORICO_CONFIG[m.tipo] ?? { label: m.tipo, cor: 'bg-neutral-400' };
+                    return (
+                      <tr key={i} className="hover:bg-surface-secondary">
+                        <td className="px-4 py-3 text-sm text-muted">{formatarDataHora(m.data)}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium`}>
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.cor}`} />
+                            {cfg.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted">{m.descricao || '-'}</td>
+                        <td className={`px-4 py-3 text-right font-medium ${isEntrada ? 'text-success-600' : 'text-error-600'}`}>
+                          {isEntrada ? '+' : '-'}{formatarMoeda(m.valor)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm font-medium">{formatarMoeda(m.saldo_novo)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </Card>
           )}
-        </Card>
+        </div>
       )}
 
       {/* ABA: PRONTUÁRIO */}
@@ -458,7 +752,9 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 <Card key={item.item_id}>
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div>
-                      <h3 className="font-semibold text-base">{item.procedimento_nome}</h3>
+                      <h3 className="font-semibold text-base">
+                        {item.etapa_label ? `${item.procedimento_nome} — ${item.etapa_label}` : item.procedimento_nome}
+                      </h3>
                       <div className="flex flex-wrap gap-3 mt-1 text-sm text-muted">
                         {item.executor_nome && <span>Executor: <span className="text-foreground">{item.executor_nome}</span></span>}
                         {dentes.length > 0 && <span>Dentes: <span className="text-foreground">{dentes.join(', ')}</span></span>}
@@ -541,9 +837,11 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-xs text-muted">{formatarDataHora(ev.data)}</p>
-                            <Link href={`/atendimentos/${ev.ref_id}`} className="text-xs text-info-600 hover:text-info-800">
-                              Ver atend. →
-                            </Link>
+                            {ev.ref_id > 0 && (
+                              <Link href={`/atendimentos/${ev.ref_id}`} className="text-xs text-info-600 hover:text-info-800">
+                                Ver atend. →
+                              </Link>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -556,12 +854,121 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         </Card>
       )}
 
+      {/* ABA: VINCULADOS */}
+      {abaAtiva === 'vinculados' && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Users className="w-5 h-5" /> Clientes Vinculados
+            </h2>
+            <Button onClick={() => { setModalAddVinculo(true); setVinculoBusca(''); setVinculoClienteSelecionado(null); setVinculoObservacao(''); }}>
+              <Plus className="w-4 h-4 mr-1" /> Adicionar Vínculo
+            </Button>
+          </div>
+          {!vinculos.length ? (
+            <p className="text-center py-8 text-muted">Nenhum vínculo cadastrado</p>
+          ) : (
+            <div className="space-y-3">
+              {vinculos.map(v => (
+                <div key={v.id} className="flex items-start justify-between gap-4 p-4 rounded-lg border border-neutral-200 hover:bg-surface-secondary">
+                  <div className="flex-1 min-w-0">
+                    <Link href={`/clientes/${v.outro_cliente_id}`} className="font-medium text-info-600 hover:text-info-800 hover:underline">
+                      {v.outro_cliente_nome}
+                    </Link>
+                    <div className="flex flex-wrap gap-3 mt-0.5 text-xs text-muted">
+                      {v.outro_cliente_cpf && <span>CPF: {v.outro_cliente_cpf}</span>}
+                      {v.outro_cliente_telefone && <span>Tel: {v.outro_cliente_telefone}</span>}
+                    </div>
+                    {v.observacao && (
+                      <p className="mt-2 text-sm text-foreground bg-neutral-50 rounded px-3 py-2 whitespace-pre-wrap">{v.observacao}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRemoveVinculo(v)}
+                    className="text-neutral-400 hover:text-error-600 shrink-0 mt-0.5"
+                    title="Remover vínculo"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* MODAL: Adicionar Vínculo */}
+      {modalAddVinculo && (
+        <Modal
+          isOpen={modalAddVinculo}
+          onClose={() => setModalAddVinculo(false)}
+          title="Adicionar Vínculo"
+          size="md"
+          footer={
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={() => setModalAddVinculo(false)}>Cancelar</Button>
+              <Button onClick={handleAddVinculo} disabled={!vinculoClienteSelecionado || vinculoSaving}>
+                {vinculoSaving ? 'Salvando...' : 'Vincular'}
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Buscar cliente</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
+                <input
+                  type="text"
+                  className="w-full pl-9 pr-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                  placeholder="Nome, CPF ou telefone..."
+                  value={vinculoBusca}
+                  onChange={e => { setVinculoBusca(e.target.value); setVinculoClienteSelecionado(null); }}
+                  autoFocus
+                />
+              </div>
+              {vinculoBuscaResultados.length > 0 && !vinculoClienteSelecionado && (
+                <div className="mt-1 border border-neutral-200 rounded-lg divide-y divide-neutral-100 max-h-48 overflow-y-auto">
+                  {vinculoBuscaResultados.map(c => (
+                    <button
+                      key={c.id}
+                      className="w-full text-left px-3 py-2 hover:bg-surface-secondary text-sm"
+                      onClick={() => { setVinculoClienteSelecionado(c); setVinculoBusca(c.nome); setVinculoBuscaResultados([]); }}
+                    >
+                      <span className="font-medium">{c.nome}</span>
+                      {c.cpf && <span className="text-muted ml-2">{c.cpf}</span>}
+                      {c.telefone && <span className="text-muted ml-2">{c.telefone}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {vinculoClienteSelecionado && (
+                <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-primary-50 border border-primary-200 rounded-lg text-sm">
+                  <span className="font-medium text-primary-800">{vinculoClienteSelecionado.nome}</span>
+                  <button onClick={() => { setVinculoClienteSelecionado(null); setVinculoBusca(''); }} className="ml-auto text-primary-600 hover:text-primary-900 text-xs">Trocar</button>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Observação <span className="text-muted font-normal">(opcional)</span></label>
+              <textarea
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+                rows={3}
+                placeholder="Descreva o vínculo entre eles..."
+                value={vinculoObservacao}
+                onChange={e => setVinculoObservacao(e.target.value)}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* MODAL: Procedimento */}
       {modalProcedimento && (
         <Modal
           isOpen={!!modalProcedimento}
           onClose={() => setModalProcedimento(null)}
-          title={modalProcedimento.procedimento_nome}
+          title={modalProcedimento.etapa_label ? `${modalProcedimento.procedimento_nome} — ${modalProcedimento.etapa_label}` : modalProcedimento.procedimento_nome}
           size="md"
           footer={
             <Link href={`/atendimentos/${modalProcedimento.atendimento_id}`}>
@@ -635,13 +1042,6 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               </div>
             )}
 
-            {modalProcedimento.valor_pago < modalProcedimento.valor && (
-              <div className="rounded-lg p-3 bg-warning-50 border border-warning-200">
-                <p className="text-sm text-warning-800">
-                  Saldo pendente: <span className="font-semibold">{formatarMoeda(modalProcedimento.valor - modalProcedimento.valor_pago)}</span>
-                </p>
-              </div>
-            )}
           </div>
         </Modal>
       )}
@@ -698,23 +1098,6 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               </div>
             </div>
 
-            {(() => {
-              const itens = ficha?.pagamentosItens.filter(i => i.pagamento_id === modalPagamento.id) ?? [];
-              return itens.length > 0 ? (
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-wide mb-2">Procedimentos cobertos</p>
-                  <div className="space-y-1">
-                    {itens.map(i => (
-                      <div key={i.item_atendimento_id} className="flex items-center justify-between text-sm bg-surface-secondary rounded-lg px-3 py-2">
-                        <span>{i.procedimento_nome}</span>
-                        <span className="font-medium text-success-700">{formatarMoeda(i.valor_aplicado)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null;
-            })()}
-
             {modalPagamento.observacoes && !modalPagamento.cancelado && (
               <div>
                 <p className="text-xs text-muted uppercase tracking-wide mb-1">Observações</p>
@@ -734,6 +1117,86 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         confirmLabel={confirmDialog.confirmLabel}
         type={confirmDialog.type}
       />
+
+      {/* MODAL: Transferir Saldo */}
+      <Modal
+        isOpen={modalTransferencia}
+        onClose={() => setModalTransferencia(false)}
+        title="Transferir saldo"
+        size="md"
+        footer={
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={() => setModalTransferencia(false)}>Cancelar</Button>
+            <Button
+              onClick={handleTransferir}
+              disabled={!transferenciaDestinoId || !transferenciaValor || transferindo}
+            >
+              {transferindo ? 'Transferindo...' : 'Confirmar transferência'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Saldo disponível: <span className="font-semibold">{formatarMoeda(saldo.saldo)}</span>
+          </p>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Cliente destino *</label>
+            {transferenciaDestinoId ? (
+              <div className="flex items-center gap-2 p-2 bg-success-50 rounded-lg border border-success-200">
+                <span className="text-sm font-medium text-success-800 flex-1">{transferenciaDestinoNome}</span>
+                <button
+                  onClick={() => { setTransferenciaDestinoId(null); setTransferenciaDestinoNome(''); setTransferBusca(''); setTransferResultados([]); }}
+                  className="text-sm text-error-600 hover:text-error-800"
+                >
+                  Alterar
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type="text"
+                  value={transferBusca}
+                  onChange={(e) => handleBuscarTransferDestino(e.target.value)}
+                  placeholder="Buscar por nome ou CPF..."
+                  className="input w-full"
+                  autoFocus
+                />
+                {transferResultados.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full bg-surface border border-neutral-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {transferResultados.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => { setTransferenciaDestinoId(c.id); setTransferenciaDestinoNome(c.nome); setTransferBusca(''); setTransferResultados([]); }}
+                        className="w-full text-left px-3 py-2 hover:bg-neutral-50 text-sm"
+                      >
+                        {c.nome}
+                        {c.cpf && <span className="text-muted ml-2">({c.cpf})</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {transferBuscando && <p className="text-xs text-muted mt-1">Buscando...</p>}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Valor a transferir (R$) *</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              max={saldo.saldo}
+              value={transferenciaValor}
+              onChange={(e) => setTransferenciaValor(e.target.value)}
+              placeholder="0,00"
+              className="input w-full"
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

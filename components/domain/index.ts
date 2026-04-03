@@ -25,11 +25,6 @@ export type { ItemAtendimentoRowProps, ItemAtendimentoData } from './ItemAtendim
 export { default as PagamentoForm } from './PagamentoForm';
 export type { PagamentoFormProps, PagamentoFormData } from './PagamentoForm';
 
-export { default as PagamentoDistribuicao } from './PagamentoDistribuicao';
-export type { PagamentoDistribuicaoProps, ItemDistribuicao } from './PagamentoDistribuicao';
-
-export { default as ParcelasTable } from './ParcelasTable';
-export type { ParcelasTableProps, ParcelaData } from './ParcelasTable';
 
 export { default as ProntuarioEditor } from './ProntuarioEditor';
 export type { ProntuarioEditorProps, ProntuarioEntry } from './ProntuarioEditor';

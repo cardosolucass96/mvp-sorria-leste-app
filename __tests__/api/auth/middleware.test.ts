@@ -94,7 +94,7 @@ describe('needsMigration', () => {
 // ===========================================================
 
 describe('generateToken / verifyToken', () => {
-  const mockUser = { id: 1, email: 'admin@test.com', role: 'admin', nome: 'Admin' };
+  const mockUser = { id: 1, email: 'admin@test.com', role: 'admin', nome: 'Admin', unidade_ids: [1, 2], unidade_atual: 1 };
 
   test('gera token no formato JWT (3 partes separadas por ponto)', async () => {
     const token = await generateToken(mockUser);
@@ -242,7 +242,7 @@ describe('withAuth', () => {
   });
 
   test('aceita token válido e passa user no context', async () => {
-    const token = await generateToken({ id: 5, email: 'test@test.com', role: 'executor', nome: 'Test' });
+    const token = await generateToken({ id: 5, email: 'test@test.com', role: 'executor', nome: 'Test', unidade_ids: [1], unidade_atual: 1 });
     const handler = withAuth(mockHandler);
     const request = new NextRequest('http://localhost/api/test', {
       headers: { Authorization: `Bearer ${token}` },
@@ -258,7 +258,7 @@ describe('withAuth', () => {
   });
 
   test('aceita token via cookie', async () => {
-    const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'A' });
+    const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'A', unidade_ids: [1, 2], unidade_atual: 1 });
     const handler = withAuth(mockHandler);
     const request = new NextRequest('http://localhost/api/test', {
       headers: { Cookie: `auth-token=${token}` },
@@ -269,7 +269,7 @@ describe('withAuth', () => {
   });
 
   test('preserva routeContext (params) ao chamar o handler', async () => {
-    const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'A' });
+    const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'A', unidade_ids: [1, 2], unidade_atual: 1 });
     
     const handler = withAuth(async (_req, ctx) => {
       return NextResponse.json({ hasParams: !!ctx.params });
@@ -293,7 +293,7 @@ describe('withRole', () => {
   });
 
   test('permite role autorizada', async () => {
-    const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'A' });
+    const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'A', unidade_ids: [1, 2], unidade_atual: 1 });
     const handler = withRole(['admin'], mockHandler);
     const request = new NextRequest('http://localhost/api/test', {
       headers: { Authorization: `Bearer ${token}` },
@@ -305,7 +305,7 @@ describe('withRole', () => {
   });
 
   test('permite quando role está na lista', async () => {
-    const token = await generateToken({ id: 1, email: 'a@b.com', role: 'atendente', nome: 'B' });
+    const token = await generateToken({ id: 1, email: 'a@b.com', role: 'atendente', nome: 'B', unidade_ids: [1], unidade_atual: 1 });
     const handler = withRole(['admin', 'atendente'], mockHandler);
     const request = new NextRequest('http://localhost/api/test', {
       headers: { Authorization: `Bearer ${token}` },
@@ -316,7 +316,7 @@ describe('withRole', () => {
   });
 
   test('rejeita role não autorizada → 403', async () => {
-    const token = await generateToken({ id: 1, email: 'a@b.com', role: 'executor', nome: 'C' });
+    const token = await generateToken({ id: 1, email: 'a@b.com', role: 'executor', nome: 'C', unidade_ids: [1], unidade_atual: 1 });
     const handler = withRole(['admin', 'atendente'], mockHandler);
     const request = new NextRequest('http://localhost/api/test', {
       headers: { Authorization: `Bearer ${token}` },
@@ -348,7 +348,7 @@ describe('withRole', () => {
     ];
 
     for (const { role, allowed, shouldPass } of roles) {
-      const token = await generateToken({ id: 1, email: 'a@b.com', role, nome: 'X' });
+      const token = await generateToken({ id: 1, email: 'a@b.com', role, nome: 'X', unidade_ids: [1, 2], unidade_atual: 1 });
       const handler = withRole(allowed as Array<'admin' | 'atendente' | 'avaliador' | 'executor'>, mockHandler);
       const request = new NextRequest('http://localhost/api/test', {
         headers: { Authorization: `Bearer ${token}` },

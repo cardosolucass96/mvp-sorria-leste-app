@@ -282,13 +282,14 @@ describe('Sprint 0: masks', () => {
 // =====================================================
 
 describe('Sprint 0: status constants', () => {
-  test('STATUS_CONFIG tem 5 status de atendimento', () => {
-    expect(Object.keys(STATUS_CONFIG)).toHaveLength(5);
+  test('STATUS_CONFIG tem 6 status de atendimento', () => {
+    expect(Object.keys(STATUS_CONFIG)).toHaveLength(6);
     expect(STATUS_CONFIG).toHaveProperty('triagem');
     expect(STATUS_CONFIG).toHaveProperty('avaliacao');
     expect(STATUS_CONFIG).toHaveProperty('aguardando_pagamento');
     expect(STATUS_CONFIG).toHaveProperty('em_execucao');
     expect(STATUS_CONFIG).toHaveProperty('finalizado');
+    expect(STATUS_CONFIG).toHaveProperty('encerrado');
   });
 
   test('cada status tem label, cor, bgCor, icon', () => {
@@ -300,20 +301,21 @@ describe('Sprint 0: status constants', () => {
     });
   });
 
-  test('STATUS_CHART_COLORS tem 5 cores sólidas', () => {
-    expect(Object.keys(STATUS_CHART_COLORS)).toHaveLength(5);
+  test('STATUS_CHART_COLORS tem 6 cores sólidas', () => {
+    expect(Object.keys(STATUS_CHART_COLORS)).toHaveLength(6);
   });
 
-  test('STATUS_ORDER tem 5 itens na sequência correta', () => {
+  test('STATUS_ORDER tem 6 itens na sequência correta', () => {
     expect(STATUS_ORDER).toEqual([
-      'triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao', 'finalizado'
+      'triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao', 'finalizado', 'encerrado'
     ]);
   });
 
   test('PROXIMOS_STATUS mapeia transições corretas', () => {
     expect(PROXIMOS_STATUS.triagem).toBe('avaliacao');
     expect(PROXIMOS_STATUS.avaliacao).toBe('aguardando_pagamento');
-    expect(PROXIMOS_STATUS.finalizado).toBeNull();
+    expect(PROXIMOS_STATUS.finalizado).toBe('encerrado');
+    expect(PROXIMOS_STATUS.encerrado).toBeNull();
   });
 
   test('ITEM_STATUS_CONFIG tem 4 status de item', () => {
@@ -341,7 +343,8 @@ describe('Sprint 0: status constants', () => {
   test('getAtendimentoStatus retorna fallback para status desconhecido', () => {
     const cfg = getAtendimentoStatus('invalido');
     expect(cfg.label).toBe('invalido');
-    expect(cfg.icon).toBe('❓');
+    // Fallback icon is HelpCircle (Lucide component)
+    expect(cfg.icon).toBeDefined();
   });
 
   test('getItemStatus retorna config válida', () => {
@@ -427,8 +430,8 @@ describe('Sprint 0: roles', () => {
 // =====================================================
 
 describe('Sprint 0: navigation', () => {
-  test('MENU_ITEMS tem 11 itens', () => {
-    expect(MENU_ITEMS).toHaveLength(11);
+  test('MENU_ITEMS tem 14 itens', () => {
+    expect(MENU_ITEMS).toHaveLength(14);
   });
 
   test('cada item tem href, label, icon', () => {

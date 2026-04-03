@@ -60,7 +60,9 @@ describe('GET /api/usuarios', () => {
     const { status, data } = await callRoute(listUsuarios, '/api/usuarios');
 
     expect(status).toBe(200);
-    expect(data).toEqual(usuariosSemSenha);
+    // Route now appends unidade_ids from usuario_unidades table
+    const expected = usuariosSemSenha.map(u => ({ ...u, unidade_ids: [] }));
+    expect(data).toEqual(expected);
   });
 
   it('retorna lista vazia quando não há usuários', async () => {
@@ -203,7 +205,8 @@ describe('GET /api/usuarios/[id]', () => {
     const { status, data } = await callRoute(getUsuario, '/api/usuarios/1', {}, ctx);
 
     expect(status).toBe(200);
-    expect(data).toEqual(USUARIO_ADMIN);
+    // Route now appends unidade_ids from usuario_unidades table
+    expect(data).toEqual({ ...USUARIO_ADMIN, unidade_ids: [] });
   });
 
   it('retorna 404 se usuário não existe', async () => {

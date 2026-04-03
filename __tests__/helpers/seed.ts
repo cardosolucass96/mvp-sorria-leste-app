@@ -3,7 +3,7 @@
  * Contém registros base usados nos testes de integração e de API.
  */
 
-import type { Usuario, Cliente, Procedimento, Atendimento, ItemAtendimento } from '@/lib/types';
+import type { Usuario, Cliente, Procedimento, Atendimento, ItemAtendimento, Unidade, UsuarioUnidade } from '@/lib/types';
 
 // ===========================================
 // USUÁRIOS
@@ -179,7 +179,11 @@ export const ATENDIMENTO_TRIAGEM: Atendimento = {
   cliente_id: 1,
   avaliador_id: 3,
   liberado_por_id: null,
+  agendamento_id: null,
+  unidade_id: 1,
   status: 'triagem',
+  tipo: 'avaliacao',
+  motivo_saida: null,
   observacoes: null,
   created_at: '2025-02-01 10:00:00',
   liberado_em: null,
@@ -191,7 +195,11 @@ export const ATENDIMENTO_AVALIACAO: Atendimento = {
   cliente_id: 2,
   avaliador_id: 3,
   liberado_por_id: null,
+  agendamento_id: null,
+  unidade_id: 1,
   status: 'avaliacao',
+  tipo: 'avaliacao',
+  motivo_saida: null,
   observacoes: 'Paciente com dor',
   created_at: '2025-02-02 10:00:00',
   liberado_em: null,
@@ -203,7 +211,11 @@ export const ATENDIMENTO_AGUARDANDO_PGTO: Atendimento = {
   cliente_id: 3,
   avaliador_id: 3,
   liberado_por_id: null,
+  agendamento_id: null,
+  unidade_id: 1,
   status: 'aguardando_pagamento',
+  tipo: 'avaliacao',
+  motivo_saida: null,
   observacoes: null,
   created_at: '2025-02-03 10:00:00',
   liberado_em: null,
@@ -215,7 +227,11 @@ export const ATENDIMENTO_EM_EXECUCAO: Atendimento = {
   cliente_id: 1,
   avaliador_id: 3,
   liberado_por_id: 1,
+  agendamento_id: null,
+  unidade_id: 1,
   status: 'em_execucao',
+  tipo: 'avaliacao',
+  motivo_saida: null,
   observacoes: null,
   created_at: '2025-02-04 10:00:00',
   liberado_em: '2025-02-05 14:00:00',
@@ -284,7 +300,6 @@ export interface PagamentoSeed {
   recebido_por_id: number;
   valor: number;
   metodo: string;
-  parcelas: number;
   observacoes: string | null;
   created_at: string;
 }
@@ -295,61 +310,8 @@ export const PAGAMENTO_PIX: PagamentoSeed = {
   recebido_por_id: 2,
   valor: 400.0,
   metodo: 'pix',
-  parcelas: 1,
   observacoes: null,
   created_at: '2025-02-05 09:00:00',
-};
-
-// ===========================================
-// PARCELAS
-// ===========================================
-
-export interface ParcelaSeed {
-  id: number;
-  atendimento_id: number;
-  numero: number;
-  valor: number;
-  data_vencimento: string;
-  pago: number;
-  pagamento_id: number | null;
-  observacoes: string | null;
-  created_at: string;
-}
-
-export const PARCELA_PENDENTE: ParcelaSeed = {
-  id: 1,
-  atendimento_id: 3,
-  numero: 1,
-  valor: 200.0,
-  data_vencimento: '2025-03-01',
-  pago: 0,
-  pagamento_id: null,
-  observacoes: null,
-  created_at: '2025-02-05 10:00:00',
-};
-
-export const PARCELA_PAGA: ParcelaSeed = {
-  id: 2,
-  atendimento_id: 3,
-  numero: 2,
-  valor: 200.0,
-  data_vencimento: '2025-02-15',
-  pago: 1,
-  pagamento_id: 1,
-  observacoes: null,
-  created_at: '2025-02-05 10:00:00',
-};
-
-export const PARCELA_VENCIDA: ParcelaSeed = {
-  id: 3,
-  atendimento_id: 3,
-  numero: 3,
-  valor: 150.0,
-  data_vencimento: '2025-01-15',
-  pago: 0,
-  pagamento_id: null,
-  observacoes: 'Atrasada',
-  created_at: '2025-02-05 10:00:00',
 };
 
 // ===========================================
@@ -361,6 +323,44 @@ export const CPFS_VALIDOS = [
   '11144477735',
   '98765432100',
   '45612378900',
+];
+
+// ===========================================
+// UNIDADES
+// ===========================================
+
+export const UNIDADE_BARRA: Unidade = {
+  id: 1,
+  nome: 'Barra do Ceará',
+  endereco: null,
+  telefone: null,
+  ativo: 1,
+  created_at: '2025-01-01 00:00:00',
+};
+
+export const UNIDADE_VILA: Unidade = {
+  id: 2,
+  nome: 'Vila União',
+  endereco: null,
+  telefone: null,
+  ativo: 1,
+  created_at: '2025-01-01 00:00:00',
+};
+
+export const TODAS_UNIDADES: Unidade[] = [UNIDADE_BARRA, UNIDADE_VILA];
+
+// ===========================================
+// USUARIO_UNIDADES (vínculos)
+// ===========================================
+
+export const USUARIO_UNIDADES_SEED: UsuarioUnidade[] = [
+  { id: 1, usuario_id: 1, unidade_id: 1, created_at: '2025-01-01 00:00:00' }, // Admin → Barra
+  { id: 2, usuario_id: 1, unidade_id: 2, created_at: '2025-01-01 00:00:00' }, // Admin → Vila (admin vê tudo)
+  { id: 3, usuario_id: 2, unidade_id: 1, created_at: '2025-01-01 00:00:00' }, // Atendente → Barra
+  { id: 4, usuario_id: 3, unidade_id: 1, created_at: '2025-01-01 00:00:00' }, // Avaliador → Barra
+  { id: 5, usuario_id: 3, unidade_id: 2, created_at: '2025-01-01 00:00:00' }, // Avaliador → Vila (2 unidades)
+  { id: 6, usuario_id: 4, unidade_id: 1, created_at: '2025-01-01 00:00:00' }, // Executor → Barra
+  { id: 7, usuario_id: 5, unidade_id: 1, created_at: '2025-01-01 00:00:00' }, // Inativo → Barra
 ];
 
 export const CPFS_INVALIDOS = [

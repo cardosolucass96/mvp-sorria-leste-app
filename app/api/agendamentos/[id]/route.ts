@@ -1,30 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db';
-import { withAuth } from '@/lib/auth/middleware';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento, AgendamentoCompleto } from '@/lib/types';
 
 const DETAIL_SQL = `
   SELECT
     a.*,
     c.nome AS cliente_nome, c.telefone AS cliente_telefone,
-    p.nome AS procedimento_nome,
+    COALESCE(p.nome, 'Avaliação') AS procedimento_nome,
     u.nome AS executor_nome,
     CAST((julianday('now') - julianday(a.created_at)) AS INTEGER) AS dias_desde_criacao
   FROM agendamentos a
   JOIN clientes c ON c.id = a.cliente_id
-  JOIN procedimentos p ON p.id = a.procedimento_id
+  LEFT JOIN procedimentos p ON p.id = a.procedimento_id
   LEFT JOIN usuarios u ON u.id = a.executor_id
-  WHERE a.id = ?
+  WHERE a.id = ? AND a.unidade_id = ?
 `;
 
 // GET /api/agendamentos/[id] - Detalhe do agendamento
-export const GET = withAuth(async (
+export const GET = withUnit(async (
   request: NextRequest,
-  context
+  context: UnitAuthenticatedContext
 ) => {
   try {
     const { id } = await context.params!;
-    const agendamento = await queryOne<AgendamentoCompleto>(DETAIL_SQL, [parseInt(id as string)]);
+    const agendamento = await queryOne<AgendamentoCompleto>(DETAIL_SQL, [parseInt(id as string), context.unidadeId]);
 
     if (!agendamento) {
       return NextResponse.json({ error: 'Agendamento não encontrado' }, { status: 404 });
@@ -38,9 +38,9 @@ export const GET = withAuth(async (
 });
 
 // PUT /api/agendamentos/[id] - Atualiza agendamento
-export const PUT = withAuth(async (
+export const PUT = withUnit(async (
   request: NextRequest,
-  context
+  context: UnitAuthenticatedContext
 ) => {
   try {
     const { id } = await context.params!;
@@ -48,8 +48,8 @@ export const PUT = withAuth(async (
     const body = await request.json();
 
     const agendamento = await queryOne<Agendamento>(
-      'SELECT * FROM agendamentos WHERE id = ?',
-      [agendamentoId]
+      'SELECT * FROM agendamentos WHERE id = ? AND unidade_id = ?',
+      [agendamentoId, context.unidadeId]
     );
 
     if (!agendamento) {
@@ -61,6 +61,12 @@ export const PUT = withAuth(async (
 
     // Caso: agendar/reagendar com data
     if (body.data_agendada !== undefined) {
+      if (body.data_agendada) {
+        const dataEscolhida = new Date(body.data_agendada);
+        if (dataEscolhida < new Date()) {
+          return NextResponse.json({ error: 'Não é possível agendar para uma data no passado' }, { status: 400 });
+        }
+      }
       updates.push('data_agendada = ?');
       params.push(body.data_agendada);
 
@@ -137,7 +143,7 @@ export const PUT = withAuth(async (
       params
     );
 
-    const atualizado = await queryOne<AgendamentoCompleto>(DETAIL_SQL, [agendamentoId]);
+    const atualizado = await queryOne<AgendamentoCompleto>(DETAIL_SQL, [agendamentoId, context.unidadeId]);
     return NextResponse.json(atualizado);
   } catch (error) {
     console.error('Erro ao atualizar agendamento:', error);

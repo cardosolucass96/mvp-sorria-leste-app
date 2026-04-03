@@ -50,8 +50,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       [id]
     );
 
+    const saldoCalculadoRow = await queryOne<{ saldo_calculado: number }>(
+      `SELECT COALESCE(SUM(ia.valor_pago), 0) AS saldo_calculado
+       FROM itens_atendimento ia
+       JOIN atendimentos a ON a.id = ia.atendimento_id
+       WHERE a.cliente_id = ? AND ia.status != 'concluido' AND ia.valor_pago > 0`,
+      [id]
+    );
+
     return NextResponse.json({
       saldo: saldoRow?.saldo ?? 0,
+      saldo_calculado: saldoCalculadoRow?.saldo_calculado ?? 0,
       updated_at: saldoRow?.updated_at ?? null,
       movimentacoes,
     });

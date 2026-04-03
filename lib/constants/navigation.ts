@@ -17,6 +17,7 @@ import {
   User,
   Banknote,
   Calendar,
+  Building2,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -31,13 +32,14 @@ export const MENU_ITEMS: MenuItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin'] },
   { href: '/clientes', label: 'Clientes', icon: Users, roles: ['admin', 'atendente'] },
   { href: '/atendimentos', label: 'Atendimentos', icon: ClipboardList, roles: ['admin', 'atendente'] },
-  { href: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'atendente'] },
+  { href: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'atendente', 'avaliador', 'executor'] },
   { href: '/avaliacao', label: 'Fila Avaliação', icon: Search, roles: ['admin', 'avaliador'] },
   { href: '/execucao', label: 'Fila Execução', icon: Activity, roles: ['admin', 'executor'] },
   { href: '/meus-procedimentos', label: 'Meus Procedimentos', icon: ClipboardList, roles: ['avaliador', 'executor'] },
   { href: '/pagamentos', label: 'Pagamentos', icon: CreditCard, roles: ['admin', 'atendente'] },
   { href: '/procedimentos', label: 'Procedimentos', icon: FileText, roles: ['admin'] },
   { href: '/usuarios', label: 'Usuários', icon: User, roles: ['admin'] },
+  { href: '/unidades', label: 'Unidades', icon: Building2, roles: ['admin'] },
   { href: '/minhas-comissoes', label: 'Minhas Comissões', icon: Banknote, roles: ['avaliador'] },
   { href: '/comissoes', label: 'Comissões', icon: Banknote, roles: ['admin'] },
 ];

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, execute } from '@/lib/db';
+import { query, execute, batch } from '@/lib/db';
 
 interface Procedimento {
   id: number;
@@ -7,8 +7,18 @@ interface Procedimento {
   valor: number;
   comissao_venda: number;
   comissao_execucao: number;
+  por_dente: number;
+  tem_etapas: number;
   ativo: number;
   created_at: string;
+}
+
+interface EtapaModelo {
+  nome: string;
+  valor: number | null;
+  comissao_venda: number;
+  comissao_execucao: number;
+  ordem: number;
 }
 
 // GET /api/procedimentos - Lista todos os procedimentos
@@ -17,37 +27,32 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const busca = searchParams.get('busca') || '';
     const incluirInativos = searchParams.get('inativos') === 'true';
-    
+
     let sql = 'SELECT * FROM procedimentos';
     const params: (string | number)[] = [];
     const conditions: string[] = [];
-    
-    // Filtro de busca
+
     if (busca) {
       conditions.push('nome LIKE ?');
       params.push(`%${busca}%`);
     }
-    
-    // Filtro de ativos (por padrão só mostra ativos)
+
     if (!incluirInativos) {
       conditions.push('ativo = 1');
     }
-    
+
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
-    
+
     sql += ' ORDER BY nome ASC';
-    
+
     const procedimentos = await query<Procedimento>(sql, params);
-    
+
     return NextResponse.json(procedimentos);
   } catch (error) {
     console.error('Erro ao buscar procedimentos:', error);
-    return NextResponse.json(
-      { error: 'Erro ao buscar procedimentos' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Erro ao buscar procedimentos' }, { status: 500 });
   }
 }
 
@@ -55,62 +60,58 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { nome, valor, comissao_venda, comissao_execucao } = body;
-    
-    // Validações
+    const { nome, valor, comissao_venda, comissao_execucao, por_dente, tem_etapas, etapas } = body;
+
     if (!nome || nome.trim() === '') {
-      return NextResponse.json(
-        { error: 'Nome é obrigatório' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
     }
-    
+
     if (valor === undefined || valor < 0) {
-      return NextResponse.json(
-        { error: 'Valor deve ser maior ou igual a zero' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Valor deve ser maior ou igual a zero' }, { status: 400 });
     }
-    
+
     if (comissao_venda !== undefined && (comissao_venda < 0 || comissao_venda > 100)) {
-      return NextResponse.json(
-        { error: 'Comissão de venda deve estar entre 0 e 100' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Comissão de venda deve estar entre 0 e 100' }, { status: 400 });
     }
-    
+
     if (comissao_execucao !== undefined && (comissao_execucao < 0 || comissao_execucao > 100)) {
-      return NextResponse.json(
-        { error: 'Comissão de execução deve estar entre 0 e 100' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Comissão de execução deve estar entre 0 e 100' }, { status: 400 });
     }
-    
-    const por_dente = body.por_dente ? 1 : 0;
-    
+
     const result = await execute(
-      `INSERT INTO procedimentos (nome, valor, comissao_venda, comissao_execucao, por_dente) 
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO procedimentos (nome, valor, comissao_venda, comissao_execucao, por_dente, tem_etapas)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         nome.trim(),
         valor,
         comissao_venda ?? 0,
         comissao_execucao ?? 0,
-        por_dente
+        por_dente ? 1 : 0,
+        tem_etapas ? 1 : 0,
       ]
     );
-    
+
+    const procedimentoId = result.lastInsertRowid;
+
+    // Salva etapas se houver
+    if (tem_etapas && Array.isArray(etapas) && etapas.length > 0) {
+      await batch(
+        etapas.map((e: EtapaModelo, idx: number) => ({
+          sql: `INSERT INTO procedimento_etapas_modelo (procedimento_id, nome, valor, comissao_venda, comissao_execucao, ordem)
+                VALUES (?, ?, ?, ?, ?, ?)`,
+          params: [procedimentoId, e.nome, e.valor ?? null, e.comissao_venda ?? 0, e.comissao_execucao ?? 0, idx],
+        }))
+      );
+    }
+
     const novoProcedimento = (await query<Procedimento>(
       'SELECT * FROM procedimentos WHERE id = ?',
-      [result.lastInsertRowid]
+      [procedimentoId]
     ))[0];
-    
+
     return NextResponse.json(novoProcedimento, { status: 201 });
   } catch (error) {
     console.error('Erro ao criar procedimento:', error);
-    return NextResponse.json(
-      { error: 'Erro ao criar procedimento' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Erro ao criar procedimento' }, { status: 500 });
   }
 }

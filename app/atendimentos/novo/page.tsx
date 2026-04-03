@@ -1,17 +1,18 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { formatarMoeda } from '@/lib/utils/formatters';
-import { ClipboardList, Search, Activity, Calendar } from 'lucide-react';
+import { ClipboardList, Search, Calendar } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Card, Button, Select, SearchInput, Modal } from '@/components/ui';
 import { ClienteForm, ClienteFormData } from '@/components/domain';
 import usePageTitle from '@/lib/utils/usePageTitle';
-import { useAuth } from '@/contexts/AuthContext';
+import { formatarDataAgendada } from '@/lib/utils/formatters';
 
 interface Agendamento {
   id: number;
   procedimento_nome: string;
+  etapa_modelo_nome: string | null;
   data_agendada: string | null;
   created_at: string;
 }
@@ -29,19 +30,13 @@ interface Usuario {
   role: string;
 }
 
-interface Procedimento {
-  id: number;
-  nome: string;
-  valor: number;
-}
-
-type TipoAtendimento = 'normal' | 'orto' | 'sessao';
+type TipoAtendimento = 'normal' | 'sessao';
 
 function NovoAtendimentoForm() {
   usePageTitle('Novo Atendimento');
   const router = useRouter();
-  const { user } = useAuth();
   const searchParams = useSearchParams();
+  const unitFetch = useUnitFetch();
   const clienteIdParam = searchParams.get('cliente');
 
   // Clientes (busca via API)
@@ -54,13 +49,9 @@ function NovoAtendimentoForm() {
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
   const [tipoAtendimento, setTipoAtendimento] = useState<TipoAtendimento>('normal');
   const [avaliadorId, setAvaliadorId] = useState('');
-  const [executorId, setExecutorId] = useState('');
-  const [procedimentoOrtoId, setProcedimentoOrtoId] = useState('');
 
   // Dados estáticos
   const [avaliadores, setAvaliadores] = useState<Usuario[]>([]);
-  const [executores, setExecutores] = useState<Usuario[]>([]);
-  const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
   const [loadingDados, setLoadingDados] = useState(true);
 
   // Modal novo cliente
@@ -97,23 +88,9 @@ function NovoAtendimentoForm() {
 
     const carregarDados = async () => {
       try {
-        const [resUsuarios, resProc] = await Promise.all([
-          fetch('/api/usuarios'),
-          fetch('/api/procedimentos'),
-        ]);
+        const resUsuarios = await fetch('/api/usuarios');
         const usuariosData: Usuario[] = await resUsuarios.json();
-        const procData: Procedimento[] = await resProc.json();
-
         setAvaliadores(usuariosData.filter((u) => u.role === 'avaliador' || u.role === 'admin'));
-        setExecutores(usuariosData.filter((u) => u.role === 'executor' || u.role === 'admin'));
-        setProcedimentos(procData);
-
-        const orto = procData.find((p) =>
-          p.nome.toLowerCase().includes('orto') ||
-          p.nome.toLowerCase().includes('aparelho') ||
-          p.nome.toLowerCase().includes('manutenção')
-        );
-        if (orto) setProcedimentoOrtoId(String(orto.id));
       } finally {
         setLoadingDados(false);
       }
@@ -143,7 +120,7 @@ function NovoAtendimentoForm() {
   const buscarAgendamentos = async (cId: number) => {
     setLoadingAgendamentos(true);
     try {
-      const res = await fetch(`/api/agendamentos?cliente_id=${cId}&status=pendente,agendado`);
+      const res = await unitFetch(`/api/agendamentos?cliente_id=${cId}&status=pendente,agendado`);
       const data = await res.json();
       setAgendamentos(data.agendamentos ?? data ?? []);
     } finally {
@@ -156,7 +133,7 @@ function NovoAtendimentoForm() {
     setConfirmandoSessao(true);
     setError('');
     try {
-      const res = await fetch(`/api/agendamentos/${agendamentoSelecionado.id}/chegou`, {
+      const res = await unitFetch(`/api/agendamentos/${agendamentoSelecionado.id}/chegou`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -195,8 +172,6 @@ function NovoAtendimentoForm() {
     }
   };
 
-  const procedimentoSelecionado = procedimentos.find((p) => p.id === parseInt(procedimentoOrtoId));
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clienteId) return;
@@ -204,24 +179,12 @@ function NovoAtendimentoForm() {
     setError('');
 
     try {
-      if (tipoAtendimento === 'orto' && !procedimentoOrtoId) {
-        throw new Error('Selecione o procedimento para atendimento orto');
-      }
-
       const payload: Record<string, unknown> = {
         cliente_id: parseInt(clienteId),
         avaliador_id: avaliadorId ? parseInt(avaliadorId) : null,
       };
 
-      if (tipoAtendimento === 'orto') {
-        payload.tipo_orto = true;
-        payload.executor_id = executorId ? parseInt(executorId) : null;
-        payload.procedimento_id = parseInt(procedimentoOrtoId);
-        payload.valor = procedimentoSelecionado?.valor || 0;
-        payload.criado_por_id = user?.id;
-      }
-
-      const res = await fetch('/api/atendimentos', {
+      const res = await unitFetch('/api/atendimentos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -230,10 +193,7 @@ function NovoAtendimentoForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao criar atendimento');
 
-      router.push(tipoAtendimento === 'orto'
-        ? `/atendimentos/${data.id}/pagamento`
-        : `/atendimentos/${data.id}`
-      );
+      router.push(`/atendimentos/${data.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar');
       setSaving(false);
@@ -312,7 +272,7 @@ function NovoAtendimentoForm() {
         {/* 2 — Tipo */}
         <Card>
           <h2 className="text-lg font-semibold mb-3">2. Tipo de Atendimento</h2>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <button type="button" onClick={() => setTipoAtendimento('normal')}
               className={`p-4 rounded-lg border-2 text-left transition-all ${
                 tipoAtendimento === 'normal' ? 'border-primary-500 bg-primary-50' : 'border-neutral-200 hover:border-neutral-300'
@@ -320,14 +280,6 @@ function NovoAtendimentoForm() {
               <Search className="w-5 h-5 mb-1 text-primary-500" aria-hidden="true" />
               <div className="font-semibold text-sm">Normal</div>
               <p className="text-xs text-muted mt-1">Triagem → Avaliação → Pagamento → Execução</p>
-            </button>
-            <button type="button" onClick={() => setTipoAtendimento('orto')}
-              className={`p-4 rounded-lg border-2 text-left transition-all ${
-                tipoAtendimento === 'orto' ? 'border-info-500 bg-info-50' : 'border-neutral-200 hover:border-neutral-300'
-              }`}>
-              <Activity className="w-5 h-5 mb-1 text-info-500" aria-hidden="true" />
-              <div className="font-semibold text-sm">Orto / Aparelho</div>
-              <p className="text-xs text-muted mt-1">Direto para Pagamento → Execução pelo dentista</p>
             </button>
             <button type="button" onClick={() => {
               setTipoAtendimento('sessao');
@@ -343,7 +295,7 @@ function NovoAtendimentoForm() {
           </div>
         </Card>
 
-        {/* 3 — Avaliador, Orto ou Sessão */}
+        {/* 3 — Avaliador ou Sessão */}
         {tipoAtendimento === 'normal' ? (
           <Card>
             <h2 className="text-lg font-semibold mb-1">3. Avaliador</h2>
@@ -351,24 +303,6 @@ function NovoAtendimentoForm() {
             <Select label="Avaliador" name="avaliador" value={avaliadorId} onChange={setAvaliadorId}
               options={avaliadores.map((a) => ({ value: String(a.id), label: a.nome }))}
               placeholder="-- Definir depois --" />
-          </Card>
-        ) : tipoAtendimento === 'orto' ? (
-          <Card className="border-l-4 border-l-info-500">
-            <h2 className="text-lg font-semibold mb-3">3. Configuração Orto</h2>
-            <div className="space-y-4">
-              <Select label="Dentista (executor)" name="executor" value={executorId} onChange={setExecutorId}
-                options={executores.map((e) => ({ value: String(e.id), label: e.nome }))}
-                placeholder="-- Disponível para qualquer dentista --" />
-              <Select label="Procedimento *" name="procedimento" value={procedimentoOrtoId} onChange={setProcedimentoOrtoId}
-                options={procedimentos.map((p) => ({ value: String(p.id), label: `${p.nome} — ${formatarMoeda(p.valor)}` }))}
-                placeholder="Selecione o procedimento..." required />
-              {procedimentoSelecionado && (
-                <div className="bg-info-50 border border-info-200 rounded-lg p-3 text-sm text-info-800">
-                  <strong>Resumo:</strong> {procedimentoSelecionado.nome} — {formatarMoeda(procedimentoSelecionado.valor)}<br />
-                  <span className="text-xs text-info-600">Será criado e irá direto para a fila de pagamento.</span>
-                </div>
-              )}
-            </div>
           </Card>
         ) : (
           <Card className="border-l-4 border-l-warning-500">
@@ -394,10 +328,12 @@ function NovoAtendimentoForm() {
                           : 'hover:bg-surface-secondary'
                       }`}>
                       <div>
-                        <p className="font-medium text-sm">{ag.procedimento_nome}</p>
+                        <p className="font-medium text-sm">
+                          {ag.procedimento_nome}{ag.etapa_modelo_nome ? <span className="text-muted font-normal"> — {ag.etapa_modelo_nome}</span> : null}
+                        </p>
                         <p className="text-xs text-muted">
                           {ag.data_agendada
-                            ? new Date(ag.data_agendada).toLocaleDateString('pt-BR')
+                            ? formatarDataAgendada(ag.data_agendada)
                             : 'Sem data'}
                           {' • '}{diasAtras(ag.created_at)}
                         </p>
@@ -426,10 +362,8 @@ function NovoAtendimentoForm() {
               Confirmar Chegada
             </Button>
           ) : (
-            <Button type="submit"
-              disabled={!clienteId || saving || (tipoAtendimento === 'orto' && !procedimentoOrtoId)}
-              loading={saving}>
-              {tipoAtendimento === 'orto' ? 'Criar Atendimento Orto' : 'Criar Atendimento'}
+            <Button type="submit" disabled={!clienteId || saving} loading={saving}>
+              Criar Atendimento
             </Button>
           )}
         </div>

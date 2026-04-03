@@ -75,7 +75,7 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
         path.join(process.cwd(), 'app', 'api', 'atendimentos', 'route.ts'),
         'utf-8'
       );
-      expect(content).toContain('export async function GET');
+      expect(content).toMatch(/export (async function|const) GET/);
     });
 
     test('API route deve ter método POST', () => {
@@ -83,7 +83,7 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
         path.join(process.cwd(), 'app', 'api', 'atendimentos', 'route.ts'),
         'utf-8'
       );
-      expect(content).toContain('export async function POST');
+      expect(content).toMatch(/export (async function|const) POST/);
     });
 
     test('API route [id] deve ter método GET', () => {
@@ -91,7 +91,7 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
         path.join(process.cwd(), 'app', 'api', 'atendimentos', '[id]', 'route.ts'),
         'utf-8'
       );
-      expect(content).toContain('export async function GET');
+      expect(content).toMatch(/export (async function|const) GET/);
     });
 
     test('API route [id] deve ter método PUT', () => {
@@ -99,7 +99,7 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
         path.join(process.cwd(), 'app', 'api', 'atendimentos', '[id]', 'route.ts'),
         'utf-8'
       );
-      expect(content).toContain('export async function PUT');
+      expect(content).toMatch(/export (async function|const) PUT/);
     });
 
     test('API deve incluir dados do cliente', () => {
@@ -270,16 +270,17 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
         path.join(process.cwd(), 'app', 'api', 'atendimentos', '[id]', 'route.ts'),
         'utf-8'
       );
-      expect(content).toContain('pelo menos um procedimento totalmente pago');
+      expect(content).toContain('ao menos um pagamento para liberar');
     });
 
-    test('execução→finalizado deve exigir tudo concluído e pago', () => {
+    test('execução→finalizado endpoint verifica motivo_saida', () => {
       // Lógica de finalização vive no endpoint dedicado /api/atendimentos/[id]/finalizar
+      // Agora só aceita motivo_saida=sem_tratamento (demais finalizações são automáticas via conclusão de itens)
       const content = fs.readFileSync(
         path.join(process.cwd(), 'app', 'api', 'atendimentos', '[id]', 'finalizar', 'route.ts'),
         'utf-8'
       );
-      expect(content).toContain('procedimentos não concluídos');
+      expect(content).toContain('sem_tratamento');
     });
 
   });
@@ -355,8 +356,7 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
         path.join(process.cwd(), 'app', 'atendimentos', 'novo', 'page.tsx'),
         'utf-8'
       );
-      expect(content).toContain('clienteId');
-      expect(content).toContain('Selecione o Cliente');
+      expect(content).toContain('clienteSelecionado');
     });
 
     test('deve ter busca de clientes', () => {
@@ -364,8 +364,8 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
         path.join(process.cwd(), 'app', 'atendimentos', 'novo', 'page.tsx'),
         'utf-8'
       );
-      expect(content).toContain('clientesFiltrados');
-      expect(content).toContain('busca');
+      expect(content).toContain('buscarClientes');
+      expect(content).toContain('buscaCliente');
     });
 
     test('deve ter seleção de avaliador opcional', () => {
@@ -382,7 +382,6 @@ describe('Sprint 5 - Atendimentos e Pipeline', () => {
         path.join(process.cwd(), 'app', 'atendimentos', 'novo', 'page.tsx'),
         'utf-8'
       );
-      expect(content).toContain('/clientes/novo');
       expect(content).toContain('Cadastrar novo cliente');
     });
 

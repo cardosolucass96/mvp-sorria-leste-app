@@ -1,20 +1,31 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 import { formatarMoeda } from '@/lib/utils/formatters';
-import { Search, Calendar } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Card, Button, Select, Input, EmptyState, ConfirmDialog } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
 import usePageTitle from '@/lib/utils/usePageTitle';
+
+interface EtapaModelo {
+  id: number;
+  nome: string;
+  valor: number | null;
+  comissao_venda: number;
+  comissao_execucao: number;
+  ordem: number;
+}
 
 interface Procedimento {
   id: number;
   nome: string;
   valor: number;
   por_dente: number;
+  tem_etapas: number;
 }
 
 interface Usuario {
@@ -33,6 +44,10 @@ interface ItemAtendimento {
   criado_por_nome: string | null;
   valor: number;
   status: string;
+  dente_unico: string | null;
+  etapa_label: string | null;
+  tem_etapas: number;
+  observacoes: string | null;
 }
 
 interface Atendimento {
@@ -45,15 +60,6 @@ interface Atendimento {
   total: number;
 }
 
-interface Agendamento {
-  id: number;
-  procedimento_nome: string;
-  executor_nome: string | null;
-  data_agendada: string | null;
-  status: string;
-}
-
-type ModoExecucao = 'hoje' | 'agendar';
 
 export default function AvaliacaoDetalhePage({
   params
@@ -65,11 +71,11 @@ export default function AvaliacaoDetalhePage({
   const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
+  const unitFetch = useUnitFetch();
 
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
   const [executores, setExecutores] = useState<Usuario[]>([]);
-  const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -78,9 +84,9 @@ export default function AvaliacaoDetalhePage({
   const [executorId, setExecutorId] = useState('');
   const [valorCustom, setValorCustom] = useState('');
   const [dentesFaces, setDentesFaces] = useState<DenteFaceInput[]>([]);
-  const [modoExecucao, setModoExecucao] = useState<ModoExecucao>('hoje');
-  const [dataAgendada, setDataAgendada] = useState('');
-  const [observacoesAgendamento, setObservacoesAgendamento] = useState('');
+  const [observacoes, setObservacoes] = useState('');
+  const [etapasModelo, setEtapasModelo] = useState<EtapaModelo[]>([]);
+  const [loadingEtapas, setLoadingEtapas] = useState(false);
   const [adicionando, setAdicionando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
   const [editingValorId, setEditingValorId] = useState<number | null>(null);
@@ -105,7 +111,7 @@ export default function AvaliacaoDetalhePage({
   const carregarDados = async () => {
     try {
       const [resAtend, resProc, resUsers] = await Promise.all([
-        fetch(`/api/atendimentos/${id}`),
+        unitFetch(`/api/atendimentos/${id}`),
         fetch('/api/procedimentos'),
         fetch('/api/usuarios'),
       ]);
@@ -121,12 +127,6 @@ export default function AvaliacaoDetalhePage({
       setExecutores(
         usersData.filter((u: Usuario) => u.role === 'executor' || u.role === 'admin')
       );
-
-      // Carrega agendamentos deste atendimento
-      const resAgend = await fetch(`/api/agendamentos?atendimento_origem_id=${id}`);
-      if (resAgend.ok) {
-        setAgendamentos(await resAgend.json());
-      }
     } catch (err) {
       setError('Erro ao carregar dados');
       console.error(err);
@@ -141,95 +141,56 @@ export default function AvaliacaoDetalhePage({
 
     const proc = procedimentos.find(p => p.id === parseInt(procedimentoId));
 
-    // Validar dentes para procedimentos por_dente (apenas modo "hoje")
-    if (modoExecucao === 'hoje') {
-      if (proc?.por_dente && dentesFaces.length === 0) {
-        setError('Selecione pelo menos um dente para este procedimento');
-        return;
-      }
-      if (proc?.por_dente && dentesFaces.some(d => d.faces.length === 0)) {
-        setError('Selecione ao menos uma face para cada dente');
-        return;
-      }
+    if (proc?.por_dente && dentesFaces.length === 0) {
+      setError('Selecione pelo menos um dente para este procedimento');
+      return;
+    }
+    if (proc?.por_dente && dentesFaces.some(d => d.faces.length === 0)) {
+      setError('Selecione ao menos uma face para cada dente');
+      return;
     }
 
     setAdicionando(true);
     setError('');
 
     try {
-      if (modoExecucao === 'agendar') {
-        // Criar agendamento para sessão futura
-        const res = await fetch('/api/agendamentos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            cliente_id: atendimento!.cliente_id,
-            atendimento_origem_id: parseInt(id),
-            procedimento_id: parseInt(procedimentoId),
-            executor_id: executorId ? parseInt(executorId) : null,
-            data_agendada: dataAgendada || null,
-            observacoes: observacoesAgendamento || null,
-          }),
-        });
+      const quantidade = proc?.por_dente ? dentesFaces.length : 1;
+      const valorBase = valorCustom ? parseFloat(valorCustom) : proc?.valor || 0;
+      const valorTotal = valorBase * quantidade;
 
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || 'Erro ao agendar');
-        }
+      const dentesParaSalvar = proc?.por_dente
+        ? JSON.stringify(dentesFaces.map(d => ({
+            dente: d.dente,
+            faces: d.faces.map(f => ({ nome: f, concluido: false })),
+          })))
+        : null;
 
-        toast.success('Procedimento agendado para sessão futura');
+      const res = await unitFetch(`/api/atendimentos/${id}/itens`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          procedimento_id: parseInt(procedimentoId),
+          executor_id: executorId ? parseInt(executorId) : null,
+          criado_por_id: user?.id,
+          valor: valorTotal,
+          dentes: dentesParaSalvar,
+          quantidade: quantidade,
+          observacoes: observacoes || null,
+        }),
+      });
 
-        // Limpa form e recarrega agendamentos
-        setProcedimentoId('');
-        setExecutorId('');
-        setValorCustom('');
-        setDentesFaces([]);
-        setDataAgendada('');
-        setObservacoesAgendamento('');
-        setModoExecucao('hoje');
-
-        const resAgend = await fetch(`/api/agendamentos?atendimento_origem_id=${id}`);
-        if (resAgend.ok) {
-          setAgendamentos(await resAgend.json());
-        }
-      } else {
-        // Executar hoje - comportamento original
-        const quantidade = proc?.por_dente ? dentesFaces.length : 1;
-        const valorBase = valorCustom ? parseFloat(valorCustom) : proc?.valor || 0;
-        const valorTotal = valorBase * quantidade;
-
-        const dentesParaSalvar = proc?.por_dente
-          ? JSON.stringify(dentesFaces.map(d => ({
-              dente: d.dente,
-              faces: d.faces.map(f => ({ nome: f, concluido: false })),
-            })))
-          : null;
-
-        const res = await fetch(`/api/atendimentos/${id}/itens`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            procedimento_id: parseInt(procedimentoId),
-            executor_id: executorId ? parseInt(executorId) : null,
-            criado_por_id: user?.id,
-            valor: valorTotal,
-            dentes: dentesParaSalvar,
-            quantidade: quantidade,
-          }),
-        });
-
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || 'Erro ao adicionar');
-        }
-
-        // Limpa form e recarrega
-        setProcedimentoId('');
-        setExecutorId('');
-        setValorCustom('');
-        setDentesFaces([]);
-        await carregarDados();
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Erro ao adicionar');
       }
+
+      setProcedimentoId('');
+      setExecutorId('');
+      setValorCustom('');
+      setDentesFaces([]);
+      setObservacoes('');
+      setEtapasModelo([]);
+      await carregarDados();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao adicionar');
     } finally {
@@ -246,7 +207,7 @@ export default function AvaliacaoDetalhePage({
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         try {
-          const res = await fetch(
+          const res = await unitFetch(
             `/api/atendimentos/${id}/itens?item_id=${itemId}&usuario_id=${user?.id}`,
             { method: 'DELETE' }
           );
@@ -266,7 +227,7 @@ export default function AvaliacaoDetalhePage({
 
   const handleAtualizarExecutor = async (itemId: number, novoExecutorId: string) => {
     try {
-      await fetch(`/api/atendimentos/${id}/itens/${itemId}`, {
+      await unitFetch(`/api/atendimentos/${id}/itens/${itemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -285,7 +246,7 @@ export default function AvaliacaoDetalhePage({
     setEditingValorId(null);
     if (isNaN(novoValor) || novoValor <= 0) return;
     try {
-      await fetch(`/api/atendimentos/${id}/itens/${itemId}`, {
+      await unitFetch(`/api/atendimentos/${id}/itens/${itemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ valor: novoValor }),
@@ -306,7 +267,7 @@ export default function AvaliacaoDetalhePage({
     setError('');
 
     try {
-      const res = await fetch(`/api/atendimentos/${id}`, {
+      const res = await unitFetch(`/api/atendimentos/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'aguardando_pagamento' }),
@@ -335,11 +296,6 @@ export default function AvaliacaoDetalhePage({
     const valorBase = valorCustom ? parseFloat(valorCustom) : procedimentoSelecionado.valor;
     const quantidade = procedimentoSelecionado.por_dente ? dentesFaces.length : 1;
     return valorBase * quantidade;
-  };
-
-  const formatarData = (data: string) => {
-    const [year, month, day] = data.split('-');
-    return `${day}/${month}/${year}`;
   };
 
   if (loading) {
@@ -382,58 +338,64 @@ export default function AvaliacaoDetalhePage({
                 label="Procedimento *"
                 name="procedimento"
                 value={procedimentoId}
-                onChange={(value) => {
+                onChange={async (value) => {
                   setProcedimentoId(value);
                   setValorCustom('');
                   setDentesFaces([]);
+                  setEtapasModelo([]);
+                  if (!value) return;
+                  const proc = procedimentos.find(p => p.id === parseInt(value));
+                  if (proc?.tem_etapas) {
+                    setLoadingEtapas(true);
+                    try {
+                      const res = await fetch(`/api/procedimentos/${value}`);
+                      const data = await res.json();
+                      setEtapasModelo(data.etapas ?? []);
+                    } finally {
+                      setLoadingEtapas(false);
+                    }
+                  }
                 }}
                 options={procedimentos.map((proc) => ({
                   value: String(proc.id),
-                  label: `${proc.nome} - ${formatarMoeda(proc.valor)}${proc.por_dente ? ' (por dente)' : ''}`,
+                  label: `${proc.nome} — ${formatarMoeda(proc.valor)}${proc.por_dente ? ' (por dente)' : ''}${proc.tem_etapas ? ' · multi-sessão' : ''}`,
                 }))}
                 placeholder="Selecione..."
                 required
               />
             </div>
 
-            {/* Toggle: Quando executar? */}
-            {procedimentoId && (
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Quando executar?
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setModoExecucao('hoje')}
-                    className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
-                      modoExecucao === 'hoje'
-                        ? 'bg-info-50 border-info-300 text-info-700 font-medium'
-                        : 'bg-surface border-neutral-200 text-neutral-600 hover:bg-neutral-50'
-                    }`}
-                  >
-                    Executar hoje
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModoExecucao('agendar')}
-                    className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
-                      modoExecucao === 'agendar'
-                        ? 'bg-warning-50 border-warning-300 text-warning-700 font-medium'
-                        : 'bg-surface border-neutral-200 text-neutral-600 hover:bg-neutral-50'
-                    }`}
-                  >
-                    <span className="flex items-center justify-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5" />
-                      Agendar para outro dia
-                    </span>
-                  </button>
+            {/* Etapas do procedimento multi-sessão */}
+            {procedimentoSelecionado?.tem_etapas === 1 && (
+              <div className="border rounded-lg overflow-hidden">
+                <div className="px-3 py-2 bg-warning-50 border-b border-warning-200">
+                  <p className="text-sm font-medium text-warning-800">
+                    {loadingEtapas ? 'Carregando etapas...' : `${etapasModelo.length} etapas de execução`}
+                  </p>
+                  <p className="text-xs text-warning-700 mt-0.5">
+                    As etapas serão acompanhadas durante a execução
+                  </p>
                 </div>
+                {!loadingEtapas && etapasModelo.length > 0 && (
+                  <div className="divide-y">
+                    {etapasModelo.map((etapa, idx) => (
+                      <div key={etapa.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <span className="text-neutral-700">
+                          <span className="text-muted mr-2">{idx + 1}.</span>
+                          {etapa.nome}
+                        </span>
+                        <span className="text-neutral-600 font-medium">
+                          {etapa.valor != null ? formatarMoeda(etapa.valor) : 'Proporcional'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Seletor de Dentes (se aplicável e modo "hoje") */}
-            {procedimentoSelecionado?.por_dente === 1 && modoExecucao === 'hoje' && (
+            {/* Seletor de Dentes (se aplicável) */}
+            {procedimentoSelecionado?.por_dente === 1 && (
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-2">
                   Dentes *
@@ -451,24 +413,9 @@ export default function AvaliacaoDetalhePage({
               </div>
             )}
 
-            {/* Campos para agendamento */}
-            {modoExecucao === 'agendar' && procedimentoId && (
-              <>
-                <div>
-                  <Input
-                    label="Data prevista (opcional)"
-                    name="data_agendada"
-                    type="date"
-                    value={dataAgendada}
-                    onChange={(value) => setDataAgendada(value)}
-                  />
-                </div>
-              </>
-            )}
-
             <div>
               <Select
-                label={modoExecucao === 'agendar' ? 'Executor preferencial' : 'Executor'}
+                label="Executor"
                 name="executor"
                 value={executorId}
                 onChange={(value) => setExecutorId(value)}
@@ -477,8 +424,7 @@ export default function AvaliacaoDetalhePage({
               />
             </div>
 
-            {/* Valor - apenas para modo "hoje" */}
-            {modoExecucao === 'hoje' && (
+            {procedimentoSelecionado?.tem_etapas !== 1 && (
               <div>
                 <Input
                   label="Valor (R$)"
@@ -496,27 +442,28 @@ export default function AvaliacaoDetalhePage({
               </div>
             )}
 
-            {/* Observações - apenas para agendamento */}
-            {modoExecucao === 'agendar' && procedimentoId && (
-              <div>
-                <Input
-                  label="Observações (opcional)"
-                  name="observacoes_agendamento"
-                  value={observacoesAgendamento}
-                  onChange={(value) => setObservacoesAgendamento(value)}
-                  placeholder="Notas sobre o agendamento..."
-                />
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                Obs / Laudo <span className="text-muted font-normal">(opcional)</span>
+              </label>
+              <textarea
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                rows={2}
+                placeholder="Observações ou laudo do procedimento..."
+                className="input w-full resize-none"
+                disabled={adicionando}
+              />
+            </div>
 
             <Button
               type="submit"
-              variant={modoExecucao === 'agendar' ? 'secondary' : 'secondary'}
-              disabled={!procedimentoId || adicionando}
+              variant="secondary"
+              disabled={!procedimentoId || adicionando || loadingEtapas}
               loading={adicionando}
               className="w-full"
             >
-              {modoExecucao === 'agendar' ? 'Agendar para sessão futura' : '+ Adicionar'}
+              + Adicionar
             </Button>
           </form>
         </Card>
@@ -558,8 +505,22 @@ export default function AvaliacaoDetalhePage({
             <tbody className="bg-surface divide-y divide-neutral-200">
               {atendimento.itens.map((item) => (
                 <tr key={item.id}>
-                  <td className="px-4 py-3 font-medium text-foreground">
-                    {item.procedimento_nome}
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-foreground">
+                      {item.procedimento_nome}
+                      {item.dente_unico && (
+                        <span className="text-sm text-muted font-normal ml-1">— dente {item.dente_unico}</span>
+                      )}
+                      {item.etapa_label && (
+                        <span className="text-sm text-muted font-normal ml-1">— {item.etapa_label}</span>
+                      )}
+                      {item.tem_etapas === 1 && !item.etapa_label && (
+                        <span className="ml-1.5 text-xs bg-warning-100 text-warning-700 px-1.5 py-0.5 rounded font-medium">multi-sessão</span>
+                      )}
+                    </p>
+                    {item.observacoes && (
+                      <p className="text-xs text-muted mt-0.5">{item.observacoes}</p>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-neutral-600">
                     {item.criado_por_nome || 'N/A'}
@@ -629,31 +590,6 @@ export default function AvaliacaoDetalhePage({
           </table>
         )}
       </Card>
-
-      {/* Agendados para sessões futuras */}
-      {agendamentos.length > 0 && (
-        <Card>
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-warning-600" />
-            Agendados para sessões futuras
-          </h2>
-          <ul className="divide-y divide-neutral-200">
-            {agendamentos.map((ag) => (
-              <li key={ag.id} className="py-3 flex items-center justify-between">
-                <div>
-                  <span className="font-medium text-foreground">{ag.procedimento_nome}</span>
-                  {ag.executor_nome && (
-                    <span className="text-sm text-neutral-500 ml-2">({ag.executor_nome})</span>
-                  )}
-                  <span className="text-sm text-neutral-500 ml-2">
-                    — {ag.data_agendada ? formatarData(ag.data_agendada) : 'Sem data definida'}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
 
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}

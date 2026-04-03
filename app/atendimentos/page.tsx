@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import Link from 'next/link';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, Clock } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingState from '@/components/ui/LoadingState';
 import Alert from '@/components/ui/Alert';
@@ -12,7 +13,7 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { StatusBadge, ViewModeToggle } from '@/components/domain';
 import { STATUS_CONFIG, STATUS_ORDER } from '@/lib/constants/status';
-import { formatarDataHora } from '@/lib/utils/formatters';
+import { formatarDataHora, tempoDecorrido } from '@/lib/utils/formatters';
 import type { AtendimentoStatus } from '@/lib/types';
 
 interface Atendimento {
@@ -22,13 +23,17 @@ interface Atendimento {
   avaliador_nome?: string | null;
   status: AtendimentoStatus;
   created_at: string;
+  liberado_em?: string | null;
   total?: number;
   qtd_itens?: number;
+  procedimentos_resumo?: string | null;
+  executores_resumo?: string | null;
 }
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 export default function AtendimentosPage() {
   usePageTitle('Atendimentos');
+  const unitFetch = useUnitFetch();
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -41,7 +46,7 @@ export default function AtendimentosPage() {
       if (busca) params.append('busca', busca);
       if (filtroStatus) params.append('status', filtroStatus);
       
-      const res = await fetch(`/api/atendimentos?${params}`);
+      const res = await unitFetch(`/api/atendimentos?${params}`);
       const data = await res.json();
       setAtendimentos(data);
     } catch (error) {
@@ -50,7 +55,7 @@ export default function AtendimentosPage() {
     } finally {
       setLoading(false);
     }
-  }, [busca, filtroStatus]);
+  }, [busca, filtroStatus, unitFetch]);
 
   useEffect(() => {
     carregarAtendimentos();
@@ -157,19 +162,34 @@ export default function AtendimentosPage() {
                   {atendimentosPorStatus[status].length === 0 ? (
                     <div className="p-4 text-center text-neutral-400 text-sm">Nenhum atendimento</div>
                   ) : (
-                    atendimentosPorStatus[status].map((atendimento) => (
-                      <Link key={atendimento.id} href={`/atendimentos/${atendimento.id}`}
-                        className="block bg-surface rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow border border-neutral-200">
-                        <div className="font-medium text-foreground mb-1">{atendimento.cliente_nome}</div>
-                        {atendimento.cliente_telefone && (
-                          <div className="text-sm text-muted mb-2">📞 {atendimento.cliente_telefone}</div>
-                        )}
-                        <div className="flex justify-between items-center text-xs text-neutral-400">
-                          <span>#{atendimento.id}</span>
-                          <span>{formatarDataHora(atendimento.created_at).split(' ')[0]}</span>
-                        </div>
-                      </Link>
-                    ))
+                    atendimentosPorStatus[status].map((atendimento) => {
+                      const inicioEtapa = atendimento.status === 'em_execucao' && atendimento.liberado_em
+                        ? atendimento.liberado_em
+                        : atendimento.created_at;
+                      return (
+                        <Link key={atendimento.id} href={`/atendimentos/${atendimento.id}`}
+                          className="block bg-surface rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow border border-neutral-200">
+                          <div className="font-medium text-foreground mb-1">{atendimento.cliente_nome}</div>
+                          {atendimento.procedimentos_resumo && (
+                            <div className="text-xs text-neutral-600 mb-1 truncate" title={atendimento.procedimentos_resumo}>
+                              🦷 {atendimento.procedimentos_resumo}
+                            </div>
+                          )}
+                          {atendimento.executores_resumo && (
+                            <div className="text-xs text-muted mb-1 truncate" title={atendimento.executores_resumo}>
+                              👤 {atendimento.executores_resumo}
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center text-xs text-neutral-400 mt-1">
+                            <span>#{atendimento.id}</span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {tempoDecorrido(inicioEtapa)}
+                            </span>
+                          </div>
+                        </Link>
+                      );
+                    })
                   )}
                 </div>
               </div>

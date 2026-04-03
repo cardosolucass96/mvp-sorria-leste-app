@@ -45,6 +45,8 @@ function forgeToken(payload: Partial<JwtPayload>): string {
     email: 'admin@test.com',
     role: 'admin',
     nome: 'Admin',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
     iat: now,
     exp: now + 86400,
     ...payload,
@@ -68,7 +70,7 @@ describe('Segurança — JWT', () => {
     });
 
     test('token válido é aceito antes da expiração', async () => {
-      const user = { id: 1, email: 'test@test.com', role: 'admin', nome: 'Test' };
+      const user = { id: 1, email: 'test@test.com', role: 'admin', nome: 'Test', unidade_ids: [1, 2], unidade_atual: 1 };
       const token = await generateToken(user);
       const payload = await verifyToken(token);
 
@@ -77,7 +79,7 @@ describe('Segurança — JWT', () => {
     });
 
     test('token expira em exatamente 24 horas', async () => {
-      const user = { id: 1, email: 'test@test.com', role: 'admin', nome: 'Test' };
+      const user = { id: 1, email: 'test@test.com', role: 'admin', nome: 'Test', unidade_ids: [1, 2], unidade_atual: 1 };
       const token = await generateToken(user);
       const payload = await verifyToken(token);
 
@@ -90,7 +92,7 @@ describe('Segurança — JWT', () => {
 
   describe('token manipulation (ataques)', () => {
     test('modificar role no payload invalida o token', async () => {
-      const user = { id: 1, email: 'executor@test.com', role: 'executor', nome: 'Exec' };
+      const user = { id: 1, email: 'executor@test.com', role: 'executor', nome: 'Exec', unidade_ids: [1], unidade_atual: 1 };
       const token = await generateToken(user);
       const [header, , signature] = token.split('.');
 
@@ -105,7 +107,7 @@ describe('Segurança — JWT', () => {
     });
 
     test('modificar sub (user id) no payload invalida o token', async () => {
-      const user = { id: 99, email: 'normal@test.com', role: 'executor', nome: 'Normal' };
+      const user = { id: 99, email: 'normal@test.com', role: 'executor', nome: 'Normal', unidade_ids: [1], unidade_atual: 1 };
       const token = await generateToken(user);
       const [header, , signature] = token.split('.');
 
@@ -119,8 +121,8 @@ describe('Segurança — JWT', () => {
     });
 
     test('trocar assinatura entre tokens de usuários diferentes invalida', async () => {
-      const tokenUser1 = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'Admin' });
-      const tokenUser2 = await generateToken({ id: 2, email: 'c@d.com', role: 'executor', nome: 'Exec' });
+      const tokenUser1 = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'Admin', unidade_ids: [1, 2], unidade_atual: 1 });
+      const tokenUser2 = await generateToken({ id: 2, email: 'c@d.com', role: 'executor', nome: 'Exec', unidade_ids: [1], unidade_atual: 1 });
 
       const [header1, payload1] = tokenUser1.split('.');
       const [, , signature2] = tokenUser2.split('.');
@@ -132,7 +134,7 @@ describe('Segurança — JWT', () => {
     });
 
     test('modificar expiração para o futuro invalida (assinatura quebra)', async () => {
-      const user = { id: 1, email: 'a@b.com', role: 'admin', nome: 'Admin' };
+      const user = { id: 1, email: 'a@b.com', role: 'admin', nome: 'Admin', unidade_ids: [1, 2], unidade_atual: 1 };
       const token = await generateToken(user);
       const [header, , signature] = token.split('.');
 
@@ -387,7 +389,7 @@ describe('Segurança — JWT', () => {
 
   describe('payload e claims do token', () => {
     test('token contém sub, email, role, nome, iat, exp', async () => {
-      const user = { id: 10, email: 'test@test.com', role: 'atendente', nome: 'Teste' };
+      const user = { id: 10, email: 'test@test.com', role: 'atendente', nome: 'Teste', unidade_ids: [1], unidade_atual: 1 };
       const token = await generateToken(user);
       const payload = await verifyToken(token);
 
@@ -400,13 +402,13 @@ describe('Segurança — JWT', () => {
     });
 
     test('sub é numérico (number, não string)', async () => {
-      const token = await generateToken({ id: 42, email: 'a@b.com', role: 'admin', nome: 'A' });
+      const token = await generateToken({ id: 42, email: 'a@b.com', role: 'admin', nome: 'A', unidade_ids: [1, 2], unidade_atual: 1 });
       const payload = await verifyToken(token);
       expect(typeof payload!.sub).toBe('number');
     });
 
     test('iat e exp são unix timestamps em segundos', async () => {
-      const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'A' });
+      const token = await generateToken({ id: 1, email: 'a@b.com', role: 'admin', nome: 'A', unidade_ids: [1, 2], unidade_atual: 1 });
       const payload = await verifyToken(token);
 
       // Should be around current time in seconds (not milliseconds)

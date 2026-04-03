@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 
 interface FaturamentoResult {
   total: number;
@@ -38,17 +39,18 @@ interface ComissaoResult {
   total: number;
 }
 
-// GET /api/dashboard/admin - Estatísticas completas do dashboard admin
-export async function GET(request: NextRequest) {
+// GET /api/dashboard/admin - Estatísticas completas do dashboard admin (filtrado por unidade)
+export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const { searchParams } = new URL(request.url);
     const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
+    const uid = context.unidadeId;
 
     // Construir filtro de data
     let filtroData = '';
-    const params: string[] = [];
-    
+    const params: (string | number)[] = [];
+
     if (dataInicio && dataFim) {
       filtroData = " AND DATE(a.created_at) BETWEEN ? AND ?";
       params.push(dataInicio, dataFim);
@@ -60,9 +62,9 @@ export async function GET(request: NextRequest) {
       params.push(dataFim);
     }
 
-    // Filtro para pagamentos
+    // Filtro para pagamentos (JOIN com atendimentos para filtrar por unidade)
     let filtroDataPag = '';
-    const paramsPag: string[] = [];
+    const paramsPag: (string | number)[] = [uid];
     if (dataInicio && dataFim) {
       filtroDataPag = " AND DATE(p.created_at) BETWEEN ? AND ?";
       paramsPag.push(dataInicio, dataFim);
@@ -74,11 +76,12 @@ export async function GET(request: NextRequest) {
       paramsPag.push(dataFim);
     }
 
-    // 1. Faturamento Total (pagamentos recebidos)
+    // 1. Faturamento Total (pagamentos recebidos, filtrado por unidade)
     const faturamentoQuery = `
       SELECT COALESCE(SUM(p.valor), 0) as total
       FROM pagamentos p
-      WHERE 1=1 ${filtroDataPag}
+      INNER JOIN atendimentos a ON p.atendimento_id = a.id
+      WHERE a.unidade_id = ? ${filtroDataPag}
     `;
     const faturamento = await queryOne<FaturamentoResult>(faturamentoQuery, paramsPag);
 
@@ -87,87 +90,82 @@ export async function GET(request: NextRequest) {
       SELECT COALESCE(SUM(i.valor - i.valor_pago), 0) as total
       FROM itens_atendimento i
       INNER JOIN atendimentos a ON i.atendimento_id = a.id
-      WHERE i.valor_pago < i.valor AND a.status != 'finalizado'
+      WHERE i.valor_pago < i.valor AND a.status NOT IN ('finalizado', 'encerrado') AND a.unidade_id = ?
     `;
-    const aReceber = await queryOne<FaturamentoResult>(aReceberQuery);
+    const aReceber = await queryOne<FaturamentoResult>(aReceberQuery, [uid]);
 
-    // 3. Parcelas Vencidas
-    const vencidasQuery = `
-      SELECT COALESCE(SUM(valor), 0) as total, COUNT(*) as count
-      FROM parcelas
-      WHERE pago = 0 AND data_vencimento < DATE('now')
-    `;
-    const vencidas = await queryOne<FaturamentoResult & CountResult>(vencidasQuery);
-
-    // 4. Atendimentos por Status
+    // 3. Atendimentos por Status
     const statusQuery = `
       SELECT status, COUNT(*) as count
       FROM atendimentos a
-      WHERE 1=1 ${filtroData}
+      WHERE a.unidade_id = ? ${filtroData}
       GROUP BY status
-      ORDER BY 
-        CASE status 
+      ORDER BY
+        CASE status
           WHEN 'triagem' THEN 1
           WHEN 'avaliacao' THEN 2
           WHEN 'aguardando_pagamento' THEN 3
           WHEN 'em_execucao' THEN 4
           WHEN 'finalizado' THEN 5
+          WHEN 'encerrado' THEN 6
         END
     `;
-    const porStatus = await query<StatusResult>(statusQuery, params);
+    const porStatus = await query<StatusResult>(statusQuery, [uid, ...params]);
 
     // 5. Faturamento por Canal de Aquisição
     const canaisQuery = `
-      SELECT 
+      SELECT
         c.origem,
         COALESCE(SUM(p.valor), 0) as total,
         COUNT(DISTINCT a.id) as count
       FROM clientes c
       INNER JOIN atendimentos a ON a.cliente_id = c.id
       LEFT JOIN pagamentos p ON p.atendimento_id = a.id
+      WHERE a.unidade_id = ?
       GROUP BY c.origem
       ORDER BY total DESC
     `;
-    const porCanal = await query<CanalResult>(canaisQuery);
+    const porCanal = await query<CanalResult>(canaisQuery, [uid]);
 
     // 6. Top 10 Procedimentos mais Realizados
     const procedimentosQuery = `
-      SELECT 
+      SELECT
         pr.nome,
         COALESCE(SUM(i.valor), 0) as total,
         COUNT(*) as count
       FROM itens_atendimento i
       INNER JOIN procedimentos pr ON i.procedimento_id = pr.id
       INNER JOIN atendimentos a ON i.atendimento_id = a.id
-      WHERE 1=1 ${filtroData}
+      WHERE a.unidade_id = ? ${filtroData}
       GROUP BY pr.id, pr.nome
       ORDER BY total DESC
       LIMIT 10
     `;
-    const topProcedimentos = await query<ProcedimentoResult>(procedimentosQuery, params);
+    const topProcedimentos = await query<ProcedimentoResult>(procedimentosQuery, [uid, ...params]);
 
     // 7. Faturamento Mensal (últimos 6 meses)
     const mensalQuery = `
-      SELECT 
+      SELECT
         strftime('%Y-%m', p.created_at) as mes,
         SUM(p.valor) as faturamento,
         COUNT(DISTINCT p.atendimento_id) as atendimentos
       FROM pagamentos p
-      WHERE p.created_at >= DATE('now', '-6 months')
+      INNER JOIN atendimentos a ON p.atendimento_id = a.id
+      WHERE p.created_at >= DATE('now', '-6 months') AND a.unidade_id = ?
       GROUP BY strftime('%Y-%m', p.created_at)
       ORDER BY mes ASC
     `;
-    const faturamentoMensal = await query<MensalResult>(mensalQuery);
+    const faturamentoMensal = await query<MensalResult>(mensalQuery, [uid]);
 
     // 8. Total de Atendimentos
     const totalAtendimentosQuery = `
       SELECT COUNT(*) as count
       FROM atendimentos a
-      WHERE 1=1 ${filtroData}
+      WHERE a.unidade_id = ? ${filtroData}
     `;
-    const totalAtendimentos = await queryOne<CountResult>(totalAtendimentosQuery, params);
+    const totalAtendimentos = await queryOne<CountResult>(totalAtendimentosQuery, [uid, ...params]);
 
-    // 9. Total de Clientes
+    // 9. Total de Clientes (compartilhado entre unidades)
     const totalClientesQuery = `SELECT COUNT(*) as count FROM clientes`;
     const totalClientes = await queryOne<CountResult>(totalClientesQuery);
 
@@ -178,59 +176,63 @@ export async function GET(request: NextRequest) {
         SELECT a.id, SUM(i.valor) as total_atend
         FROM atendimentos a
         INNER JOIN itens_atendimento i ON i.atendimento_id = a.id
-        WHERE a.status = 'finalizado'
+        WHERE a.status IN ('finalizado', 'encerrado') AND a.unidade_id = ?
         GROUP BY a.id
       )
     `;
-    const ticketMedio = await queryOne<FaturamentoResult>(ticketMedioQuery);
+    const ticketMedio = await queryOne<FaturamentoResult>(ticketMedioQuery, [uid]);
 
     // 11. Top Vendedores (por comissão de venda)
     const topVendedoresQuery = `
-      SELECT 
+      SELECT
         u.nome,
         'venda' as tipo,
         COALESCE(SUM(c.valor_comissao), 0) as total
       FROM comissoes c
       INNER JOIN usuarios u ON c.usuario_id = u.id
-      WHERE c.tipo = 'venda'
+      INNER JOIN atendimentos a ON c.atendimento_id = a.id
+      WHERE c.tipo = 'venda' AND a.unidade_id = ?
       GROUP BY u.id, u.nome
       ORDER BY total DESC
       LIMIT 5
     `;
-    const topVendedores = await query<ComissaoResult>(topVendedoresQuery);
+    const topVendedores = await query<ComissaoResult>(topVendedoresQuery, [uid]);
 
     // 12. Top Executores (por comissão de execução)
     const topExecutoresQuery = `
-      SELECT 
+      SELECT
         u.nome,
         'execucao' as tipo,
         COALESCE(SUM(c.valor_comissao), 0) as total
       FROM comissoes c
       INNER JOIN usuarios u ON c.usuario_id = u.id
-      WHERE c.tipo = 'execucao'
+      INNER JOIN atendimentos a ON c.atendimento_id = a.id
+      WHERE c.tipo = 'execucao' AND a.unidade_id = ?
       GROUP BY u.id, u.nome
       ORDER BY total DESC
       LIMIT 5
     `;
-    const topExecutores = await query<ComissaoResult>(topExecutoresQuery);
+    const topExecutores = await query<ComissaoResult>(topExecutoresQuery, [uid]);
 
     // 13. Taxa de Conversão (finalizados / total)
     const finalizadosQuery = `
       SELECT COUNT(*) as count
       FROM atendimentos a
-      WHERE status = 'finalizado' ${filtroData}
+      WHERE status IN ('finalizado', 'encerrado') AND a.unidade_id = ? ${filtroData}
     `;
-    const finalizados = await queryOne<CountResult>(finalizadosQuery, params);
-    const taxaConversao = totalAtendimentos?.count 
+    const finalizados = await queryOne<CountResult>(finalizadosQuery, [uid, ...params]);
+    const taxaConversao = totalAtendimentos?.count
       ? ((finalizados?.count || 0) / totalAtendimentos.count * 100).toFixed(1)
       : '0';
 
     // 14. Comissões Totais
     const comissoesTotalQuery = `
-      SELECT COALESCE(SUM(valor_comissao), 0) as total
-      FROM comissoes
+      SELECT COALESCE(SUM(c.valor_comissao), 0) as total
+      FROM comissoes c
+      INNER JOIN atendimentos a ON c.atendimento_id = a.id
+      WHERE a.unidade_id = ?
     `;
-    const comissoesTotal = await queryOne<FaturamentoResult>(comissoesTotalQuery);
+    const comissoesTotal = await queryOne<FaturamentoResult>(comissoesTotalQuery, [uid]);
 
     // Labels para origem
     const origemLabels: Record<string, string> = {
@@ -251,8 +253,6 @@ export async function GET(request: NextRequest) {
       resumo: {
         faturamento: faturamento?.total || 0,
         aReceber: aReceber?.total || 0,
-        vencidas: vencidas?.total || 0,
-        parcelasVencidas: vencidas?.count || 0,
         totalAtendimentos: totalAtendimentos?.count || 0,
         totalClientes: totalClientes?.count || 0,
         ticketMedio: ticketMedio?.total || 0,
@@ -274,4 +274,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { nome, cpf, telefone, email, data_nascimento, endereco, origem, observacoes } = body;
+    const { nome, cpf, telefone, email, data_nascimento, endereco, origem, sexo, plano_odontologico, observacoes } = body;
 
     // Validações
     if (!nome || nome.trim() === '') {
@@ -93,9 +93,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const sexosValidos = ['masculino', 'feminino', 'outro'];
+    const sexoValido = sexo && sexosValidos.includes(sexo) ? sexo : null;
+    const planosValidos = ['Clin', 'Prime', 'OdontoArt'];
+    const planoValido = plano_odontologico && planosValidos.includes(plano_odontologico) ? plano_odontologico : null;
+
     const result = await execute(
-      `INSERT INTO clientes (nome, cpf, telefone, email, data_nascimento, endereco, origem, observacoes) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO clientes (nome, cpf, telefone, email, data_nascimento, endereco, origem, sexo, plano_odontologico, observacoes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         nome.trim(),
         cpf?.trim() || null,
@@ -104,6 +109,8 @@ export async function POST(request: NextRequest) {
         data_nascimento || null,
         endereco?.trim() || null,
         origem,
+        sexoValido,
+        planoValido,
         observacoes?.trim() || null,
       ]
     );

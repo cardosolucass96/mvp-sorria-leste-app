@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { query, queryOne, execute } from '@/lib/db';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 
 interface ItemAtendimento {
   id: number;
@@ -27,16 +28,29 @@ interface Procedimento {
 interface Atendimento {
   id: number;
   status: string;
+  unidade_id: number;
+}
+
+async function verificarAtendimentoUnidade(atendimentoId: number, unidadeId: number) {
+  const at = await queryOne<Atendimento>(
+    'SELECT id, status, unidade_id FROM atendimentos WHERE id = ?',
+    [atendimentoId]
+  );
+  if (!at) return { error: NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 }) };
+  if (at.unidade_id !== unidadeId) return { error: NextResponse.json({ error: 'Atendimento não pertence a esta unidade' }, { status: 403 }) };
+  return { atendimento: at };
 }
 
 // GET /api/atendimentos/[id]/itens - Lista itens do atendimento
-export async function GET(
+export const GET = withUnit(async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  context: UnitAuthenticatedContext
+) => {
   try {
-    const { id } = await params;
-    
+    const { id } = await context.params!;
+    const result = await verificarAtendimentoUnidade(parseInt(id as string), context.unidadeId);
+    if ('error' in result) return result.error;
+
     const itens = await query<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null; criado_por_nome: string | null }>(
       `SELECT
         i.*,
@@ -50,9 +64,9 @@ export async function GET(
       LEFT JOIN usuarios c ON i.criado_por_id = c.id
       WHERE i.atendimento_id = ?
       ORDER BY i.group_id NULLS LAST, i.created_at ASC`,
-      [parseInt(id)]
+      [parseInt(id as string)]
     );
-    
+
     return NextResponse.json(itens);
   } catch (error) {
     console.error('Erro ao buscar itens:', error);
@@ -61,30 +75,22 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // POST /api/atendimentos/[id]/itens - Adiciona item ao atendimento
-export async function POST(
+export const POST = withUnit(async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  context: UnitAuthenticatedContext
+) => {
   try {
-    const { id } = await params;
+    const { id } = await context.params!;
     const body = await request.json();
-    const { procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade } = body;
-    
-    // Verifica se atendimento existe
-    const atendimento = await queryOne<Atendimento>(
-      'SELECT * FROM atendimentos WHERE id = ?',
-      [parseInt(id)]
-    );
-    
-    if (!atendimento) {
-      return NextResponse.json(
-        { error: 'Atendimento não encontrado' },
-        { status: 404 }
-      );
-    }
+    const { procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, observacoes } = body;
+
+    // Verifica se atendimento existe e pertence à unidade
+    const result = await verificarAtendimentoUnidade(parseInt(id as string), context.unidadeId);
+    if ('error' in result) return result.error;
+    const atendimento = result.atendimento;
     
     // Verifica se pode adicionar itens (triagem, avaliacao ou em_execucao)
     if (!['triagem', 'avaliacao', 'em_execucao'].includes(atendimento.status)) {
@@ -142,7 +148,17 @@ export async function POST(
     const quantidadeFinal = quantidade || 1;
 
     interface DenteFaceDB { dente: string; faces: Array<{ nome: string }> }
-    const dentesArray: DenteFaceDB[] = dentes ? JSON.parse(dentes) : [];
+    let dentesArray: DenteFaceDB[] = [];
+    if (dentes) {
+      try {
+        const parsed = JSON.parse(dentes);
+        if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
+          dentesArray = parsed;
+        }
+      } catch {
+        // dentes is a plain string (legacy format) — skip per-dente logic
+      }
+    }
 
     // Fluxo por_dente: cria 1 item por dente com group_id compartilhado
     if (procedimento.por_dente && dentesArray.length > 0) {
@@ -153,10 +169,10 @@ export async function POST(
       for (const d of dentesArray) {
         const res = await execute(
           `INSERT INTO itens_atendimento
-            (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, group_id, dente_unico, status)
-           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 'pendente')`,
+            (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, group_id, dente_unico, observacoes, status)
+           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 'pendente')`,
           [
-            parseInt(id),
+            parseInt(id as string),
             procedimento_id,
             executor_id || null,
             criado_por_id || null,
@@ -164,6 +180,7 @@ export async function POST(
             JSON.stringify([d]),
             groupId,
             d.dente,
+            observacoes || null,
           ]
         );
         const itemId = res.lastInsertRowid as number;
@@ -181,7 +198,7 @@ export async function POST(
       if (atendimento.status === 'em_execucao') {
         await execute(
           "UPDATE atendimentos SET status = 'aguardando_pagamento' WHERE id = ?",
-          [parseInt(id)]
+          [parseInt(id as string)]
         );
       }
 
@@ -189,22 +206,23 @@ export async function POST(
     }
 
     // Fluxo original para procedimentos NÃO por_dente
-    const result = await execute(
+    const insertResult = await execute(
       `INSERT INTO itens_atendimento
-        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente')`,
+        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, observacoes, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendente')`,
       [
-        parseInt(id),
+        parseInt(id as string),
         procedimento_id,
         executor_id || null,
         criado_por_id || null,
         valorFinal,
         dentes || null,
-        quantidadeFinal
+        quantidadeFinal,
+        observacoes || null,
       ]
     );
 
-    const itemId = result.lastInsertRowid as number;
+    const itemId = insertResult.lastInsertRowid as number;
 
     // Cria etapas se tiver dentes com faces definidas
     for (const d of dentesArray) {
@@ -220,7 +238,7 @@ export async function POST(
     if (atendimento.status === 'em_execucao') {
       await execute(
         "UPDATE atendimentos SET status = 'aguardando_pagamento' WHERE id = ?",
-        [parseInt(id)]
+        [parseInt(id as string)]
       );
     }
 
@@ -245,16 +263,15 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});
 
 // DELETE /api/atendimentos/[id]/itens - Remove item ou grupo (só na avaliação)
-// Query params: item_id=X (remove um item) OU group_id=UUID (remove todos do grupo)
-export async function DELETE(
+export const DELETE = withUnit(async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  context: UnitAuthenticatedContext
+) => {
   try {
-    const { id } = await params;
+    const { id } = await context.params!;
     const { searchParams } = new URL(request.url);
     const itemId = searchParams.get('item_id');
     const groupId = searchParams.get('group_id');
@@ -266,18 +283,10 @@ export async function DELETE(
       );
     }
 
-    // Verifica se atendimento existe e está em avaliação
-    const atendimento = await queryOne<Atendimento>(
-      'SELECT * FROM atendimentos WHERE id = ?',
-      [parseInt(id)]
-    );
-
-    if (!atendimento) {
-      return NextResponse.json(
-        { error: 'Atendimento não encontrado' },
-        { status: 404 }
-      );
-    }
+    // Verifica se atendimento existe e pertence à unidade
+    const result = await verificarAtendimentoUnidade(parseInt(id as string), context.unidadeId);
+    if ('error' in result) return result.error;
+    const atendimento = result.atendimento;
 
     if (atendimento.status !== 'avaliacao') {
       return NextResponse.json(
@@ -292,7 +301,7 @@ export async function DELETE(
     if (groupId) {
       itensParaRemover = await query<{ id: number }>(
         'SELECT id FROM itens_atendimento WHERE group_id = ? AND atendimento_id = ?',
-        [groupId, parseInt(id)]
+        [groupId, parseInt(id as string)]
       );
       if (itensParaRemover.length === 0) {
         return NextResponse.json({ error: 'Grupo não encontrado' }, { status: 404 });
@@ -300,7 +309,7 @@ export async function DELETE(
     } else {
       const item = await queryOne<{ id: number }>(
         'SELECT id FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
-        [parseInt(itemId!), parseInt(id)]
+        [parseInt(itemId!), parseInt(id as string)]
       );
       if (!item) {
         return NextResponse.json({ error: 'Item não encontrado' }, { status: 404 });
@@ -333,4 +342,4 @@ export async function DELETE(
       { status: 500 }
     );
   }
-}
+});

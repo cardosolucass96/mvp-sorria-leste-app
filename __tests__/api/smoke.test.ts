@@ -35,33 +35,35 @@ describe('Smoke Test — Infraestrutura de Testes de API', () => {
   });
 
   test('callRoute GET retorna JSON mockado', async () => {
-    // Configurar mock: quando a query contiver "select * from clientes", retornar dados de seed
-    mockQueryResponse('select * from clientes', TODOS_CLIENTES);
+    // GET /api/clientes agora retorna { clientes, total, page, ... } com paginação
+    mockQueryResponse('select count(*) as total from clientes', { total: TODOS_CLIENTES.length });
+    mockQueryResponse('select * from clientes order by nome', TODOS_CLIENTES);
 
-    const { status, data } = await callRoute<typeof TODOS_CLIENTES>(
+    const { status, data } = await callRoute<{ clientes: typeof TODOS_CLIENTES }>(
       GET,
       '/api/clientes',
       { method: 'GET' }
     );
 
     expect(status).toBe(200);
-    expect(Array.isArray(data)).toBe(true);
-    expect(data).toHaveLength(3);
-    expect(data[0].nome).toBe('Lucas Cardoso');
+    expect(Array.isArray(data.clientes)).toBe(true);
+    expect(data.clientes).toHaveLength(3);
+    expect(data.clientes[0].nome).toBe('Lucas Cardoso');
   });
 
   test('callRoute GET com searchParams funciona', async () => {
-    mockQueryResponse('select * from clientes', [CLIENTE_BASICO]);
+    mockQueryResponse('select count(*) as total from clientes where nome like', { total: 1 });
+    mockQueryResponse('where nome like', [CLIENTE_BASICO]);
 
-    const { status, data } = await callRoute<typeof TODOS_CLIENTES>(
+    const { status, data } = await callRoute<{ clientes: typeof TODOS_CLIENTES }>(
       GET,
       '/api/clientes',
       { method: 'GET', searchParams: { busca: 'Lucas' } }
     );
 
     expect(status).toBe(200);
-    expect(data).toHaveLength(1);
-    expect(data[0].nome).toBe('Lucas Cardoso');
+    expect(data.clientes).toHaveLength(1);
+    expect(data.clientes[0].nome).toBe('Lucas Cardoso');
   });
 
   test('callRoute POST envia body JSON corretamente', async () => {
@@ -106,7 +108,8 @@ describe('Smoke Test — Infraestrutura de Testes de API', () => {
   });
 
   test('mock DB registra queries executadas', async () => {
-    mockQueryResponse('select * from clientes', []);
+    mockQueryResponse('select count(*) as total from clientes', { total: 0 });
+    mockQueryResponse('select * from clientes order by nome', []);
 
     await callRoute(GET, '/api/clientes');
 

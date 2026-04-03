@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Search, User, Stethoscope, PlusCircle } from 'lucide-react';
@@ -21,6 +22,7 @@ interface Atendimento {
 export default function AvaliacaoPage() {
   usePageTitle('Avaliação');
   const { user } = useAuth();
+  const unitFetch = useUnitFetch();
   const [atendimentosDisponiveis, setAtendimentosDisponiveis] = useState<Atendimento[]>([]);
   const [meusAtendimentos, setMeusAtendimentos] = useState<Atendimento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,19 +32,19 @@ export default function AvaliacaoPage() {
     if (!user) return;
     
     try {
-      const res = await fetch('/api/atendimentos');
+      const res = await unitFetch('/api/atendimentos');
       const data = await res.json();
-      
+
       // Atendimentos disponíveis: em avaliação SEM avaliador definido
-      const disponiveis = data.filter((a: Atendimento) => 
+      const disponiveis = data.filter((a: Atendimento) =>
         a.status === 'avaliacao' && !a.avaliador_id
       );
-      
+
       // Meus atendimentos: onde EU sou o avaliador (apenas em avaliação)
-      const meus = data.filter((a: Atendimento) => 
+      const meus = data.filter((a: Atendimento) =>
         a.avaliador_id === user.id && a.status === 'avaliacao'
       );
-      
+
       setAtendimentosDisponiveis(disponiveis);
       setMeusAtendimentos(meus);
     } catch (error) {
@@ -51,7 +53,7 @@ export default function AvaliacaoPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, unitFetch]);
 
   useEffect(() => {
     carregarAtendimentos();
@@ -61,11 +63,11 @@ export default function AvaliacaoPage() {
     if (!user) return;
     
     try {
-      const res = await fetch(`/api/atendimentos/${atendimentoId}`, {
+      const res = await unitFetch(`/api/atendimentos/${atendimentoId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          avaliador_id: user.id 
+        body: JSON.stringify({
+          avaliador_id: user.id
         }),
       });
       

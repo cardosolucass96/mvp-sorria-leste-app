@@ -15,12 +15,19 @@ export async function GET(
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
     }
 
-    // Atendimentos
+    // Atendimentos (com totais calculados e nome da unidade)
     const atendimentos = await query(
-      `SELECT a.*, u.nome as avaliador_nome
+      `SELECT a.*,
+              u.nome as avaliador_nome,
+              un.nome as unidade_nome,
+              COALESCE(SUM(i.valor), 0) as total,
+              COALESCE(SUM(i.valor_pago), 0) as total_pago
        FROM atendimentos a
        LEFT JOIN usuarios u ON a.avaliador_id = u.id
+       LEFT JOIN unidades un ON a.unidade_id = un.id
+       LEFT JOIN itens_atendimento i ON i.atendimento_id = a.id
        WHERE a.cliente_id = ?
+       GROUP BY a.id
        ORDER BY a.created_at DESC`,
       [clienteId]
     );
@@ -30,6 +37,7 @@ export async function GET(
       `SELECT i.id, i.atendimento_id, i.valor, i.valor_pago, i.status,
               i.dentes, i.quantidade, i.observacoes, i.created_at, i.concluido_at,
               p.nome as procedimento_nome,
+              i.etapa_label,
               u.nome as executor_nome,
               c.nome as criado_por_nome
        FROM itens_atendimento i
@@ -55,83 +63,87 @@ export async function GET(
       [clienteId]
     );
 
-    // Histórico — eventos derivados das tabelas existentes
-    const historico = await query(
-      `SELECT * FROM (
-        SELECT 'atendimento_criado' as tipo, a.created_at as data,
-               'Atendimento #' || a.id || ' criado (status: ' || a.status || ')' as descricao,
-               a.id as ref_id
-        FROM atendimentos a WHERE a.cliente_id = ?
-
-        UNION ALL
-
-        SELECT 'liberado', a.liberado_em,
-               'Atendimento #' || a.id || ' liberado para execução' ||
-               CASE WHEN u.nome IS NOT NULL THEN ' por ' || u.nome ELSE '' END,
-               a.id
-        FROM atendimentos a
-        LEFT JOIN usuarios u ON a.liberado_por_id = u.id
-        WHERE a.cliente_id = ? AND a.liberado_em IS NOT NULL
-
-        UNION ALL
-
-        SELECT 'finalizado', a.finalizado_at,
-               'Atendimento #' || a.id || ' finalizado',
-               a.id
-        FROM atendimentos a
-        WHERE a.cliente_id = ? AND a.finalizado_at IS NOT NULL
-
-        UNION ALL
-
-        SELECT 'pagamento', pg.created_at,
-               'Pagamento de R$ ' || printf('%.2f', pg.valor) ||
-               ' registrado no atendimento #' || a.id ||
-               CASE WHEN pg.cancelado = 1 THEN ' (cancelado)' ELSE '' END,
-               pg.atendimento_id
-        FROM pagamentos pg
-        INNER JOIN atendimentos a ON pg.atendimento_id = a.id
-        WHERE a.cliente_id = ?
-
-        UNION ALL
-
-        SELECT 'procedimento', i.created_at,
-               'Procedimento "' || p.nome || '" adicionado ao atendimento #' || a.id,
-               a.id
-        FROM itens_atendimento i
-        INNER JOIN atendimentos a ON i.atendimento_id = a.id
-        INNER JOIN procedimentos p ON i.procedimento_id = p.id
-        WHERE a.cliente_id = ?
-
-        UNION ALL
-
-        SELECT 'etapa_concluida', e.concluido_at,
-               'Etapa ' || e.face || ' do dente ' || e.dente ||
-               ' concluída em "' || p.nome || '" (atend. #' || a.id || ')' ||
-               CASE WHEN u.nome IS NOT NULL THEN ' por ' || u.nome ELSE '' END,
-               a.id
-        FROM etapas_procedimento e
-        INNER JOIN itens_atendimento i ON e.item_atendimento_id = i.id
-        INNER JOIN atendimentos a ON i.atendimento_id = a.id
-        INNER JOIN procedimentos p ON i.procedimento_id = p.id
-        LEFT JOIN usuarios u ON e.concluido_por_id = u.id
-        WHERE a.cliente_id = ? AND e.concluido_at IS NOT NULL
-      )
-      ORDER BY data DESC`,
-      [clienteId, clienteId, clienteId, clienteId, clienteId, clienteId]
-    );
-
-    // Itens de pagamento (quais procedimentos cada pagamento cobriu)
-    const pagamentosItens = await query(
-      `SELECT pi.pagamento_id, pi.item_atendimento_id, pi.valor_aplicado,
-              p.nome as procedimento_nome
-       FROM pagamentos_itens pi
-       INNER JOIN pagamentos pg ON pi.pagamento_id = pg.id
-       INNER JOIN atendimentos a ON pg.atendimento_id = a.id
-       INNER JOIN itens_atendimento ia ON pi.item_atendimento_id = ia.id
-       INNER JOIN procedimentos p ON ia.procedimento_id = p.id
-       WHERE a.cliente_id = ?`,
-      [clienteId]
-    );
+    // Histórico — executado em queries separadas para evitar limite de compound SELECT do D1
+    const [hCriados, hLiberados, hFinalizados, hPagamentos, hProcedimentos, hEtapas, hMovimentacoes] = await Promise.all([
+      query(
+        `SELECT 'atendimento_criado' as tipo, a.created_at as data,
+                'Atendimento #' || a.id || ' criado (status: ' || a.status || ')' as descricao,
+                a.id as ref_id
+         FROM atendimentos a WHERE a.cliente_id = ?`,
+        [clienteId]
+      ),
+      query(
+        `SELECT 'liberado' as tipo, a.liberado_em as data,
+                'Atendimento #' || a.id || ' liberado para execução' ||
+                CASE WHEN u.nome IS NOT NULL THEN ' por ' || u.nome ELSE '' END as descricao,
+                a.id as ref_id
+         FROM atendimentos a
+         LEFT JOIN usuarios u ON a.liberado_por_id = u.id
+         WHERE a.cliente_id = ? AND a.liberado_em IS NOT NULL`,
+        [clienteId]
+      ),
+      query(
+        `SELECT 'finalizado' as tipo, a.finalizado_at as data,
+                'Atendimento #' || a.id || ' finalizado' as descricao,
+                a.id as ref_id
+         FROM atendimentos a
+         WHERE a.cliente_id = ? AND a.finalizado_at IS NOT NULL`,
+        [clienteId]
+      ),
+      query(
+        `SELECT 'pagamento' as tipo, pg.created_at as data,
+                'Pagamento de R$ ' || printf('%.2f', pg.valor) ||
+                ' registrado no atendimento #' || a.id ||
+                CASE WHEN pg.cancelado = 1 THEN ' (cancelado)' ELSE '' END as descricao,
+                pg.atendimento_id as ref_id
+         FROM pagamentos pg
+         INNER JOIN atendimentos a ON pg.atendimento_id = a.id
+         WHERE a.cliente_id = ?`,
+        [clienteId]
+      ),
+      query(
+        `SELECT 'procedimento' as tipo, i.created_at as data,
+                'Procedimento "' || p.nome || '" adicionado ao atendimento #' || a.id as descricao,
+                a.id as ref_id
+         FROM itens_atendimento i
+         INNER JOIN atendimentos a ON i.atendimento_id = a.id
+         INNER JOIN procedimentos p ON i.procedimento_id = p.id
+         WHERE a.cliente_id = ?`,
+        [clienteId]
+      ),
+      query(
+        `SELECT 'etapa_concluida' as tipo, e.concluido_at as data,
+                'Etapa ' || e.face || ' do dente ' || e.dente ||
+                ' concluída em "' || p.nome || '" (atend. #' || a.id || ')' ||
+                CASE WHEN u.nome IS NOT NULL THEN ' por ' || u.nome ELSE '' END as descricao,
+                a.id as ref_id
+         FROM etapas_procedimento e
+         INNER JOIN itens_atendimento i ON e.item_atendimento_id = i.id
+         INNER JOIN atendimentos a ON i.atendimento_id = a.id
+         INNER JOIN procedimentos p ON i.procedimento_id = p.id
+         LEFT JOIN usuarios u ON e.concluido_por_id = u.id
+         WHERE a.cliente_id = ? AND e.concluido_at IS NOT NULL`,
+        [clienteId]
+      ),
+      query(
+        `SELECT ms.tipo as tipo, ms.created_at as data,
+                ms.observacoes as descricao,
+                COALESCE(ms.item_atendimento_id, 0) as ref_id,
+                ms.valor, ms.saldo_anterior, ms.saldo_novo
+         FROM movimentacoes_saldo ms
+         WHERE ms.cliente_id = ?
+         ORDER BY ms.created_at DESC`,
+        [clienteId]
+      ),
+    ]);
+    const historico = [
+      ...hCriados, ...hLiberados, ...hFinalizados,
+      ...hPagamentos, ...hProcedimentos, ...hEtapas, ...hMovimentacoes,
+    ].sort((a, b) => {
+      const da = (a as { data: string }).data;
+      const db2 = (b as { data: string }).data;
+      return da > db2 ? -1 : da < db2 ? 1 : 0;
+    });
 
     // Prontuários — procedimentos concluídos com texto de prontuário
     const prontuarios = await query(
@@ -143,6 +155,7 @@ export async function GET(
          i.quantidade,
          i.observacoes as item_observacoes,
          p.nome as procedimento_nome,
+         i.etapa_label,
          u.nome as executor_nome,
          pr.id as prontuario_id,
          pr.descricao as prontuario_descricao,
@@ -161,7 +174,7 @@ export async function GET(
       [clienteId]
     );
 
-    return NextResponse.json({ atendimentos, procedimentos, pagamentos, pagamentosItens, historico, prontuarios });
+    return NextResponse.json({ atendimentos, procedimentos, pagamentos, historico, prontuarios, movimentacoes: hMovimentacoes });
   } catch (error) {
     console.error('Erro ao buscar ficha:', error);
     return NextResponse.json({ error: 'Erro ao buscar ficha' }, { status: 500 });

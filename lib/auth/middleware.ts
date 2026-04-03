@@ -30,7 +30,7 @@ export interface AuthenticatedContext {
 type AuthenticatedHandler = (
   request: NextRequest,
   context: AuthenticatedContext
-) => Promise<Response>;
+) => Promise<Response | void>;
 
 /**
  * Middleware que exige autenticação via JWT.
@@ -83,5 +83,63 @@ export function withRole(
     }
 
     return handler(request, context);
+  });
+}
+
+// ============================================================
+// Middleware com contexto de unidade
+// ============================================================
+
+/**
+ * Extrai a unidade atual do request.
+ * Prioridade: header X-Unidade-Id > JWT unidade_atual > fallback 1.
+ * Valida que o usuário pertence à unidade (admin acessa qualquer uma).
+ */
+export function getUnidadeFromRequest(
+  request: NextRequest,
+  user: JwtPayload
+): number {
+  const headerUnit = request.headers.get('X-Unidade-Id');
+  if (headerUnit) {
+    const parsed = parseInt(headerUnit);
+    if (!isNaN(parsed)) {
+      if (user.role === 'admin' || (user.unidade_ids && user.unidade_ids.includes(parsed))) {
+        return parsed;
+      }
+    }
+  }
+  return user.unidade_atual || 1;
+}
+
+export interface UnitAuthenticatedContext extends AuthenticatedContext {
+  unidadeId: number;
+}
+
+type UnitAuthenticatedHandler = (
+  request: NextRequest,
+  context: UnitAuthenticatedContext
+) => Promise<Response | void>;
+
+/**
+ * Middleware que exige autenticação + extrai unidade atual.
+ * Adiciona `unidadeId` ao context.
+ */
+export function withUnit(handler: UnitAuthenticatedHandler) {
+  return withAuth(async (request: NextRequest, context: AuthenticatedContext) => {
+    const unidadeId = getUnidadeFromRequest(request, context.user);
+    return handler(request, { ...context, unidadeId });
+  });
+}
+
+/**
+ * Middleware que exige autenticação + role + extrai unidade.
+ */
+export function withUnitRole(
+  roles: UserRole[],
+  handler: UnitAuthenticatedHandler
+) {
+  return withRole(roles, async (request: NextRequest, context: AuthenticatedContext) => {
+    const unidadeId = getUnidadeFromRequest(request, context.user);
+    return handler(request, { ...context, unidadeId });
   });
 }

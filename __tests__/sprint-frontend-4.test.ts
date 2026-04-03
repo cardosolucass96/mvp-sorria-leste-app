@@ -106,10 +106,6 @@ describe('Sprint 4: pagamentos/page.tsx', () => {
     expect(src).toContain('PageHeader');
   });
 
-  test('usa Tabs', () => {
-    expect(src).toContain('Tabs');
-  });
-
   test('usa Table', () => {
     expect(src).toContain('Table');
   });

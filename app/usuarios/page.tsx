@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Usuario, UserRole } from '@/lib/types';
-import { Users } from 'lucide-react';
+import { Usuario, UserRole, Unidade } from '@/lib/types';
+import { Users, Building2 } from 'lucide-react';
 import { PageHeader, Card, Button, Input, Select, Badge, Alert, LoadingState, Table, ConfirmDialog } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { ROLE_LABELS_DESCRITIVOS } from '@/lib/constants/roles';
@@ -13,21 +13,28 @@ const roleOptions = Object.entries(ROLE_LABELS_DESCRITIVOS).map(([value, label])
   label,
 }));
 
+interface UsuarioComUnidades extends Usuario {
+  unidade_ids?: number[];
+}
+
 interface UsuarioFormData {
   nome: string;
   email: string;
   role: UserRole;
+  unidade_ids: number[];
 }
 
 const initialFormData: UsuarioFormData = {
   nome: '',
   email: '',
   role: 'atendente',
+  unidade_ids: [1],
 };
 
 export default function UsuariosPage() {
   usePageTitle('Usuários');
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [usuarios, setUsuarios] = useState<UsuarioComUnidades[]>([]);
+  const [unidades, setUnidades] = useState<Unidade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -47,12 +54,19 @@ export default function UsuariosPage() {
     setConfirmDialog({ ...config, isOpen: true });
   };
 
-  // Carregar usuários
+  // Carregar usuários e unidades
   const loadUsuarios = async () => {
     try {
-      const response = await fetch('/api/usuarios');
-      const data = await response.json();
-      setUsuarios(data);
+      const [resUsuarios, resUnidades] = await Promise.all([
+        fetch('/api/usuarios'),
+        fetch('/api/unidades'),
+      ]);
+      const dataUsuarios = await resUsuarios.json();
+      setUsuarios(dataUsuarios);
+      if (resUnidades.ok) {
+        const dataUnidades = await resUnidades.json();
+        setUnidades(dataUnidades);
+      }
     } catch {
       setError('Erro ao carregar usuários');
     } finally {
@@ -84,11 +98,12 @@ export default function UsuariosPage() {
   };
 
   // Abrir formulário para editar
-  const handleEdit = (usuario: Usuario) => {
+  const handleEdit = (usuario: UsuarioComUnidades) => {
     setFormData({
       nome: usuario.nome,
       email: usuario.email,
       role: usuario.role,
+      unidade_ids: usuario.unidade_ids || [1],
     });
     setEditingId(usuario.id);
     setShowForm(true);
@@ -246,6 +261,35 @@ export default function UsuariosPage() {
               options={roleOptions}
               required
             />
+            {unidades.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <Building2 className="w-4 h-4 inline mr-1" />
+                  Unidades
+                </label>
+                <div className="flex flex-wrap gap-3">
+                  {unidades.map(u => (
+                    <label key={u.id} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.unidade_ids.includes(u.id)}
+                        onChange={(e) => {
+                          const ids = e.target.checked
+                            ? [...formData.unidade_ids, u.id]
+                            : formData.unidade_ids.filter(id => id !== u.id);
+                          setFormData({ ...formData, unidade_ids: ids.length > 0 ? ids : [u.id] });
+                        }}
+                        className="w-4 h-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+                      />
+                      <span className="text-sm text-neutral-700">{u.nome}</span>
+                    </label>
+                  ))}
+                </div>
+                {formData.unidade_ids.length === 0 && (
+                  <p className="text-xs text-error-600 mt-1">Selecione ao menos uma unidade</p>
+                )}
+              </div>
+            )}
             <div className="flex gap-2">
               <Button type="submit">Salvar</Button>
               <Button type="button" variant="secondary" onClick={handleCancel}>Cancelar</Button>
@@ -265,7 +309,7 @@ export default function UsuariosPage() {
         type={confirmDialog.type}
       />
 
-      <Table<Usuario>
+      <Table<UsuarioComUnidades>
         columns={[
           {
             key: 'nome',
@@ -284,6 +328,25 @@ export default function UsuariosPage() {
               <Badge color={getRoleBadgeColor(u.role)}>
                 {ROLE_LABELS_DESCRITIVOS[u.role]}
               </Badge>
+            ),
+          },
+          {
+            key: 'unidades',
+            label: 'Unidades',
+            render: (u) => (
+              <div className="flex flex-wrap gap-1">
+                {(u.unidade_ids || []).map(uid => {
+                  const unidade = unidades.find(un => un.id === uid);
+                  return (
+                    <Badge key={uid} color="blue">
+                      {unidade?.nome || `Unidade ${uid}`}
+                    </Badge>
+                  );
+                })}
+                {(!u.unidade_ids || u.unidade_ids.length === 0) && (
+                  <span className="text-neutral-400 text-sm">—</span>
+                )}
+              </div>
             ),
           },
           {
@@ -316,7 +379,7 @@ export default function UsuariosPage() {
               </div>
             ),
           },
-        ] as TableColumn<Usuario>[]}
+        ] as TableColumn<UsuarioComUnidades>[]}
         data={usuarios}
         keyExtractor={(u) => u.id}
         emptyMessage="Nenhum usuário cadastrado"

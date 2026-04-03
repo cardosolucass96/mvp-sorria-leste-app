@@ -41,32 +41,35 @@ afterEach(() => {
 
 describe('GET /api/clientes', () => {
   it('retorna lista de clientes ordenados por nome', async () => {
+    mockQueryResponse('select count(*) as total from clientes', { total: TODOS_CLIENTES.length });
     mockQueryResponse('select * from clientes order by nome', TODOS_CLIENTES);
 
-    const { status, data } = await callRoute(listClientes, '/api/clientes');
+    const { status, data } = await callRoute<{ clientes: typeof TODOS_CLIENTES }>(listClientes, '/api/clientes');
 
     expect(status).toBe(200);
-    expect(data).toEqual(TODOS_CLIENTES);
+    expect(data.clientes).toEqual(TODOS_CLIENTES);
   });
 
   it('retorna lista vazia quando não há clientes', async () => {
+    mockQueryResponse('select count(*) as total from clientes', { total: 0 });
     mockQueryResponse('select * from clientes order by nome', []);
 
-    const { status, data } = await callRoute(listClientes, '/api/clientes');
+    const { status, data } = await callRoute<{ clientes: unknown[] }>(listClientes, '/api/clientes');
 
     expect(status).toBe(200);
-    expect(data).toEqual([]);
+    expect(data.clientes).toEqual([]);
   });
 
   it('busca por nome parcial', async () => {
+    mockQueryResponse('select count(*) as total from clientes where nome like', { total: 1 });
     mockQueryResponse('where nome like', [CLIENTE_BASICO]);
 
-    const { status, data } = await callRoute(listClientes, '/api/clientes', {
+    const { status, data } = await callRoute<{ clientes: typeof TODOS_CLIENTES }>(listClientes, '/api/clientes', {
       searchParams: { busca: 'Lucas' },
     });
 
     expect(status).toBe(200);
-    expect(data).toEqual([CLIENTE_BASICO]);
+    expect(data.clientes).toEqual([CLIENTE_BASICO]);
 
     // Verifica se o parâmetro de busca foi usado na query
     const queries = getExecutedQueries();
@@ -76,47 +79,51 @@ describe('GET /api/clientes', () => {
   });
 
   it('busca por CPF parcial', async () => {
+    mockQueryResponse('select count(*) as total from clientes where nome like', { total: 1 });
     mockQueryResponse('where nome like', [CLIENTE_BASICO]);
 
-    const { status, data } = await callRoute(listClientes, '/api/clientes', {
+    const { status, data } = await callRoute<{ clientes: typeof TODOS_CLIENTES }>(listClientes, '/api/clientes', {
       searchParams: { busca: '529982' },
     });
 
     expect(status).toBe(200);
-    expect(data).toEqual([CLIENTE_BASICO]);
+    expect(data.clientes).toEqual([CLIENTE_BASICO]);
   });
 
   it('busca por telefone', async () => {
+    mockQueryResponse('select count(*) as total from clientes where nome like', { total: 1 });
     mockQueryResponse('where nome like', [CLIENTE_BASICO]);
 
-    const { status, data } = await callRoute(listClientes, '/api/clientes', {
+    const { status, data } = await callRoute<{ clientes: typeof TODOS_CLIENTES }>(listClientes, '/api/clientes', {
       searchParams: { busca: '11999887766' },
     });
 
     expect(status).toBe(200);
-    expect(data).toEqual([CLIENTE_BASICO]);
+    expect(data.clientes).toEqual([CLIENTE_BASICO]);
   });
 
   it('busca por email', async () => {
+    mockQueryResponse('select count(*) as total from clientes where nome like', { total: 1 });
     mockQueryResponse('where nome like', [CLIENTE_COMPLETO]);
 
-    const { status, data } = await callRoute(listClientes, '/api/clientes', {
+    const { status, data } = await callRoute<{ clientes: typeof TODOS_CLIENTES }>(listClientes, '/api/clientes', {
       searchParams: { busca: 'roberto@email' },
     });
 
     expect(status).toBe(200);
-    expect(data).toEqual([CLIENTE_COMPLETO]);
+    expect(data.clientes).toEqual([CLIENTE_COMPLETO]);
   });
 
   it('busca sem resultados retorna array vazio', async () => {
+    mockQueryResponse('select count(*) as total from clientes where nome like', { total: 0 });
     mockQueryResponse('where nome like', []);
 
-    const { status, data } = await callRoute(listClientes, '/api/clientes', {
+    const { status, data } = await callRoute<{ clientes: unknown[] }>(listClientes, '/api/clientes', {
       searchParams: { busca: 'ninguem_aqui' },
     });
 
     expect(status).toBe(200);
-    expect(data).toEqual([]);
+    expect(data.clientes).toEqual([]);
   });
 });
 
@@ -232,7 +239,7 @@ describe('POST /api/clientes', () => {
     expect(params[2]).toBe('11999');          // telefone
     expect(params[3]).toBe('trim@test.com'); // email lowercased + trimmed
     expect(params[5]).toBe('Rua Trim');      // endereco
-    expect(params[7]).toBe('obs');           // observacoes
+    expect(params[9]).toBe('obs');           // observacoes (índice 9: nome,cpf,telefone,email,data_nascimento,endereco,origem,sexo,plano,observacoes)
   });
 
   it('campos opcionais são null quando não enviados', async () => {

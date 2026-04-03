@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import { Activity, LayoutList, Users } from 'lucide-react';
 import { PageHeader, Card, LoadingState, EmptyState, Alert, ConfirmDialog } from '@/components/ui';
@@ -12,12 +13,33 @@ interface Procedimento {
   id: number;
   atendimento_id: number;
   procedimento_nome: string;
+  etapa_label: string | null;
+  tem_etapas: number;
   cliente_nome: string;
   executor_id: number | null;
   status: string;
   created_at: string;
   concluido_at: string | null;
   dente_unico: string | null;
+}
+
+function NomeProcedimento({ proc }: { proc: Procedimento }) {
+  const base = proc.dente_unico
+    ? `${proc.procedimento_nome} • Dente ${proc.dente_unico}`
+    : proc.procedimento_nome;
+  return (
+    <span className="inline-flex items-center gap-1.5 flex-wrap">
+      <span>{base}</span>
+      {proc.tem_etapas === 1 && proc.etapa_label && (
+        <span className="text-xs bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded font-medium">
+          {proc.etapa_label}
+        </span>
+      )}
+      {!proc.tem_etapas && proc.etapa_label && (
+        <span className="text-xs text-muted">— {proc.etapa_label}</span>
+      )}
+    </span>
+  );
 }
 
 interface FilaData {
@@ -31,10 +53,11 @@ export default function ExecucaoPage() {
   usePageTitle('Fila de Execução');
   const { user } = useAuth();
   const router = useRouter();
+  const unitFetch = useUnitFetch();
   const [fila, setFila] = useState<FilaData>({ meusProcedimentos: [], disponiveis: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [visualizacao, setVisualizacao] = useState<Visualizacao>('procedimento');
+  const [visualizacao, setVisualizacao] = useState<Visualizacao>('paciente');
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -43,13 +66,9 @@ export default function ExecucaoPage() {
   }>({ isOpen: false, title: '', message: '', onConfirm: async () => {} });
   const [pegando, setPegando] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (user?.id) carregarProcedimentos();
-  }, [user?.id]);
-
-  async function carregarProcedimentos() {
+  const carregarProcedimentos = useCallback(async () => {
     try {
-      const response = await fetch(`/api/execucao?executor_id=${user?.id}`);
+      const response = await unitFetch(`/api/execucao?executor_id=${user?.id}`);
       const data = await response.json();
       setFila(data);
     } catch {
@@ -57,7 +76,11 @@ export default function ExecucaoPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [user?.id, unitFetch]);
+
+  useEffect(() => {
+    if (user?.id) carregarProcedimentos();
+  }, [user?.id, carregarProcedimentos]);
 
   function confirmarPegarTodos(atendimento_id: number, cliente_nome: string, disponiveis: Procedimento[]) {
     setConfirmDialog({
@@ -70,7 +93,7 @@ export default function ExecucaoPage() {
         try {
           await Promise.all(
             disponiveis.map(proc =>
-              fetch(`/api/atendimentos/${proc.atendimento_id}/itens/${proc.id}`, {
+              unitFetch(`/api/atendimentos/${proc.atendimento_id}/itens/${proc.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ executor_id: user?.id }),
@@ -152,27 +175,49 @@ export default function ExecucaoPage() {
       ) : visualizacao === 'procedimento' ? (
         /* ─── VIEW: Por Procedimento ─── */
         <div className="space-y-8 mt-6">
-          <Section
-            label="Meus Procedimentos"
-            count={fila.meusProcedimentos.length}
-            badgeClass="bg-info-100 text-info-800"
-            empty="Nenhum procedimento atribuído a você ainda."
-          >
-            {fila.meusProcedimentos.map(proc => (
-              <ProcedimentoCard key={proc.id} proc={proc} onClick={() => router.push(`/execucao/${proc.id}`)} />
-            ))}
-          </Section>
+          {(() => {
+            const porAtendimento = todos.reduce<Record<number, Procedimento[]>>((acc, p) => {
+              if (!acc[p.atendimento_id]) acc[p.atendimento_id] = [];
+              acc[p.atendimento_id].push(p);
+              return acc;
+            }, {});
 
-          <Section
-            label="Disponíveis para Pegar"
-            count={fila.disponiveis.length}
-            badgeClass="bg-warning-100 text-warning-800"
-            empty="Nenhum procedimento disponível no momento."
-          >
-            {fila.disponiveis.map(proc => (
-              <ProcedimentoCard key={proc.id} proc={proc} onClick={() => router.push(`/execucao/${proc.id}`)} />
-            ))}
-          </Section>
+            return (
+              <>
+                <Section
+                  label="Meus Procedimentos"
+                  count={fila.meusProcedimentos.length}
+                  badgeClass="bg-info-100 text-info-800"
+                  empty="Nenhum procedimento atribuído a você ainda."
+                >
+                  {fila.meusProcedimentos.map(proc => (
+                    <ProcedimentoCard
+                      key={proc.id}
+                      proc={proc}
+                      irmaos={(porAtendimento[proc.atendimento_id] ?? []).filter(p => p.id !== proc.id)}
+                      onClick={() => router.push(`/execucao/${proc.id}`)}
+                    />
+                  ))}
+                </Section>
+
+                <Section
+                  label="Disponíveis para Pegar"
+                  count={fila.disponiveis.length}
+                  badgeClass="bg-warning-100 text-warning-800"
+                  empty="Nenhum procedimento disponível no momento."
+                >
+                  {fila.disponiveis.map(proc => (
+                    <ProcedimentoCard
+                      key={proc.id}
+                      proc={proc}
+                      irmaos={(porAtendimento[proc.atendimento_id] ?? []).filter(p => p.id !== proc.id)}
+                      onClick={() => router.push(`/execucao/${proc.id}`)}
+                    />
+                  ))}
+                </Section>
+              </>
+            );
+          })()}
         </div>
       ) : (
         /* ─── VIEW: Por Paciente ─── */
@@ -311,8 +356,8 @@ function PacienteSection({
                         {proc.executor_id === userId && (
                           <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-info-500" title="Meu procedimento" />
                         )}
-                        <span className="text-sm font-medium text-foreground truncate group-hover:text-primary-700">
-                          {proc.dente_unico ? `${proc.procedimento_nome} • Dente ${proc.dente_unico}` : proc.procedimento_nome}
+                        <span className="text-sm font-medium text-foreground group-hover:text-primary-700">
+                          <NomeProcedimento proc={proc} />
                         </span>
                       </div>
                       <StatusBadge type="item" status={proc.status} />
@@ -328,19 +373,34 @@ function PacienteSection({
   );
 }
 
-function ProcedimentoCard({ proc, onClick }: { proc: Procedimento; onClick: () => void }) {
+function ProcedimentoCard({ proc, irmaos, onClick }: { proc: Procedimento; irmaos: Procedimento[]; onClick: () => void }) {
   return (
     <Card variant="outlined" borderColor="border-info-500" onClick={onClick}>
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <h3 className="text-lg font-semibold text-foreground">
-            {proc.dente_unico ? `${proc.procedimento_nome} • Dente ${proc.dente_unico}` : proc.procedimento_nome}
+            <NomeProcedimento proc={proc} />
           </h3>
           <p className="text-sm text-neutral-600">{proc.cliente_nome}</p>
           <p className="text-xs text-neutral-400">Atendimento #{proc.atendimento_id}</p>
         </div>
         <StatusBadge type="item" status={proc.status} />
       </div>
+      {irmaos.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-border-light">
+          <p className="text-xs text-muted font-medium mb-1.5">Outros procedimentos deste paciente:</p>
+          <div className="space-y-1">
+            {irmaos.map(irmao => (
+              <div key={irmao.id} className="flex items-center justify-between gap-2">
+                <span className="text-xs text-neutral-600">
+                  <NomeProcedimento proc={irmao} />
+                </span>
+                <StatusBadge type="item" status={irmao.status} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

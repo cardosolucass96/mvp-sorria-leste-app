@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useAuth } from '@/contexts/AuthContext';
 import { ClipboardList, Search, Activity } from 'lucide-react';
 import { PageHeader, StatCard, Badge, LoadingState, Tabs, Alert, Table } from '@/components/ui';
@@ -25,6 +26,7 @@ interface Procedimento {
 export default function MeusProcedimentosPage() {
   usePageTitle('Meus Procedimentos');
   const { user, hasRole } = useAuth();
+  const unitFetch = useUnitFetch();
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,7 +36,7 @@ export default function MeusProcedimentosPage() {
     if (!user) return;
     
     try {
-      const res = await fetch(`/api/meus-procedimentos?usuario_id=${user.id}`);
+      const res = await unitFetch(`/api/meus-procedimentos?usuario_id=${user.id}`);
       const data = await res.json();
       setProcedimentos(data);
     } catch (error) {
@@ -43,7 +45,7 @@ export default function MeusProcedimentosPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, unitFetch]);
 
   useEffect(() => {
     carregarProcedimentos();

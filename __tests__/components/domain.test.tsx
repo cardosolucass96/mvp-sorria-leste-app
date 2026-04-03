@@ -178,17 +178,6 @@ describe('PagamentoForm', () => {
     });
   });
 
-  test('mostra parcelas apenas para cartão de crédito', async () => {
-    render(<PagamentoForm onSubmit={mockSubmit} />);
-    
-    // Initially no parcelas
-    expect(screen.queryByLabelText(/Parcelas/)).not.toBeInTheDocument();
-    
-    // Select cartao_credito
-    fireEvent.change(screen.getByLabelText(/Método/), { target: { value: 'cartao_credito' } });
-    
-    expect(screen.getByLabelText(/Parcelas/)).toBeInTheDocument();
-  });
 });
 
 // ─── ViewModeToggle ───────────────────────────────────────────────

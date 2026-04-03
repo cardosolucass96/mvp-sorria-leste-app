@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Inbox } from 'lucide-react';
+import { Inbox, ChevronsUpDown, ChevronUp, ChevronDown } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -11,7 +11,8 @@ export interface TableColumn<T> {
   align?: 'left' | 'center' | 'right';
   width?: string;
   render?: (item: T, index: number) => React.ReactNode;
-  sortable?: boolean;
+  /** Se definido, o header vira botão e chama onSort com este valor */
+  sortField?: string;
 }
 
 export interface TableProps<T> {
@@ -25,6 +26,12 @@ export interface TableProps<T> {
   stickyHeader?: boolean;
   caption?: string;
   className?: string;
+  /** Campo atualmente ordenado */
+  sortKey?: string;
+  /** Direção atual */
+  sortDir?: 'asc' | 'desc';
+  /** Callback ao clicar no header — alterna asc/desc se for o mesmo campo */
+  onSort?: (field: string, dir: 'asc' | 'desc') => void;
 }
 
 // ─── Skeleton ───────────────────────────────────────────────────
@@ -54,9 +61,25 @@ export default function Table<T>({
   stickyHeader = false,
   caption,
   className = '',
+  sortKey,
+  sortDir,
+  onSort,
 }: TableProps<T>) {
   const alignClass = (align?: string) =>
     align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+
+  const handleSort = (field: string) => {
+    if (!onSort) return;
+    const nextDir = sortKey === field && sortDir === 'asc' ? 'desc' : 'asc';
+    onSort(field, nextDir);
+  };
+
+  const SortIcon = ({ field }: { field: string }) => {
+    if (sortKey !== field) return <ChevronsUpDown className="w-3.5 h-3.5 text-primary-400" />;
+    return sortDir === 'asc'
+      ? <ChevronUp className="w-3.5 h-3.5 text-primary-700" />
+      : <ChevronDown className="w-3.5 h-3.5 text-primary-700" />;
+  };
 
   return (
     <div className={`overflow-x-auto rounded-xl border border-border-light ${className}`}>
@@ -76,7 +99,18 @@ export default function Table<T>({
                 `}
                 style={col.width ? { width: col.width } : undefined}
               >
-                {col.label}
+                {col.sortField && onSort ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSort(col.sortField!)}
+                    className="inline-flex items-center gap-1 hover:text-primary-700 transition-colors"
+                  >
+                    {col.label}
+                    <SortIcon field={col.sortField} />
+                  </button>
+                ) : (
+                  col.label
+                )}
               </th>
             ))}
           </tr>

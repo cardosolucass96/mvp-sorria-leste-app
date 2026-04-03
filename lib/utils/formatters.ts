@@ -29,6 +29,36 @@ export function formatarData(data: string | null | undefined): string {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+/**
+ * Formata data de agendamento: mostra hora apenas quando presente e não for 00:00.
+ * Ex: "2025-06-10" → "10/06/2025"
+ *     "2025-06-10T14:30" → "10/06/2025 14:30"
+ */
+export function formatarDataAgendada(data: string | null | undefined): string {
+  if (!data) return '-';
+  const s = data.trim();
+  const temHora = (s.includes('T') || s.includes(' ')) &&
+    !/T00:00(:\d{2})?$/.test(s) && !/ 00:00(:\d{2})?$/.test(s);
+  const d = parseSqliteDate(data);
+  if (!d || isNaN(d.getTime())) return '-';
+  if (temHora) {
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+/**
+ * Converte valor de data/datetime armazenado para o formato do input datetime-local (YYYY-MM-DDTHH:mm).
+ */
+export function toDateTimeLocal(data: string | null | undefined): string {
+  if (!data) return '';
+  const s = data.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s + 'T00:00';
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) return s.replace(' ', 'T').substring(0, 16);
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.substring(0, 16);
+  return s;
+}
+
 /** Formata data como dd/mm/aaaa HH:mm */
 export function formatarDataHora(data: string | null | undefined): string {
   const d = parseSqliteDate(data);
@@ -57,6 +87,21 @@ export function formatarCPF(cpf: string | null): string {
   return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
 }
 
+/**
+ * Retorna o nome completo do item de atendimento incluindo etapa quando aplicável.
+ * Ex: "Canal • Dente 18 — Etapa 1"
+ */
+export function nomeProcedimentoItem(item: {
+  procedimento_nome: string;
+  etapa_label?: string | null;
+  dente_unico?: string | null;
+}): string {
+  let nome = item.procedimento_nome;
+  if (item.dente_unico) nome += ` • Dente ${item.dente_unico}`;
+  if (item.etapa_label) nome += ` — ${item.etapa_label}`;
+  return nome;
+}
+
 /** Formata telefone: (11) 91234-5678 ou (11) 1234-5678 */
 export function formatarTelefone(telefone: string | null): string {
   if (!telefone) return '-';
@@ -73,6 +118,28 @@ export function formatarTelefone(telefone: string | null): string {
 /** Formata porcentagem: 15% */
 export function formatarPorcentagem(valor: number): string {
   return `${valor}%`;
+}
+
+/**
+ * Retorna tempo decorrido desde uma data até agora (ou até outra data).
+ * Ex: "há 5 min", "há 2h 30min", "há 3 dias"
+ */
+export function tempoDecorrido(inicio: string | null | undefined, fim?: string | null): string {
+  const d = parseSqliteDate(inicio);
+  if (!d || isNaN(d.getTime())) return '-';
+  const fimDate = fim ? (parseSqliteDate(fim) ?? new Date()) : new Date();
+  const diffMs = fimDate.getTime() - d.getTime();
+  if (diffMs < 0) return '-';
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'agora';
+  if (mins < 60) return `${mins} min`;
+  const horas = Math.floor(mins / 60);
+  const minRest = mins % 60;
+  if (horas < 24) return minRest > 0 ? `${horas}h ${minRest}min` : `${horas}h`;
+  const dias = Math.floor(horas / 24);
+  const horaRest = horas % 24;
+  if (dias < 7) return horaRest > 0 ? `${dias}d ${horaRest}h` : `${dias}d`;
+  return `${dias} dias`;
 }
 
 /** Retorna iniciais do nome (para avatar): "Lucas Cardoso" → "LC" */

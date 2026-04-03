@@ -19,6 +19,22 @@ import {
   getExecutedQueries,
 } from '../../helpers/db-mock';
 
+// Mock JWT para bypass de autenticação nos testes
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1,
+    email: 'admin@test.com',
+    role: 'admin',
+    nome: 'Admin Teste',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { GET as getDashboard } from '@/app/api/dashboard/route';
 
 beforeEach(() => {
@@ -38,7 +54,6 @@ interface DashboardStats {
   finalizadosHoje: number;
   emExecucao: number;
   emAvaliacao: number;
-  parcelasVencidas: number;
   minhasComissoes: number;
   meusProcedimentos: number;
   procedimentosDisponiveis: number;
@@ -64,7 +79,6 @@ describe('GET /api/dashboard — stats gerais', () => {
     expect(data).toHaveProperty('finalizadosHoje');
     expect(data).toHaveProperty('emExecucao');
     expect(data).toHaveProperty('emAvaliacao');
-    expect(data).toHaveProperty('parcelasVencidas');
     expect(data).toHaveProperty('minhasComissoes');
     expect(data).toHaveProperty('meusProcedimentos');
     expect(data).toHaveProperty('procedimentosDisponiveis');
@@ -94,7 +108,7 @@ describe('GET /api/dashboard — stats gerais', () => {
   });
 
   it('finalizadosHoje conta finalizados do dia', async () => {
-    mockQueryResponse("status = 'finalizado' and date(finalizado_at)", [{ count: 3 }]);
+    mockQueryResponse("in ('finalizado', 'encerrado') and date(finalizado_at)", [{ count: 3 }]);
 
     const { data } = await callRoute<DashboardStats>(getDashboard, '/api/dashboard');
     expect(data.finalizadosHoje).toBe(3);
@@ -121,13 +135,6 @@ describe('GET /api/dashboard — stats gerais', () => {
     expect(avaliacaoQuery).toBeDefined();
   });
 
-  it('parcelasVencidas conta parcelas não pagas com vencimento passado', async () => {
-    mockQueryResponse("pago = 0 and date(data_vencimento)", [{ count: 4 }]);
-
-    const { data } = await callRoute<DashboardStats>(getDashboard, '/api/dashboard');
-    expect(data.parcelasVencidas).toBe(4);
-  });
-
   it('sem usuario_id, stats pessoais são zero', async () => {
     const { data } = await callRoute<DashboardStats>(getDashboard, '/api/dashboard');
 
@@ -149,7 +156,6 @@ describe('GET /api/dashboard — stats gerais', () => {
     expect(data.finalizadosHoje).toBe(0);
     expect(data.emExecucao).toBe(0);
     expect(data.emAvaliacao).toBe(0);
-    expect(data.parcelasVencidas).toBe(0);
   });
 });
 
@@ -273,7 +279,7 @@ describe('GET /api/dashboard — role admin', () => {
 
 describe('GET /api/dashboard — comissões do usuário', () => {
   it('minhasComissoes retorna soma do mês corrente', async () => {
-    mockQueryResponse("sum(valor_comissao)", [{ total: 1500 }]);
+    mockQueryResponse("sum(co.valor_comissao)", [{ total: 1500 }]);
 
     const { data } = await callRoute<DashboardStats>(getDashboard, '/api/dashboard', {
       searchParams: { usuario_id: '3', role: 'avaliador' },

@@ -30,6 +30,22 @@ import {
   teardownCloudflareContextMock,
 } from '../helpers/db-mock';
 
+// Mock JWT para bypass de autenticação nos testes
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1,
+    email: 'admin@test.com',
+    role: 'admin',
+    nome: 'Admin Teste',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 // ═════════════════════════════════════════════
 // Route handlers
 // ═════════════════════════════════════════════
@@ -99,6 +115,7 @@ const ATENDIMENTO_BASE = {
   id: 1,
   cliente_id: CLIENTE.id,
   avaliador_id: AVALIADOR.id,
+  unidade_id: 1,
   created_at: '2025-01-15T10:00:00',
   finalizado_at: null,
   cliente_nome: CLIENTE.nome,
@@ -184,7 +201,7 @@ describe('Integração — Fluxo Normal Completo', () => {
 
   describe('Etapa 3 — Triagem → Avaliação', () => {
     test('PUT avança status para avaliação', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
         status: 'triagem',
       });
@@ -210,14 +227,14 @@ describe('Integração — Fluxo Normal Completo', () => {
 
   describe('Etapa 4 — Adicionar procedimentos', () => {
     test('POST /api/atendimentos/1/itens adiciona Limpeza', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
         status: 'avaliacao',
       });
       mockQueryResponse('select * from procedimentos where id', PROCEDIMENTO_1);
       mockQueryResponse('select id, role from usuarios where id', { id: EXECUTOR.id, role: EXECUTOR.role });
       setLastInsertId(1);
-      mockQueryResponse('select \n        i.*', {
+      mockQueryResponse('where i.id = ?', {
         id: 1,
         atendimento_id: 1,
         procedimento_id: PROCEDIMENTO_1.id,
@@ -247,14 +264,14 @@ describe('Integração — Fluxo Normal Completo', () => {
     });
 
     test('POST /api/atendimentos/1/itens adiciona Restauração (por_dente)', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
         status: 'avaliacao',
       });
       mockQueryResponse('select * from procedimentos where id', PROCEDIMENTO_2);
       mockQueryResponse('select id, role from usuarios where id', { id: EXECUTOR.id, role: EXECUTOR.role });
       setLastInsertId(2);
-      mockQueryResponse('select \n        i.*', {
+      mockQueryResponse('where i.id = ?', {
         id: 2,
         atendimento_id: 1,
         procedimento_id: PROCEDIMENTO_2.id,
@@ -294,7 +311,7 @@ describe('Integração — Fluxo Normal Completo', () => {
 
   describe('Etapa 5 — Avaliação → Aguardando Pagamento', () => {
     test('PUT avança para aguardando_pagamento (requer itens)', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
         status: 'avaliacao',
       });
@@ -322,20 +339,17 @@ describe('Integração — Fluxo Normal Completo', () => {
 
   describe('Etapa 6 — Registrar pagamento', () => {
     test('POST /api/atendimentos/1/pagamentos com distribuição por item', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
         status: 'aguardando_pagamento',
       });
-      // Hardcoded recebido_por_id
-      mockQueryResponse('select id from usuarios limit 1', { id: 1 });
       setLastInsertId(1);
-      mockQueryResponse('select * from pagamentos where id', {
+      mockQueryResponse('from pagamentos where id', {
         id: 1,
         atendimento_id: 1,
         recebido_por_id: 1,
         valor: 700,
         metodo: 'pix',
-        parcelas: 1,
         observacoes: null,
         created_at: '2025-01-15T11:00:00',
       });
@@ -346,10 +360,6 @@ describe('Integração — Fluxo Normal Completo', () => {
         body: {
           valor: 700,
           metodo: 'pix',
-          itens: [
-            { item_id: 1, valor_aplicado: 200 },
-            { item_id: 2, valor_aplicado: 500 },
-          ],
         },
       }, ctx);
 
@@ -357,16 +367,10 @@ describe('Integração — Fluxo Normal Completo', () => {
       expect(data).toHaveProperty('valor', 700);
       expect(data).toHaveProperty('metodo', 'pix');
 
-      // Verifica que as execuções de SQL incluem INSERT nos itens do pagamento
+      // Verifica que atualiza valor_pago dos itens (single UPDATE for all pendente)
       const queries = getExecutedQueries();
-      const inserts = queries.filter(q => q.sql.toLowerCase().includes('insert into pagamentos_itens'));
-      expect(inserts).toHaveLength(2);
-      expect(inserts[0].params).toContain(200); // valor_aplicado do item 1
-      expect(inserts[1].params).toContain(500); // valor_aplicado do item 2
-
-      // Verifica que atualiza valor_pago dos itens
       const updates = queries.filter(q => q.sql.toLowerCase().includes('update itens_atendimento'));
-      expect(updates).toHaveLength(2);
+      expect(updates.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -375,7 +379,7 @@ describe('Integração — Fluxo Normal Completo', () => {
   // ═════════════════════════════════════════════
 
   describe('Etapa 7 — Itens marcados como pagos', () => {
-    test('UPDATE de valor_pago inclui CASE para mudar status para "pago"', () => {
+    test('UPDATE de valor_pago inclui CASE para mudar status para "pago"', async () => {
       // A marca de status acontece diretamente no SQL:
       // status = CASE WHEN valor_pago + ? >= valor THEN 'pago' ELSE status END
       // Este teste verifica que a query do pagamento usa esse padrão
@@ -383,33 +387,31 @@ describe('Integração — Fluxo Normal Completo', () => {
       setupCloudflareContextMock();
 
       // Re-registra mocks para o POST pagamento
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
         status: 'aguardando_pagamento',
       });
-      mockQueryResponse('select id from usuarios limit 1', { id: 1 });
       setLastInsertId(1);
-      mockQueryResponse('select * from pagamentos where id', {
+      mockQueryResponse('from pagamentos where id', {
         id: 1, atendimento_id: 1, valor: 200, metodo: 'dinheiro',
       });
 
       // Faz o pagamento para 1 item
-      callRoute(postPagamentos, '/api/atendimentos/1/pagamentos', {
+      await callRoute(postPagamentos, '/api/atendimentos/1/pagamentos', {
         method: 'POST',
         body: {
           valor: 200,
           metodo: 'dinheiro',
-          itens: [{ item_id: 1, valor_aplicado: 200 }],
         },
-      }, createRouteContext({ id: '1' })).then(() => {
-        const queries = getExecutedQueries();
-        const updateItem = queries.find(q =>
-          q.sql.toLowerCase().includes('update itens_atendimento') &&
-          q.sql.toLowerCase().includes("when valor_pago")
-        );
-        expect(updateItem).toBeDefined();
-        expect(updateItem!.sql).toContain("'pago'");
-      });
+      }, createRouteContext({ id: '1' }));
+
+      const queries = getExecutedQueries();
+      const updateItem = queries.find(q =>
+        q.sql.toLowerCase().includes('update itens_atendimento') &&
+        q.sql.toLowerCase().includes("'pago'")
+      );
+      expect(updateItem).toBeDefined();
+      expect(updateItem!.sql).toContain("'pago'");
     });
   });
 
@@ -418,20 +420,18 @@ describe('Integração — Fluxo Normal Completo', () => {
   // ═════════════════════════════════════════════
 
   describe('Etapa 8 — Aguardando Pagamento → Em Execução', () => {
-    test('PUT avança para em_execucao (requer pelo menos 1 item pago)', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+    test('PUT avança para em_execucao (requer pelo menos 1 pagamento ativo)', async () => {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
         status: 'aguardando_pagamento',
       });
-      // Validação: itens pagos
-      mockQueryResponse('count(*) as count', { count: 2 });
-      // Hardcoded liberado_por_id
-      mockQueryResponse('select id from usuarios limit 1', { id: AVALIADOR.id });
+      // Validação: pagamentos ativos (cancelado = 0)
+      mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 1 });
       mockQueryResponse('select \n        a.*', {
         ...ATENDIMENTO_BASE,
         status: 'em_execucao',
-        liberado_por_id: AVALIADOR.id,
-        liberado_por_nome: AVALIADOR.nome,
+        liberado_por_id: 1,
+        liberado_por_nome: 'Admin Teste',
       });
 
       const ctx = createRouteContext({ id: '1' });
@@ -443,7 +443,7 @@ describe('Integração — Fluxo Normal Completo', () => {
       expect(status).toBe(200);
       expect(data).toHaveProperty('status', 'em_execucao');
 
-      // Verifica que executou a query de UPDATE incluindo liberado_por_id
+      // Verifica que executou a query de UPDATE incluindo liberado_por_id (from JWT context.user.sub)
       const queries = getExecutedQueries();
       const updateQ = queries.find(q =>
         q.sql.toLowerCase().includes('update atendimentos set') &&
@@ -460,7 +460,7 @@ describe('Integração — Fluxo Normal Completo', () => {
   describe('Etapa 9 — Executor assume procedimento', () => {
     test('PUT /api/atendimentos/1/itens/1 marca status executando', async () => {
       // Atendimento em execução
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
         status: 'em_execucao',
       });
@@ -474,7 +474,7 @@ describe('Integração — Fluxo Normal Completo', () => {
         status: 'pago',
       });
       // Item atualizado retornado
-      mockQueryResponse('select \n        i.*', {
+      mockQueryResponse('where i.id = ?', {
         id: 1,
         atendimento_id: 1,
         procedimento_id: PROCEDIMENTO_1.id,
@@ -563,7 +563,7 @@ describe('Integração — Fluxo Normal Completo', () => {
 
   describe('Etapa 12 — Concluir procedimento', () => {
     test('PUT /api/atendimentos/1/itens/1 marca como concluído', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
         status: 'em_execucao',
       });
@@ -575,7 +575,7 @@ describe('Integração — Fluxo Normal Completo', () => {
         valor: 200,
         status: 'executando',
       });
-      mockQueryResponse('select \n        i.*', {
+      mockQueryResponse('where i.id = ?', {
         id: 1,
         atendimento_id: 1,
         procedimento_id: PROCEDIMENTO_1.id,
@@ -614,101 +614,49 @@ describe('Integração — Fluxo Normal Completo', () => {
   // ETAPA 13: Finalizar atendimento
   // ═════════════════════════════════════════════
 
-  describe('Etapa 13 — Finalizar atendimento', () => {
-    test('POST /api/atendimentos/1/finalizar gera comissões', async () => {
+  describe('Etapa 13 — Finalizar atendimento (sem_tratamento)', () => {
+    test('POST /api/atendimentos/1/finalizar com sem_tratamento finaliza', async () => {
       // Atendimento em execução
-      mockQueryResponse('select id, status from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         id: 1,
         status: 'em_execucao',
+        unidade_id: 1,
       });
-      // 2 itens, ambos concluídos e pagos
-      mockQueryResponse('from itens_atendimento where atendimento_id', [
-        {
-          id: 1,
-          valor: 200,
-          valor_pago: 200,
-          status: 'concluido',
-          criado_por_id: AVALIADOR.id,
-          executor_id: EXECUTOR.id,
-          procedimento_id: PROCEDIMENTO_1.id,
-        },
-        {
-          id: 2,
-          valor: 500,
-          valor_pago: 500,
-          status: 'concluido',
-          criado_por_id: AVALIADOR.id,
-          executor_id: EXECUTOR.id,
-          procedimento_id: PROCEDIMENTO_2.id,
-        },
-      ]);
-      // Procedimento 1 — comissões 10% venda, 20% execução
-      mockQueryResponse('select id, comissao_venda, comissao_execucao from procedimentos where id', PROCEDIMENTO_1);
 
       const ctx = createRouteContext({ id: '1' });
       const { status, data } = await callRoute(postFinalizar, '/api/atendimentos/1/finalizar', {
         method: 'POST',
+        body: { motivo_saida: 'sem_tratamento' },
       }, ctx);
 
       expect(status).toBe(200);
       expect(data).toHaveProperty('success', true);
       expect(data).toHaveProperty('message', 'Atendimento finalizado com sucesso');
-      expect(data.comissoes).toBeDefined();
-
-      // Comissões: 
-      //   Item 1 (200): venda=20, exec=40 → totais para item 1
-      //   Item 2 (500): venda=40, exec=125 → totais para item 2
-      //   (ambos usam PROCEDIMENTO_1 no mock por substring match)
-      // O mock retorna o mesmo procedimento para ambos, mas a lógica dos cálculos funciona
-      expect(data.comissoes.total).toBeGreaterThan(0);
-      expect(data.comissoes.detalhes.length).toBeGreaterThan(0);
-
-      // Verifica INSERTs de comissões foram executados
-      const queries = getExecutedQueries();
-      const comissaoInserts = queries.filter(q =>
-        q.sql.toLowerCase().includes('insert into comissoes')
-      );
-      // 2 itens × 2 tipos (venda + execução) = 4 comissões
-      expect(comissaoInserts.length).toBe(4);
 
       // Verifica UPDATE de finalização
+      const queries = getExecutedQueries();
       const finalizeUpdate = queries.find(q =>
-        q.sql.toLowerCase().includes("update atendimentos set status = 'finalizado'")
+        q.sql.toLowerCase().includes("status = 'finalizado'") &&
+        q.sql.toLowerCase().includes('finalizado_at')
       );
       expect(finalizeUpdate).toBeDefined();
     });
 
-    test('comissões de venda calculadas corretamente (% × valor)', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
+    test('POST /api/atendimentos/1/finalizar sem motivo sem_tratamento retorna 400', async () => {
+      mockQueryResponse('from atendimentos where id', {
         id: 1,
         status: 'em_execucao',
-      });
-      mockQueryResponse('from itens_atendimento where atendimento_id', [
-        {
-          id: 1,
-          valor: 1000,
-          valor_pago: 1000,
-          status: 'concluido',
-          criado_por_id: AVALIADOR.id,
-          executor_id: EXECUTOR.id,
-          procedimento_id: PROCEDIMENTO_1.id,
-        },
-      ]);
-      mockQueryResponse('select id, comissao_venda, comissao_execucao from procedimentos where id', {
-        id: PROCEDIMENTO_1.id,
-        comissao_venda: 10,
-        comissao_execucao: 20,
+        unidade_id: 1,
       });
 
       const ctx = createRouteContext({ id: '1' });
-      const { data } = await callRoute(postFinalizar, '/api/atendimentos/1/finalizar', {
+      const { status, data } = await callRoute(postFinalizar, '/api/atendimentos/1/finalizar', {
         method: 'POST',
+        body: { motivo_saida: 'tratamento_completo' },
       }, ctx);
 
-      // 10% de 1000 = 100 (venda), 20% de 1000 = 200 (execução)
-      expect(data.comissoes.venda).toBe(100);
-      expect(data.comissoes.execucao).toBe(200);
-      expect(data.comissoes.total).toBe(300);
+      expect(status).toBe(400);
+      expect(data).toHaveProperty('error');
     });
   });
 
@@ -797,13 +745,12 @@ describe('Integração — Fluxo Normal Completo', () => {
 
   describe('Etapa 15 — Dashboard atualizado', () => {
     test('GET /api/dashboard reflete atendimento finalizado', async () => {
-      mockQueryResponse('select count(*) as count from clientes', { count: 1 });
-      mockQueryResponse('select count(*) as count from atendimentos \n       where date(created_at)', { count: 1 });
-      mockQueryResponse("where status = 'aguardando_pagamento'", { count: 0 });
-      mockQueryResponse("where status = 'finalizado' and date(finalizado_at)", { count: 1 });
-      mockQueryResponse("where status = 'em_execucao'", { count: 0 });
-      mockQueryResponse("where status in ('triagem', 'avaliacao')", { count: 0 });
-      mockQueryResponse('select count(*) as count from parcelas', { count: 0 });
+      mockQueryResponse('count(*) as count from clientes', { count: 1 });
+      mockQueryResponse('date(created_at) = date', { count: 1 });
+      mockQueryResponse("status = 'aguardando_pagamento'", { count: 0 });
+      mockQueryResponse("status in ('finalizado', 'encerrado')", { count: 1 });
+      mockQueryResponse("status = 'em_execucao'", { count: 0 });
+      mockQueryResponse("status in ('triagem', 'avaliacao')", { count: 0 });
 
       const { status, data } = await callRoute(getDashboard, '/api/dashboard');
 
@@ -815,15 +762,14 @@ describe('Integração — Fluxo Normal Completo', () => {
     });
 
     test('GET /api/dashboard para executor mostra suas comissões', async () => {
-      mockQueryResponse('select count(*) as count from clientes', { count: 1 });
-      mockQueryResponse('select count(*) as count from atendimentos \n       where date(created_at)', { count: 1 });
-      mockQueryResponse("where status = 'aguardando_pagamento'", { count: 0 });
-      mockQueryResponse("where status = 'finalizado' and date(finalizado_at)", { count: 1 });
-      mockQueryResponse("where status = 'em_execucao'", { count: 0 });
-      mockQueryResponse("where status in ('triagem', 'avaliacao')", { count: 0 });
-      mockQueryResponse('select count(*) as count from parcelas', { count: 0 });
-      // Comissões do executor
-      mockQueryResponse('select coalesce(sum(valor_comissao), 0) as total from comissoes', { total: 165 });
+      mockQueryResponse('count(*) as count from clientes', { count: 1 });
+      mockQueryResponse('date(created_at) = date', { count: 1 });
+      mockQueryResponse("status = 'aguardando_pagamento'", { count: 0 });
+      mockQueryResponse("status in ('finalizado', 'encerrado')", { count: 1 });
+      mockQueryResponse("status = 'em_execucao'", { count: 0 });
+      mockQueryResponse("status in ('triagem', 'avaliacao')", { count: 0 });
+      // Comissões do executor (agora com JOIN atendimentos)
+      mockQueryResponse('sum(co.valor_comissao)', { total: 165 });
       // Procedimentos do executor
       mockQueryResponse('i.executor_id = ?', { count: 0 });
       mockQueryResponse('i.executor_id is null', { count: 0 });
@@ -843,13 +789,12 @@ describe('Integração — Fluxo Normal Completo', () => {
 
   describe('Verificação de sequência de queries', () => {
     test('pagamento com distribuição gera queries na ordem correta', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
         status: 'aguardando_pagamento',
       });
-      mockQueryResponse('select id from usuarios limit 1', { id: 1 });
       setLastInsertId(5);
-      mockQueryResponse('select * from pagamentos where id', {
+      mockQueryResponse('from pagamentos where id', {
         id: 5, atendimento_id: 1, valor: 700, metodo: 'cartao_credito',
       });
 
@@ -858,10 +803,6 @@ describe('Integração — Fluxo Normal Completo', () => {
         body: {
           valor: 700,
           metodo: 'cartao_credito',
-          itens: [
-            { item_id: 1, valor_aplicado: 200 },
-            { item_id: 2, valor_aplicado: 500 },
-          ],
         },
       }, createRouteContext({ id: '1' }));
 
@@ -872,49 +813,34 @@ describe('Integração — Fluxo Normal Completo', () => {
       // 1. SELECT atendimento
       // 2. SELECT usuario (recebido_por)
       // 3. INSERT pagamento
-      // 4. INSERT pagamentos_itens (item 1)
-      // 5. UPDATE itens_atendimento (item 1 valor_pago)
-      // 6. INSERT pagamentos_itens (item 2)
-      // 7. UPDATE itens_atendimento (item 2 valor_pago)
-      // 8. SELECT pagamento criado
+      // 4. UPDATE itens_atendimento (valor_pago)
+      // 5. SELECT pagamento criado
 
       const insertPagIdx = sqlTexts.findIndex(s => s.includes('insert into pagamentos ('));
-      const insertPiIdx = sqlTexts.findIndex(s => s.includes('insert into pagamentos_itens'));
       const updateItemIdx = sqlTexts.findIndex(s => s.includes('update itens_atendimento'));
 
-      expect(insertPagIdx).toBeLessThan(insertPiIdx);
-      expect(insertPiIdx).toBeLessThan(updateItemIdx);
+      expect(insertPagIdx).toBeLessThan(updateItemIdx);
     });
 
-    test('finalização gera comissões antes de atualizar status', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
-        id: 1, status: 'em_execucao',
-      });
-      mockQueryResponse('from itens_atendimento where atendimento_id', [
-        {
-          id: 1, valor: 100, valor_pago: 100, status: 'concluido',
-          criado_por_id: AVALIADOR.id, executor_id: EXECUTOR.id,
-          procedimento_id: PROCEDIMENTO_1.id,
-        },
-      ]);
-      mockQueryResponse('select id, comissao_venda, comissao_execucao from procedimentos where id', {
-        ...PROCEDIMENTO_1, comissao_venda: 10, comissao_execucao: 20,
+    test('finalização com sem_tratamento atualiza status e finalizado_at', async () => {
+      mockQueryResponse('from atendimentos where id', {
+        id: 1, status: 'em_execucao', unidade_id: 1,
       });
 
       await callRoute(postFinalizar, '/api/atendimentos/1/finalizar', {
         method: 'POST',
+        body: { motivo_saida: 'sem_tratamento' },
       }, createRouteContext({ id: '1' }));
 
       const queries = getExecutedQueries();
       const sqlTexts = queries.map(q => q.sql.toLowerCase());
 
-      const comissaoIdx = sqlTexts.findIndex(s => s.includes('insert into comissoes'));
       const finalizeIdx = sqlTexts.findIndex(s => s.includes("status = 'finalizado'"));
-
-      expect(comissaoIdx).toBeGreaterThan(-1);
       expect(finalizeIdx).toBeGreaterThan(-1);
-      // Comissões inseridas ANTES da finalização
-      expect(comissaoIdx).toBeLessThan(finalizeIdx);
+
+      // Verifica que motivo_saida é incluído no UPDATE
+      const finalizeQ = queries[finalizeIdx];
+      expect(finalizeQ.sql).toContain('motivo_saida');
     });
   });
 });

@@ -1,11 +1,10 @@
 /**
- * Sprint 6 — Testes de distribuição de pagamento por itens
+ * Pagamentos — modelo simplificado (sem distribuição por item)
  *
- * Cobre: POST /api/atendimentos/[id]/pagamentos  com body.itens
- *   - vinculação pagamento↔itens via pagamentos_itens
- *   - atualização de valor_pago incremental
- *   - transição de item para 'pago' quando valor_pago >= valor
- *   - validação da soma dos valor_aplicado == valor do pagamento
+ * Cobre: POST /api/atendimentos/[id]/pagamentos
+ *   - marca todos os itens pendentes do atendimento como 'pago' ao registrar pagamento
+ *   - aceita crediario e afins_sorria (métodos adicionais)
+ *   - rejeita método inválido com mensagem unificada
  */
 
 import { callRoute, createRouteContext } from '../../helpers/api-test-helper';
@@ -22,6 +21,16 @@ import {
   PAGAMENTO_PIX,
 } from '../../helpers/seed';
 
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1, email: 'admin@test.com', role: 'admin', nome: 'Admin Teste',
+    unidade_ids: [1, 2], unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { POST as createPagamento } from '@/app/api/atendimentos/[id]/pagamentos/route';
 
 beforeEach(() => {
@@ -33,261 +42,98 @@ afterEach(() => {
   teardownCloudflareContextMock();
 });
 
-describe('POST /api/atendimentos/[id]/pagamentos — distribuição por itens', () => {
-  const baseMocks = () => {
+describe('POST /api/atendimentos/[id]/pagamentos — modelo simplificado', () => {
+  it('marca itens pendentes como pago ao registrar pagamento', async () => {
     setLastInsertId(10);
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('select id from usuarios limit 1', { id: 2 });
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select id from usuarios limit 1', { id: 1 });
     mockQueryResponse('select * from pagamentos where id', { ...PAGAMENTO_PIX, id: 10 });
-  };
-
-  it('distribui pagamento por múltiplos itens', async () => {
-    baseMocks();
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: {
-        valor: 300,
-        metodo: 'pix',
-        itens: [
-          { item_id: 1, valor_aplicado: 150 },
-          { item_id: 2, valor_aplicado: 150 },
-        ],
-      },
+      body: { valor: 300, metodo: 'pix' },
     }, ctx);
 
     expect(status).toBe(201);
 
     const queries = getExecutedQueries();
-
-    // Verifica inserções em pagamentos_itens
-    const insertJunctionQueries = queries.filter(q => q.sql.includes('INSERT INTO pagamentos_itens'));
-    expect(insertJunctionQueries).toHaveLength(2);
-
-    // Verifica updates de valor_pago
-    const updateQueries = queries.filter(q => q.sql.includes('UPDATE itens_atendimento'));
-    expect(updateQueries).toHaveLength(2);
+    const updateQ = queries.find(q => q.sql.toLowerCase().includes("status = 'pago'"));
+    expect(updateQ).toBeDefined();
+    expect(updateQ!.sql.toLowerCase()).toContain("status = 'pendente'");
   });
 
-  it('cria registro em pagamentos_itens com valores corretos', async () => {
-    baseMocks();
+  it('não exige distribuição por item no body', async () => {
+    setLastInsertId(11);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select id from usuarios limit 1', { id: 1 });
+    mockQueryResponse('select * from pagamentos where id', { ...PAGAMENTO_PIX, id: 11 });
 
     const ctx = createRouteContext({ id: '3' });
-    await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
+    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: {
-        valor: 200,
-        metodo: 'dinheiro',
-        itens: [{ item_id: 5, valor_aplicado: 200 }],
-      },
+      body: { valor: 500, metodo: 'dinheiro' },
     }, ctx);
 
+    expect(status).toBe(201);
+
     const queries = getExecutedQueries();
-    const insertJunction = queries.find(q => q.sql.includes('INSERT INTO pagamentos_itens'));
-    expect(insertJunction!.params[0]).toBe(10); // pagamento_id
-    expect(insertJunction!.params[1]).toBe(5); // item_atendimento_id
-    expect(insertJunction!.params[2]).toBe(200); // valor_aplicado
+    // pagamentos_itens table has been removed - no vinculação queries expected
   });
 
-  it('atualiza valor_pago incrementalmente no item', async () => {
-    baseMocks();
+  it('aceita crediario como método válido', async () => {
+    setLastInsertId(12);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select id from usuarios limit 1', { id: 1 });
+    mockQueryResponse('select * from pagamentos where id', { ...PAGAMENTO_PIX, metodo: 'crediario' });
 
     const ctx = createRouteContext({ id: '3' });
-    await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
+    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: {
-        valor: 100,
-        metodo: 'pix',
-        itens: [{ item_id: 1, valor_aplicado: 100 }],
-      },
+      body: { valor: 200, metodo: 'crediario' },
     }, ctx);
 
-    const queries = getExecutedQueries();
-    const updateQ = queries.find(q => q.sql.includes('UPDATE itens_atendimento'));
-    expect(updateQ!.sql).toContain('valor_pago = valor_pago + ?');
-    expect(updateQ!.params[0]).toBe(100); // incremento
-    expect(updateQ!.params[2]).toBe(1); // item_id no WHERE
+    expect(status).toBe(201);
   });
 
-  it('transiciona item para "pago" quando valor_pago >= valor', async () => {
-    baseMocks();
+  it('aceita afins_sorria como método válido', async () => {
+    setLastInsertId(13);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select id from usuarios limit 1', { id: 1 });
+    mockQueryResponse('select * from pagamentos where id', { ...PAGAMENTO_PIX, metodo: 'afins_sorria' });
 
     const ctx = createRouteContext({ id: '3' });
-    await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
+    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: {
-        valor: 150,
-        metodo: 'pix',
-        itens: [{ item_id: 1, valor_aplicado: 150 }],
-      },
+      body: { valor: 150, metodo: 'afins_sorria' },
     }, ctx);
 
-    const queries = getExecutedQueries();
-    const updateQ = queries.find(q => q.sql.includes('UPDATE itens_atendimento'));
-    // CASE WHEN valor_pago + ? >= valor THEN 'pago'
-    expect(updateQ!.sql).toContain("WHEN valor_pago + ? >= valor THEN 'pago'");
-    expect(updateQ!.params[1]).toBe(150); // segundo ? no CASE
+    expect(status).toBe(201);
   });
 
-  it('rejeita quando soma dos valor_aplicado != valor do pagamento', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+  it('rejeita método inválido com mensagem unificada', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<{ error: string }>(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: {
-        valor: 300,
-        metodo: 'pix',
-        itens: [
-          { item_id: 1, valor_aplicado: 100 },
-          { item_id: 2, valor_aplicado: 100 },
-          // soma = 200, mas valor = 300
-        ],
-      },
+      body: { valor: 100, metodo: 'cheque' },
     }, ctx);
 
     expect(status).toBe(400);
-    expect(data.error).toBe('A soma dos valores aplicados deve ser igual ao valor do pagamento');
+    expect(data.error).toBe('Método de pagamento inválido');
   });
 
-  it('aceita quando soma difere por margem de tolerância (0.01)', async () => {
-    baseMocks();
+  it('rejeita ausência de método com mensagem unificada', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
 
     const ctx = createRouteContext({ id: '3' });
-    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
-      method: 'POST',
-      body: {
-        valor: 100,
-        metodo: 'pix',
-        itens: [
-          { item_id: 1, valor_aplicado: 33.34 },
-          { item_id: 2, valor_aplicado: 33.33 },
-          { item_id: 3, valor_aplicado: 33.33 },
-        ],
-      },
-    }, ctx);
-
-    // 33.34 + 33.33 + 33.33 = 100.00 (exato), dentro da tolerância
-    expect(status).toBe(201);
-  });
-
-  it('aceita diferença de exatamente 0.01 (limite da tolerância)', async () => {
-    baseMocks();
-
-    const ctx = createRouteContext({ id: '3' });
-    // soma = 100.005, valor = 100 → diff = 0.005, dentro da tolerância de 0.01
-    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
-      method: 'POST',
-      body: {
-        valor: 100,
-        metodo: 'pix',
-        itens: [
-          { item_id: 1, valor_aplicado: 50 },
-          { item_id: 2, valor_aplicado: 50.005 },
-        ],
-      },
-    }, ctx);
-
-    expect(status).toBe(201);
-  });
-
-  it('rejeita diferença maior que 0.01 (fora da tolerância)', async () => {
-    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
-
-    const ctx = createRouteContext({ id: '3' });
-    // soma = 100.02, valor = 100 → diff = 0.02, Math.abs(0.02) > 0.01 = true → rejeita
     const { status, data } = await callRoute<{ error: string }>(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: {
-        valor: 100,
-        metodo: 'pix',
-        itens: [
-          { item_id: 1, valor_aplicado: 50.01 },
-          { item_id: 2, valor_aplicado: 50.01 },
-        ],
-      },
+      body: { valor: 100 },
     }, ctx);
 
     expect(status).toBe(400);
-    expect(data.error).toBe('A soma dos valores aplicados deve ser igual ao valor do pagamento');
-  });
-
-  it('funciona sem itens (pagamento sem distribuição)', async () => {
-    baseMocks();
-
-    const ctx = createRouteContext({ id: '3' });
-    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
-      method: 'POST',
-      body: {
-        valor: 100,
-        metodo: 'pix',
-        // sem itens
-      },
-    }, ctx);
-
-    expect(status).toBe(201);
-
-    // Nenhuma inserção em pagamentos_itens
-    const queries = getExecutedQueries();
-    const junctionInserts = queries.filter(q => q.sql.includes('INSERT INTO pagamentos_itens'));
-    expect(junctionInserts).toHaveLength(0);
-  });
-
-  it('funciona com itens vazio (array empty)', async () => {
-    baseMocks();
-
-    const ctx = createRouteContext({ id: '3' });
-    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
-      method: 'POST',
-      body: {
-        valor: 100,
-        metodo: 'pix',
-        itens: [],
-      },
-    }, ctx);
-
-    expect(status).toBe(201);
-  });
-
-  it('distribui por item único', async () => {
-    baseMocks();
-
-    const ctx = createRouteContext({ id: '3' });
-    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
-      method: 'POST',
-      body: {
-        valor: 500,
-        metodo: 'cartao_credito',
-        itens: [{ item_id: 1, valor_aplicado: 500 }],
-      },
-    }, ctx);
-
-    expect(status).toBe(201);
-
-    const queries = getExecutedQueries();
-    const junctionInserts = queries.filter(q => q.sql.includes('INSERT INTO pagamentos_itens'));
-    expect(junctionInserts).toHaveLength(1);
-    const updateQueries = queries.filter(q => q.sql.includes('UPDATE itens_atendimento'));
-    expect(updateQueries).toHaveLength(1);
-  });
-
-  it('pagamento parcial — item permanece com status anterior', async () => {
-    baseMocks();
-
-    const ctx = createRouteContext({ id: '3' });
-    await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
-      method: 'POST',
-      body: {
-        valor: 50,
-        metodo: 'pix',
-        itens: [{ item_id: 1, valor_aplicado: 50 }],
-      },
-    }, ctx);
-
-    const queries = getExecutedQueries();
-    const updateQ = queries.find(q => q.sql.includes('UPDATE itens_atendimento'));
-    // ELSE status → mantém status atual se valor_pago + 50 < valor
-    expect(updateQ!.sql).toContain('ELSE status');
+    expect(data.error).toBe('Método de pagamento inválido');
   });
 });

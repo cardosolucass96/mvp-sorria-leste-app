@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { MENU_ITEMS, VIEW_MODE_LABELS } from '@/lib/constants/navigation';
 import { ROLE_LABELS } from '@/lib/constants/roles';
 import TrocarSenhaModal from '@/components/domain/TrocarSenhaModal';
+import UnitSelector from './UnitSelector';
 
 export default function Header() {
   const { user, logout, hasRole, viewMode, toggleViewMode, isAdmin } = useAuth();
@@ -62,6 +63,9 @@ export default function Header() {
         <div className="flex items-center gap-2 md:gap-4">
           {user ? (
             <>
+              {/* Seletor de Unidade */}
+              <UnitSelector />
+
               {/* Toggle Admin/Dentista - Só para admins */}
               {isAdmin && (
                 <button
@@ -119,6 +123,11 @@ export default function Header() {
       {/* Menu Mobile Dropdown */}
       {showMobileMenu && (
         <nav className="md:hidden bg-sidebar border-t border-neutral-700" aria-label="Menu mobile">
+          {/* Seletor de Unidade - Mobile */}
+          <div className="px-4 py-3 border-b border-neutral-700 sm:hidden">
+            <UnitSelector />
+          </div>
+
           {/* Toggle Admin/Dentista - Mobile */}
           {isAdmin && (
             <div className="px-4 py-3 border-b border-neutral-700">

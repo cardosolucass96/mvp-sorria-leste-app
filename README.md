@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sorria Leste - Sistema de Gestao Odontologica
 
-## Getting Started
+Sistema web para gestao completa de clinica odontologica. Gerencia toda a jornada do paciente: chegada, triagem, avaliacao, pagamento, execucao de procedimentos e agendamento de retornos. Suporte a multiplas unidades.
 
-First, run the development server:
+## Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Framework | Next.js 16 (App Router) + TypeScript |
+| Banco de dados | Cloudflare D1 (SQLite) |
+| Storage | Cloudflare R2 |
+| Deploy | Cloudflare Workers (via opennextjs-cloudflare) |
+| Estilo | Tailwind CSS v4 |
+| Testes | Jest + Testing Library |
+
+## Setup Local
+
+### Pre-requisitos
+- Node.js 18+
+- Wrangler CLI (`npm install -g wrangler`)
+- Conta Cloudflare com D1 e R2 configurados
+
+### Instalacao
 
 ```bash
+# Clonar e instalar
+git clone <repo-url>
+cd mvp-sorria-leste-app
+npm install
+
+# Configurar banco local
+npm run d1:migrate:local
+npm run d1:seed:local
+
+# Iniciar dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Acesse `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Credenciais de teste (seed)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Email | Senha | Role |
+|---|---|---|
+| admin@sorria.com | Sorria@123 | admin |
+| atendente@sorria.com | Sorria@123 | atendente |
+| avaliador@sorria.com | Sorria@123 | avaliador |
+| executor@sorria.com | Sorria@123 | executor |
 
-## Learn More
+## Comandos Principais
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run dev              # Dev server
+npm test                 # Testes
+npm run lint             # Linting
+npm run deploy           # Build + deploy producao
+npm run preview          # Preview local (Cloudflare)
+npm run d1:pull-prod     # Baixar banco de producao
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Estrutura
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+app/api/     # 43 API routes
+app/*/       # 22 paginas
+components/  # UI primitivos + componentes de dominio
+lib/         # DB, auth, types, constants, utils
+contexts/    # AuthContext
+__tests__/   # Testes
+```
 
-## Deploy on Vercel
+## Roles
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Admin**: acesso total, dashboard, gestao de usuarios e procedimentos
+- **Atendente**: recebe pacientes, cria atendimentos, registra pagamentos
+- **Avaliador**: avalia pacientes, define procedimentos e valores
+- **Executor**: executa procedimentos, preenche prontuarios
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Pipeline de Atendimento
+
+```
+Triagem -> Avaliacao -> Aguardando Pagamento -> Em Execucao -> Finalizado -> Encerrado
+```
+
+## Deploy
+
+```bash
+npm run deploy
+```
+
+Migrations manuais em producao:
+```bash
+wrangler d1 execute sorria-leste-db --file=lib/migrations/<arquivo>.sql
+```

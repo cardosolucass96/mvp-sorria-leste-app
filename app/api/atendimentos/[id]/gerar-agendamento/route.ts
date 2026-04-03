@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db';
-import { withAuth, AuthenticatedContext } from '@/lib/auth/middleware';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { AgendamentoCompleto } from '@/lib/types';
 
 interface AtendimentoBase {
   id: number;
   cliente_id: number;
+  unidade_id: number;
   status: string;
 }
 
 // POST /api/atendimentos/[id]/gerar-agendamento - Gera agendamento de próxima sessão
-export const POST = withAuth(async (
+export const POST = withUnit(async (
   request: NextRequest,
-  context: AuthenticatedContext
+  context: UnitAuthenticatedContext
 ) => {
   try {
     const { id } = await context.params!;
@@ -34,10 +35,10 @@ export const POST = withAuth(async (
       );
     }
 
-    // Verifica atendimento existe
+    // Verifica atendimento existe e pertence à unidade
     const atendimento = await queryOne<AtendimentoBase>(
-      'SELECT id, cliente_id, status FROM atendimentos WHERE id = ?',
-      [atendimentoId]
+      'SELECT id, cliente_id, unidade_id, status FROM atendimentos WHERE id = ? AND unidade_id = ?',
+      [atendimentoId, context.unidadeId]
     );
 
     if (!atendimento) {
@@ -68,8 +69,8 @@ export const POST = withAuth(async (
 
     const result = await execute(
       `INSERT INTO agendamentos
-        (cliente_id, atendimento_origem_id, procedimento_id, item_atendimento_origem_id, executor_id, data_agendada, status, observacoes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (cliente_id, atendimento_origem_id, procedimento_id, item_atendimento_origem_id, executor_id, data_agendada, status, observacoes, unidade_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         atendimento.cliente_id,
         atendimentoId,
@@ -79,6 +80,7 @@ export const POST = withAuth(async (
         data_agendada || null,
         statusInicial,
         observacoes || null,
+        atendimento.unidade_id,
       ]
     );
 

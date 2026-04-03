@@ -25,6 +25,22 @@ import {
   ATENDIMENTO_EM_EXECUCAO,
 } from '../../helpers/seed';
 
+// Mock JWT para bypass de autenticação nos testes
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1,
+    email: 'admin@test.com',
+    role: 'admin',
+    nome: 'Admin Teste',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { PUT as updateAtendimento } from '@/app/api/atendimentos/[id]/route';
 
 beforeEach(() => {
@@ -78,10 +94,10 @@ describe('Máquina de estados — transições válidas', () => {
     expect(status).toBe(200);
   });
 
-  it('aguardando_pagamento → em_execucao (com item pago)', async () => {
+  it('aguardando_pagamento → em_execucao (com pagamento ativo)', async () => {
     mockAtendimentoAndReturn(ATENDIMENTO_AGUARDANDO_PGTO);
-    // Tem itens pagos
-    mockQueryResponse("select count(*) as count from itens_atendimento", { count: 1 });
+    // Tem pagamento ativo
+    mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 1 });
     // Mock para o liberado_por_id (SELECT id FROM usuarios LIMIT 1)
     mockQueryResponse('select id from usuarios limit', { id: 1 });
 
@@ -279,11 +295,11 @@ describe('Máquina de estados — condições', () => {
     expect(data.error).toBe('É necessário adicionar pelo menos um procedimento');
   });
 
-  it('aguardando_pagamento → em_execucao SEM item pago → erro', async () => {
+  it('aguardando_pagamento → em_execucao SEM pagamento ativo → erro', async () => {
     mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
     mockQueryResponse('from atendimentos a', ATENDIMENTO_AGUARDANDO_PGTO);
-    // Sem itens pagos
-    mockQueryResponse("select count(*) as count from itens_atendimento", { count: 0 });
+    // Sem pagamento ativo
+    mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 0 });
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<{ error: string }>(updateAtendimento, '/api/atendimentos/3', {
@@ -292,7 +308,7 @@ describe('Máquina de estados — condições', () => {
     }, ctx);
 
     expect(status).toBe(400);
-    expect(data.error).toBe('É necessário ter pelo menos um procedimento totalmente pago para liberar');
+    expect(data.error).toBe('É necessário registrar ao menos um pagamento para liberar o atendimento');
   });
 });
 

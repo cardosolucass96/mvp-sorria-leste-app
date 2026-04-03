@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne, execute } from '@/lib/db';
+import { queryOne, execute, query } from '@/lib/db';
 import { gerarComissoesItem } from '@/lib/helpers/gerarComissoes';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 
 interface ItemAtendimento {
   id: number;
@@ -15,28 +16,36 @@ interface ItemAtendimento {
 interface Atendimento {
   id: number;
   status: string;
+  unidade_id: number;
 }
 
 // PUT /api/atendimentos/[id]/itens/[itemId] - Atualiza item
-export async function PUT(
+export const PUT = withUnit(async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; itemId: string }> }
-) {
+  context: UnitAuthenticatedContext
+) => {
   try {
-    const { id, itemId } = await params;
+    const { id, itemId } = await context.params! as { id: string; itemId: string };
     const body = await request.json();
     const { executor_id, valor, status, usuario_id, dentes } = body;
-    
-    // Verifica se atendimento existe
+
+    // Verifica se atendimento existe e pertence à unidade
     const atendimento = await queryOne<Atendimento>(
-      'SELECT * FROM atendimentos WHERE id = ?',
+      'SELECT id, status, unidade_id FROM atendimentos WHERE id = ?',
       [parseInt(id)]
     );
-    
+
     if (!atendimento) {
       return NextResponse.json(
         { error: 'Atendimento não encontrado' },
         { status: 404 }
+      );
+    }
+
+    if (atendimento.unidade_id !== context.unidadeId) {
+      return NextResponse.json(
+        { error: 'Atendimento não pertence a esta unidade' },
+        { status: 403 }
       );
     }
     
@@ -61,6 +70,14 @@ export async function PUT(
           { status: 403 }
         );
       }
+    }
+
+    // Validação: não permite trocar executor após iniciar execução
+    if (executor_id !== undefined && ['executando', 'concluido'].includes(item.status)) {
+      return NextResponse.json(
+        { error: 'Não é possível trocar o executor após o procedimento ter sido iniciado' },
+        { status: 400 }
+      );
     }
     
     // Monta update
@@ -107,8 +124,25 @@ export async function PUT(
     );
 
     // Gera comissões quando item é marcado como concluído
+    let atendimentoFinalizado = false;
     if (status === 'concluido') {
       await gerarComissoesItem(parseInt(itemId));
+
+      // Auto-transição: se todos os itens do atendimento estão concluídos → finalizado
+      const contagem = await queryOne<{ total: number; concluidos: number }>(
+        `SELECT COUNT(*) as total,
+                SUM(CASE WHEN status = 'concluido' THEN 1 ELSE 0 END) as concluidos
+         FROM itens_atendimento WHERE atendimento_id = ?`,
+        [parseInt(id)]
+      );
+      if (contagem && contagem.total > 0 && contagem.total === contagem.concluidos) {
+        const res = await execute(
+          `UPDATE atendimentos SET status = 'finalizado', finalizado_at = datetime('now','localtime')
+           WHERE id = ? AND status = 'em_execucao'`,
+          [parseInt(id)]
+        );
+        atendimentoFinalizado = res.changes > 0;
+      }
     }
 
     // Retorna item atualizado
@@ -124,7 +158,7 @@ export async function PUT(
       [parseInt(itemId)]
     );
     
-    return NextResponse.json(atualizado);
+    return NextResponse.json({ ...atualizado, atendimento_finalizado: atendimentoFinalizado });
   } catch (error) {
     console.error('Erro ao atualizar item:', error);
     return NextResponse.json(
@@ -132,4 +166,4 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
+});

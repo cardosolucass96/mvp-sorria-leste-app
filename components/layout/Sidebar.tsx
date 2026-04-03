@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, Stethoscope, ArrowLeftRight } from 'lucide-react';
+import { Shield, Stethoscope, ArrowLeftRight, Building2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { MENU_ITEMS } from '@/lib/constants/navigation';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, hasRole, viewMode, toggleViewMode, isAdmin } = useAuth();
+  const { user, hasRole, viewMode, toggleViewMode, isAdmin, currentUnidade, unidadeNomes } = useAuth();
 
   // Filtra itens do menu baseado no role do usuário (respeita viewMode)
   const visibleMenuItems = MENU_ITEMS.filter((item) => {
@@ -38,6 +38,16 @@ export default function Sidebar() {
             <span>{viewMode === 'admin' ? 'Modo Admin' : 'Modo Dentista'}</span>
             <ArrowLeftRight className="w-3.5 h-3.5 opacity-60 ml-auto" aria-hidden="true" />
           </button>
+        </div>
+      )}
+
+      {/* Nome da Unidade Atual */}
+      {currentUnidade && (
+        <div className="px-4 pt-3">
+          <div className="flex items-center gap-2 px-3 py-2 text-xs text-neutral-400 bg-neutral-800/50 rounded-lg">
+            <Building2 className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{unidadeNomes[currentUnidade] || `Unidade ${currentUnidade}`}</span>
+          </div>
         </div>
       )}
 

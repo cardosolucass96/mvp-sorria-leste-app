@@ -18,6 +18,8 @@ export interface JwtPayload {
   email: string;
   role: string;
   nome: string;
+  unidade_ids: number[];  // unidades que o usuário pertence
+  unidade_atual: number;  // unidade selecionada no momento
   iat: number;       // issued at (unix seconds)
   exp: number;       // expires at (unix seconds)
 }
@@ -85,6 +87,8 @@ export async function generateToken(user: {
   email: string;
   role: string;
   nome: string;
+  unidade_ids: number[];
+  unidade_atual: number;
 }): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
 
@@ -94,6 +98,8 @@ export async function generateToken(user: {
     email: user.email,
     role: user.role,
     nome: user.nome,
+    unidade_ids: user.unidade_ids,
+    unidade_atual: user.unidade_atual,
     iat: now,
     exp: now + JWT_EXPIRATION_HOURS * 3600,
   };

@@ -30,7 +30,7 @@ describe('Sprint 8 - Execução (Dentista Executor)', () => {
         path.join(process.cwd(), 'app', 'api', 'execucao', 'route.ts'),
         'utf-8'
       );
-      expect(content).toContain('export async function GET');
+      expect(content).toMatch(/export (async function|const) GET/);
     });
 
     test('API deve filtrar por executor_id', () => {
@@ -72,7 +72,7 @@ describe('Sprint 8 - Execução (Dentista Executor)', () => {
         path.join(process.cwd(), 'app', 'api', 'execucao', 'item', '[id]', 'route.ts'),
         'utf-8'
       );
-      expect(content).toContain('export async function GET');
+      expect(content).toMatch(/export (async function|const) GET/);
       expect(content).toContain('cliente_nome');
     });
   });

@@ -1,6 +1,6 @@
 /**
  * PagamentoForm — formulário de pagamento.
- * Método (select), valor (moeda input), parcelas.
+ * Método (select), valor (moeda input).
  */
 
 'use client';
@@ -16,7 +16,6 @@ import type { MetodoPagamento } from '@/lib/types';
 export interface PagamentoFormData {
   metodo: string;
   valor: string;
-  parcelas: string;
   observacoes: string;
 }
 
@@ -45,7 +44,6 @@ export default function PagamentoForm({
   const [formData, setFormData] = useState<PagamentoFormData>({
     metodo: '',
     valor: '',
-    parcelas: '1',
     observacoes: '',
   });
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof PagamentoFormData, string>>>({});
@@ -72,8 +70,6 @@ export default function PagamentoForm({
     if (!validate()) return;
     await onSubmit(formData);
   };
-
-  const showParcelas = formData.metodo === 'cartao_credito';
 
   return (
     <form onSubmit={handleSubmit} className={`space-y-4 ${className}`}>
@@ -104,19 +100,6 @@ export default function PagamentoForm({
         step="0.01"
         error={fieldErrors.valor}
       />
-
-      {showParcelas && (
-        <Input
-          label="Parcelas"
-          name="parcelas"
-          type="number"
-          value={formData.parcelas}
-          onChange={handleChange('parcelas')}
-          min={1}
-          max={12}
-          disabled={loading}
-        />
-      )}
 
       <div className="flex justify-end gap-3 pt-4">
         {onCancel && (

@@ -102,11 +102,7 @@ export const mockDb = {
     return createMockStatement(sql);
   },
   async batch(statements: ReturnType<typeof createMockStatement>[]) {
-    return statements.map(() => ({
-      results: [],
-      success: true,
-      meta: { duration: 0, changes: 1, last_row_id: lastInsertId, rows_read: 0, rows_written: 1 },
-    }));
+    return Promise.all(statements.map(stmt => stmt.all()));
   },
   async exec(_sql: string) {
     return { count: 0, duration: 0 };

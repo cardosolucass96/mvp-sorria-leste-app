@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter, useParams } from 'next/navigation';
 import { formatarDataHora } from '@/lib/utils/formatters';
 import { StatusBadge } from '@/components/domain';
@@ -50,6 +51,8 @@ interface ItemAtendimento {
   cliente_nome: string;
   cliente_id: number;
   etapas: Etapa[];
+  etapa_label: string | null;
+  tem_etapas: number;
 }
 
 interface Procedimento {
@@ -96,6 +99,7 @@ export default function ExecucaoProcedimentoPage() {
   const params = useParams();
   const { user } = useAuth();
   const router = useRouter();
+  const unitFetch = useUnitFetch();
   const { toast } = useToast();
 
   const [item, setItem] = useState<ItemAtendimento | null>(null);
@@ -148,7 +152,7 @@ export default function ExecucaoProcedimentoPage() {
 
   async function carregarItem() {
     try {
-      const res = await fetch(`/api/execucao/item/${params.id}`);
+      const res = await unitFetch(`/api/execucao/item/${params.id}`);
       if (!res.ok) throw new Error('Item não encontrado');
       const data = await res.json();
       setItem(data);
@@ -176,12 +180,12 @@ export default function ExecucaoProcedimentoPage() {
   }
 
   async function carregarAnexos() {
-    const res = await fetch(`/api/execucao/item/${params.id}/anexos`);
+    const res = await unitFetch(`/api/execucao/item/${params.id}/anexos`);
     setAnexos(await res.json());
   }
 
   async function carregarProntuario() {
-    const res = await fetch(`/api/execucao/item/${params.id}/prontuario`);
+    const res = await unitFetch(`/api/execucao/item/${params.id}/prontuario`);
     const data = await res.json();
     if (data.prontuario) {
       setProntuario(data.prontuario);
@@ -194,7 +198,7 @@ export default function ExecucaoProcedimentoPage() {
 
   async function pegarProcedimento() {
     if (!item) return;
-    const res = await fetch(`/api/atendimentos/${item.atendimento_id}/itens/${item.id}`, {
+    const res = await unitFetch(`/api/atendimentos/${item.atendimento_id}/itens/${item.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ executor_id: user?.id }),
@@ -204,7 +208,7 @@ export default function ExecucaoProcedimentoPage() {
 
   async function iniciarExecucao() {
     if (!item) return;
-    const res = await fetch(`/api/atendimentos/${item.atendimento_id}/itens/${item.id}`, {
+    const res = await unitFetch(`/api/atendimentos/${item.atendimento_id}/itens/${item.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'executando' }),
@@ -225,12 +229,20 @@ export default function ExecucaoProcedimentoPage() {
       type: 'warning',
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-        const res = await fetch(`/api/atendimentos/${item.atendimento_id}/itens/${item.id}`, {
+        const res = await unitFetch(`/api/atendimentos/${item.atendimento_id}/itens/${item!.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'concluido' }),
         });
-        if (res.ok) carregarItem();
+        if (res.ok) {
+          const data = await res.json();
+          if (data.atendimento_finalizado) {
+            toast.success('Todos os procedimentos concluídos! Atendimento encaminhado para revisão.');
+            router.push('/execucao');
+          } else {
+            carregarItem();
+          }
+        }
       },
     });
   }
@@ -246,7 +258,7 @@ export default function ExecucaoProcedimentoPage() {
     setSalvandoProntuario(true);
     setErroProntuario('');
     try {
-      const res = await fetch(`/api/execucao/item/${params.id}/prontuario`, {
+      const res = await unitFetch(`/api/execucao/item/${params.id}/prontuario`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ usuario_id: user.id, descricao: descricaoProntuario, observacoes: observacoesProntuario }),
@@ -277,7 +289,7 @@ export default function ExecucaoProcedimentoPage() {
     setSalvandoEtapa(etapa.id);
     try {
       // 1. Salva prontuário da etapa
-      const resPront = await fetch(`/api/execucao/etapa/${etapa.id}/prontuario`, {
+      const resPront = await unitFetch(`/api/execucao/etapa/${etapa.id}/prontuario`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -293,7 +305,7 @@ export default function ExecucaoProcedimentoPage() {
       }
 
       // 2. Conclui a etapa
-      const resConcluir = await fetch(`/api/execucao/etapa/${etapa.id}`, {
+      const resConcluir = await unitFetch(`/api/execucao/etapa/${etapa.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ usuario_id: user.id }),
@@ -306,6 +318,12 @@ export default function ExecucaoProcedimentoPage() {
 
       setEtapaAberta(null);
       toast.success('Etapa concluída!');
+
+      if (dataConcluir.atendimento_finalizado) {
+        toast.success('Todos os procedimentos concluídos! Atendimento encaminhado para revisão.');
+        router.push('/execucao');
+        return;
+      }
 
       if (dataConcluir.item_concluido) {
         toast.success('Todas as etapas concluídas! Procedimento finalizado.');
@@ -323,7 +341,7 @@ export default function ExecucaoProcedimentoPage() {
 
   async function adicionarProcedimento() {
     if (!item || !novoProcId) { toast.warning('Selecione um procedimento'); return; }
-    const res = await fetch(`/api/atendimentos/${item.atendimento_id}/itens`, {
+    const res = await unitFetch(`/api/atendimentos/${item.atendimento_id}/itens`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ procedimento_id: parseInt(novoProcId), executor_id: user?.id, criado_por_id: user?.id }),
@@ -347,7 +365,7 @@ export default function ExecucaoProcedimentoPage() {
       formData.append('arquivo', file);
       formData.append('usuario_id', user.id.toString());
       formData.append('descricao', descricaoAnexo);
-      const res = await fetch(`/api/execucao/item/${params.id}/anexos`, { method: 'POST', body: formData });
+      const res = await unitFetch(`/api/execucao/item/${params.id}/anexos`, { method: 'POST', body: formData });
       if (res.ok) { setDescricaoAnexo(''); carregarAnexos(); if (fileInputRef.current) fileInputRef.current.value = ''; }
       else { const d = await res.json(); toast.error(d.error || 'Erro ao enviar'); }
     } catch { /* noop */ }
@@ -359,7 +377,7 @@ export default function ExecucaoProcedimentoPage() {
       title: 'Remover Anexo', message: 'Remover este anexo?', confirmLabel: 'Remover', type: 'danger',
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-        const res = await fetch(`/api/execucao/item/${params.id}/anexos?anexo_id=${anexoId}`, { method: 'DELETE' });
+        const res = await unitFetch(`/api/execucao/item/${params.id}/anexos?anexo_id=${anexoId}`, { method: 'DELETE' });
         if (res.ok) carregarAnexos();
       },
     });
@@ -376,6 +394,7 @@ export default function ExecucaoProcedimentoPage() {
   const isMeu = item.executor_id === user?.id;
   const isDisponivel = item.executor_id === null;
   const temEtapas = item.etapas.length > 0;
+  const isMultiSessao = item.tem_etapas === 1; // canal, implante — sessões via procedimento_etapas_modelo
   const etapasConcluidas = item.etapas.filter(e => e.status === 'concluido').length;
   const progresso = temEtapas ? Math.round((etapasConcluidas / item.etapas.length) * 100) : 0;
 
@@ -503,10 +522,10 @@ export default function ExecucaoProcedimentoPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <PageHeader
-        title={item.procedimento_nome}
+        title={item.etapa_label ? `${item.procedimento_nome} — ${item.etapa_label}` : item.procedimento_nome}
         icon={<Activity className="w-7 h-7" />}
         description={`${item.cliente_nome} · Atendimento #${item.atendimento_id}${denteLabel}`}
-        breadcrumb={[{ label: 'Execução', href: '/execucao' }, { label: item.procedimento_nome }]}
+        breadcrumb={[{ label: 'Execução', href: '/execucao' }, { label: item.etapa_label ? `${item.procedimento_nome} — ${item.etapa_label}` : item.procedimento_nome }]}
       />
 
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
@@ -540,6 +559,12 @@ export default function ExecucaoProcedimentoPage() {
 
         {/* Ações */}
         <div className="space-y-3">
+          {/* Sessão atual para procedimentos multi-sessão */}
+          {isMultiSessao && item.etapa_label && (
+            <div className="p-3 bg-primary-50 border border-primary-200 rounded-lg text-sm text-primary-800">
+              <strong>Sessão sendo executada:</strong> {item.etapa_label}
+            </div>
+          )}
           {isDisponivel && item.status === 'pago' && (
             <Button onClick={pegarProcedimento} variant="secondary" className="w-full text-lg py-3">
               Pegar Este Procedimento
@@ -550,7 +575,7 @@ export default function ExecucaoProcedimentoPage() {
               Iniciar Execução
             </Button>
           )}
-          {/* Concluir manual só para itens SEM etapas */}
+          {/* Concluir manual só para itens SEM etapas por dente */}
           {isMeu && item.status === 'executando' && !temEtapas && (
             <div className="space-y-2">
               {!prontuario && (
@@ -559,11 +584,13 @@ export default function ExecucaoProcedimentoPage() {
                 </div>
               )}
               <Button onClick={marcarComoConcluido} disabled={!prontuario} className="w-full text-lg py-3">
-                {prontuario ? 'Marcar como Concluído' : 'Preencha o Prontuário para Concluir'}
+                {prontuario
+                  ? (isMultiSessao ? `Concluir Sessão (${item.etapa_label ?? 'sessão'})` : 'Marcar como Concluído')
+                  : 'Preencha o Prontuário para Concluir'}
               </Button>
             </div>
           )}
-          {/* Para itens COM etapas: conclusão é automática */}
+          {/* Para itens COM etapas por dente: conclusão é automática */}
           {isMeu && item.status === 'executando' && temEtapas && etapasConcluidas < item.etapas.length && (
             <div className="p-3 bg-info-50 border border-info-200 rounded-lg text-sm text-info-800">
               Conclua todas as etapas abaixo para finalizar o procedimento automaticamente.

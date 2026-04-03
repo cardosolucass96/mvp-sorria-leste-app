@@ -320,7 +320,7 @@ describe('GET /api/procedimentos/[id]', () => {
     const { status, data } = await callRoute(getProcedimento, '/api/procedimentos/1', {}, ctx);
 
     expect(status).toBe(200);
-    expect(data).toEqual(PROC_LIMPEZA);
+    expect(data).toEqual({ ...PROC_LIMPEZA, etapas: [] });
   });
 
   it('retorna 404 se não existe', async () => {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 
 interface Atendimento {
   id: number;
@@ -15,6 +16,9 @@ interface AtendimentoComCliente extends Atendimento {
   cliente_cpf: string | null;
   cliente_telefone: string | null;
   avaliador_nome: string | null;
+  procedimentos_resumo: string | null;
+  executores_resumo: string | null;
+  liberado_em: string | null;
 }
 
 interface CountResult {
@@ -25,55 +29,61 @@ interface SumResult {
   total: number;
 }
 
-// GET /api/atendimentos - Lista todos os atendimentos
-export async function GET(request: NextRequest) {
+// GET /api/atendimentos - Lista atendimentos da unidade atual
+export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const clienteId = searchParams.get('cliente_id');
     const busca = searchParams.get('busca');
-    
+
     let sql = `
-      SELECT 
+      SELECT
         a.*,
         c.nome as cliente_nome,
         c.cpf as cliente_cpf,
         c.telefone as cliente_telefone,
-        u.nome as avaliador_nome
+        u.nome as avaliador_nome,
+        (SELECT GROUP_CONCAT(nome, ', ') FROM (
+           SELECT DISTINCT p.nome FROM itens_atendimento ia
+           JOIN procedimentos p ON ia.procedimento_id = p.id
+           WHERE ia.atendimento_id = a.id)) as procedimentos_resumo,
+        (SELECT GROUP_CONCAT(nome, ', ') FROM (
+           SELECT DISTINCT u2.nome FROM itens_atendimento ia
+           JOIN usuarios u2 ON ia.executor_id = u2.id
+           WHERE ia.atendimento_id = a.id)) as executores_resumo
       FROM atendimentos a
       INNER JOIN clientes c ON a.cliente_id = c.id
       LEFT JOIN usuarios u ON a.avaliador_id = u.id
     `;
-    
-    const conditions: string[] = [];
-    const params: (string | number)[] = [];
-    
+
+    const conditions: string[] = ['a.unidade_id = ?'];
+    const params: (string | number)[] = [context.unidadeId];
+
     // Filtro por status
     if (status) {
       conditions.push('a.status = ?');
       params.push(status);
     }
-    
+
     // Filtro por cliente
     if (clienteId) {
       conditions.push('a.cliente_id = ?');
       params.push(parseInt(clienteId));
     }
-    
+
     // Busca por nome do cliente
     if (busca) {
       conditions.push('(c.nome LIKE ? OR c.cpf LIKE ?)');
       params.push(`%${busca}%`, `%${busca}%`);
     }
-    
-    if (conditions.length > 0) {
-      sql += ' WHERE ' + conditions.join(' AND ');
-    }
-    
+
+    sql += ' WHERE ' + conditions.join(' AND ');
+
     sql += ' ORDER BY a.created_at DESC';
-    
+
     const atendimentos = await query<AtendimentoComCliente>(sql, params);
-    
+
     return NextResponse.json(atendimentos);
   } catch (error) {
     console.error('Erro ao buscar atendimentos:', error);
@@ -82,10 +92,10 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
-// POST /api/atendimentos - Cria novo atendimento
-export async function POST(request: NextRequest) {
+// POST /api/atendimentos - Cria novo atendimento na unidade atual
+export const POST = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const body = await request.json();
     const { cliente_id, avaliador_id, tipo_orto, executor_id, procedimento_id, valor, criado_por_id } = body;
@@ -111,11 +121,11 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Verifica se cliente já tem atendimento em aberto
+    // Verifica se cliente já tem atendimento em aberto na mesma unidade
     const atendimentoAberto = await queryOne<CountResult>(
-      `SELECT COUNT(*) as count FROM atendimentos 
-       WHERE cliente_id = ? AND status != 'finalizado'`,
-      [cliente_id]
+      `SELECT COUNT(*) as count FROM atendimentos
+       WHERE cliente_id = ? AND status NOT IN ('finalizado', 'encerrado') AND unidade_id = ?`,
+      [cliente_id, context.unidadeId]
     );
     
     if (atendimentoAberto && atendimentoAberto.count > 0) {
@@ -189,9 +199,9 @@ export async function POST(request: NextRequest) {
 
       // Cria atendimento já em aguardando_pagamento
       const result = await execute(
-        `INSERT INTO atendimentos (cliente_id, avaliador_id, status, observacoes)
-         VALUES (?, NULL, 'aguardando_pagamento', ?)`,
-        [cliente_id, 'Atendimento Orto']
+        `INSERT INTO atendimentos (cliente_id, avaliador_id, status, observacoes, unidade_id)
+         VALUES (?, NULL, 'aguardando_pagamento', ?, ?)`,
+        [cliente_id, 'Atendimento Orto', context.unidadeId]
       );
 
       const atendimentoId = result.lastInsertRowid;
@@ -223,9 +233,9 @@ export async function POST(request: NextRequest) {
     // === FLUXO NORMAL ===
     // Cria atendimento com status inicial 'triagem'
     const result = await execute(
-      `INSERT INTO atendimentos (cliente_id, avaliador_id, status) 
-       VALUES (?, ?, 'triagem')`,
-      [cliente_id, avaliador_id || null]
+      `INSERT INTO atendimentos (cliente_id, avaliador_id, status, unidade_id)
+       VALUES (?, ?, 'triagem', ?)`,
+      [cliente_id, avaliador_id || null, context.unidadeId]
     );
     
     // Busca atendimento criado com dados do cliente
@@ -251,4 +261,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

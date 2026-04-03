@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 
 interface Comissao {
   id: number;
@@ -31,7 +32,7 @@ interface ResumoComissao {
 // - data_inicio: filtra a partir de uma data
 // - data_fim: filtra até uma data
 // - resumo: se "true", retorna resumo por usuário
-export async function GET(request: NextRequest) {
+export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const { searchParams } = new URL(request.url);
     const usuarioId = searchParams.get('usuario_id');
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
     // Se pediu resumo, retorna agregado por usuário
     if (resumo) {
       let sqlResumo = `
-        SELECT 
+        SELECT
           c.usuario_id,
           u.nome as usuario_nome,
           SUM(CASE WHEN c.tipo = 'venda' THEN c.valor_comissao ELSE 0 END) as total_venda,
@@ -51,9 +52,10 @@ export async function GET(request: NextRequest) {
           COUNT(*) as quantidade
         FROM comissoes c
         INNER JOIN usuarios u ON c.usuario_id = u.id
-        WHERE 1=1
+        INNER JOIN atendimentos a ON c.atendimento_id = a.id
+        WHERE a.unidade_id = ?
       `;
-      const paramsResumo: unknown[] = [];
+      const paramsResumo: unknown[] = [context.unidadeId];
 
       if (usuarioId) {
         sqlResumo += ' AND c.usuario_id = ?';
@@ -97,9 +99,9 @@ export async function GET(request: NextRequest) {
       INNER JOIN procedimentos p ON i.procedimento_id = p.id
       INNER JOIN atendimentos a ON c.atendimento_id = a.id
       INNER JOIN clientes cl ON a.cliente_id = cl.id
-      WHERE 1=1
+      WHERE a.unidade_id = ?
     `;
-    const params: unknown[] = [];
+    const params: unknown[] = [context.unidadeId];
 
     if (usuarioId) {
       sql += ' AND c.usuario_id = ?';
@@ -144,4 +146,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

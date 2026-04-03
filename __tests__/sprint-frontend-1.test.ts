@@ -200,7 +200,7 @@ describe('Sprint 1: componentes têm estrutura correta', () => {
       expect(src).toContain('green');
       expect(src).toContain('red');
       expect(src).toContain('blue');
-      expect(src).toContain('purple');
+      expect(src).toContain('evaluation');
     });
     test('é rounded-full', () => {
       expect(src).toContain('rounded-full');

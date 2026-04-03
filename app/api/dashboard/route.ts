@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 
 interface DashboardStats {
   totalClientes: number;
@@ -8,7 +9,6 @@ interface DashboardStats {
   finalizadosHoje: number;
   emExecucao: number;
   emAvaliacao: number;
-  parcelasVencidas: number;
   minhasComissoes: number;
   meusProcedimentos: number;
   procedimentosDisponiveis: number;
@@ -16,48 +16,47 @@ interface DashboardStats {
   atendimentosDisponiveisAvaliacao: number;
 }
 
-// GET /api/dashboard?usuario_id=X&role=Y - Dados do dashboard por role
-export async function GET(request: NextRequest) {
+// GET /api/dashboard?usuario_id=X&role=Y - Dados do dashboard por role (filtrado por unidade)
+export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const { searchParams } = new URL(request.url);
     const usuarioId = searchParams.get('usuario_id');
     const role = searchParams.get('role');
+    const uid = context.unidadeId;
 
-    const hoje = new Date().toISOString().split('T')[0];
-
-    // Stats gerais
+    // Stats gerais (clientes são compartilhados, sem filtro de unidade)
     const totalClientes = (await query<{ count: number }>(
       'SELECT COUNT(*) as count FROM clientes'
     ))[0]?.count || 0;
 
     const atendimentosHoje = (await query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM atendimentos 
-       WHERE DATE(created_at) = DATE('now', 'localtime')`
+      `SELECT COUNT(*) as count FROM atendimentos
+       WHERE DATE(created_at) = DATE('now', 'localtime') AND unidade_id = ?`,
+      [uid]
     ))[0]?.count || 0;
 
     const aguardandoPagamento = (await query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM atendimentos 
-       WHERE status = 'aguardando_pagamento'`
+      `SELECT COUNT(*) as count FROM atendimentos
+       WHERE status = 'aguardando_pagamento' AND unidade_id = ?`,
+      [uid]
     ))[0]?.count || 0;
 
     const finalizadosHoje = (await query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM atendimentos 
-       WHERE status = 'finalizado' AND DATE(finalizado_at) = DATE('now', 'localtime')`
+      `SELECT COUNT(*) as count FROM atendimentos
+       WHERE status IN ('finalizado', 'encerrado') AND DATE(finalizado_at) = DATE('now', 'localtime') AND unidade_id = ?`,
+      [uid]
     ))[0]?.count || 0;
 
     const emExecucao = (await query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM atendimentos 
-       WHERE status = 'em_execucao'`
+      `SELECT COUNT(*) as count FROM atendimentos
+       WHERE status = 'em_execucao' AND unidade_id = ?`,
+      [uid]
     ))[0]?.count || 0;
 
     const emAvaliacao = (await query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM atendimentos 
-       WHERE status IN ('triagem', 'avaliacao')`
-    ))[0]?.count || 0;
-
-    const parcelasVencidas = (await query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM parcelas 
-       WHERE pago = 0 AND DATE(data_vencimento) < DATE('now', 'localtime')`
+      `SELECT COUNT(*) as count FROM atendimentos
+       WHERE status IN ('triagem', 'avaliacao') AND unidade_id = ?`,
+      [uid]
     ))[0]?.count || 0;
 
     // Stats específicas por role
@@ -68,11 +67,13 @@ export async function GET(request: NextRequest) {
     let atendimentosDisponiveisAvaliacao = 0;
 
     if (usuarioId) {
-      // Comissões do usuário
+      // Comissões do usuário (filtrado por unidade via atendimento)
       minhasComissoes = (await query<{ total: number }>(
-        `SELECT COALESCE(SUM(valor_comissao), 0) as total FROM comissoes 
-         WHERE usuario_id = ? AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', 'localtime')`,
-        [parseInt(usuarioId)]
+        `SELECT COALESCE(SUM(co.valor_comissao), 0) as total FROM comissoes co
+         INNER JOIN atendimentos a ON co.atendimento_id = a.id
+         WHERE co.usuario_id = ? AND a.unidade_id = ?
+         AND strftime('%Y-%m', co.created_at) = strftime('%Y-%m', 'now', 'localtime')`,
+        [parseInt(usuarioId), uid]
       ))[0]?.total || 0;
 
       // Para Executor: procedimentos
@@ -80,32 +81,34 @@ export async function GET(request: NextRequest) {
         meusProcedimentos = (await query<{ count: number }>(
           `SELECT COUNT(*) as count FROM itens_atendimento i
            INNER JOIN atendimentos a ON i.atendimento_id = a.id
-           WHERE a.status = 'em_execucao' 
+           WHERE a.status = 'em_execucao' AND a.unidade_id = ?
            AND i.status IN ('pago', 'executando')
            AND i.executor_id = ?`,
-          [parseInt(usuarioId)]
+          [uid, parseInt(usuarioId)]
         ))[0]?.count || 0;
 
         procedimentosDisponiveis = (await query<{ count: number }>(
           `SELECT COUNT(*) as count FROM itens_atendimento i
            INNER JOIN atendimentos a ON i.atendimento_id = a.id
-           WHERE a.status = 'em_execucao' 
+           WHERE a.status = 'em_execucao' AND a.unidade_id = ?
            AND i.status IN ('pago', 'executando')
-           AND i.executor_id IS NULL`
+           AND i.executor_id IS NULL`,
+          [uid]
         ))[0]?.count || 0;
       }
 
       // Para Avaliador: atendimentos
       if (role === 'avaliador' || role === 'admin') {
         meusAtendimentosAvaliacao = (await query<{ count: number }>(
-          `SELECT COUNT(*) as count FROM atendimentos 
-           WHERE status IN ('triagem', 'avaliacao') AND avaliador_id = ?`,
-          [parseInt(usuarioId)]
+          `SELECT COUNT(*) as count FROM atendimentos
+           WHERE status IN ('triagem', 'avaliacao') AND unidade_id = ? AND avaliador_id = ?`,
+          [uid, parseInt(usuarioId)]
         ))[0]?.count || 0;
 
         atendimentosDisponiveisAvaliacao = (await query<{ count: number }>(
-          `SELECT COUNT(*) as count FROM atendimentos 
-           WHERE status IN ('triagem', 'avaliacao') AND avaliador_id IS NULL`
+          `SELECT COUNT(*) as count FROM atendimentos
+           WHERE status IN ('triagem', 'avaliacao') AND unidade_id = ? AND avaliador_id IS NULL`,
+          [uid]
         ))[0]?.count || 0;
       }
     }
@@ -117,7 +120,6 @@ export async function GET(request: NextRequest) {
       finalizadosHoje,
       emExecucao,
       emAvaliacao,
-      parcelasVencidas,
       minhasComissoes,
       meusProcedimentos,
       procedimentosDisponiveis,
@@ -133,4 +135,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

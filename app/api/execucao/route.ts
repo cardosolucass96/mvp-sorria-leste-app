@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 
 interface ProcedimentoExecucao {
   id: number;
   atendimento_id: number;
   procedimento_id: number;
   procedimento_nome: string;
+  etapa_label: string | null;
+  tem_etapas: number;
   executor_id: number | null;
   executor_nome: string | null;
   cliente_nome: string;
@@ -15,8 +18,8 @@ interface ProcedimentoExecucao {
   dente_unico: string | null;
 }
 
-// GET /api/execucao?executor_id=X - Lista PROCEDIMENTOS individuais para o executor
-export async function GET(request: NextRequest) {
+// GET /api/execucao?executor_id=X - Lista PROCEDIMENTOS individuais para o executor na unidade atual
+export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const { searchParams } = new URL(request.url);
     const executorId = searchParams.get('executor_id');
@@ -32,30 +35,33 @@ export async function GET(request: NextRequest) {
     // 1. Já atribuídos ao executor (meus)
     // 2. Sem executor definido (disponíveis para pegar)
     const procedimentos = await query<ProcedimentoExecucao>(
-      `SELECT 
+      `SELECT
         i.id,
         i.atendimento_id,
         i.procedimento_id,
         p.nome as procedimento_nome,
+        i.etapa_label,
+        p.tem_etapas,
         i.executor_id,
         e.nome as executor_nome,
         c.nome as cliente_nome,
         i.status,
         i.created_at,
         i.concluido_at,
-        json_extract(i.dentes, '$[0]') as dente_unico
+        json_extract(i.dentes, '$[0].dente') as dente_unico
       FROM itens_atendimento i
       INNER JOIN atendimentos a ON i.atendimento_id = a.id
       INNER JOIN clientes c ON a.cliente_id = c.id
       INNER JOIN procedimentos p ON i.procedimento_id = p.id
       LEFT JOIN usuarios e ON i.executor_id = e.id
       WHERE a.status = 'em_execucao'
-      AND i.status IN ('pago', 'executando', 'concluido')
+      AND a.unidade_id = ?
+      AND i.status IN ('pago', 'executando')
       AND (i.executor_id = ? OR i.executor_id IS NULL)
-      ORDER BY 
+      ORDER BY
         CASE WHEN i.executor_id = ? THEN 0 ELSE 1 END,
         i.created_at DESC`,
-      [parseInt(executorId), parseInt(executorId)]
+      [context.unidadeId, parseInt(executorId), parseInt(executorId)]
     );
 
     // Separa em "meus" e "disponíveis"
@@ -73,4 +79,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

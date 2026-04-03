@@ -25,6 +25,22 @@ import {
   ITEM_RESTAURACAO_PAGO,
 } from '../../helpers/seed';
 
+// Mock JWT para bypass de autenticação nos testes
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1,
+    email: 'admin@test.com',
+    role: 'admin',
+    nome: 'Admin Teste',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { GET as listAtendimentos, POST as createAtendimento } from '@/app/api/atendimentos/route';
 import { GET as getAtendimento } from '@/app/api/atendimentos/[id]/route';
 
@@ -280,19 +296,18 @@ describe('GET /api/atendimentos/[id]', () => {
     liberado_por_nome: null,
   };
 
-  const itensComJoin = [
-    { ...ITEM_LIMPEZA_PENDENTE, procedimento_nome: 'Limpeza Dental', executor_nome: 'Dr. Carlos Executor', criado_por_nome: 'Dr. João Avaliador' },
-  ];
+  const itemBase = { ...ITEM_LIMPEZA_PENDENTE, procedimento_nome: 'Limpeza Dental', executor_nome: 'Dr. Carlos Executor', criado_por_nome: 'Dr. João Avaliador' };
+  const itensComJoin = [{ ...itemBase, etapas: [], progresso_etapas: null }];
 
   it('retorna atendimento com itens e totais', async () => {
     // Atendimento
     mockQueryResponse('from atendimentos a', atendimentoDetalhe);
     // Itens
-    mockQueryResponse('from itens_atendimento i', itensComJoin);
+    mockQueryResponse('from itens_atendimento i', [itemBase]);
     // Total valor
     mockQueryResponse('select sum(valor) as total from itens_atendimento', { total: 150 });
-    // Total pago
-    mockQueryResponse('select sum(valor_pago) as total from itens_atendimento', { total: 0 });
+    // Total pago (novo modelo: pagamentos não cancelados)
+    mockQueryResponse('coalesce(sum(valor), 0) as total from pagamentos', { total: 0 });
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<Record<string, unknown>>(getAtendimento, '/api/atendimentos/3', {}, ctx);
@@ -317,7 +332,7 @@ describe('GET /api/atendimentos/[id]', () => {
     mockQueryResponse('from atendimentos a', atendimentoDetalhe);
     mockQueryResponse('from itens_atendimento i', []);
     mockQueryResponse('select sum(valor) as total from itens_atendimento', { total: null });
-    mockQueryResponse('select sum(valor_pago) as total from itens_atendimento', { total: null });
+    mockQueryResponse('coalesce(sum(valor), 0) as total from pagamentos', { total: 0 });
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<Record<string, unknown>>(getAtendimento, '/api/atendimentos/3', {}, ctx);
@@ -342,7 +357,7 @@ describe('GET /api/atendimentos/[id]', () => {
       { ...ITEM_RESTAURACAO_PAGO, procedimento_nome: 'Restauração', executor_nome: 'Dr. Carlos Executor', criado_por_nome: 'Dr. João Avaliador' },
     ]);
     mockQueryResponse('select sum(valor) as total from itens_atendimento', { total: 1200 });
-    mockQueryResponse('select sum(valor_pago) as total from itens_atendimento', { total: 800 });
+    mockQueryResponse('coalesce(sum(valor), 0) as total from pagamentos', { total: 800 });
 
     const ctx = createRouteContext({ id: '4' });
     const { status, data } = await callRoute<Record<string, unknown>>(getAtendimento, '/api/atendimentos/4', {}, ctx);

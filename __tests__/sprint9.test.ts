@@ -86,7 +86,7 @@ describe('Sprint 9 - Finalização e Comissões', () => {
   describe('API de Finalização - Estrutura', () => {
     test('API finalizar deve ter método POST', () => {
       const route = readFile('app/api/atendimentos/[id]/finalizar/route.ts');
-      expect(route).toContain('export async function POST');
+      expect(route).toMatch(/export (async function|const) POST/);
     });
 
     test('API deve verificar se atendimento está em execução', () => {
@@ -94,26 +94,20 @@ describe('Sprint 9 - Finalização e Comissões', () => {
       expect(route).toContain("status !== 'em_execucao'");
     });
 
-    test('API deve verificar se todos itens estão concluídos', () => {
+    test('API deve aceitar motivo_saida', () => {
       const route = readFile('app/api/atendimentos/[id]/finalizar/route.ts');
-      expect(route).toContain("status !== 'concluido'");
+      expect(route).toContain('motivo_saida');
     });
 
-    test('API deve verificar se todos itens estão pagos', () => {
+    test('API deve aceitar apenas sem_tratamento neste endpoint', () => {
       const route = readFile('app/api/atendimentos/[id]/finalizar/route.ts');
-      expect(route).toContain('valor_pago < i.valor');
+      expect(route).toContain("sem_tratamento");
     });
 
-    test('API deve calcular comissão de venda', () => {
+    test('API deve retornar 400 para motivo diferente de sem_tratamento', () => {
       const route = readFile('app/api/atendimentos/[id]/finalizar/route.ts');
-      expect(route).toContain("'venda'");
-      expect(route).toContain('comissao_venda');
-    });
-
-    test('API deve calcular comissão de execução', () => {
-      const route = readFile('app/api/atendimentos/[id]/finalizar/route.ts');
-      expect(route).toContain("'execucao'");
-      expect(route).toContain('comissao_execucao');
+      expect(route).toContain('400');
+      expect(route).toContain('Use o fluxo normal');
     });
 
     test('API deve atualizar status para finalizado', () => {
@@ -130,7 +124,7 @@ describe('Sprint 9 - Finalização e Comissões', () => {
   describe('API de Comissões - Estrutura', () => {
     test('API comissões deve ter método GET', () => {
       const route = readFile('app/api/comissoes/route.ts');
-      expect(route).toContain('export async function GET');
+      expect(route).toMatch(/export (async function|const) GET/);
     });
 
     test('API deve filtrar por usuario_id', () => {
@@ -221,52 +215,53 @@ describe('Sprint 9 - Finalização e Comissões', () => {
     });
   });
 
-  describe('Botão Finalizar no Atendimento', () => {
-    test('página de atendimento deve ter função handleFinalizar', () => {
+  describe('Botão Encerrar no Atendimento', () => {
+    test('página de atendimento deve ter link para encerrar', () => {
       const page = readFile('app/atendimentos/[id]/page.tsx');
-      expect(page).toContain('handleFinalizar');
+      // Novo fluxo: "Revisar e Encerrar" via link
+      const hasEncerrar = page.includes('encerrar') || page.includes('Encerrar');
+      expect(hasEncerrar).toBe(true);
     });
 
-    test('página deve chamar API de finalização', () => {
+    test('página deve ter link para encerrar', () => {
       const page = readFile('app/atendimentos/[id]/page.tsx');
-      expect(page).toContain('/finalizar');
+      expect(page).toContain('/encerrar');
     });
 
-    test('botão deve aparecer apenas para status em_execucao', () => {
+    test('página deve mostrar status em_execucao', () => {
       const page = readFile('app/atendimentos/[id]/page.tsx');
       expect(page).toContain("em_execucao");
-      expect(page).toContain("Finalizar");
     });
 
-    test('página deve exibir comissões geradas após finalização', () => {
+    test('página deve mostrar status do atendimento', () => {
       const page = readFile('app/atendimentos/[id]/page.tsx');
-      expect(page).toContain('comissoesGeradas');
+      expect(page).toContain('STATUS_CONFIG');
     });
   });
 
-  describe('Regras de Negócio - Comissões', () => {
-    test('comissão de venda deve ir para criado_por_id', () => {
+  describe('Regras de Negócio - Finalização', () => {
+    test('finalizar deve aceitar motivo_saida como parâmetro', () => {
       const route = readFile('app/api/atendimentos/[id]/finalizar/route.ts');
-      expect(route).toContain('criado_por_id');
-      expect(route).toMatch(/venda.*criado_por|criado_por.*venda/);
+      expect(route).toContain('motivo_saida');
     });
 
-    test('comissão de execução deve ir para executor_id', () => {
+    test('finalizar deve definir tipos de motivo de saída', () => {
       const route = readFile('app/api/atendimentos/[id]/finalizar/route.ts');
-      expect(route).toContain('executor_id');
-      expect(route).toMatch(/execucao.*executor|executor.*execucao/);
+      expect(route).toContain('MotivoSaida');
+      expect(route).toContain('sem_tratamento');
+      expect(route).toContain('tratamento_completo');
     });
 
-    test('comissão deve usar percentual do procedimento', () => {
+    test('finalizar deve atualizar status e timestamp', () => {
       const route = readFile('app/api/atendimentos/[id]/finalizar/route.ts');
-      expect(route).toContain('proc.comissao_venda');
-      expect(route).toContain('proc.comissao_execucao');
+      expect(route).toContain("status = 'finalizado'");
+      expect(route).toContain('finalizado_at');
     });
 
-    test('valor da comissão deve ser calculado corretamente', () => {
+    test('finalizar deve retornar sucesso', () => {
       const route = readFile('app/api/atendimentos/[id]/finalizar/route.ts');
-      // Fórmula: valor * (percentual / 100)
-      expect(route).toMatch(/valor.*\*.*100|100.*\*.*valor/);
+      expect(route).toContain('success');
+      expect(route).toContain('Atendimento finalizado com sucesso');
     });
   });
 
@@ -277,15 +272,15 @@ describe('Sprint 9 - Finalização e Comissões', () => {
       expect(route).toContain('400');
     });
 
-    test('não permite finalizar com procedimentos não concluídos', () => {
+    test('não permite finalizar com motivo diferente de sem_tratamento', () => {
       const route = readFile('app/api/atendimentos/[id]/finalizar/route.ts');
-      expect(route).toContain('itensNaoConcluidos');
+      expect(route).toContain("motivo_saida !== 'sem_tratamento'");
     });
 
-    test('não permite finalizar com pagamentos pendentes', () => {
+    test('retorna 404 para atendimento inexistente', () => {
       const route = readFile('app/api/atendimentos/[id]/finalizar/route.ts');
-      expect(route).toContain('itensNaoPagos');
-      expect(route).toContain('valorFaltante');
+      expect(route).toContain('Atendimento não encontrado');
+      expect(route).toContain('404');
     });
   });
 });

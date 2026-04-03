@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useRef, use } from 'react';
+import React, { useState, useEffect, use } from 'react';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatarMoeda, formatarDataHora } from '@/lib/utils/formatters';
+import { formatarMoeda, formatarDataHora, tempoDecorrido } from '@/lib/utils/formatters';
 import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PROXIMOS_STATUS } from '@/lib/constants/status';
-import type { AtendimentoStatus, ItemStatus } from '@/lib/types';
+import type { AtendimentoStatus, AtendimentoTipo, ItemStatus } from '@/lib/types';
 import { StatusBadge, StatusPipeline } from '@/components/domain';
 import { ClipboardList, ChevronDown, ChevronRight, X, Trash2, CalendarPlus, Info } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Button, Card, EmptyState, ConfirmDialog, Modal, Select, Input, Textarea, useToast } from '@/components/ui';
@@ -33,9 +34,16 @@ const METODOS_PAGAMENTO = [
   { value: 'cartao_credito', label: 'Cartão Crédito' },
 ];
 
+interface ProgressoEtapa {
+  nome: string;
+  status: string;
+}
+
 interface ItemAtendimento {
   id: number;
   procedimento_nome: string;
+  etapa_label: string | null;
+  executor_id: number | null;
   executor_nome: string | null;
   criado_por_nome: string | null;
   valor: number;
@@ -43,6 +51,7 @@ interface ItemAtendimento {
   status: string;
   group_id: string | null;
   dente_unico: string | null;
+  progresso_etapas: ProgressoEtapa[] | null;
 }
 
 interface Atendimento {
@@ -65,16 +74,39 @@ interface Atendimento {
   total_pago: number;
 }
 
-export default function AtendimentoDetalhePage({ 
-  params 
-}: { 
-  params: Promise<{ id: string }> 
+function ProgressoEtapas({ etapas }: { etapas: ProgressoEtapa[] }) {
+  const concluidas = etapas.filter(e => e.status === 'concluido').length;
+  return (
+    <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+      {etapas.map((etapa, i) => (
+        <span
+          key={i}
+          className={`text-xs px-1.5 py-0.5 rounded ${
+            etapa.status === 'concluido'
+              ? 'bg-success-100 text-success-700'
+              : 'bg-neutral-100 text-neutral-400'
+          }`}
+          title={`${etapa.nome}: ${etapa.status === 'concluido' ? 'Concluída' : 'Pendente'}`}
+        >
+          {etapa.nome}
+        </span>
+      ))}
+      <span className="text-xs text-muted ml-0.5">{concluidas}/{etapas.length}</span>
+    </div>
+  );
+}
+
+export default function AtendimentoDetalhePage({
+  params
+}: {
+  params: Promise<{ id: string }>
 }) {
   usePageTitle('Detalhes do Atendimento');
   const { id } = use(params);
   const router = useRouter();
   const { hasRole, user } = useAuth();
   const { toast } = useToast();
+  const unitFetch = useUnitFetch();
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -91,8 +123,6 @@ export default function AtendimentoDetalhePage({
   const openConfirm = (config: Omit<typeof confirmDialog, 'isOpen'>) => {
     setConfirmDialog({ ...config, isOpen: true });
   };
-  const [finalizando, setFinalizando] = useState(false);
-
   // Modal adicionar procedimento
   const [modalProcedimento, setModalProcedimento] = useState(false);
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
@@ -119,14 +149,6 @@ export default function AtendimentoDetalhePage({
   const [registrando, setRegistrando] = useState(false);
   const [errorPagamento, setErrorPagamento] = useState('');
 
-  const [comissoesGeradas, setComissoesGeradas] = useState<{
-    venda: number;
-    execucao: number;
-    total: number;
-  } | null>(null);
-
-  const agendamentoFromFinalizar = useRef(false);
-
   // Modal agendar próxima sessão
   const [modalAgendamento, setModalAgendamento] = useState(false);
   const [agProcId, setAgProcId] = useState('');
@@ -136,9 +158,38 @@ export default function AtendimentoDetalhePage({
   const [agSalvando, setAgSalvando] = useState(false);
   const [agError, setAgError] = useState('');
 
-  // Modal finalização com motivo
-  const [modalFinalizar, setModalFinalizar] = useState(false);
-  const [motivoSaida, setMotivoSaida] = useState<'sem_tratamento' | 'tratamento_completo' | 'continuacao' | ''>('');
+  // Trocar executor
+  const [trocandoExecutor, setTrocandoExecutor] = useState<number | null>(null);
+
+  const carregarExecutores = async () => {
+    if (executores.length > 0) return;
+    try {
+      const res = await fetch('/api/usuarios');
+      const data: Usuario[] = await res.json();
+      setExecutores(data.filter(u => u.role === 'executor' || u.role === 'admin'));
+    } catch {}
+  };
+
+  const handleTrocarExecutor = async (itemId: number, novoExecutorId: number | null) => {
+    try {
+      const res = await unitFetch(`/api/atendimentos/${id}/itens/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ executor_id: novoExecutorId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Erro ao trocar executor');
+        return;
+      }
+      toast.success('Executor alterado com sucesso');
+      await carregarAtendimento();
+    } catch {
+      toast.error('Erro ao trocar executor');
+    } finally {
+      setTrocandoExecutor(null);
+    }
+  };
 
   // Estado para grupos expandidos
   const [gruposExpandidos, setGruposExpandidos] = useState<Set<string>>(new Set());
@@ -158,7 +209,7 @@ export default function AtendimentoDetalhePage({
 
   const carregarAtendimento = async () => {
     try {
-      const res = await fetch(`/api/atendimentos/${id}`);
+      const res = await unitFetch(`/api/atendimentos/${id}`);
       if (!res.ok) {
         throw new Error('Atendimento não encontrado');
       }
@@ -179,7 +230,7 @@ export default function AtendimentoDetalhePage({
     setError('');
     
     try {
-      const res = await fetch(`/api/atendimentos/${id}`, {
+      const res = await unitFetch(`/api/atendimentos/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: novoStatus }),
@@ -208,7 +259,7 @@ export default function AtendimentoDetalhePage({
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         try {
-          const res = await fetch(`/api/atendimentos/${id}`, { method: 'DELETE' });
+          const res = await unitFetch(`/api/atendimentos/${id}`, { method: 'DELETE' });
           const data = await res.json();
           if (!res.ok) { setError(data.error || 'Erro ao excluir'); return; }
           router.push('/atendimentos');
@@ -268,7 +319,7 @@ export default function AtendimentoDetalhePage({
             faces: d.faces.map(f => ({ nome: f, concluido: false })),
           })))
         : null;
-      const res = await fetch(`/api/atendimentos/${id}/itens`, {
+      const res = await unitFetch(`/api/atendimentos/${id}/itens`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -348,7 +399,7 @@ export default function AtendimentoDetalhePage({
     setRegistrando(true);
     setErrorPagamento('');
     try {
-      const res = await fetch(`/api/atendimentos/${id}/pagamentos`, {
+      const res = await unitFetch(`/api/atendimentos/${id}/pagamentos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ valor: parseFloat(valorPagamento), metodo: metodoPagamento, observacoes: observacoesPagamento || null, itens }),
@@ -359,7 +410,7 @@ export default function AtendimentoDetalhePage({
       }
       fecharModalPagamento();
       // Recarrega e verifica se todos os procedimentos estão pagos
-      const resAtend = await fetch(`/api/atendimentos/${id}`);
+      const resAtend = await unitFetch(`/api/atendimentos/${id}`);
       const dadosAtend = await resAtend.json();
       setAtendimento(dadosAtend);
       const todosPagos = dadosAtend.itens.length > 0 &&
@@ -383,45 +434,7 @@ export default function AtendimentoDetalhePage({
     }
   };
 
-  const handleClickFinalizar = () => {
-    setMotivoSaida('');
-    setModalFinalizar(true);
-  };
-
-  const executarFinalizacao = async (motivo: string) => {
-    if (!atendimento) return;
-    setFinalizando(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/atendimentos/${id}/finalizar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ motivo_saida: motivo }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao finalizar atendimento');
-      setComissoesGeradas(data.comissoes);
-      await carregarAtendimento();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao finalizar');
-    } finally {
-      setFinalizando(false);
-    }
-  };
-
-  const handleConfirmarFinalizar = async () => {
-    if (!motivoSaida) return;
-    setModalFinalizar(false);
-    if (motivoSaida === 'continuacao') {
-      // Pre-fill agendamento modal with current procedure then finalize after
-      abrirModalAgendamento(true);
-    } else {
-      await executarFinalizacao(motivoSaida);
-    }
-  };
-
-  const abrirModalAgendamento = async (fromFinalizar = false) => {
-    agendamentoFromFinalizar.current = fromFinalizar;
+  const abrirModalAgendamento = async () => {
     setModalAgendamento(true);
     setAgError('');
     setAgSalvando(false);
@@ -463,7 +476,7 @@ export default function AtendimentoDetalhePage({
     setAgSalvando(true);
     setAgError('');
     try {
-      const res = await fetch(`/api/atendimentos/${id}/gerar-agendamento`, {
+      const res = await unitFetch(`/api/atendimentos/${id}/gerar-agendamento`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -477,11 +490,6 @@ export default function AtendimentoDetalhePage({
       if (!res.ok) throw new Error(data.error || 'Erro ao agendar');
       fecharModalAgendamento();
       toast.success('Próxima sessão agendada com sucesso');
-      // If came from finalize flow, now finalize
-      if (agendamentoFromFinalizar.current) {
-        agendamentoFromFinalizar.current = false;
-        await executarFinalizacao('continuacao');
-      }
     } catch (err) {
       setAgError(err instanceof Error ? err.message : 'Erro ao agendar');
     } finally {
@@ -498,7 +506,7 @@ export default function AtendimentoDetalhePage({
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         try {
-          const res = await fetch(`/api/atendimentos/${id}/itens?item_id=${itemId}`, { method: 'DELETE' });
+          const res = await unitFetch(`/api/atendimentos/${id}/itens?item_id=${itemId}`, { method: 'DELETE' });
           if (!res.ok) {
             const data = await res.json();
             setError(data.error || 'Erro ao remover');
@@ -521,7 +529,7 @@ export default function AtendimentoDetalhePage({
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         try {
-          const res = await fetch(`/api/atendimentos/${id}/itens?group_id=${groupId}`, { method: 'DELETE' });
+          const res = await unitFetch(`/api/atendimentos/${id}/itens?group_id=${groupId}`, { method: 'DELETE' });
           if (!res.ok) {
             const data = await res.json();
             setError(data.error || 'Erro ao remover');
@@ -592,6 +600,7 @@ export default function AtendimentoDetalhePage({
   };
 
   const podRemover = atendimento?.status === 'avaliacao';
+  const podTrocarExecutor = hasRole(['atendente', 'admin']) && atendimento && ['avaliacao', 'aguardando_pagamento', 'em_execucao'].includes(atendimento.status);
 
   return (
     <div className="space-y-6">
@@ -605,22 +614,31 @@ export default function AtendimentoDetalhePage({
         actions={
           <div className="flex gap-2 flex-wrap">
             {atendimento.status === 'em_execucao' && (
-              <>
-                <Button onClick={() => abrirModalAgendamento(false)} variant="secondary">
-                  <CalendarPlus className="w-4 h-4 mr-1" />
-                  Agendar próxima sessão
-                </Button>
-                <Button onClick={handleClickFinalizar} disabled={finalizando} variant="primary">
-                  {finalizando ? 'Finalizando...' : 'Finalizar Atendimento'}
-                </Button>
-              </>
+              <Button onClick={() => abrirModalAgendamento()} variant="secondary">
+                <CalendarPlus className="w-4 h-4 mr-1" />
+                Agendar próxima sessão
+              </Button>
             )}
-            {proximoStatus && atendimento.status !== 'em_execucao' && (
+            {atendimento.status === 'finalizado' && hasRole(['atendente', 'admin']) && (
+              <Link href={`/atendimentos/${id}/encerrar`}>
+                <Button variant="primary">
+                  Revisar e Encerrar
+                </Button>
+              </Link>
+            )}
+            {proximoStatus && !['em_execucao', 'aguardando_pagamento', 'finalizado', 'encerrado'].includes(atendimento.status) && (
               <Button onClick={() => handleMudarStatus(proximoStatus)} disabled={mudandoStatus}>
                 {mudandoStatus ? 'Processando...' : `Avançar para ${STATUS_CONFIG[proximoStatus].label}`}
               </Button>
             )}
-            {atendimento.status !== 'finalizado' && hasRole(['atendente', 'admin']) && (
+            {atendimento.status === 'aguardando_pagamento' && (
+              <Link href={`/atendimentos/${id}/pagamento`}>
+                <Button variant="primary">
+                  💳 Ir para Pagamento
+                </Button>
+              </Link>
+            )}
+            {!['finalizado', 'encerrado'].includes(atendimento.status) && hasRole(['atendente', 'admin']) && (
               <Button variant="danger" onClick={handleExcluir}>
                 Excluir
               </Button>
@@ -630,7 +648,7 @@ export default function AtendimentoDetalhePage({
       />
 
       <Card className="-mt-2">
-        <StatusPipeline currentStatus={atendimento.status as AtendimentoStatus} />
+        <StatusPipeline currentStatus={atendimento.status as AtendimentoStatus} tipo={atendimento.tipo as AtendimentoTipo} />
       </Card>
 
       {error && <Alert type="error">{error}</Alert>}
@@ -639,29 +657,13 @@ export default function AtendimentoDetalhePage({
       {atendimento.tipo === 'sessao' && (
         <div className="flex items-center gap-2 p-3 bg-info-50 border border-info-200 rounded-lg text-sm text-info-800">
           <Info className="w-4 h-4 shrink-0" />
-          <span>Este atendimento é uma continuação — sessão agendada para {atendimento.itens[0]?.procedimento_nome || 'procedimento'}.</span>
-        </div>
-      )}
-
-      {/* Comissões Geradas (após finalização) */}
-      {comissoesGeradas && (
-        <div className="p-4 bg-success-50 border border-success-200 rounded-lg">
-          <h3 className="font-semibold text-success-800 mb-2">Atendimento Finalizado!</h3>
-          <p className="text-sm text-success-700 mb-2">Comissões geradas:</p>
-          <div className="flex gap-4">
-            <div>
-              <span className="text-xs text-success-600">Venda:</span>
-              <span className="ml-1 font-semibold">{formatarMoeda(comissoesGeradas.venda)}</span>
-            </div>
-            <div>
-              <span className="text-xs text-success-600">Execução:</span>
-              <span className="ml-1 font-semibold">{formatarMoeda(comissoesGeradas.execucao)}</span>
-            </div>
-            <div>
-              <span className="text-xs text-success-600">Total:</span>
-              <span className="ml-1 font-bold">{formatarMoeda(comissoesGeradas.total)}</span>
-            </div>
-          </div>
+          <span>Este atendimento é uma continuação — sessão agendada para {
+            atendimento.itens[0]
+              ? (atendimento.itens[0].etapa_label
+                  ? `${atendimento.itens[0].procedimento_nome} — ${atendimento.itens[0].etapa_label}`
+                  : atendimento.itens[0].procedimento_nome)
+              : 'procedimento'
+          }.</span>
         </div>
       )}
 
@@ -740,6 +742,39 @@ export default function AtendimentoDetalhePage({
               </div>
             )}
           </div>
+
+          {/* Métricas de tempo */}
+          <div className="mt-4 pt-4 border-t space-y-2">
+            {!['finalizado', 'encerrado'].includes(atendimento.status) ? (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted">Aberto há:</span>
+                <span className="font-medium text-warning-600">{tempoDecorrido(atendimento.created_at)}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted">Duração total:</span>
+                <span className="font-medium">{tempoDecorrido(atendimento.created_at, atendimento.finalizado_at)}</span>
+              </div>
+            )}
+            {atendimento.liberado_em && !atendimento.finalizado_at && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted">Em execução há:</span>
+                <span className="font-medium text-info-600">{tempoDecorrido(atendimento.liberado_em)}</span>
+              </div>
+            )}
+            {atendimento.liberado_em && atendimento.finalizado_at && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted">Tempo em execução:</span>
+                <span className="font-medium">{tempoDecorrido(atendimento.liberado_em, atendimento.finalizado_at)}</span>
+              </div>
+            )}
+            {!atendimento.liberado_em && !['finalizado', 'encerrado'].includes(atendimento.status) && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted">Aguardando liberação há:</span>
+                <span className="font-medium text-warning-500">{tempoDecorrido(atendimento.created_at)}</span>
+              </div>
+            )}
+          </div>
         </Card>
 
         {/* Resumo Financeiro */}
@@ -771,9 +806,11 @@ export default function AtendimentoDetalhePage({
           </div>
           {atendimento.status === 'aguardando_pagamento' && (
             <div className="mt-4 pt-4 border-t">
-              <Button variant="secondary" className="w-full justify-center" onClick={() => setModalPagamento(true)}>
-                Registrar Pagamento
-              </Button>
+              <Link href={`/atendimentos/${id}/pagamento`} className="block">
+                <Button variant="secondary" className="w-full justify-center">
+                  💳 Ir para Pagamento
+                </Button>
+              </Link>
             </div>
           )}
         </Card>
@@ -813,9 +850,47 @@ export default function AtendimentoDetalhePage({
                     const item = entry.item;
                     return (
                       <tr key={item.id}>
-                        <td className="px-4 py-3">{item.procedimento_nome}</td>
+                        <td className="px-4 py-3">
+                          <div>
+                            {item.dente_unico
+                              ? `${item.procedimento_nome} • Dente ${item.dente_unico}${item.etapa_label ? ` — ${item.etapa_label}` : ''}`
+                              : item.etapa_label
+                                ? `${item.procedimento_nome} — ${item.etapa_label}`
+                                : item.procedimento_nome}
+                          </div>
+                          {item.progresso_etapas && item.progresso_etapas.length > 0 && (
+                            <ProgressoEtapas etapas={item.progresso_etapas} />
+                          )}
+                        </td>
                         <td className="px-4 py-3">{item.criado_por_nome || '-'}</td>
-                        <td className="px-4 py-3">{item.executor_nome || '-'}</td>
+                        <td className="px-4 py-3">
+                          {podTrocarExecutor && ['pendente', 'pago'].includes(item.status) ? (
+                            trocandoExecutor === item.id ? (
+                              <select
+                                autoFocus
+                                className="text-sm border border-border rounded px-2 py-1 bg-surface"
+                                defaultValue={item.executor_id ?? ''}
+                                onChange={(e) => handleTrocarExecutor(item.id, e.target.value ? parseInt(e.target.value) : null)}
+                                onBlur={() => setTrocandoExecutor(null)}
+                              >
+                                <option value="">Sem executor</option>
+                                {executores.map(ex => (
+                                  <option key={ex.id} value={ex.id}>{ex.nome}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <button
+                                onClick={() => { carregarExecutores(); setTrocandoExecutor(item.id); }}
+                                className="text-left hover:text-primary-600 hover:underline transition-colors"
+                                title="Clique para trocar executor"
+                              >
+                                {item.executor_nome || <span className="text-muted italic">Sem executor</span>}
+                              </button>
+                            )
+                          ) : (
+                            item.executor_nome || '-'
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right">{formatarMoeda(item.valor)}</td>
                         <td className="px-4 py-3 text-center"><StatusBadge type="item" status={item.status} /></td>
                         {podRemover && (
@@ -850,9 +925,46 @@ export default function AtendimentoDetalhePage({
                               {grupoItens.length} {grupoItens.length === 1 ? 'dente' : 'dentes'}
                             </span>
                           </div>
+                          {primeiro.progresso_etapas && primeiro.progresso_etapas.length > 0 && (
+                            <div className="ml-6">
+                              <ProgressoEtapas etapas={primeiro.progresso_etapas} />
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3">{primeiro.criado_por_nome || '-'}</td>
-                        <td className="px-4 py-3">{primeiro.executor_nome || '-'}</td>
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          {podTrocarExecutor && grupoItens.every(i => ['pendente', 'pago'].includes(i.status)) ? (
+                            trocandoExecutor === primeiro.id ? (
+                              <select
+                                autoFocus
+                                className="text-sm border border-border rounded px-2 py-1 bg-surface"
+                                defaultValue={primeiro.executor_id ?? ''}
+                                onChange={async (e) => {
+                                  const novoId = e.target.value ? parseInt(e.target.value) : null;
+                                  for (const gi of grupoItens) {
+                                    await handleTrocarExecutor(gi.id, novoId);
+                                  }
+                                }}
+                                onBlur={() => setTrocandoExecutor(null)}
+                              >
+                                <option value="">Sem executor</option>
+                                {executores.map(ex => (
+                                  <option key={ex.id} value={ex.id}>{ex.nome}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <button
+                                onClick={() => { carregarExecutores(); setTrocandoExecutor(primeiro.id); }}
+                                className="text-left hover:text-primary-600 hover:underline transition-colors"
+                                title="Clique para trocar executor de todo o grupo"
+                              >
+                                {primeiro.executor_nome || <span className="text-muted italic">Sem executor</span>}
+                              </button>
+                            )
+                          ) : (
+                            primeiro.executor_nome || '-'
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right font-medium">{formatarMoeda(totalGrupo)}</td>
                         <td className="px-4 py-3 text-center"><StatusBadge type="item" status={statusAgregado} /></td>
                         {podRemover && (
@@ -1039,12 +1151,12 @@ export default function AtendimentoDetalhePage({
               placeholder="Definir depois"
             />
             <Input
-              label="Data"
+              label="Data e hora"
               name="agData"
-              type="date"
+              type="datetime-local"
               value={agData}
               onChange={setAgData}
-              hint="Opcional — sem data = agendamento pendente"
+              hint="Opcional — sem data = agendamento pendente. Hora também opcional."
             />
             <Textarea
               label="Observações"
@@ -1061,41 +1173,6 @@ export default function AtendimentoDetalhePage({
             </div>
           </form>
         )}
-      </Modal>
-
-      {/* Modal Finalizar com Motivo */}
-      <Modal isOpen={modalFinalizar} onClose={() => setModalFinalizar(false)} title="Finalizar Atendimento" size="sm">
-        <div className="space-y-4">
-          <p className="text-sm text-muted">Selecione o motivo de saída do cliente:</p>
-          <div className="space-y-2">
-            {([
-              { value: 'sem_tratamento', label: 'Avaliação apenas — cliente saiu sem tratamento' },
-              { value: 'tratamento_completo', label: 'Tratamento concluído por hoje' },
-              { value: 'continuacao', label: 'Haverá continuação — cliente retornará' },
-            ] as const).map((opt) => (
-              <label key={opt.value}
-                className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                  motivoSaida === opt.value ? 'border-primary-500 bg-primary-50' : 'border-neutral-200 hover:border-neutral-300'
-                }`}>
-                <input
-                  type="radio"
-                  name="motivoSaida"
-                  value={opt.value}
-                  checked={motivoSaida === opt.value}
-                  onChange={() => setMotivoSaida(opt.value)}
-                  className="accent-primary-500"
-                />
-                <span className="text-sm">{opt.label}</span>
-              </label>
-            ))}
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setModalFinalizar(false)}>Cancelar</Button>
-            <Button onClick={handleConfirmarFinalizar} disabled={!motivoSaida || finalizando} loading={finalizando}>
-              Confirmar
-            </Button>
-          </div>
-        </div>
       </Modal>
 
       {/* Modal Pagamento */}
@@ -1161,7 +1238,13 @@ export default function AtendimentoDetalhePage({
                       return (
                         <div key={item.id} className="flex items-center gap-3 px-3 py-2">
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{item.procedimento_nome}</p>
+                            <p className="text-sm font-medium truncate">
+                              {item.dente_unico
+                                ? `${item.procedimento_nome} • Dente ${item.dente_unico}${item.etapa_label ? ` — ${item.etapa_label}` : ''}`
+                                : item.etapa_label
+                                  ? `${item.procedimento_nome} — ${item.etapa_label}`
+                                  : item.procedimento_nome}
+                            </p>
                             <p className="text-xs text-muted">
                               Falta pagar: {formatarMoeda(devido)}
                               {alocado >= devido && <span className="ml-2 text-success-600 font-medium">✓ Quitado</span>}

@@ -26,6 +26,22 @@ import {
   teardownCloudflareContextMock,
 } from '../helpers/db-mock';
 
+// Mock JWT para bypass de autenticação nos testes
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1,
+    email: 'admin@test.com',
+    role: 'admin',
+    nome: 'Admin Teste',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { POST as postClientes } from '@/app/api/clientes/route';
 import { POST as postAtendimentos } from '@/app/api/atendimentos/route';
 import { PUT as putAtendimento } from '@/app/api/atendimentos/[id]/route';
@@ -64,6 +80,7 @@ const ATENDIMENTO_ORTO_BASE = {
   id: 10,
   cliente_id: CLIENTE_ORTO.id,
   avaliador_id: null,
+  unidade_id: 1,
   created_at: '2025-02-01T09:00:00',
   finalizado_at: null,
   cliente_nome: CLIENTE_ORTO.nome,
@@ -197,19 +214,18 @@ describe('Integração — Fluxo Orto', () => {
 
   describe('Etapa 3 — Pagamento do procedimento orto', () => {
     test('POST /api/atendimentos/10/pagamentos registra pagamento', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_ORTO_BASE,
         status: 'aguardando_pagamento',
       });
       mockQueryResponse('select id from usuarios limit 1', { id: 1 });
       setLastInsertId(10);
-      mockQueryResponse('select * from pagamentos where id', {
+      mockQueryResponse('from pagamentos where id', {
         id: 10,
         atendimento_id: ATENDIMENTO_ORTO_BASE.id,
         recebido_por_id: 1,
         valor: PROC_ORTO.valor,
         metodo: 'cartao_debito',
-        parcelas: 1,
         created_at: '2025-02-01T10:00:00',
       });
 
@@ -236,7 +252,7 @@ describe('Integração — Fluxo Orto', () => {
 
   describe('Etapa 4 — Aguardando Pagamento → Em Execução', () => {
     test('PUT libera para execução', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_ORTO_BASE,
         status: 'aguardando_pagamento',
       });
@@ -265,11 +281,11 @@ describe('Integração — Fluxo Orto', () => {
 
   describe('Etapa 5 — Executar procedimento', () => {
     test('PUT marca item como executando', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_ORTO_BASE,
         status: 'em_execucao',
       });
-      mockQueryResponse('select * from itens_atendimento where id', {
+      mockQueryResponse('from itens_atendimento where id', {
         id: 1,
         atendimento_id: ATENDIMENTO_ORTO_BASE.id,
         procedimento_id: PROC_ORTO.id,
@@ -295,11 +311,11 @@ describe('Integração — Fluxo Orto', () => {
     });
 
     test('PUT marca item como concluído', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_ORTO_BASE,
         status: 'em_execucao',
       });
-      mockQueryResponse('select * from itens_atendimento where id', {
+      mockQueryResponse('from itens_atendimento where id', {
         id: 1,
         atendimento_id: ATENDIMENTO_ORTO_BASE.id,
         procedimento_id: PROC_ORTO.id,
@@ -331,77 +347,34 @@ describe('Integração — Fluxo Orto', () => {
   // ═════════════════════════════════════════════
 
   describe('Etapa 6 — Finalizar atendimento orto', () => {
-    test('POST /api/atendimentos/10/finalizar com comissões corretas', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
+    test('POST /api/atendimentos/10/finalizar com sem_tratamento', async () => {
+      mockQueryResponse('from atendimentos where id', [{
         id: ATENDIMENTO_ORTO_BASE.id,
         status: 'em_execucao',
-      });
-      // 1 item, concluído e pago
-      mockQueryResponse('from itens_atendimento where atendimento_id', [
-        {
-          id: 1,
-          valor: PROC_ORTO.valor,
-          valor_pago: PROC_ORTO.valor,
-          status: 'concluido',
-          criado_por_id: null, // Orto não tem criado_por (não tem avaliador)
-          executor_id: EXECUTOR_ORTO.id,
-          procedimento_id: PROC_ORTO.id,
-        },
-      ]);
-      mockQueryResponse('select id, comissao_venda, comissao_execucao from procedimentos where id', {
-        id: PROC_ORTO.id,
-        comissao_venda: PROC_ORTO.comissao_venda,
-        comissao_execucao: PROC_ORTO.comissao_execucao,
-      });
+        unidade_id: 1,
+      }]);
 
       const ctx = createRouteContext({ id: String(ATENDIMENTO_ORTO_BASE.id) });
-      const { status, data } = await callRoute(postFinalizar, '/api/atendimentos/10/finalizar', {
+      const { status, data } = await callRoute<{ success: boolean; message: string }>(postFinalizar, '/api/atendimentos/10/finalizar', {
         method: 'POST',
+        body: { motivo_saida: 'sem_tratamento' },
       }, ctx);
 
       expect(status).toBe(200);
       expect(data).toHaveProperty('success', true);
-
-      // Comissão: apenas execução (não há criado_por_id para venda)
-      // 30% de 350 = 105
-      expect(data.comissoes.venda).toBe(0);
-      expect(data.comissoes.execucao).toBe(PROC_ORTO.valor * (PROC_ORTO.comissao_execucao / 100));
-      expect(data.comissoes.total).toBe(
-        PROC_ORTO.valor * (PROC_ORTO.comissao_execucao / 100)
-      );
-
-      // Verifica que apenas 1 comissão foi gerada (só execução, sem venda)
-      expect(data.comissoes.detalhes).toHaveLength(1);
-      expect(data.comissoes.detalhes[0]).toEqual(
-        expect.objectContaining({
-          tipo: 'execucao',
-          usuario_id: EXECUTOR_ORTO.id,
-          valor: PROC_ORTO.valor * (PROC_ORTO.comissao_execucao / 100),
-        })
-      );
     });
 
-    test('query de finalização atualiza status para finalizado', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
+    test('query de finalização atualiza status e motivo_saida', async () => {
+      mockQueryResponse('from atendimentos where id', [{
         id: ATENDIMENTO_ORTO_BASE.id,
         status: 'em_execucao',
-      });
-      mockQueryResponse('from itens_atendimento where atendimento_id', [
-        {
-          id: 1,
-          valor: 350,
-          valor_pago: 350,
-          status: 'concluido',
-          criado_por_id: null,
-          executor_id: EXECUTOR_ORTO.id,
-          procedimento_id: PROC_ORTO.id,
-        },
-      ]);
-      mockQueryResponse('select id, comissao_venda, comissao_execucao from procedimentos where id', PROC_ORTO);
+        unidade_id: 1,
+      }]);
 
       const ctx = createRouteContext({ id: String(ATENDIMENTO_ORTO_BASE.id) });
       await callRoute(postFinalizar, '/api/atendimentos/10/finalizar', {
         method: 'POST',
+        body: { motivo_saida: 'sem_tratamento' },
       }, ctx);
 
       const queries = getExecutedQueries();
@@ -409,7 +382,8 @@ describe('Integração — Fluxo Orto', () => {
         q.sql.toLowerCase().includes("status = 'finalizado'")
       );
       expect(finalizeQ).toBeDefined();
-      expect(finalizeQ!.params).toContain(ATENDIMENTO_ORTO_BASE.id);
+      expect(finalizeQ!.sql).toContain('motivo_saida');
+      expect(finalizeQ!.params).toContain('sem_tratamento');
     });
   });
 

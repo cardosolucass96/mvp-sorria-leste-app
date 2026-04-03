@@ -17,6 +17,8 @@ export interface ItemAtendimentoData {
   status: ItemStatus;
   dentes: string | null;
   quantidade: number;
+  dente_unico?: string | null;
+  etapa_label?: string | null;
   observacoes?: string | null;
 }
 
@@ -48,7 +50,15 @@ export default function ItemAtendimentoRow({
   return (
     <tr className="hover:bg-neutral-50">
       <td className="px-4 py-3">
-        <div className="font-medium text-foreground">{item.procedimento_nome}</div>
+        <div className="font-medium text-foreground">
+          {item.procedimento_nome}
+          {item.dente_unico && (
+            <span className="text-sm text-muted font-normal ml-1">• Dente {item.dente_unico}</span>
+          )}
+          {item.etapa_label && (
+            <span className="text-sm text-muted font-normal ml-1">— {item.etapa_label}</span>
+          )}
+        </div>
         {item.observacoes && (
           <div className="text-xs text-muted mt-0.5">{item.observacoes}</div>
         )}

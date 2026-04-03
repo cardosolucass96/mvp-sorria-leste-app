@@ -2,11 +2,19 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { FileText, Activity } from 'lucide-react';
+import { FileText, Plus, Trash2 } from 'lucide-react';
 import { PageHeader, Button, Input, Checkbox, Badge, Alert, Modal, LoadingState, Card, Table, ConfirmDialog } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
+
+interface EtapaModelo {
+  id?: number;
+  nome: string;
+  valor: string;
+  comissao_venda: string;
+  comissao_execucao: string;
+}
 
 interface Procedimento {
   id: number;
@@ -15,6 +23,7 @@ interface Procedimento {
   comissao_venda: number;
   comissao_execucao: number;
   por_dente: number;
+  tem_etapas: number;
   ativo: number;
   created_at: string;
 }
@@ -25,7 +34,11 @@ interface FormData {
   comissao_venda: string;
   comissao_execucao: string;
   por_dente: boolean;
+  tem_etapas: boolean;
+  etapas: EtapaModelo[];
 }
+
+const ETAPA_VAZIA: EtapaModelo = { nome: '', valor: '', comissao_venda: '', comissao_execucao: '' };
 
 const initialFormData: FormData = {
   nome: '',
@@ -33,6 +46,8 @@ const initialFormData: FormData = {
   comissao_venda: '',
   comissao_execucao: '',
   por_dente: false,
+  tem_etapas: false,
+  etapas: [],
 };
 
 export default function ProcedimentosPage() {
@@ -42,11 +57,9 @@ export default function ProcedimentosPage() {
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [mostrarInativos, setMostrarInativos] = useState(false);
-  
-  // Apenas admin e atendente podem ver comissões
+
   const podeVerComissoes = user?.role === 'admin' || user?.role === 'atendente';
-  
-  // Modal/Formulário
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState<FormData>(initialFormData);
@@ -70,7 +83,7 @@ export default function ProcedimentosPage() {
       const params = new URLSearchParams();
       if (busca) params.append('busca', busca);
       if (mostrarInativos) params.append('inativos', 'true');
-      
+
       const res = await fetch(`/api/procedimentos?${params}`);
       const data = await res.json();
       setProcedimentos(data);
@@ -86,11 +99,6 @@ export default function ProcedimentosPage() {
     carregarProcedimentos();
   }, [carregarProcedimentos]);
 
-  const handleBuscar = (e: React.FormEvent) => {
-    e.preventDefault();
-    carregarProcedimentos();
-  };
-
   const abrirModalNovo = () => {
     setFormData(initialFormData);
     setEditingId(null);
@@ -98,17 +106,40 @@ export default function ProcedimentosPage() {
     setIsModalOpen(true);
   };
 
-  const abrirModalEditar = (proc: Procedimento) => {
-    setFormData({
-      nome: proc.nome,
-      valor: proc.valor.toString(),
-      comissao_venda: proc.comissao_venda.toString(),
-      comissao_execucao: proc.comissao_execucao.toString(),
-      por_dente: proc.por_dente === 1,
-    });
+  const abrirModalEditar = async (proc: Procedimento) => {
     setEditingId(proc.id);
     setError('');
     setIsModalOpen(true);
+
+    // Carrega etapas do procedimento
+    try {
+      const res = await fetch(`/api/procedimentos/${proc.id}`);
+      const data = await res.json();
+      setFormData({
+        nome: proc.nome,
+        valor: proc.valor.toString(),
+        comissao_venda: proc.comissao_venda.toString(),
+        comissao_execucao: proc.comissao_execucao.toString(),
+        por_dente: proc.por_dente === 1,
+        tem_etapas: proc.tem_etapas === 1,
+        etapas: (data.etapas ?? []).map((e: { nome: string; valor: number | null; comissao_venda: number; comissao_execucao: number }) => ({
+          nome: e.nome,
+          valor: e.valor != null ? String(e.valor) : '',
+          comissao_venda: String(e.comissao_venda),
+          comissao_execucao: String(e.comissao_execucao),
+        })),
+      });
+    } catch {
+      setFormData({
+        nome: proc.nome,
+        valor: proc.valor.toString(),
+        comissao_venda: proc.comissao_venda.toString(),
+        comissao_execucao: proc.comissao_execucao.toString(),
+        por_dente: proc.por_dente === 1,
+        tem_etapas: proc.tem_etapas === 1,
+        etapas: [],
+      });
+    }
   };
 
   const fecharModal = () => {
@@ -118,10 +149,37 @@ export default function ProcedimentosPage() {
     setError('');
   };
 
+  const adicionarEtapa = () => {
+    setFormData(prev => ({ ...prev, etapas: [...prev.etapas, { ...ETAPA_VAZIA }] }));
+  };
+
+  const removerEtapa = (idx: number) => {
+    setFormData(prev => ({ ...prev, etapas: prev.etapas.filter((_, i) => i !== idx) }));
+  };
+
+  const atualizarEtapa = (idx: number, field: keyof EtapaModelo, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      etapas: prev.etapas.map((e, i) => i === idx ? { ...e, [field]: value } : e),
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError('');
+
+    if (formData.tem_etapas && formData.etapas.length === 0) {
+      setError('Adicione pelo menos uma etapa ou desmarque "Tem etapas"');
+      setSaving(false);
+      return;
+    }
+
+    if (formData.tem_etapas && formData.etapas.some(e => !e.nome.trim())) {
+      setError('Todas as etapas precisam ter um nome');
+      setSaving(false);
+      return;
+    }
 
     try {
       const payload = {
@@ -130,12 +188,19 @@ export default function ProcedimentosPage() {
         comissao_venda: parseFloat(formData.comissao_venda) || 0,
         comissao_execucao: parseFloat(formData.comissao_execucao) || 0,
         por_dente: formData.por_dente,
+        tem_etapas: formData.tem_etapas,
+        etapas: formData.tem_etapas
+          ? formData.etapas.map((e, idx) => ({
+              nome: e.nome.trim(),
+              valor: e.valor ? parseFloat(e.valor) : null,
+              comissao_venda: parseFloat(e.comissao_venda) || 0,
+              comissao_execucao: parseFloat(e.comissao_execucao) || 0,
+              ordem: idx,
+            }))
+          : [],
       };
 
-      const url = editingId 
-        ? `/api/procedimentos/${editingId}`
-        : '/api/procedimentos';
-      
+      const url = editingId ? `/api/procedimentos/${editingId}` : '/api/procedimentos';
       const res = await fetch(url, {
         method: editingId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -166,9 +231,7 @@ export default function ProcedimentosPage() {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         try {
           const res = await fetch(`/api/procedimentos/${id}`, { method: 'DELETE' });
-          if (res.ok) {
-            carregarProcedimentos();
-          }
+          if (res.ok) carregarProcedimentos();
         } catch (error) {
           console.error('Erro ao desativar:', error);
         }
@@ -183,9 +246,7 @@ export default function ProcedimentosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ativo: true }),
       });
-      if (res.ok) {
-        carregarProcedimentos();
-      }
+      if (res.ok) carregarProcedimentos();
     } catch (error) {
       console.error('Erro ao reativar:', error);
     }
@@ -204,9 +265,8 @@ export default function ProcedimentosPage() {
         actions={<Button onClick={abrirModalNovo}>+ Novo Procedimento</Button>}
       />
 
-      {/* Busca e Filtros */}
       <Card>
-        <form onSubmit={handleBuscar} className="flex gap-4 items-end flex-wrap">
+        <form onSubmit={(e) => { e.preventDefault(); carregarProcedimentos(); }} className="flex gap-4 items-end flex-wrap">
           <div className="flex-1 min-w-[200px]">
             <Input
               label="Buscar"
@@ -216,27 +276,25 @@ export default function ProcedimentosPage() {
               placeholder="Nome do procedimento..."
             />
           </div>
-          
-          <Checkbox
-            label="Mostrar inativos"
-            checked={mostrarInativos}
-            onChange={setMostrarInativos}
-          />
-          
+          <Checkbox label="Mostrar inativos" checked={mostrarInativos} onChange={setMostrarInativos} />
           <Button type="submit" variant="secondary">Buscar</Button>
         </form>
       </Card>
 
-      {/* Tabela */}
       <Table<Procedimento>
         columns={[
           {
             key: 'nome',
             label: 'Procedimento',
             render: (proc) => (
-              <span className={`font-medium ${!proc.ativo ? 'text-neutral-400' : 'text-foreground'}`}>
-                {proc.nome}
-              </span>
+              <div>
+                <span className={`font-medium ${!proc.ativo ? 'text-neutral-400' : 'text-foreground'}`}>
+                  {proc.nome}
+                </span>
+                {proc.tem_etapas === 1 && (
+                  <Badge color="purple" className="ml-2 text-xs">Multi-sessão</Badge>
+                )}
+              </div>
             ),
           },
           {
@@ -303,7 +361,6 @@ export default function ProcedimentosPage() {
         caption="Procedimentos odontológicos"
       />
 
-      {/* Resumo */}
       <div className="text-sm text-muted">
         Total: {procedimentos.length} procedimento(s)
         {mostrarInativos && ` (${procedimentos.filter(p => !p.ativo).length} inativo(s))`}
@@ -324,40 +381,41 @@ export default function ProcedimentosPage() {
         isOpen={isModalOpen}
         onClose={fecharModal}
         title={editingId ? 'Editar Procedimento' : 'Novo Procedimento'}
-        size="md"
+        size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && <Alert type="error">{error}</Alert>}
-          
+
           <Input
             label="Nome"
             name="nome"
             value={formData.nome}
-            onChange={(v) => setFormData({...formData, nome: v})}
+            onChange={(v) => setFormData({ ...formData, nome: v })}
             required
             placeholder="Ex: Limpeza dental"
             disabled={saving}
           />
-          
+
           <Input
-            label="Valor (R$)"
+            label="Valor total (R$)"
             name="valor"
             type="number"
             value={formData.valor}
-            onChange={(v) => setFormData({...formData, valor: v})}
+            onChange={(v) => setFormData({ ...formData, valor: v })}
             required
             placeholder="0,00"
             disabled={saving}
+            hint={formData.tem_etapas ? 'Valor total do procedimento completo (soma de todas as sessões)' : undefined}
           />
-          
-          {podeVerComissoes && (
+
+          {podeVerComissoes && !formData.tem_etapas && (
             <div className="grid grid-cols-2 gap-4">
               <Input
                 label="Comissão Venda (%)"
                 name="comissao_venda"
                 type="number"
                 value={formData.comissao_venda}
-                onChange={(v) => setFormData({...formData, comissao_venda: v})}
+                onChange={(v) => setFormData({ ...formData, comissao_venda: v })}
                 placeholder="0"
                 disabled={saving}
               />
@@ -366,21 +424,127 @@ export default function ProcedimentosPage() {
                 name="comissao_execucao"
                 type="number"
                 value={formData.comissao_execucao}
-                onChange={(v) => setFormData({...formData, comissao_execucao: v})}
+                onChange={(v) => setFormData({ ...formData, comissao_execucao: v })}
                 placeholder="0"
                 disabled={saving}
               />
             </div>
           )}
-          
-          <Checkbox
-            label="Cobrar por dente"
-            checked={formData.por_dente}
-            onChange={(v) => setFormData({...formData, por_dente: v})}
-            hint="Se marcado, o avaliador poderá selecionar múltiplos dentes e o valor será multiplicado pela quantidade"
-          />
-          
-          <div className="flex justify-end gap-3 pt-4">
+
+          <div className="flex gap-6">
+            <Checkbox
+              label="Cobrar por dente"
+              checked={formData.por_dente}
+              onChange={(v) => setFormData({ ...formData, por_dente: v })}
+              hint="Valor multiplicado pela quantidade de dentes"
+            />
+            <Checkbox
+              label="Tem etapas (multi-sessão)"
+              checked={formData.tem_etapas}
+              onChange={(v) => setFormData({ ...formData, tem_etapas: v, etapas: v ? [{ ...ETAPA_VAZIA }] : [] })}
+              hint="Ex: aparelho, implante, canal"
+            />
+          </div>
+
+          {/* Etapas */}
+          {formData.tem_etapas && (
+            <div className="border rounded-lg overflow-hidden">
+              <div className="px-4 py-2 bg-surface-secondary flex items-center justify-between">
+                <span className="text-sm font-medium">Etapas / Sessões</span>
+                <button
+                  type="button"
+                  onClick={adicionarEtapa}
+                  disabled={saving}
+                  className="flex items-center gap-1 text-sm text-info-600 hover:text-info-800"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Adicionar etapa
+                </button>
+              </div>
+
+              {formData.etapas.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-muted">
+                  Nenhuma etapa adicionada.
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {formData.etapas.map((etapa, idx) => (
+                    <div key={idx} className="px-4 py-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-muted w-6 shrink-0">{idx + 1}.</span>
+                        <input
+                          type="text"
+                          value={etapa.nome}
+                          onChange={(e) => atualizarEtapa(idx, 'nome', e.target.value)}
+                          placeholder="Nome da etapa (ex: Instalação do aparelho)"
+                          className="input flex-1 text-sm"
+                          disabled={saving}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removerEtapa(idx)}
+                          disabled={saving}
+                          className="text-error-500 hover:text-error-700 shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className={`grid gap-2 pl-8 ${podeVerComissoes ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                        <div>
+                          <label className="block text-xs text-muted mb-1">Valor (R$) <span className="text-neutral-400">opcional</span></label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={etapa.valor}
+                            onChange={(e) => atualizarEtapa(idx, 'valor', e.target.value)}
+                            placeholder="Deixe vazio para proporcional"
+                            className="input text-sm w-full"
+                            disabled={saving}
+                          />
+                        </div>
+                        {podeVerComissoes && (
+                          <>
+                            <div>
+                              <label className="block text-xs text-muted mb-1">Comissão Venda (%)</label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                value={etapa.comissao_venda}
+                                onChange={(e) => atualizarEtapa(idx, 'comissao_venda', e.target.value)}
+                                placeholder="0"
+                                className="input text-sm w-full"
+                                disabled={saving}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-muted mb-1">Comissão Execução (%)</label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                value={etapa.comissao_execucao}
+                                onChange={(e) => atualizarEtapa(idx, 'comissao_execucao', e.target.value)}
+                                placeholder="0"
+                                className="input text-sm w-full"
+                                disabled={saving}
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="secondary" onClick={fecharModal} disabled={saving}>
               Cancelar
             </Button>

@@ -33,13 +33,6 @@ interface Pagamento {
   metodo: string;
 }
 
-interface PagamentoItem {
-  id: number;
-  pagamento_id: number;
-  item_atendimento_id: number;
-  valor_aplicado: number;
-}
-
 describe.skip('Sprint 7 - Sistema de Pagamentos por Procedimento', () => {
   // SKIP - Todos os testes dependem de D1 que não roda em ambiente Jest local
   
@@ -123,7 +116,6 @@ describe.skip('Sprint 7 - Sistema de Pagamentos por Procedimento', () => {
 
   // Cleanup
   afterAll(() => {
-    execute('DELETE FROM pagamentos_itens WHERE pagamento_id IN (SELECT id FROM pagamentos WHERE atendimento_id = ?)', [testAtendimentoId]);
     execute('DELETE FROM pagamentos WHERE atendimento_id = ?', [testAtendimentoId]);
     execute('DELETE FROM itens_atendimento WHERE atendimento_id = ?', [testAtendimentoId]);
     execute('DELETE FROM atendimentos WHERE id = ?', [testAtendimentoId]);
@@ -137,13 +129,6 @@ describe.skip('Sprint 7 - Sistema de Pagamentos por Procedimento', () => {
   // ============================================
   describe('Estrutura do Banco de Dados', () => {
     
-    test('tabela "pagamentos_itens" deve existir', () => {
-      const tables = query(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='pagamentos_itens'"
-      );
-      expect(tables).toHaveLength(1);
-    });
-
     test('coluna "valor_pago" deve existir em itens_atendimento', () => {
       const columns = query(
         "PRAGMA table_info(itens_atendimento)"
@@ -177,13 +162,6 @@ describe.skip('Sprint 7 - Sistema de Pagamentos por Procedimento', () => {
         [testAtendimentoId, testUsuarioId, 100.00, 'pix']
       );
       const pagamentoId = Number(pagamento.lastInsertRowid);
-
-      // Vincular ao item
-      execute(
-        `INSERT INTO pagamentos_itens (pagamento_id, item_atendimento_id, valor_aplicado) 
-         VALUES (?, ?, ?)`,
-        [pagamentoId, testItem1Id, 100.00]
-      );
 
       // Atualizar valor_pago
       execute(
@@ -225,12 +203,6 @@ describe.skip('Sprint 7 - Sistema de Pagamentos por Procedimento', () => {
         [testAtendimentoId, testUsuarioId, 50.00, 'dinheiro']
       );
       const pagamentoId = Number(pagamento.lastInsertRowid);
-
-      execute(
-        `INSERT INTO pagamentos_itens (pagamento_id, item_atendimento_id, valor_aplicado) 
-         VALUES (?, ?, ?)`,
-        [pagamentoId, testItem1Id, 50.00]
-      );
 
       execute(
         `UPDATE itens_atendimento 
@@ -280,12 +252,6 @@ describe.skip('Sprint 7 - Sistema de Pagamentos por Procedimento', () => {
 
       // Aplicar 300 no item 2
       execute(
-        `INSERT INTO pagamentos_itens (pagamento_id, item_atendimento_id, valor_aplicado) 
-         VALUES (?, ?, ?)`,
-        [pagamentoId, testItem2Id, 300.00]
-      );
-
-      execute(
         `UPDATE itens_atendimento 
          SET valor_pago = valor_pago + ?,
              status = CASE WHEN valor_pago + ? >= valor THEN 'pago' ELSE status END
@@ -294,12 +260,6 @@ describe.skip('Sprint 7 - Sistema de Pagamentos por Procedimento', () => {
       );
 
       // Aplicar 200 no item 3
-      execute(
-        `INSERT INTO pagamentos_itens (pagamento_id, item_atendimento_id, valor_aplicado) 
-         VALUES (?, ?, ?)`,
-        [pagamentoId, testItem3Id, 200.00]
-      );
-
       execute(
         `UPDATE itens_atendimento 
          SET valor_pago = valor_pago + ?,
@@ -332,13 +292,8 @@ describe.skip('Sprint 7 - Sistema de Pagamentos por Procedimento', () => {
         [testAtendimentoId]
       );
 
-      const itensVinculados = query<PagamentoItem>(
-        'SELECT * FROM pagamentos_itens WHERE pagamento_id = ?',
-        [pagamento?.id]
-      );
-
-      const totalAplicado = itensVinculados.reduce((sum, item) => sum + item.valor_aplicado, 0);
-      expect(totalAplicado).toBe(pagamento?.valor);
+      // Validate the payment value directly
+      expect(pagamento?.valor).toBe(500);
     });
 
   });
@@ -456,60 +411,7 @@ describe.skip('Sprint 7 - Sistema de Pagamentos por Procedimento', () => {
 
       expect(pagamentos.length).toBeGreaterThan(0);
 
-      pagamentos.forEach(pagamento => {
-        const vinculos = query<PagamentoItem>(
-          'SELECT * FROM pagamentos_itens WHERE pagamento_id = ?',
-          [pagamento.id]
-        );
-        
-        expect(vinculos.length).toBeGreaterThan(0);
-      });
-    });
-
-    test('deve recuperar histórico de pagamentos de um procedimento', () => {
-      const historico = query<any>(
-        `SELECT 
-          pi.valor_aplicado,
-          p.metodo,
-          p.created_at,
-          u.nome as recebido_por
-         FROM pagamentos_itens pi
-         JOIN pagamentos p ON pi.pagamento_id = p.id
-         LEFT JOIN usuarios u ON p.recebido_por_id = u.id
-         WHERE pi.item_atendimento_id = ?
-         ORDER BY p.created_at`,
-        [testItem1Id]
-      );
-
-      expect(historico.length).toBe(2); // 2 pagamentos no item1
-      expect(historico[0].valor_aplicado).toBe(100);
-      expect(historico[1].valor_aplicado).toBe(50);
-    });
-
-    test('deve listar todos os procedimentos de um pagamento', () => {
-      // Pegar o último pagamento que foi distribuído
-      const pagamento = queryOne<Pagamento>(
-        `SELECT * FROM pagamentos WHERE atendimento_id = ? 
-         AND valor = 500
-         ORDER BY id DESC LIMIT 1`,
-        [testAtendimentoId]
-      );
-
-      const procedimentos = query<any>(
-        `SELECT 
-          ia.id,
-          pr.nome as procedimento_nome,
-          pi.valor_aplicado
-         FROM pagamentos_itens pi
-         JOIN itens_atendimento ia ON pi.item_atendimento_id = ia.id
-         JOIN procedimentos pr ON ia.procedimento_id = pr.id
-         WHERE pi.pagamento_id = ?`,
-        [pagamento?.id]
-      );
-
-      expect(procedimentos.length).toBe(2); // Distribuído entre 2 procedimentos
-      const totalDistribuido = procedimentos.reduce((sum: number, p: any) => sum + p.valor_aplicado, 0);
-      expect(totalDistribuido).toBe(500);
+      expect(pagamentos.length).toBeGreaterThan(0);
     });
 
   });
@@ -527,25 +429,6 @@ describe.skip('Sprint 7 - Sistema de Pagamentos por Procedimento', () => {
       );
 
       expect(itensInvalidos.length).toBe(0);
-    });
-
-    test('soma de pagamentos_itens deve ser igual ao valor do pagamento', () => {
-      const pagamentos = query<Pagamento>(
-        'SELECT * FROM pagamentos WHERE atendimento_id = ?',
-        [testAtendimentoId]
-      );
-
-      pagamentos.forEach(pagamento => {
-        const itens = query<PagamentoItem>(
-          'SELECT * FROM pagamentos_itens WHERE pagamento_id = ?',
-          [pagamento.id]
-        );
-
-        const somaItens = itens.reduce((sum, item) => sum + item.valor_aplicado, 0);
-        
-        // Permitir diferença de 0.01 por arredondamento
-        expect(Math.abs(somaItens - pagamento.valor)).toBeLessThan(0.02);
-      });
     });
 
     test('status "pago" deve ser consistente com valor_pago >= valor', () => {

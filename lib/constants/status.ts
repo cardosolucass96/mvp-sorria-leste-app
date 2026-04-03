@@ -5,7 +5,7 @@
 
 import type { AtendimentoStatus, ItemStatus } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
-import { ClipboardList, Search, Clock, Activity, CheckCircle, HelpCircle, DollarSign } from 'lucide-react';
+import { ClipboardList, Search, Clock, Activity, CheckCircle, HelpCircle, DollarSign, Archive } from 'lucide-react';
 
 // ─── Status de Atendimento ──────────────────────────────────────
 
@@ -47,6 +47,12 @@ export const STATUS_CONFIG: Record<AtendimentoStatus, StatusConfig> = {
     bgCor: 'bg-success-100',
     icon: CheckCircle,
   },
+  encerrado: {
+    label: 'Encerrado',
+    cor: 'text-neutral-600',
+    bgCor: 'bg-neutral-200',
+    icon: Archive,
+  },
 };
 
 /** Cores sólidas para gráficos / barras do dashboard */
@@ -56,6 +62,7 @@ export const STATUS_CHART_COLORS: Record<AtendimentoStatus, string> = {
   aguardando_pagamento: 'bg-warning-500',
   em_execucao: 'bg-evaluation-500',
   finalizado: 'bg-success-500',
+  encerrado: 'bg-neutral-400',
 };
 
 /** Ordem do pipeline de atendimento */
@@ -65,6 +72,7 @@ export const STATUS_ORDER: AtendimentoStatus[] = [
   'aguardando_pagamento',
   'em_execucao',
   'finalizado',
+  'encerrado',
 ];
 
 /** Mapa de próximo status (transição) */
@@ -73,7 +81,8 @@ export const PROXIMOS_STATUS: Record<AtendimentoStatus, AtendimentoStatus | null
   avaliacao: 'aguardando_pagamento',
   aguardando_pagamento: 'em_execucao',
   em_execucao: 'finalizado',
-  finalizado: null,
+  finalizado: 'encerrado',
+  encerrado: null,
 };
 
 // ─── Status de Item ─────────────────────────────────────────────

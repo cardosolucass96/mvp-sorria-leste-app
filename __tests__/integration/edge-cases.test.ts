@@ -27,6 +27,22 @@ import {
   teardownCloudflareContextMock,
 } from '../helpers/db-mock';
 
+// Mock JWT para bypass de autenticação nos testes
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn().mockResolvedValue({
+    sub: 1,
+    email: 'admin@test.com',
+    role: 'admin',
+    nome: 'Admin Teste',
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  }),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
 import { POST as postAtendimentos } from '@/app/api/atendimentos/route';
 import { PUT as putAtendimento } from '@/app/api/atendimentos/[id]/route';
 import { POST as postItens, DELETE as deleteItens } from '@/app/api/atendimentos/[id]/itens/route';
@@ -39,6 +55,7 @@ const ATENDIMENTO = {
   id: 1,
   cliente_id: 1,
   avaliador_id: 10,
+  unidade_id: 1,
   created_at: '2025-01-15',
   finalizado_at: null,
   cliente_nome: 'Maria Silva',
@@ -91,7 +108,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
 
   describe('Pular etapas da pipeline', () => {
     test('triagem → aguardando_pagamento (pula avaliação) → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'triagem',
       });
@@ -107,7 +124,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
     });
 
     test('triagem → em_execucao (pula 2 etapas) → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'triagem',
       });
@@ -122,7 +139,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
     });
 
     test('triagem → finalizado (pula tudo) → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'triagem',
       });
@@ -137,7 +154,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
     });
 
     test('avaliacao → em_execucao (pula aguardando_pagamento) → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'avaliacao',
       });
@@ -152,7 +169,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
     });
 
     test('aguardando_pagamento → finalizado (pula execução) → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'aguardando_pagamento',
       });
@@ -167,7 +184,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
     });
 
     test('finalizado → qualquer status → 400 (estado terminal)', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'finalizado',
         finalizado_at: '2025-01-20',
@@ -177,7 +194,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
       for (const novoStatus of ['triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao']) {
         resetMockDb();
         setupCloudflareContextMock();
-        mockQueryResponse('select * from atendimentos where id', {
+        mockQueryResponse('from atendimentos where id', {
           ...ATENDIMENTO,
           status: 'finalizado',
         });
@@ -196,77 +213,55 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
   // 11.4 — Finalizar sem pagar tudo
   // ═════════════════════════════════════════════
 
-  describe('Finalizar sem pagar tudo', () => {
-    test('finalizar com item não concluído → 400', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
+  describe('Finalizar — novo fluxo (apenas sem_tratamento)', () => {
+    test('finalizar sem motivo_saida (default tratamento_completo) → 400', async () => {
+      mockQueryResponse('from atendimentos where id', [{
         id: 1,
         status: 'em_execucao',
-      });
-      mockQueryResponse('from itens_atendimento where atendimento_id', [
-        { id: 1, valor: 200, valor_pago: 200, status: 'concluido', criado_por_id: 10, executor_id: 20, procedimento_id: 100 },
-        { id: 2, valor: 500, valor_pago: 500, status: 'executando', criado_por_id: 10, executor_id: 20, procedimento_id: 101 },
-      ]);
-
-      const ctx = createRouteContext({ id: '1' });
-      const { status, data } = await callRoute<{ error: string; pendentes?: number }>(postFinalizar, '/api/atendimentos/1/finalizar', {
-        method: 'POST',
-      }, ctx);
-
-      expect(status).toBe(400);
-      expect(data.error).toContain('não concluído');
-      expect(data.pendentes).toBe(1);
-    });
-
-    test('finalizar com item não pago → 400', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
-        id: 1,
-        status: 'em_execucao',
-      });
-      mockQueryResponse('from itens_atendimento where atendimento_id', [
-        { id: 1, valor: 200, valor_pago: 200, status: 'concluido', criado_por_id: 10, executor_id: 20, procedimento_id: 100 },
-        { id: 2, valor: 500, valor_pago: 300, status: 'concluido', criado_por_id: 10, executor_id: 20, procedimento_id: 101 },
-      ]);
-
-      const ctx = createRouteContext({ id: '1' });
-      const { status, data } = await callRoute<{ error: string; valorFaltante?: number }>(postFinalizar, '/api/atendimentos/1/finalizar', {
-        method: 'POST',
-      }, ctx);
-
-      expect(status).toBe(400);
-      expect(data.error).toContain('pagamento pendente');
-      expect(data.valorFaltante).toBe(200); // 500 - 300
-    });
-
-    test('finalizar atendimento que não está em execução → 400', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
-        id: 1,
-        status: 'aguardando_pagamento', // não está em em_execucao
-      });
+        unidade_id: 1,
+      }]);
 
       const ctx = createRouteContext({ id: '1' });
       const { status, data } = await callRoute<{ error: string }>(postFinalizar, '/api/atendimentos/1/finalizar', {
         method: 'POST',
+      }, ctx);
+
+      expect(status).toBe(400);
+      expect(data.error).toContain('fluxo normal');
+    });
+
+    test('finalizar com motivo_saida=sem_tratamento → 200', async () => {
+      mockQueryResponse('from atendimentos where id', [{
+        id: 1,
+        status: 'em_execucao',
+        unidade_id: 1,
+      }]);
+
+      const ctx = createRouteContext({ id: '1' });
+      const { status, data } = await callRoute<{ success: boolean }>(postFinalizar, '/api/atendimentos/1/finalizar', {
+        method: 'POST',
+        body: { motivo_saida: 'sem_tratamento' },
+      }, ctx);
+
+      expect(status).toBe(200);
+      expect(data.success).toBe(true);
+    });
+
+    test('finalizar atendimento que não está em execução → 400', async () => {
+      mockQueryResponse('from atendimentos where id', [{
+        id: 1,
+        status: 'aguardando_pagamento',
+        unidade_id: 1,
+      }]);
+
+      const ctx = createRouteContext({ id: '1' });
+      const { status, data } = await callRoute<{ error: string }>(postFinalizar, '/api/atendimentos/1/finalizar', {
+        method: 'POST',
+        body: { motivo_saida: 'sem_tratamento' },
       }, ctx);
 
       expect(status).toBe(400);
       expect(data.error).toContain('não está em execução');
-    });
-
-    test('finalizar atendimento sem itens → 400', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
-        id: 1,
-        status: 'em_execucao',
-      });
-      // Sem itens
-      mockQueryResponse('from itens_atendimento where atendimento_id', []);
-
-      const ctx = createRouteContext({ id: '1' });
-      const { status, data } = await callRoute<{ error: string }>(postFinalizar, '/api/atendimentos/1/finalizar', {
-        method: 'POST',
-      }, ctx);
-
-      expect(status).toBe(400);
-      expect(data.error).toContain('não possui procedimentos');
     });
   });
 
@@ -276,7 +271,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
 
   describe('Adicionar item em atendimento finalizado', () => {
     test('POST /api/atendimentos/1/itens com status finalizado → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'finalizado',
         finalizado_at: '2025-01-20',
@@ -293,7 +288,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
     });
 
     test('POST /api/atendimentos/1/itens com status aguardando_pagamento → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'aguardando_pagamento',
       });
@@ -313,99 +308,38 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
   // 11.4 — Pagamento distribuído com soma errada
   // ═════════════════════════════════════════════
 
-  describe('Pagamento distribuído com soma errada', () => {
-    test('soma dos itens menor que valor do pagamento → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
-        ...ATENDIMENTO,
-        status: 'aguardando_pagamento',
-      });
-
-      const ctx = createRouteContext({ id: '1' });
-      const { status, data } = await callRoute<{ error: string }>(postPagamentos, '/api/atendimentos/1/pagamentos', {
-        method: 'POST',
-        body: {
-          valor: 700,
-          metodo: 'pix',
-          itens: [
-            { item_id: 1, valor_aplicado: 200 },
-            { item_id: 2, valor_aplicado: 400 }, // soma = 600, não 700
-          ],
-        },
-      }, ctx);
-
-      expect(status).toBe(400);
-      expect(data.error).toContain('soma dos valores');
-    });
-
-    test('soma dos itens maior que valor do pagamento → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
-        ...ATENDIMENTO,
-        status: 'aguardando_pagamento',
-      });
-
-      const ctx = createRouteContext({ id: '1' });
-      const { status, data } = await callRoute<{ error: string }>(postPagamentos, '/api/atendimentos/1/pagamentos', {
-        method: 'POST',
-        body: {
-          valor: 500,
-          metodo: 'pix',
-          itens: [
-            { item_id: 1, valor_aplicado: 300 },
-            { item_id: 2, valor_aplicado: 300 }, // soma = 600, não 500
-          ],
-        },
-      }, ctx);
-
-      expect(status).toBe(400);
-    });
-
+  describe('Pagamento — validações básicas', () => {
     test('pagamento sem valor → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
-        ...ATENDIMENTO,
-        status: 'aguardando_pagamento',
-      });
+      mockQueryResponse('from atendimentos where id', { ...ATENDIMENTO, status: 'aguardando_pagamento' });
 
       const ctx = createRouteContext({ id: '1' });
       const { status } = await callRoute(postPagamentos, '/api/atendimentos/1/pagamentos', {
         method: 'POST',
-        body: {
-          metodo: 'pix',
-        },
+        body: { metodo: 'pix' },
       }, ctx);
 
       expect(status).toBe(400);
     });
 
     test('pagamento sem método → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
-        ...ATENDIMENTO,
-        status: 'aguardando_pagamento',
-      });
+      mockQueryResponse('from atendimentos where id', { ...ATENDIMENTO, status: 'aguardando_pagamento' });
 
       const ctx = createRouteContext({ id: '1' });
       const { status } = await callRoute(postPagamentos, '/api/atendimentos/1/pagamentos', {
         method: 'POST',
-        body: {
-          valor: 500,
-        },
+        body: { valor: 500 },
       }, ctx);
 
       expect(status).toBe(400);
     });
 
     test('método de pagamento inválido → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
-        ...ATENDIMENTO,
-        status: 'aguardando_pagamento',
-      });
+      mockQueryResponse('from atendimentos where id', { ...ATENDIMENTO, status: 'aguardando_pagamento' });
 
       const ctx = createRouteContext({ id: '1' });
       const { status, data } = await callRoute<{ error: string }>(postPagamentos, '/api/atendimentos/1/pagamentos', {
         method: 'POST',
-        body: {
-          valor: 500,
-          metodo: 'bitcoin', // inválido
-        },
+        body: { valor: 500, metodo: 'bitcoin' },
       }, ctx);
 
       expect(status).toBe(400);
@@ -413,7 +347,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
     });
 
     test('pagamento em status que não aceita → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'triagem',
       });
@@ -421,10 +355,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
       const ctx = createRouteContext({ id: '1' });
       const { status, data } = await callRoute<{ error: string }>(postPagamentos, '/api/atendimentos/1/pagamentos', {
         method: 'POST',
-        body: {
-          valor: 500,
-          metodo: 'pix',
-        },
+        body: { valor: 500, metodo: 'pix' },
       }, ctx);
 
       expect(status).toBe(400);
@@ -438,13 +369,13 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
 
   describe('Adicionar item durante execução → revert', () => {
     test('POST item em atendimento em_execucao reverte para aguardando_pagamento', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'em_execucao',
       });
-      mockQueryResponse('select * from procedimentos where id', PROCEDIMENTO);
+      mockQueryResponse('from procedimentos where id', PROCEDIMENTO);
       setLastInsertId(3);
-      mockQueryResponse('select \n        i.*', {
+      mockQueryResponse('where i.id = ?', {
         id: 3,
         atendimento_id: 1,
         procedimento_id: 100,
@@ -474,13 +405,13 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
     });
 
     test('adicionar item em avaliação NÃO reverte status', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'avaliacao',
       });
-      mockQueryResponse('select * from procedimentos where id', PROCEDIMENTO);
+      mockQueryResponse('from procedimentos where id', PROCEDIMENTO);
       setLastInsertId(4);
-      mockQueryResponse('select \n        i.*', {
+      mockQueryResponse('where i.id = ?', {
         id: 4,
         atendimento_id: 1,
         procedimento_id: 100,
@@ -510,7 +441,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
 
   describe('Revert em_execucao → aguardando_pagamento', () => {
     test('PUT status aguardando_pagamento quando em em_execucao é permitido', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'em_execucao',
       });
@@ -536,13 +467,13 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
 
   describe('Procedimento por_dente', () => {
     test('adicionar item com múltiplos dentes registra dentes e quantidade', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'avaliacao',
       });
-      mockQueryResponse('select * from procedimentos where id', PROC_POR_DENTE);
+      mockQueryResponse('from procedimentos where id', PROC_POR_DENTE);
       setLastInsertId(5);
-      mockQueryResponse('select \n        i.*', {
+      mockQueryResponse('where i.id = ?', {
         id: 5,
         atendimento_id: 1,
         procedimento_id: PROC_POR_DENTE.id,
@@ -579,13 +510,13 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
     });
 
     test('item sem dentes usa quantidade = 1 por padrão', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'avaliacao',
       });
-      mockQueryResponse('select * from procedimentos where id', PROCEDIMENTO);
+      mockQueryResponse('from procedimentos where id', PROCEDIMENTO);
       setLastInsertId(6);
-      mockQueryResponse('select \n        i.*', {
+      mockQueryResponse('where i.id = ?', {
         id: 6,
         atendimento_id: 1,
         procedimento_id: PROCEDIMENTO.id,
@@ -619,161 +550,38 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
   // 11.5 — Procedimento com comissão 0%
   // ═════════════════════════════════════════════
 
-  describe('Procedimento com comissão 0%', () => {
-    test('finalizar com comissão 0% não gera INSERT de comissão', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
+  describe('Finalizar — rota redesenhada (sem comissões)', () => {
+    test('finalizar sem motivo_saida retorna erro sobre fluxo normal', async () => {
+      mockQueryResponse('from atendimentos where id', [{
         id: 1,
         status: 'em_execucao',
-      });
-      mockQueryResponse('from itens_atendimento where atendimento_id', [
-        {
-          id: 1,
-          valor: PROC_ZERO_COMISSAO.valor,
-          valor_pago: PROC_ZERO_COMISSAO.valor,
-          status: 'concluido',
-          criado_por_id: 10,
-          executor_id: 20,
-          procedimento_id: PROC_ZERO_COMISSAO.id,
-        },
-      ]);
-      mockQueryResponse('select id, comissao_venda, comissao_execucao from procedimentos where id', {
-        id: PROC_ZERO_COMISSAO.id,
-        comissao_venda: 0,
-        comissao_execucao: 0,
-      });
+        unidade_id: 1,
+      }]);
 
       const ctx = createRouteContext({ id: '1' });
-      const { status, data } = await callRoute(postFinalizar, '/api/atendimentos/1/finalizar', {
+      const { status, data } = await callRoute<{ error: string }>(postFinalizar, '/api/atendimentos/1/finalizar', {
         method: 'POST',
+      }, ctx);
+
+      expect(status).toBe(400);
+      expect(data.error).toContain('fluxo normal');
+    });
+
+    test('finalizar com sem_tratamento funciona sem itens', async () => {
+      mockQueryResponse('from atendimentos where id', [{
+        id: 1,
+        status: 'em_execucao',
+        unidade_id: 1,
+      }]);
+
+      const ctx = createRouteContext({ id: '1' });
+      const { status, data } = await callRoute<{ success: boolean }>(postFinalizar, '/api/atendimentos/1/finalizar', {
+        method: 'POST',
+        body: { motivo_saida: 'sem_tratamento' },
       }, ctx);
 
       expect(status).toBe(200);
-      expect(data.comissoes.venda).toBe(0);
-      expect(data.comissoes.execucao).toBe(0);
-      expect(data.comissoes.total).toBe(0);
-      expect(data.comissoes.detalhes).toHaveLength(0);
-
-      // Nenhum INSERT de comissão deve ter sido executado
-      const queries = getExecutedQueries();
-      const comissaoInserts = queries.filter(q =>
-        q.sql.toLowerCase().includes('insert into comissoes')
-      );
-      expect(comissaoInserts).toHaveLength(0);
-    });
-  });
-
-  // ═════════════════════════════════════════════
-  // 11.5 — Comissões mistas: venda + execução separadas
-  // ═════════════════════════════════════════════
-
-  describe('Comissões com cenários variados', () => {
-    test('item sem executor gera apenas comissão de venda', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
-        id: 1,
-        status: 'em_execucao',
-      });
-      mockQueryResponse('from itens_atendimento where atendimento_id', [
-        {
-          id: 1,
-          valor: 200,
-          valor_pago: 200,
-          status: 'concluido',
-          criado_por_id: 10,
-          executor_id: null, // sem executor
-          procedimento_id: 100,
-        },
-      ]);
-      mockQueryResponse('select id, comissao_venda, comissao_execucao from procedimentos where id', {
-        id: 100,
-        comissao_venda: 10,
-        comissao_execucao: 20,
-      });
-
-      const ctx = createRouteContext({ id: '1' });
-      const { data } = await callRoute(postFinalizar, '/api/atendimentos/1/finalizar', {
-        method: 'POST',
-      }, ctx);
-
-      // Apenas venda: 10% de 200 = 20
-      expect(data.comissoes.venda).toBe(20);
-      expect(data.comissoes.execucao).toBe(0);
-      expect(data.comissoes.detalhes).toHaveLength(1);
-      expect(data.comissoes.detalhes[0].tipo).toBe('venda');
-    });
-
-    test('item sem criado_por gera apenas comissão de execução', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
-        id: 1,
-        status: 'em_execucao',
-      });
-      mockQueryResponse('from itens_atendimento where atendimento_id', [
-        {
-          id: 1,
-          valor: 500,
-          valor_pago: 500,
-          status: 'concluido',
-          criado_por_id: null, // sem criador (orto)
-          executor_id: 20,
-          procedimento_id: 100,
-        },
-      ]);
-      mockQueryResponse('select id, comissao_venda, comissao_execucao from procedimentos where id', {
-        id: 100,
-        comissao_venda: 10,
-        comissao_execucao: 20,
-      });
-
-      const ctx = createRouteContext({ id: '1' });
-      const { data } = await callRoute(postFinalizar, '/api/atendimentos/1/finalizar', {
-        method: 'POST',
-      }, ctx);
-
-      // Apenas execução: 20% de 500 = 100
-      expect(data.comissoes.execucao).toBe(100);
-      expect(data.comissoes.venda).toBe(0);
-      expect(data.comissoes.detalhes).toHaveLength(1);
-      expect(data.comissoes.detalhes[0].tipo).toBe('execucao');
-    });
-
-    test('múltiplos itens geram comissões individuais somadas', async () => {
-      mockQueryResponse('select id, status from atendimentos where id', {
-        id: 1,
-        status: 'em_execucao',
-      });
-      mockQueryResponse('from itens_atendimento where atendimento_id', [
-        {
-          id: 1, valor: 200, valor_pago: 200, status: 'concluido',
-          criado_por_id: 10, executor_id: 20, procedimento_id: 100,
-        },
-        {
-          id: 2, valor: 300, valor_pago: 300, status: 'concluido',
-          criado_por_id: 10, executor_id: 20, procedimento_id: 100,
-        },
-        {
-          id: 3, valor: 500, valor_pago: 500, status: 'concluido',
-          criado_por_id: 10, executor_id: 20, procedimento_id: 100,
-        },
-      ]);
-      // O mock retorna o mesmo proc para todos (substring match)
-      mockQueryResponse('select id, comissao_venda, comissao_execucao from procedimentos where id', {
-        id: 100,
-        comissao_venda: 10,
-        comissao_execucao: 20,
-      });
-
-      const ctx = createRouteContext({ id: '1' });
-      const { data } = await callRoute(postFinalizar, '/api/atendimentos/1/finalizar', {
-        method: 'POST',
-      }, ctx);
-
-      // Total valor: 200+300+500 = 1000
-      // Venda: 10% × 1000 = 100
-      // Execução: 20% × 1000 = 200
-      expect(data.comissoes.venda).toBe(100);
-      expect(data.comissoes.execucao).toBe(200);
-      expect(data.comissoes.total).toBe(300);
-      // 3 itens × 2 tipos (venda + exec) = 6 detalhes
-      expect(data.comissoes.detalhes).toHaveLength(6);
+      expect(data.success).toBe(true);
     });
   });
 
@@ -783,7 +591,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
 
   describe('Avaliação → Aguardando Pagamento exige itens', () => {
     test('avaliação → aguardando_pagamento sem itens → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'avaliacao',
       });
@@ -804,14 +612,14 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
   // 11.5 — Aguardando Pagamento → Em Execução exige pago
   // ═════════════════════════════════════════════
 
-  describe('Aguardando → Em Execução exige item pago', () => {
-    test('aguardando → em_execucao sem itens pagos → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+  describe('Aguardando → Em Execução exige pagamento', () => {
+    test('aguardando → em_execucao sem pagamento ativo → 400', async () => {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'aguardando_pagamento',
       });
-      // 0 itens pagos
-      mockQueryResponse('count(*) as count', { count: 0 });
+      // 0 pagamentos ativos
+      mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 0 });
 
       const ctx = createRouteContext({ id: '1' });
       const { status, data } = await callRoute<{ error: string }>(putAtendimento, '/api/atendimentos/1', {
@@ -820,7 +628,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
       }, ctx);
 
       expect(status).toBe(400);
-      expect(data.error).toContain('pago');
+      expect(data.error).toContain('pagamento');
     });
   });
 
@@ -830,11 +638,11 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
 
   describe('Remover item', () => {
     test('DELETE item na avaliação funciona', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'avaliacao',
       });
-      mockQueryResponse('select * from itens_atendimento where id', {
+      mockQueryResponse('from itens_atendimento where id', {
         id: 1,
         atendimento_id: 1,
         procedimento_id: 100,
@@ -853,7 +661,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
     });
 
     test('DELETE item fora de avaliação → 400', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'em_execucao',
       });
@@ -884,11 +692,11 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
 
   describe('Validação de executor no item', () => {
     test('apenas executor designado pode marcar concluído', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'em_execucao',
       });
-      mockQueryResponse('select * from itens_atendimento where id', {
+      mockQueryResponse('from itens_atendimento where id', {
         id: 1,
         atendimento_id: 1,
         procedimento_id: 100,
@@ -935,16 +743,16 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
 
   describe('Valor customizado de procedimento', () => {
     test('POST item com valor customizado usa valor informado', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'avaliacao',
       });
-      mockQueryResponse('select * from procedimentos where id', {
+      mockQueryResponse('from procedimentos where id', {
         ...PROCEDIMENTO,
         valor: 200, // valor padrão
       });
       setLastInsertId(7);
-      mockQueryResponse('select \n        i.*', {
+      mockQueryResponse('where i.id = ?', {
         id: 7,
         valor: 350, // valor customizado
         procedimento_nome: PROCEDIMENTO.nome,
@@ -969,16 +777,16 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
     });
 
     test('POST item sem valor usa valor padrão do procedimento', async () => {
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'avaliacao',
       });
-      mockQueryResponse('select * from procedimentos where id', {
+      mockQueryResponse('from procedimentos where id', {
         ...PROCEDIMENTO,
         valor: 200,
       });
       setLastInsertId(8);
-      mockQueryResponse('select \n        i.*', {
+      mockQueryResponse('where i.id = ?', {
         id: 8,
         valor: 200,
         procedimento_nome: PROCEDIMENTO.nome,
@@ -1012,7 +820,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
 
     metodos.forEach((metodo) => {
       test(`método "${metodo}" é aceito`, async () => {
-        mockQueryResponse('select * from atendimentos where id', {
+        mockQueryResponse('from atendimentos where id', {
           ...ATENDIMENTO,
           status: 'aguardando_pagamento',
         });

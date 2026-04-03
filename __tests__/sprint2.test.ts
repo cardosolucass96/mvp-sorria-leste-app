@@ -333,12 +333,13 @@ describe('Sprint 2 - Login Simples + Usuários', () => {
       expect(content).toContain('email');
     });
 
-    test('página de login deve ter emails de teste', () => {
+    test('página de login deve ter atalhos de acesso rápido', () => {
       const content = fs.readFileSync(
         path.join(process.cwd(), 'app', 'login', 'page.tsx'),
         'utf-8'
       );
-      expect(content).toContain('testEmails');
+      // Usa DEV_USERS com loginRapido para acesso rápido em dev
+      expect(content).toContain('DEV_USERS');
       expect(content).toContain('admin@sorrialeste.com');
     });
 

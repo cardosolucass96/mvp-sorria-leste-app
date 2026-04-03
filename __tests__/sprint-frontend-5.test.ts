@@ -240,7 +240,7 @@ describe('Sprint 5: usePageTitle em todas as páginas', () => {
     [['dashboard', 'page.tsx'], 'Dashboard'],
     [['clientes', 'page.tsx'], 'Clientes'],
     [['clientes', 'novo', 'page.tsx'], 'Novo Cliente'],
-    [['clientes', '[id]', 'page.tsx'], 'Detalhes do Cliente'],
+    [['clientes', '[id]', 'page.tsx'], 'Ficha do Cliente'],
     [['atendimentos', 'page.tsx'], 'Atendimentos'],
     [['atendimentos', 'novo', 'page.tsx'], 'Novo Atendimento'],
     [['atendimentos', '[id]', 'page.tsx'], 'Detalhes do Atendimento'],
