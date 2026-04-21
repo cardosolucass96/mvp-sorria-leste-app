@@ -33,3 +33,11 @@ port = 8788
 # Variáveis de ambiente
 [vars]
 ENVIRONMENT = "production"
+
+# Observabilidade
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
