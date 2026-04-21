@@ -6,6 +6,7 @@ interface ProcedimentoRow {
   item_id: number;
   atendimento_id: number;
   procedimento_nome: string;
+  cliente_id: number;
   cliente_nome: string;
   dentes: string | null;
   quantidade: number;
@@ -26,10 +27,11 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
   try {
     // Buscar procedimentos onde o usuário foi o avaliador (criou o item)
     const avaliacoes = await query<ProcedimentoRow>(
-      `SELECT 
+      `SELECT
         ia.id as item_id,
         ia.atendimento_id,
         p.nome as procedimento_nome,
+        c.id as cliente_id,
         c.nome as cliente_nome,
         ia.dentes,
         ia.quantidade,
@@ -48,10 +50,11 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 
     // Buscar procedimentos onde o usuário foi o executor
     const execucoes = await query<ProcedimentoRow>(
-      `SELECT 
+      `SELECT
         ia.id as item_id,
         ia.atendimento_id,
         p.nome as procedimento_nome,
+        c.id as cliente_id,
         c.nome as cliente_nome,
         ia.dentes,
         ia.quantidade,

@@ -31,14 +31,18 @@ interface Atendimento {
   unidade_id: number;
 }
 
-async function verificarAtendimentoUnidade(atendimentoId: number, unidadeId: number) {
+type VerificarResult =
+  | { kind: 'error'; response: NextResponse }
+  | { kind: 'ok'; atendimento: Atendimento };
+
+async function verificarAtendimentoUnidade(atendimentoId: number, unidadeId: number): Promise<VerificarResult> {
   const at = await queryOne<Atendimento>(
     'SELECT id, status, unidade_id FROM atendimentos WHERE id = ?',
     [atendimentoId]
   );
-  if (!at) return { error: NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 }) };
-  if (at.unidade_id !== unidadeId) return { error: NextResponse.json({ error: 'Atendimento não pertence a esta unidade' }, { status: 403 }) };
-  return { atendimento: at };
+  if (!at) return { kind: 'error', response: NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 }) };
+  if (at.unidade_id !== unidadeId) return { kind: 'error', response: NextResponse.json({ error: 'Atendimento não pertence a esta unidade' }, { status: 403 }) };
+  return { kind: 'ok', atendimento: at };
 }
 
 // GET /api/atendimentos/[id]/itens - Lista itens do atendimento
@@ -49,7 +53,7 @@ export const GET = withUnit(async (
   try {
     const { id } = await context.params!;
     const result = await verificarAtendimentoUnidade(parseInt(id as string), context.unidadeId);
-    if ('error' in result) return result.error;
+    if (result.kind === 'error') return result.response;
 
     const itens = await query<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null; criado_por_nome: string | null }>(
       `SELECT
@@ -89,7 +93,7 @@ export const POST = withUnit(async (
 
     // Verifica se atendimento existe e pertence à unidade
     const result = await verificarAtendimentoUnidade(parseInt(id as string), context.unidadeId);
-    if ('error' in result) return result.error;
+    if (result.kind === 'error') return result.response;
     const atendimento = result.atendimento;
     
     // Verifica se pode adicionar itens (triagem, avaliacao ou em_execucao)
@@ -160,7 +164,16 @@ export const POST = withUnit(async (
       }
     }
 
-    // Fluxo por_dente: cria 1 item por dente com group_id compartilhado
+    // Itens adicionados durante execução entram direto na fila do executor:
+    // - status = 'pago' (visível para o executor sem precisar passar pelo pagamento)
+    // - valor_pago = 0 (será cobrado depois, ao final do atendimento)
+    // - adicionado_em_execucao = 1 (flag para o fluxo de finalização verificar e voltar para aguardando_pagamento)
+    const isAddDuringExecucao = atendimento.status === 'em_execucao';
+    const statusItemInicial = isAddDuringExecucao ? 'pago' : 'pendente';
+    const adicionadoEmExecucaoFlag = isAddDuringExecucao ? 1 : 0;
+
+    // Fluxo por_dente: cria 1 item por dente com group_id compartilhado.
+    // Faces (quando presentes) ficam apenas no JSON `dentes` do item.
     if (procedimento.por_dente && dentesArray.length > 0) {
       const groupId = randomUUID();
       const valorPorDente = valorFinal / dentesArray.length;
@@ -169,78 +182,51 @@ export const POST = withUnit(async (
       for (const d of dentesArray) {
         const res = await execute(
           `INSERT INTO itens_atendimento
-            (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, group_id, dente_unico, observacoes, status)
-           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 'pendente')`,
+            (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, dentes, quantidade, group_id, dente_unico, observacoes, status, adicionado_em_execucao)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
           [
             parseInt(id as string),
             procedimento_id,
             executor_id || null,
             criado_por_id || null,
             valorPorDente,
+            valorPorDente, // valor_original = snapshot do valor inicial
             JSON.stringify([d]),
             groupId,
             d.dente,
             observacoes || null,
+            statusItemInicial,
+            adicionadoEmExecucaoFlag,
           ]
         );
         const itemId = res.lastInsertRowid as number;
         itemIds.push(itemId);
-
-        for (const f of d.faces) {
-          await execute(
-            `INSERT INTO etapas_procedimento (item_atendimento_id, dente, face) VALUES (?, ?, ?)`,
-            [itemId, d.dente, f.nome]
-          );
-        }
       }
 
-      // Se adicionou durante execução, volta para aguardando_pagamento
-      if (atendimento.status === 'em_execucao') {
-        await execute(
-          "UPDATE atendimentos SET status = 'aguardando_pagamento' WHERE id = ?",
-          [parseInt(id as string)]
-        );
-      }
-
-      return NextResponse.json({ group_id: groupId, itens: itemIds }, { status: 201 });
+      return NextResponse.json({ group_id: groupId, itens: itemIds, adicionado_em_execucao: adicionadoEmExecucaoFlag }, { status: 201 });
     }
 
     // Fluxo original para procedimentos NÃO por_dente
     const insertResult = await execute(
       `INSERT INTO itens_atendimento
-        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, dentes, quantidade, observacoes, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendente')`,
+        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, dentes, quantidade, observacoes, status, adicionado_em_execucao)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         parseInt(id as string),
         procedimento_id,
         executor_id || null,
         criado_por_id || null,
         valorFinal,
+        valorFinal, // valor_original = snapshot do valor inicial
         dentes || null,
         quantidadeFinal,
         observacoes || null,
+        statusItemInicial,
+        adicionadoEmExecucaoFlag,
       ]
     );
 
     const itemId = insertResult.lastInsertRowid as number;
-
-    // Cria etapas se tiver dentes com faces definidas
-    for (const d of dentesArray) {
-      for (const f of d.faces) {
-        await execute(
-          `INSERT INTO etapas_procedimento (item_atendimento_id, dente, face) VALUES (?, ?, ?)`,
-          [itemId, d.dente, f.nome]
-        );
-      }
-    }
-
-    // Se adicionou durante execução, volta para aguardando_pagamento
-    if (atendimento.status === 'em_execucao') {
-      await execute(
-        "UPDATE atendimentos SET status = 'aguardando_pagamento' WHERE id = ?",
-        [parseInt(id as string)]
-      );
-    }
 
     // Retorna item criado
     const novoItem = await queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null }>(
@@ -285,7 +271,7 @@ export const DELETE = withUnit(async (
 
     // Verifica se atendimento existe e pertence à unidade
     const result = await verificarAtendimentoUnidade(parseInt(id as string), context.unidadeId);
-    if ('error' in result) return result.error;
+    if (result.kind === 'error') return result.response;
     const atendimento = result.atendimento;
 
     if (atendimento.status !== 'avaliacao') {
@@ -317,16 +303,7 @@ export const DELETE = withUnit(async (
       itensParaRemover = [item];
     }
 
-    // Remove etapas, prontuários e itens em cascata
     for (const item of itensParaRemover) {
-      const etapas = await query<{ id: number }>(
-        'SELECT id FROM etapas_procedimento WHERE item_atendimento_id = ?',
-        [item.id]
-      );
-      for (const etapa of etapas) {
-        await execute('DELETE FROM prontuarios_etapa WHERE etapa_id = ?', [etapa.id]);
-      }
-      await execute('DELETE FROM etapas_procedimento WHERE item_atendimento_id = ?', [item.id]);
       await execute('DELETE FROM itens_atendimento WHERE id = ?', [item.id]);
     }
 

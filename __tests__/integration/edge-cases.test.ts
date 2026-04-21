@@ -367,8 +367,8 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
   // 11.5 — Adicionar item durante execução (revert)
   // ═════════════════════════════════════════════
 
-  describe('Adicionar item durante execução → revert', () => {
-    test('POST item em atendimento em_execucao reverte para aguardando_pagamento', async () => {
+  describe('Adicionar item durante execução → flag adicionado_em_execucao', () => {
+    test('POST item em atendimento em_execucao insere com status=pago e flag adicionado_em_execucao=1', async () => {
       mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'em_execucao',
@@ -381,12 +381,12 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
         procedimento_id: 100,
         executor_id: null,
         valor: 200,
-        status: 'pendente',
+        status: 'pago',
         procedimento_nome: PROCEDIMENTO.nome,
       });
 
       const ctx = createRouteContext({ id: '1' });
-      const { status, data } = await callRoute(postItens, '/api/atendimentos/1/itens', {
+      const { status } = await callRoute(postItens, '/api/atendimentos/1/itens', {
         method: 'POST',
         body: {
           procedimento_id: PROCEDIMENTO.id,
@@ -394,14 +394,17 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
       }, ctx);
 
       expect(status).toBe(201);
-      expect(data).toHaveProperty('status', 'pendente');
 
-      // Verifica que o UPDATE de revert foi executado
+      // Novo comportamento: não há revert direto. O item é inserido com status='pago'
+      // e flag adicionado_em_execucao=1 para ser visto pelo executor. A volta para
+      // aguardando_pagamento acontece na finalização, quando o atendimento detecta
+      // itens com adicionado_em_execucao=1 e valor_pago<valor.
       const queries = getExecutedQueries();
-      const revertQuery = queries.find(q =>
-        q.sql.toLowerCase().includes("update atendimentos set status = 'aguardando_pagamento'")
-      );
-      expect(revertQuery).toBeDefined();
+      const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
+      expect(insertQuery).toBeDefined();
+      // Params: ..., valor, valor_original, dentes, quantidade, observacoes, status, adicionado_em_execucao
+      expect(insertQuery!.params[9]).toBe('pago');
+      expect(insertQuery!.params[10]).toBe(1);
     });
 
     test('adicionar item em avaliação NÃO reverte status', async () => {

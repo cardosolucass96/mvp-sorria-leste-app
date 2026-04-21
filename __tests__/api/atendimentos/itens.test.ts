@@ -134,7 +134,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     expect(status).toBe(201);
   });
 
-  it('adiciona item em em_execucao → volta para aguardando_pagamento', async () => {
+  it('adiciona item em em_execucao com status=pago e adicionado_em_execucao=1', async () => {
     setLastInsertId(12);
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from procedimentos where id', PROC_RESTAURACAO);
@@ -149,10 +149,15 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
     expect(status).toBe(201);
 
-    // Verifica que voltou para aguardando_pagamento
+    // Novo fluxo: item adicionado em execução entra com status=pago e flag adicionado_em_execucao=1;
+    // a volta para aguardando_pagamento acontece via flag quando o atendimento for finalizado.
     const queries = getExecutedQueries();
-    const statusUpdate = queries.find(q => q.sql.includes("UPDATE atendimentos SET status = 'aguardando_pagamento'"));
-    expect(statusUpdate).toBeDefined();
+    const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
+    expect(insertQuery).toBeDefined();
+    // Params: ..., valor, valor_original, dentes, quantidade, observacoes, status, adicionado_em_execucao
+    // status = params[9], adicionado_em_execucao = params[10]
+    expect(insertQuery!.params[9]).toBe('pago');
+    expect(insertQuery!.params[10]).toBe(1);
   });
 
   it('rejeita adicionar em aguardando_pagamento', async () => {
@@ -254,6 +259,26 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     expect(insertQuery!.params[4]).toBe(300);
   });
 
+  it('salva valor_original = valor no INSERT (snapshot de orçamento)', async () => {
+    setLastInsertId(18);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
+    mockQueryResponse('from itens_atendimento i', novoItem);
+
+    const ctx = createRouteContext({ id: '2' });
+    await callRoute(addItem, '/api/atendimentos/2/itens', {
+      method: 'POST',
+      body: { procedimento_id: 1, valor: 250 },
+    }, ctx);
+
+    const queries = getExecutedQueries();
+    const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
+    expect(insertQuery!.sql).toContain('valor_original');
+    // valor = params[4], valor_original = params[5] (por_dente=0 branch)
+    expect(insertQuery!.params[4]).toBe(250);
+    expect(insertQuery!.params[5]).toBe(250); // valor_original = valor
+  });
+
   it('salva campo dentes quando fornecido (procedimento não por_dente)', async () => {
     setLastInsertId(15);
     // PROC_LIMPEZA tem por_dente=0 → dentes armazenado como string diretamente
@@ -269,8 +294,9 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
-    expect(insertQuery!.params[5]).toBe('["11","21"]'); // dentes
-    expect(insertQuery!.params[6]).toBe(2); // quantidade
+    // Params: atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, dentes, quantidade, ...
+    expect(insertQuery!.params[6]).toBe('["11","21"]'); // dentes
+    expect(insertQuery!.params[7]).toBe(2); // quantidade
   });
 
   it('quantidade default é 1', async () => {
@@ -287,7 +313,8 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
-    expect(insertQuery!.params[6]).toBe(1);
+    // Params: atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, dentes, quantidade, ...
+    expect(insertQuery!.params[7]).toBe(1);
   });
 
   it('rejeita executor que não existe', async () => {
@@ -455,18 +482,22 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
     expect(update!.sql).toContain('executor_id = ?');
   });
 
-  it('atualiza valor do item', async () => {
-    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
-    mockQueryResponse('select * from itens_atendimento where id', ITEM_RESTAURACAO_PAGO);
-    mockQueryResponse('from itens_atendimento i', { ...ITEM_RESTAURACAO_PAGO, procedimento_nome: 'Restauração', executor_nome: 'Dr. Carlos' });
+  it('atualiza valor do item em aguardando_pagamento', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select * from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
+    mockQueryResponse('from itens_atendimento i', { ...ITEM_LIMPEZA_PENDENTE, procedimento_nome: 'Limpeza', executor_nome: 'Dr. Carlos' });
 
-    const ctx = createRouteContext({ id: '4', itemId: '2' });
-    const { status } = await callRoute(updateItem, '/api/atendimentos/4/itens/2', {
+    const ctx = createRouteContext({ id: '3', itemId: '1' });
+    const { status } = await callRoute(updateItem, '/api/atendimentos/3/itens/1', {
       method: 'PUT',
-      body: { valor: 500 },
+      body: { valor: 120 },
     }, ctx);
 
     expect(status).toBe(200);
+
+    const queries = getExecutedQueries();
+    const update = queries.find(q => q.sql.includes('UPDATE itens_atendimento'));
+    expect(update!.sql).toContain('valor = ?');
   });
 
   it('atualiza status para executando', async () => {
@@ -578,5 +609,153 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
 
     expect(status).toBe(400);
     expect(data.error).toBe('Nenhum campo para atualizar');
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // valor_original (desconto do atendente durante avaliação/aguardando_pagamento)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  it('valor: permite editar durante avaliacao', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
+    mockQueryResponse('from itens_atendimento i', { ...ITEM_LIMPEZA_PENDENTE, valor: 120, procedimento_nome: 'Limpeza', executor_nome: 'Dr. Carlos' });
+
+    const ctx = createRouteContext({ id: '2', itemId: '1' });
+    const { status } = await callRoute(updateItem, '/api/atendimentos/2/itens/1', {
+      method: 'PUT',
+      body: { valor: 120 },
+    }, ctx);
+
+    expect(status).toBe(200);
+  });
+
+  it('valor: rejeita edição em triagem', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select * from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
+
+    const ctx = createRouteContext({ id: '1', itemId: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/1/itens/1', {
+      method: 'PUT',
+      body: { valor: 100 },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toContain('avaliação');
+  });
+
+  it('valor: rejeita edição em em_execucao', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('select * from itens_atendimento where id', ITEM_RESTAURACAO_PAGO);
+
+    const ctx = createRouteContext({ id: '4', itemId: '2' });
+    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/4/itens/2', {
+      method: 'PUT',
+      body: { valor: 500 },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toContain('avaliação');
+  });
+
+  it('valor: rejeita valor menor que valor_pago', async () => {
+    // Item com valor=400, valor_pago=400 → tentar reduzir para 300
+    const itemParcial = { ...ITEM_LIMPEZA_PENDENTE, valor: 400, valor_pago: 400 };
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select * from itens_atendimento where id', itemParcial);
+
+    const ctx = createRouteContext({ id: '3', itemId: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/3/itens/1', {
+      method: 'PUT',
+      body: { valor: 300 },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toContain('já foi pago');
+    expect(data.error).toContain('400.00');
+  });
+
+  it('valor: aceita valor igual a valor_pago', async () => {
+    const itemParcial = { ...ITEM_LIMPEZA_PENDENTE, valor: 500, valor_pago: 400 };
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select * from itens_atendimento where id', itemParcial);
+    mockQueryResponse('from itens_atendimento i', { ...itemParcial, valor: 400, procedimento_nome: 'Limpeza', executor_nome: null });
+
+    const ctx = createRouteContext({ id: '3', itemId: '1' });
+    const { status } = await callRoute(updateItem, '/api/atendimentos/3/itens/1', {
+      method: 'PUT',
+      body: { valor: 400 },
+    }, ctx);
+
+    expect(status).toBe(200);
+  });
+
+  it('valor: rejeita valor negativo', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
+
+    const ctx = createRouteContext({ id: '2', itemId: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/2/itens/1', {
+      method: 'PUT',
+      body: { valor: -10 },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Valor inválido');
+  });
+
+  it('valor: rejeita valor não numérico', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
+
+    const ctx = createRouteContext({ id: '2', itemId: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/2/itens/1', {
+      method: 'PUT',
+      body: { valor: 'abc' },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Valor inválido');
+  });
+
+  it('valor: preserva valor_original quando edita item que já tem snapshot', async () => {
+    // Item com valor_original=150 (já snapshotado) → editar valor para 120
+    // Update NÃO deve incluir valor_original (fica igual)
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
+    mockQueryResponse('from itens_atendimento i', { ...ITEM_LIMPEZA_PENDENTE, valor: 120, procedimento_nome: 'Limpeza', executor_nome: null });
+
+    const ctx = createRouteContext({ id: '2', itemId: '1' });
+    await callRoute(updateItem, '/api/atendimentos/2/itens/1', {
+      method: 'PUT',
+      body: { valor: 120 },
+    }, ctx);
+
+    const queries = getExecutedQueries();
+    const update = queries.find(q => q.sql.includes('UPDATE itens_atendimento') && q.sql.includes('valor = ?'));
+    expect(update).toBeDefined();
+    expect(update!.sql).toContain('valor = ?');
+    // NÃO deve conter valor_original no update (pois já existe snapshot)
+    expect(update!.sql).not.toContain('valor_original = ?');
+  });
+
+  it('valor: backfill valor_original para itens legacy (valor_original NULL)', async () => {
+    // Item legacy com valor_original=null → ao editar, deve snapshotar valor atual
+    const itemLegacy = { ...ITEM_LIMPEZA_PENDENTE, valor: 150, valor_original: null };
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from itens_atendimento where id', itemLegacy);
+    mockQueryResponse('from itens_atendimento i', { ...itemLegacy, valor: 100, procedimento_nome: 'Limpeza', executor_nome: null });
+
+    const ctx = createRouteContext({ id: '2', itemId: '1' });
+    await callRoute(updateItem, '/api/atendimentos/2/itens/1', {
+      method: 'PUT',
+      body: { valor: 100 },
+    }, ctx);
+
+    const queries = getExecutedQueries();
+    const update = queries.find(q => q.sql.includes('UPDATE itens_atendimento') && q.sql.includes('valor_original = ?'));
+    expect(update).toBeDefined();
+    // Params: [novoValor, valorOriginalBackfill, itemId]
+    expect(update!.params[0]).toBe(100); // valor novo
+    expect(update!.params[1]).toBe(150); // valor_original = valor atual antes da edição
   });
 });

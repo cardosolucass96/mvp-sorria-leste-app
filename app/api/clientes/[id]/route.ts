@@ -137,7 +137,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    
+
     const existing = await queryOne<Cliente>(
       'SELECT * FROM clientes WHERE id = ?',
       [id]

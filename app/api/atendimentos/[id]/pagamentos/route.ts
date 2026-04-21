@@ -122,23 +122,39 @@ export const POST = withUnit(async (
         const itemId = parseInt(itemIdStr);
         itemsHandledSeparately.add(itemId);
 
-        const itemData = await queryOne<{ id: number; procedimento_id: number; etapa_label: string | null }>(
-          'SELECT id, procedimento_id, etapa_label FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
+        const itemData = await queryOne<{ id: number; procedimento_id: number; etapa_label: string | null; etapas_valores: string | null }>(
+          'SELECT id, procedimento_id, etapa_label, etapas_valores FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
           [itemId, atendimentoId]
         );
         if (!itemData) continue;
 
-        const todasEtapas = await query<{ nome: string; valor: number | null }>(
-          'SELECT nome, valor FROM procedimento_etapas_modelo WHERE procedimento_id = ? ORDER BY ordem ASC',
+        const todasEtapas = await query<{ id: number; nome: string; valor: number | null }>(
+          'SELECT id, nome, valor FROM procedimento_etapas_modelo WHERE procedimento_id = ? ORDER BY ordem ASC',
           [itemData.procedimento_id]
         );
+
+        // Aplica override per-item se houver: {"<etapa_modelo_id>": valor}.
+        // Quando existe, cada etapa tem valor garantido (não null).
+        let overrides: Record<string, number> = {};
+        if (itemData.etapas_valores) {
+          try {
+            overrides = JSON.parse(itemData.etapas_valores) as Record<string, number>;
+          } catch {
+            overrides = {};
+          }
+        }
+        const etapasComValor = todasEtapas.map(e => ({
+          id: e.id,
+          nome: e.nome,
+          valor: overrides[String(e.id)] ?? e.valor,
+        }));
 
         // Combina sessões já pagas (de pagamentos anteriores) com as novas
         const jaPageasNomes = itemData.etapa_label
           ? itemData.etapa_label.split(', ').map(s => s.trim())
           : [];
         const todasPageasNomes = [...new Set([...jaPageasNomes, ...(nomesPagosNovos as string[])])];
-        const todosPago = todasPageasNomes.length >= todasEtapas.length;
+        const todosPago = todasPageasNomes.length >= etapasComValor.length;
 
         if (todosPago) {
           // Todas as sessões pagas → marca como pago, limpa etapa_label
@@ -149,7 +165,7 @@ export const POST = withUnit(async (
         } else {
           // Ainda parcial → atualiza etapa_label com todas as sessões pagas até agora
           const label = todasPageasNomes.join(', ');
-          const etapasPageas = todasEtapas.filter(e => todasPageasNomes.includes(e.nome));
+          const etapasPageas = etapasComValor.filter(e => todasPageasNomes.includes(e.nome));
           const todosTemValor = etapasPageas.every(e => e.valor != null);
           if (todosTemValor) {
             const valorPago = etapasPageas.reduce((sum, e) => sum + (e.valor ?? 0), 0);

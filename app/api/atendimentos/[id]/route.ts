@@ -26,6 +26,8 @@ interface ItemAtendimento {
   executor_id: number | null;
   criado_por_id: number | null;
   valor: number;
+  valor_original: number | null;
+  etapas_valores: string | null;
   status: string;
   created_at: string;
   concluido_at: string | null;
@@ -140,6 +142,16 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
           `SELECT id, nome, valor, ordem FROM procedimento_etapas_modelo WHERE procedimento_id = ? ORDER BY ordem ASC`,
           [item.procedimento_id]
         );
+        // Aplica override per-item: se item.etapas_valores tem a etapa, usa o valor override.
+        // Caso contrário, usa valor do template (pode ser null = proporcional).
+        let overrides: Record<string, number> = {};
+        if (item.etapas_valores) {
+          try {
+            overrides = JSON.parse(item.etapas_valores) as Record<string, number>;
+          } catch {
+            overrides = {};
+          }
+        }
         // ID virtual único por item: evita colisão quando dois itens usam o mesmo procedimento
         modeloEtapasMap.set(item.id, modelos.map(m => ({
           id: item.id * 100000 + m.id,
@@ -149,7 +161,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
           status: 'pendente',
           nome: m.nome,
           tipo: 'modelo' as const,
-          valor: m.valor,
+          valor: overrides[String(m.id)] ?? m.valor,
         })));
       }
 

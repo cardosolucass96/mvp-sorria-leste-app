@@ -1153,32 +1153,34 @@ describe('Alternância Admin/Dentista', () => {
       expect(header).toContain('VIEW_MODE_LABELS');
     });
 
-    test('Deve ter toggle no menu mobile', () => {
-      // Deve ter toggle no dropdown mobile
-      expect(header).toContain('Trocar para Dentista');
-      expect(header).toContain('Trocar para Admin');
+    test('Deve ter toggle no dropdown menu', () => {
+      // Toggle lives in DropdownMenu now
+      expect(header).toContain('Trocar p/ Dentista');
+      expect(header).toContain('Trocar p/ Admin');
     });
   });
 
-  describe('Sidebar — Responde ao ViewMode', () => {
+  describe('Sidebar — Uses shadcn Sidebar', () => {
     const sidebar = readFile('components/layout/Sidebar.tsx');
 
-    test('Deve importar ViewMode', () => {
-      expect(sidebar).toContain('ViewMode');
+    test('Deve usar shadcn Sidebar components', () => {
+      expect(sidebar).toContain('ShadcnSidebar');
+      expect(sidebar).toContain('SidebarMenu');
     });
 
-    test('Deve usar toggleViewMode e viewMode', () => {
-      expect(sidebar).toContain('toggleViewMode');
-      expect(sidebar).toContain('viewMode');
+    test('Deve filtrar menu items por role', () => {
+      expect(sidebar).toContain('hasRole');
     });
 
-    test('Deve ter botão de toggle para admins', () => {
-      expect(sidebar).toContain('{isAdmin && (');
+    test('Deve usar MENU_ITEMS de navigation', () => {
+      expect(sidebar).toContain('MENU_ITEMS');
     });
 
-    test('Deve mostrar Modo Admin ou Modo Dentista', () => {
-      expect(sidebar).toContain('Modo Admin');
-      expect(sidebar).toContain('Modo Dentista');
+    test('ViewMode toggle lives in Header now', () => {
+      // ViewMode toggle was moved to Header DropdownMenu
+      const header = readFile('components/layout/Header.tsx');
+      expect(header).toContain('toggleViewMode');
+      expect(header).toContain('viewMode');
     });
   });
 

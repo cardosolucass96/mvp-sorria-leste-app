@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
-import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento } from '@/lib/types';
 
 interface ItemOrigem {
@@ -30,9 +30,9 @@ interface AgendamentoDoCliente {
   tipo: string;
 }
 
-// POST /api/agendamentos/[id]/chegou - Ação "Chegou" da tela Agenda
+// POST /api/agendamentos/[id]/chegou - Ação "Chegou" da tela Agenda (apenas admin/atendente)
 // Agrupa automaticamente todos os agendamentos do cliente para hoje num único atendimento.
-export const POST = withUnit(async (
+export const POST = withUnitRole(['admin', 'atendente'], async (
   request: NextRequest,
   context: UnitAuthenticatedContext
 ) => {
@@ -185,12 +185,13 @@ export const POST = withUnit(async (
 
         await execute(
           `INSERT INTO itens_atendimento
-            (atendimento_id, procedimento_id, valor, valor_pago, status, executor_id, criado_por_id, origem_agendamento_id, etapa_modelo_id, etapa_label)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (atendimento_id, procedimento_id, valor, valor_original, valor_pago, status, executor_id, criado_por_id, origem_agendamento_id, etapa_modelo_id, etapa_label)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             novoAtendimentoId,
             ag.procedimento_id,
             itemValor,
+            itemValor, // valor_original = snapshot do valor inicial
             valorPago,
             statusItem,
             ag.executor_id || null,
