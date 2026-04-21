@@ -2,93 +2,92 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, Stethoscope, ArrowLeftRight, Building2 } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { MENU_ITEMS } from '@/lib/constants/navigation';
+import {
+  Sidebar as ShadcnSidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+} from '@/components/ui/_shadcn/sidebar';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, hasRole, viewMode, toggleViewMode, isAdmin, currentUnidade, unidadeNomes } = useAuth();
+  const { user, hasRole, currentUnidade, unidadeNomes } = useAuth();
 
-  // Filtra itens do menu baseado no role do usuário (respeita viewMode)
   const visibleMenuItems = MENU_ITEMS.filter((item) => {
-    if (!item.roles) return true; // Sem restrição de role
-    if (!user) return false; // Não logado não vê itens restritos
+    if (!item.roles) return true;
+    if (!user) return false;
     return hasRole(item.roles);
   });
 
   return (
-    <aside className="hidden md:flex w-64 bg-sidebar text-white min-h-screen flex-col" aria-label="Barra lateral">
-      {/* Toggle Admin/Dentista */}
-      {isAdmin && (
-        <div className="px-4 pt-4">
-          <button
-            onClick={toggleViewMode}
-            aria-label={viewMode === 'admin' ? 'Trocar para visão Dentista' : 'Trocar para visão Admin'}
-            className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              viewMode === 'admin'
-                ? 'bg-sidebar-active/20 text-sidebar-text-active border border-sidebar-active/40 hover:bg-sidebar-active/30'
-                : 'bg-dentist-500/20 text-dentist-400 border border-dentist-500/40 hover:bg-dentist-500/30'
-            }`}
-          >
-            {viewMode === 'admin'
-              ? <Shield className="w-4 h-4" aria-hidden="true" />
-              : <Stethoscope className="w-4 h-4" aria-hidden="true" />
-            }
-            <span>{viewMode === 'admin' ? 'Modo Admin' : 'Modo Dentista'}</span>
-            <ArrowLeftRight className="w-3.5 h-3.5 opacity-60 ml-auto" aria-hidden="true" />
-          </button>
-        </div>
-      )}
-
-      {/* Nome da Unidade Atual */}
+    <ShadcnSidebar collapsible="icon" className="border-r border-sidebar-border">
+      {/* Unidade badge */}
       {currentUnidade && (
-        <div className="px-4 pt-3">
-          <div className="flex items-center gap-2 px-3 py-2 text-xs text-neutral-400 bg-neutral-800/50 rounded-lg">
-            <Building2 className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">{unidadeNomes[currentUnidade] || `Unidade ${currentUnidade}`}</span>
+        <SidebarHeader className="px-3 pt-3 pb-0">
+          <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+            <Building2 className="size-3.5 shrink-0" />
+            <span className="truncate">
+              {unidadeNomes[currentUnidade] || `Unidade ${currentUnidade}`}
+            </span>
           </div>
-        </div>
+          <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center py-1">
+            <Building2 className="size-4 text-muted-foreground" />
+          </div>
+        </SidebarHeader>
       )}
 
-      <nav className="py-4 flex-1" aria-label="Menu principal">
-        <ul className="space-y-1">
-          {visibleMenuItems.map((item) => {
-            const isActive = pathname === item.href ||
-              (item.href !== '/' && pathname.startsWith(item.href));
-            const ItemIcon = item.icon;
+      {/* Navigation */}
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {visibleMenuItems.map((item) => {
+                const isActive =
+                  pathname === item.href ||
+                  (item.href !== '/' && pathname.startsWith(item.href));
+                const ItemIcon = item.icon;
 
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={`
-                    flex items-center gap-3 px-6 py-3 transition-all border-l-4
-                    ${isActive
-                      ? 'bg-sidebar-active/20 text-sidebar-text-active border-sidebar-active font-medium'
-                      : 'text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active border-transparent'
-                    }
-                  `}
-                >
-                  <ItemIcon className="w-5 h-5 shrink-0" aria-hidden="true" />
-                  <span>{item.label}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      tooltip={item.label}
+                      render={
+                        <Link
+                          href={item.href}
+                          aria-current={isActive ? 'page' : undefined}
+                        />
+                      }
+                    >
+                      <ItemIcon className="size-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
 
-      {/* Rodapé da Sidebar */}
-      <div className="p-4 border-t border-neutral-700">
-        <div className="flex items-center justify-center gap-2">
-          <div className="w-2 h-2 bg-sidebar-active rounded-full animate-pulse"></div>
-          <p className="text-xs text-neutral-400">
-            Sorria Leste v1.0
-          </p>
+      {/* Footer */}
+      <SidebarFooter className="group-data-[collapsible=icon]:hidden">
+        <div className="flex items-center justify-center gap-2 px-2 py-2">
+          <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <p className="text-xs text-muted-foreground">Sorria Leste v1.0</p>
         </div>
-      </div>
-    </aside>
+      </SidebarFooter>
+
+      <SidebarRail />
+    </ShadcnSidebar>
   );
 }
