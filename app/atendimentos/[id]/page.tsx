@@ -19,6 +19,7 @@ interface Procedimento {
   nome: string;
   valor: number;
   por_dente: number;
+  tem_face: number;
 }
 
 interface Usuario {
@@ -304,7 +305,7 @@ export default function AtendimentoDetalhePage({
       setErrorModal('Selecione pelo menos um dente para este procedimento');
       return;
     }
-    if (proc?.por_dente && dentesFaces.some(d => d.faces.length === 0)) {
+    if (proc?.por_dente && proc?.tem_face && dentesFaces.some(d => d.faces.length === 0)) {
       setErrorModal('Selecione ao menos uma face para cada dente');
       return;
     }
@@ -1056,6 +1057,7 @@ export default function AtendimentoDetalhePage({
                     valor={dentesFaces}
                     onChange={setDentesFaces}
                     disabled={adicionando}
+                    mostrarFaces={proc.tem_face === 1}
                   />
                   {dentesFaces.length > 0 && (
                     <p className="text-sm text-info-600 mt-2">

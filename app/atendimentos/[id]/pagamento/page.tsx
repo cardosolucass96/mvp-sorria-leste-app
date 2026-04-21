@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -8,17 +8,16 @@ import { formatarMoeda, formatarDataHora } from '@/lib/utils/formatters';
 import { StatusBadge } from '@/components/domain';
 import Alert from '@/components/ui/Alert';
 import LoadingState from '@/components/ui/LoadingState';
-import { Input, Select } from '@/components/ui';
+import { Input, Select, Card, Button } from '@/components/ui';
+import { cn } from '@/lib/utils';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import type { Usuario } from '@/lib/types';
 
 interface Etapa {
   id: number;
   item_atendimento_id: number;
-  dente: string;
-  face: string;
   status: string;
   nome?: string;
-  tipo?: 'face' | 'modelo';
   valor?: number | null;
 }
 
@@ -28,10 +27,14 @@ interface ItemAtendimento {
   procedimento_nome: string;
   etapa_label?: string | null;
   valor: number;
+  valor_original: number | null;
   valor_pago: number;
   status: string;
   group_id: string | null;
   dente_unico: string | null;
+  executor_id: number | null;
+  adicionado_em_execucao: number;
+  concluido_at: string | null;
   etapas?: Etapa[];
 }
 
@@ -60,12 +63,8 @@ interface Atendimento {
   total_pago: number;
 }
 
-const FACE_LABEL: Record<string, string> = {
-  V: 'Vestibular', L: 'Lingual', M: 'Mesial', D: 'Distal', O: 'Oclusal',
-};
-
 function calcularValorItemPagamento(item: ItemAtendimento, etapasPag: Set<number>): number {
-  const modeloEtapas = (item.etapas ?? []).filter(e => e.tipo === 'modelo');
+  const modeloEtapas = item.etapas ?? [];
   if (modeloEtapas.length === 0) return item.valor;
   const selecionadas = modeloEtapas.filter(e => etapasPag.has(e.id));
   if (selecionadas.length === modeloEtapas.length) return item.valor;
@@ -129,13 +128,41 @@ export default function PagamentoPage({
   // Itens com etapas modelo → acaoEtapas keyed by virtual etapa.id (item_id * 100000 + etapa_modelo_id)
   const [acaoItens, setAcaoItens] = useState<Record<number, AcaoItem>>({});
   const [datasAgendamento, setDatasAgendamento] = useState<Record<number, string>>({});
+  const [executoresAgendamento, setExecutoresAgendamento] = useState<Record<number, string>>({});
   const [acaoEtapas, setAcaoEtapas] = useState<Record<number, AcaoItem>>({});
   const [datasEtapasAgendamento, setDatasEtapasAgendamento] = useState<Record<number, string>>({});
+  const [executoresEtapasAgendamento, setExecutoresEtapasAgendamento] = useState<Record<number, string>>({});
+  const [executores, setExecutores] = useState<Usuario[]>([]);
   const [enviando, setEnviando] = useState(false);
+
+  // Edição de valor (desconto)
+  const [editandoValorItemId, setEditandoValorItemId] = useState<number | null>(null);
+  const [valorEditando, setValorEditando] = useState('');
+  const [salvandoValor, setSalvandoValor] = useState(false);
+  const [erroEdicaoValor, setErroEdicaoValor] = useState('');
+
+  // Edição de valor per-etapa (override JSON em etapas_valores)
+  // editandoEtapaId armazena o ID virtual da etapa (item.id * 100000 + etapa_modelo_id)
+  const [editandoEtapaId, setEditandoEtapaId] = useState<number | null>(null);
+  const [valorEditandoEtapa, setValorEditandoEtapa] = useState('');
+  const [salvandoEtapa, setSalvandoEtapa] = useState(false);
+  const [erroEdicaoEtapa, setErroEdicaoEtapa] = useState('');
 
   useEffect(() => {
     carregarDados();
+    carregarExecutores();
   }, [id]);
+
+  const carregarExecutores = async () => {
+    try {
+      const res = await fetch('/api/usuarios');
+      if (!res.ok) return;
+      const data: Usuario[] = await res.json();
+      setExecutores(data.filter(u => u.role === 'executor' || u.role === 'admin'));
+    } catch {
+      /* silently fail */
+    }
+  };
 
   const carregarDados = async () => {
     try {
@@ -144,12 +171,39 @@ export default function PagamentoPage({
       const atendData = await resAtend.json();
       setAtendimento(atendData);
 
-      // Atualiza seleção de pagamento com os itens ainda pendentes.
+      // Pré-popula executor de agendamento com o executor já definido no item (vindo da avaliação),
+      // sem sobrescrever caso o usuário já tenha mexido manualmente nesta sessão.
+      const itensAtend = atendData.itens as ItemAtendimento[];
+      setExecutoresAgendamento(prev => {
+        const next = { ...prev };
+        for (const item of itensAtend) {
+          if (next[item.id] === undefined && item.executor_id != null) {
+            next[item.id] = String(item.executor_id);
+          }
+        }
+        return next;
+      });
+      setExecutoresEtapasAgendamento(prev => {
+        const next = { ...prev };
+        for (const item of itensAtend) {
+          if (item.executor_id == null) continue;
+          const modeloEtapas = (item.etapas ?? []);
+          for (const etapa of modeloEtapas) {
+            if (next[etapa.id] === undefined) {
+              next[etapa.id] = String(item.executor_id);
+            }
+          }
+        }
+        return next;
+      });
+
+      // Atualiza seleção de pagamento com os itens ainda pendentes de cobrança
+      // (status='pendente' OR valor_pago<valor — este último cobre os adicionados em execução).
       // Itens com etapa_label parcialmente pago: seleciona apenas as sessões NÃO pagas.
-      const pendentes = (atendData.itens as ItemAtendimento[]).filter(i => i.status === 'pendente');
+      const pendentes = itensAtend.filter(i => i.status === 'pendente' || i.valor_pago < i.valor);
       setItensSelecionados(new Set(pendentes.map(i => i.id)));
       const etapasParaPagar = pendentes.flatMap(i => {
-        const modeloEtapas = (i.etapas ?? []).filter(e => e.tipo === 'modelo');
+        const modeloEtapas = i.etapas ?? [];
         if (!i.etapa_label) return modeloEtapas.map(e => e.id);
         const jaPageas = new Set(i.etapa_label.split(', ').map(s => s.trim()));
         return modeloEtapas.filter(e => !jaPageas.has(e.nome ?? '')).map(e => e.id);
@@ -178,6 +232,105 @@ export default function PagamentoPage({
     }
   };
 
+  // === Edição de valor (desconto) ===
+
+  const abrirEdicaoValor = (item: ItemAtendimento) => {
+    setEditandoValorItemId(item.id);
+    setValorEditando(item.valor.toFixed(2));
+    setErroEdicaoValor('');
+  };
+
+  const cancelarEdicaoValor = () => {
+    setEditandoValorItemId(null);
+    setValorEditando('');
+    setErroEdicaoValor('');
+  };
+
+  const salvarValor = async (itemId: number, novoValor: number) => {
+    setSalvandoValor(true);
+    setErroEdicaoValor('');
+    try {
+      const res = await unitFetch(`/api/atendimentos/${id}/itens/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valor: novoValor }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setErroEdicaoValor(data.error || 'Erro ao salvar valor');
+        return;
+      }
+      cancelarEdicaoValor();
+      await carregarDados();
+    } catch (err) {
+      console.error(err);
+      setErroEdicaoValor('Erro ao salvar valor');
+    } finally {
+      setSalvandoValor(false);
+    }
+  };
+
+  const confirmarEdicaoValor = async (itemId: number) => {
+    const num = parseFloat(valorEditando.replace(',', '.'));
+    if (!Number.isFinite(num) || num < 0) {
+      setErroEdicaoValor('Valor inválido');
+      return;
+    }
+    await salvarValor(itemId, num);
+  };
+
+  const restaurarValorOriginal = async (item: ItemAtendimento) => {
+    if (item.valor_original == null) return;
+    await salvarValor(item.id, item.valor_original);
+  };
+
+  // === Edição de valor per-etapa ===
+
+  const abrirEdicaoEtapa = (etapaVirtualId: number, valorAtual: number | null, itemValor: number, totalEtapas: number) => {
+    setEditandoEtapaId(etapaVirtualId);
+    // Se a etapa ainda não tem override, sugere split igualitário do item.valor
+    const valorInicial = valorAtual != null ? valorAtual : itemValor / totalEtapas;
+    setValorEditandoEtapa(valorInicial.toFixed(2));
+    setErroEdicaoEtapa('');
+  };
+
+  const cancelarEdicaoEtapa = () => {
+    setEditandoEtapaId(null);
+    setValorEditandoEtapa('');
+    setErroEdicaoEtapa('');
+  };
+
+  const confirmarEdicaoEtapa = async (itemId: number, etapaVirtualId: number) => {
+    const num = parseFloat(valorEditandoEtapa.replace(',', '.'));
+    if (!Number.isFinite(num) || num < 0) {
+      setErroEdicaoEtapa('Valor inválido');
+      return;
+    }
+    setSalvandoEtapa(true);
+    setErroEdicaoEtapa('');
+    try {
+      // Decodifica etapa_modelo_id do ID virtual: virtualId = item.id * 100000 + etapa_modelo_id
+      const etapaModeloId = etapaVirtualId - itemId * 100000;
+      const res = await unitFetch(`/api/atendimentos/${id}/itens/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ etapa_modelo_id: etapaModeloId, etapa_valor: num }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setErroEdicaoEtapa(data.error || 'Erro ao salvar valor da sessão');
+        return;
+      }
+      cancelarEdicaoEtapa();
+      await carregarDados();
+    } catch (err) {
+      console.error(err);
+      setErroEdicaoEtapa('Erro ao salvar valor da sessão');
+    } finally {
+      setSalvandoEtapa(false);
+    }
+  };
+
   const handleRegistrarPagamento = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valorPagamento || !atendimento) return;
@@ -193,7 +346,7 @@ export default function PagamentoPage({
       for (const itemId of itensSelecionados) {
         const item = atendimento.itens.find(i => i.id === itemId);
         if (!item) continue;
-        const modeloEtapas = (item.etapas ?? []).filter(e => e.tipo === 'modelo');
+        const modeloEtapas = (item.etapas ?? []);
         if (modeloEtapas.length === 0) continue;
         const pagas = modeloEtapas.filter(e => etapasPagamento.has(e.id));
         if (pagas.length > 0 && pagas.length < modeloEtapas.length) {
@@ -233,11 +386,11 @@ export default function PagamentoPage({
     setError('');
     try {
       const itensHoje: number[] = [];
-      const itensAgendar: { item_id: number; data_agendada: string | null }[] = [];
-      const etapasAgendar: { etapa_id: number; item_id: number; tipo: 'modelo'; data_agendada?: string | null; pago_override?: 0 | 1 }[] = [];
+      const itensAgendar: { item_id: number; data_agendada: string | null; executor_id?: number | null }[] = [];
+      const etapasAgendar: { etapa_id: number; item_id: number; tipo: 'modelo'; data_agendada?: string | null; pago_override?: 0 | 1; executor_id?: number | null }[] = [];
 
       for (const item of atendimento.itens) {
-        const modeloEtapas = (item.etapas ?? []).filter(e => e.tipo === 'modelo');
+        const modeloEtapas = (item.etapas ?? []);
         if (modeloEtapas.length > 0) {
           // Sessões com pagamento parcial: etapa_label indica quais foram pagas neste item.
           // Sessões fora do etapa_label (não pagas) são auto-diferidas com pago=0.
@@ -250,12 +403,14 @@ export default function PagamentoPage({
             const acao = acaoEtapas[etapa.id] ?? 'pendente';
             const sessaoPaga = sessoesPagas === null ? true : sessoesPagas.has(etapa.nome ?? '');
             if (acao === 'agendar') {
+              const execRaw = executoresEtapasAgendamento[etapa.id];
               etapasAgendar.push({
                 etapa_id: etapa.id,
                 item_id: item.id,
                 tipo: 'modelo',
                 data_agendada: datasEtapasAgendamento[etapa.id] || null,
                 pago_override: sessaoPaga ? 1 : 0,
+                executor_id: execRaw ? parseInt(execRaw) : null,
               });
             } else if (!sessaoPaga && acao !== 'hoje') {
               // Sessão não paga deixada como pendente → auto-difere sem data
@@ -280,7 +435,12 @@ export default function PagamentoPage({
           const acao = acaoItens[item.id] ?? 'pendente';
           if (acao === 'hoje') itensHoje.push(item.id);
           if (acao === 'agendar') {
-            itensAgendar.push({ item_id: item.id, data_agendada: datasAgendamento[item.id] || null });
+            const execRaw = executoresAgendamento[item.id];
+            itensAgendar.push({
+              item_id: item.id,
+              data_agendada: datasAgendamento[item.id] || null,
+              executor_id: execRaw ? parseInt(execRaw) : null,
+            });
           }
         }
       }
@@ -314,6 +474,28 @@ export default function PagamentoPage({
     }
   };
 
+  const handleFinalizarAtendimento = async () => {
+    if (!atendimento) return;
+    setEnviando(true);
+    setError('');
+    try {
+      const res = await unitFetch(`/api/atendimentos/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'finalizado' }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Erro ao finalizar atendimento');
+      }
+      router.push(`/atendimentos/${id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao finalizar atendimento');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   const handleCancelarPagamento = async (pagamentoId: number) => {
     if (!motivoCancelamento.trim()) return;
     try {
@@ -336,7 +518,7 @@ export default function PagamentoPage({
 
   const toggleItemPagamento = (itemId: number) => {
     const item = atendimento!.itens.find(i => i.id === itemId);
-    const modeloEtapas = (item?.etapas ?? []).filter(e => e.tipo === 'modelo');
+    const modeloEtapas = item?.etapas ?? [];
     const estaSelecionado = itensSelecionados.has(itemId);
     // Para itens com pagamento parcial, só alterna as sessões ainda não pagas
     const jaPageas = item?.etapa_label
@@ -366,25 +548,29 @@ export default function PagamentoPage({
   if (!atendimento) {
     return (
       <div className="text-center py-12">
-        <p className="text-muted mb-4">Atendimento não encontrado</p>
-        <Link href="/atendimentos" className="text-info-600">← Voltar para lista</Link>
+        <p className="text-muted-foreground mb-4">Atendimento não encontrado</p>
+        <Link href="/atendimentos" className="text-primary hover:text-primary-700">← Voltar para lista</Link>
       </div>
     );
   }
 
   const totalPago = pagamentos.filter(p => !p.cancelado).reduce((acc, p) => acc + p.valor, 0);
   const temPagamentoAtivo = pagamentos.some(p => !p.cancelado);
-  const itensPendentes = atendimento.itens.filter(i => i.status === 'pendente');
+  // Itens que precisam ser cobrados: pendentes do fluxo normal + executados na hora ainda não pagos
+  const itensPendentes = atendimento.itens.filter(i => i.status === 'pendente' || i.valor_pago < i.valor);
+  // Quando todos os itens já estão concluídos e só falta pagamento (caso de procedimentos
+  // adicionados em execução), mostramos botão "Finalizar" em vez de "Enviar para Execução"
+  const todosItensConcluidos = atendimento.itens.length > 0 && atendimento.itens.every(i => i.status === 'concluido');
   const valorSelecionado = atendimento.itens
     .filter(i => itensSelecionados.has(i.id))
     .reduce((sum, i) => sum + calcularValorItemPagamento(i, etapasPagamento), 0);
   const hojeCount = atendimento.itens.reduce((acc, item) => {
-    const modeloEtapas = (item.etapas ?? []).filter(e => e.tipo === 'modelo');
+    const modeloEtapas = (item.etapas ?? []);
     if (modeloEtapas.length > 0) return acc + modeloEtapas.filter(e => acaoEtapas[e.id] === 'hoje').length;
     return acc + (acaoItens[item.id] === 'hoje' ? 1 : 0);
   }, 0);
   const agendarCount = atendimento.itens.reduce((acc, item) => {
-    const modeloEtapas = (item.etapas ?? []).filter(e => e.tipo === 'modelo');
+    const modeloEtapas = (item.etapas ?? []);
     if (modeloEtapas.length > 0) return acc + modeloEtapas.filter(e => acaoEtapas[e.id] === 'agendar').length;
     return acc + (acaoItens[item.id] === 'agendar' ? 1 : 0);
   }, 0);
@@ -393,65 +579,64 @@ export default function PagamentoPage({
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href={`/atendimentos/${id}`} className="text-muted hover:text-neutral-700">
+        <Link href={`/atendimentos/${id}`} className="text-muted-foreground hover:text-foreground">
           ← Voltar
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-foreground">Pagamento</h1>
-          <p className="text-neutral-600">{atendimento.cliente_nome} — Atendimento #{atendimento.id}</p>
+          <p className="text-muted-foreground">{atendimento.cliente_nome} — Atendimento #{atendimento.id}</p>
         </div>
       </div>
 
       {error && <Alert type="error">{error}</Alert>}
 
       {/* Dados do Cliente */}
-      <div className="card bg-info-50 border border-info-200">
+      <Card className="bg-primary-500/10 border border-primary-500/20">
         <div className="flex items-center gap-6">
           <div>
-            <p className="text-sm text-info-600">Cliente</p>
-            <p className="font-semibold text-info-900">{atendimento.cliente_nome}</p>
+            <p className="text-sm text-primary-600 dark:text-primary-400">Cliente</p>
+            <p className="font-semibold text-foreground">{atendimento.cliente_nome}</p>
           </div>
           {atendimento.cliente_cpf && (
             <div>
-              <p className="text-sm text-info-600">CPF</p>
-              <p className="font-medium text-info-800">{atendimento.cliente_cpf}</p>
+              <p className="text-sm text-primary-600 dark:text-primary-400">CPF</p>
+              <p className="font-medium text-foreground">{atendimento.cliente_cpf}</p>
             </div>
           )}
           {atendimento.cliente_telefone && (
             <div>
-              <p className="text-sm text-info-600">Telefone</p>
-              <p className="font-medium text-info-800">{atendimento.cliente_telefone}</p>
+              <p className="text-sm text-primary-600 dark:text-primary-400">Telefone</p>
+              <p className="font-medium text-foreground">{atendimento.cliente_telefone}</p>
             </div>
           )}
           {saldoInfo > 0 && (
             <div className="ml-auto">
-              <p className="text-sm text-info-600">Saldo disponível</p>
-              <p className="font-semibold text-info-800">{formatarMoeda(saldoInfo)}</p>
+              <p className="text-sm text-primary-600 dark:text-primary-400">Saldo disponível</p>
+              <p className="font-semibold text-foreground">{formatarMoeda(saldoInfo)}</p>
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* Grid principal */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         {/* ─── ESQUERDA: Pagar ─── */}
         <div className="space-y-6">
-          <div className="card">
+          <Card>
             <h2 className="text-lg font-semibold mb-3">Pagar</h2>
 
             {/* Seleção de itens pendentes */}
             {itensPendentes.length > 0 ? (
               <>
-                <p className="text-xs text-muted mb-3">
+                <p className="text-xs text-muted-foreground mb-3">
                   Selecione o que será cobrado nesta cobrança, até o nível de sessão.
                 </p>
 
-                <div className="divide-y divide-neutral-200 border border-neutral-200 rounded-lg overflow-hidden mb-4">
+                <div className="divide-y divide-border border border-border rounded-lg overflow-hidden mb-4">
                   {itensPendentes.map((item) => {
                     const selecionado = itensSelecionados.has(item.id);
-                    const modeloEtapas = (item.etapas ?? []).filter(e => e.tipo === 'modelo');
-                    const faceEtapas = (item.etapas ?? []).filter(e => e.tipo === 'face');
+                    const modeloEtapas = item.etapas ?? [];
                     const valorExibido = calcularValorItemPagamento(item, etapasPagamento);
                     const label = item.dente_unico
                       ? `${item.procedimento_nome} • Dente ${item.dente_unico}`
@@ -460,53 +645,125 @@ export default function PagamentoPage({
                     const sessoesParcialmentePagas = item.etapa_label
                       ? new Set(item.etapa_label.split(', ').map(s => s.trim()))
                       : null;
+                    const temDescontoPag = item.valor_original != null && item.valor_original > item.valor;
+                    const editandoPag = editandoValorItemId === item.id;
 
                     return (
-                      <div key={item.id} className={selecionado ? 'bg-info-50' : 'bg-neutral-50'}>
+                      <div key={item.id} className={selecionado ? 'bg-primary-500/10' : 'bg-muted'}>
                         <div className="px-4 py-3">
                           <label className="flex items-center gap-3 cursor-pointer">
                             <input
                               type="checkbox"
                               checked={selecionado}
                               onChange={() => toggleItemPagamento(item.id)}
-                              className="w-4 h-4 accent-primary shrink-0"
+                              className="custom-checkbox shrink-0"
                             />
                             <div className="flex-1 min-w-0">
-                              <span className={`text-sm font-medium ${selecionado ? 'text-foreground' : 'text-neutral-500'}`}>
+                              <span className={cn("text-sm font-medium", selecionado ? "text-foreground" : "text-muted-foreground")}>
                                 {label}
                               </span>
+                              {temDescontoPag && (
+                                <span className="ml-2 text-xs font-semibold text-warning-600 bg-warning-500/10 border border-warning-500/30 px-1.5 py-0.5 rounded-full">
+                                  Com desconto
+                                </span>
+                              )}
                               {sessoesParcialmentePagas && (
                                 <span className="ml-2 text-xs text-success-600 font-medium">
                                   · {item.etapa_label} já pago
                                 </span>
                               )}
                               {selecionado && modeloEtapas.length > 0 && !sessoesParcialmentePagas && (
-                                <span className="ml-2 text-xs text-muted">
+                                <span className="ml-2 text-xs text-muted-foreground">
                                   ({modeloEtapas.filter(e => etapasPagamento.has(e.id)).length}/{modeloEtapas.length} sessão/ões)
                                 </span>
                               )}
                             </div>
-                            <span className={`text-sm font-semibold shrink-0 ${selecionado ? 'text-foreground' : 'text-neutral-400'}`}>
-                              {formatarMoeda(valorExibido)}
-                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {temDescontoPag && (
+                                <span className="text-xs text-muted-foreground line-through">
+                                  {formatarMoeda(item.valor_original!)}
+                                </span>
+                              )}
+                              <span className={cn("text-sm font-semibold", selecionado ? "text-foreground" : "text-muted-foreground")}>
+                                {formatarMoeda(valorExibido)}
+                              </span>
+                            </div>
                           </label>
-
-                          {selecionado && faceEtapas.length > 0 && (
-                            <div className="mt-1.5 ml-7 text-xs text-muted">
-                              {faceEtapas.length} face(s): {faceEtapas.map(e => `${e.dente}-${FACE_LABEL[e.face] ?? e.face}`).join(', ')}
+                          {!editandoPag && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); abrirEdicaoValor(item); }}
+                              className="ml-7 mt-1 text-xs text-primary-600 hover:underline font-medium"
+                              title="Editar valor (aplicar desconto)"
+                            >
+                              editar valor
+                            </button>
+                          )}
+                          {editandoPag && (
+                            <div className="ml-7 mt-2 bg-background border border-border rounded p-2">
+                              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                                Novo valor total{item.valor_original != null && ` (original: ${formatarMoeda(item.valor_original)})`}
+                              </label>
+                              <div className="flex gap-2 items-start">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={valorEditando}
+                                  onChange={e => setValorEditando(e.target.value)}
+                                  onClick={e => e.stopPropagation()}
+                                  className="flex-1 px-2 py-1 border border-input rounded text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); confirmarEdicaoValor(item.id); }}
+                                  disabled={salvandoValor}
+                                  className="text-xs px-3 py-1 rounded bg-primary-600 text-white font-medium disabled:opacity-50"
+                                >
+                                  {salvandoValor ? '...' : 'Salvar'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); cancelarEdicaoValor(); }}
+                                  disabled={salvandoValor}
+                                  className="text-xs px-3 py-1 rounded border border-input text-muted-foreground"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                              {item.valor_original != null && item.valor !== item.valor_original && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); restaurarValorOriginal(item); }}
+                                  disabled={salvandoValor}
+                                  className="mt-2 text-xs text-primary-600 hover:underline"
+                                >
+                                  Restaurar valor original ({formatarMoeda(item.valor_original)})
+                                </button>
+                              )}
+                              {erroEdicaoValor && (
+                                <div className="mt-2 text-xs text-error-600 dark:text-error-400">{erroEdicaoValor}</div>
+                              )}
+                            </div>
+                          )}
+                          {temDescontoPag && !editandoPag && (
+                            <div className="ml-7 mt-1 text-xs text-warning-600 dark:text-warning-400">
+                              Desconto: {formatarMoeda(item.valor_original! - item.valor)}
                             </div>
                           )}
                         </div>
 
                         {/* Sessões (modelo etapas) — mostra todas; já pagas bloqueadas */}
                         {selecionado && modeloEtapas.length > 0 && (
-                          <div className="ml-7 mr-4 mb-3 border border-neutral-200 rounded-lg overflow-hidden">
+                          <div className="ml-7 mr-4 mb-3 border border-border rounded-lg overflow-hidden">
                             {modeloEtapas.map((etapa) => {
                               const jaFoiPaga = sessoesParcialmentePagas?.has(etapa.nome ?? '') ?? false;
                               const etapaSel = etapasPagamento.has(etapa.id);
+                              const editandoEstaEtapa = editandoEtapaId === etapa.id;
                               return (
-                                <div key={etapa.id} className={`px-3 py-2 border-b border-neutral-100 last:border-b-0 ${jaFoiPaga ? 'bg-success-50' : etapaSel ? '' : 'bg-neutral-50'}`}>
-                                  <label className={`flex items-center gap-2 ${jaFoiPaga ? 'cursor-default' : 'cursor-pointer'}`}>
+                                <div key={etapa.id} className={cn("px-3 py-2 border-b border-border last:border-b-0", jaFoiPaga ? "bg-success-500/10" : etapaSel ? "" : "bg-muted")}>
+                                  <label className={cn("flex items-center gap-2", jaFoiPaga ? "cursor-default" : "cursor-pointer")}>
                                     <input
                                       type="checkbox"
                                       checked={jaFoiPaga || etapaSel}
@@ -520,20 +777,72 @@ export default function PagamentoPage({
                                           return next;
                                         });
                                       }}
-                                      className="w-3.5 h-3.5 accent-primary-600 shrink-0"
+                                      className="custom-checkbox custom-checkbox-sm shrink-0"
                                     />
-                                    <span className={`text-xs font-medium flex-1 ${jaFoiPaga ? 'text-success-700' : etapaSel ? 'text-foreground' : 'text-neutral-500'}`}>
+                                    <span className={cn("text-xs font-medium flex-1", jaFoiPaga ? "text-success-600 dark:text-success-400" : etapaSel ? "text-foreground" : "text-muted-foreground")}>
                                       {etapa.nome ?? `Sessão ${modeloEtapas.indexOf(etapa) + 1}`}
                                     </span>
                                     {jaFoiPaga && (
-                                      <span className="text-xs font-medium text-success-600 bg-success-100 px-1.5 py-0.5 rounded">Pago</span>
+                                      <span className="text-xs font-medium text-success-600 bg-success-500/10 px-1.5 py-0.5 rounded">Pago</span>
                                     )}
                                     {etapa.valor != null && !jaFoiPaga && (
-                                      <span className={`text-xs font-semibold ${etapaSel ? 'text-foreground' : 'text-neutral-400'}`}>
+                                      <span className={cn("text-xs font-semibold", etapaSel ? "text-foreground" : "text-muted-foreground")}>
                                         {formatarMoeda(etapa.valor)}
                                       </span>
                                     )}
+                                    {!jaFoiPaga && !editandoEstaEtapa && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          abrirEdicaoEtapa(etapa.id, etapa.valor ?? null, item.valor, modeloEtapas.length);
+                                        }}
+                                        className="text-[11px] text-primary-600 hover:underline font-medium shrink-0"
+                                        title="Editar valor da sessão"
+                                      >
+                                        editar
+                                      </button>
+                                    )}
                                   </label>
+                                  {editandoEstaEtapa && (
+                                    <div className="mt-2 bg-background border border-border rounded p-2">
+                                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                                        Valor desta sessão
+                                      </label>
+                                      <div className="flex gap-2 items-start">
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          value={valorEditandoEtapa}
+                                          onChange={e => setValorEditandoEtapa(e.target.value)}
+                                          onClick={e => e.stopPropagation()}
+                                          className="flex-1 px-2 py-1 border border-input rounded text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+                                          autoFocus
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); confirmarEdicaoEtapa(item.id, etapa.id); }}
+                                          disabled={salvandoEtapa}
+                                          className="text-xs px-3 py-1 rounded bg-primary-600 text-white font-medium disabled:opacity-50"
+                                        >
+                                          {salvandoEtapa ? '...' : 'Salvar'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); cancelarEdicaoEtapa(); }}
+                                          disabled={salvandoEtapa}
+                                          className="text-xs px-3 py-1 rounded border border-input text-muted-foreground"
+                                        >
+                                          Cancelar
+                                        </button>
+                                      </div>
+                                      {erroEdicaoEtapa && (
+                                        <div className="mt-2 text-xs text-error-600 dark:text-error-400">{erroEdicaoEtapa}</div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -544,22 +853,22 @@ export default function PagamentoPage({
                   })}
                 </div>
 
-                <div className="flex items-center justify-between text-sm border-t border-neutral-200 pt-3 mb-4">
-                  <span className="text-muted">{itensSelecionados.size} item(s) selecionado(s)</span>
+                <div className="flex items-center justify-between text-sm border-t border-border pt-3 mb-4">
+                  <span className="text-muted-foreground">{itensSelecionados.size} item(s) selecionado(s)</span>
                   <span className="font-bold text-lg">{formatarMoeda(valorSelecionado)}</span>
                 </div>
               </>
             ) : (
-              <div className="py-4 text-center text-sm text-success-700 bg-success-50 rounded-lg mb-4">
+              <div className="py-4 text-center text-sm text-success-600 dark:text-success-400 bg-success-500/10 rounded-lg mb-4">
                 Todos os procedimentos já foram cobertos.
               </div>
             )}
 
             {/* Formulário de pagamento */}
             {atendimento.status === 'aguardando_pagamento' && (
-              <form onSubmit={handleRegistrarPagamento} className="space-y-4 border-t border-neutral-200 pt-4">
+              <form onSubmit={handleRegistrarPagamento} className="space-y-4 border-t border-border pt-4">
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     Valor recebido (R$) *
                   </label>
                   <div className="flex gap-2">
@@ -570,17 +879,19 @@ export default function PagamentoPage({
                       value={valorPagamento}
                       onChange={(e) => setValorPagamento(e.target.value)}
                       placeholder="0,00"
-                      className="input flex-1"
+                      className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent flex-1"
                       required
                     />
                     {valorSelecionado > 0 && (
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={() => setValorPagamento(valorSelecionado.toFixed(2))}
-                        className="btn btn-secondary whitespace-nowrap text-sm"
+                        className="whitespace-nowrap"
                       >
                         Usar seleção
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -603,70 +914,71 @@ export default function PagamentoPage({
                   hint="opcional"
                 />
 
-                <button
+                <Button
                   type="submit"
                   disabled={!valorPagamento || registrando}
-                  className="btn btn-primary w-full disabled:opacity-50"
+                  loading={registrando}
+                  className="w-full"
                 >
-                  {registrando ? 'Registrando...' : 'Confirmar Pagamento'}
-                </button>
+                  Confirmar Pagamento
+                </Button>
               </form>
             )}
-          </div>
+          </Card>
 
           {/* Histórico de pagamentos */}
           {pagamentos.length > 0 && (
-            <div className="card">
+            <Card>
               <h2 className="text-lg font-semibold mb-4">Pagamentos Registrados</h2>
-              <table className="min-w-full divide-y divide-neutral-200">
-                <thead className="bg-surface-secondary">
+              <table className="min-w-full divide-y divide-border text-sm">
+                <thead className="bg-muted">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data/Hora</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Método</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Valor</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase"></th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Data/Hora</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Método</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Valor</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase"></th>
                   </tr>
                 </thead>
-                <tbody className="bg-surface divide-y divide-neutral-200">
+                <tbody className="bg-background divide-y divide-border">
                   {pagamentos.map((pag) => (
-                    <>
-                      <tr key={pag.id} className={pag.cancelado ? 'opacity-50 bg-neutral-50' : ''}>
-                        <td className="px-4 py-3 text-neutral-600 text-sm">{formatarDataHora(pag.created_at)}</td>
+                    <React.Fragment key={pag.id}>
+                      <tr className={pag.cancelado ? 'opacity-50 bg-muted' : ''}>
+                        <td className="px-4 py-3 text-muted-foreground text-sm">{formatarDataHora(pag.created_at)}</td>
                         <td className="px-4 py-3 text-sm">
                           {METODOS_PAGAMENTO.find(m => m.value === pag.metodo)?.label || pag.metodo}
                           {pag.observacoes && (
-                            <span className="ml-1 text-muted text-xs">— {pag.observacoes}</span>
+                            <span className="ml-1 text-muted-foreground text-xs">— {pag.observacoes}</span>
                           )}
                         </td>
-                        <td className={`px-4 py-3 text-right font-medium ${pag.cancelado ? 'line-through text-neutral-400' : 'text-success-600'}`}>
+                        <td className={cn("px-4 py-3 text-right font-medium", pag.cancelado ? "line-through text-muted-foreground" : "text-success-600")}>
                           {formatarMoeda(pag.valor)}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {pag.cancelado ? (
-                            <span className="text-xs font-medium text-error-600 bg-error-50 px-2 py-1 rounded">
+                            <span className="text-xs font-medium text-error-600 bg-error-500/10 px-2 py-1 rounded">
                               Cancelado
                             </span>
                           ) : (
                             <button
                               onClick={() => { setCancelandoId(pag.id); setMotivoCancelamento(''); }}
-                              className="text-sm text-error-600 hover:text-error-800"
+                              className="text-sm text-error-600 hover:text-error-600 dark:text-error-400"
                             >
                               Cancelar
                             </button>
                           )}
                         </td>
                       </tr>
-                      {pag.cancelado && pag.motivo_cancelamento && (
-                        <tr key={`${pag.id}-motivo`} className="bg-error-50">
-                          <td colSpan={4} className="px-4 py-2 text-xs text-error-700">
+                      {!!pag.cancelado && pag.motivo_cancelamento && (
+                        <tr className="bg-error-500/10">
+                          <td colSpan={4} className="px-4 py-2 text-xs text-error-600 dark:text-error-400">
                             <span className="font-medium">Motivo:</span> {pag.motivo_cancelamento}
                           </td>
                         </tr>
                       )}
                       {cancelandoId === pag.id && (
-                        <tr key={`${pag.id}-cancel`}>
-                          <td colSpan={4} className="px-4 py-3 bg-warning-50 border-l-4 border-warning-400">
-                            <p className="text-sm font-medium text-warning-800 mb-2">Informe o motivo:</p>
+                        <tr>
+                          <td colSpan={4} className="px-4 py-3 bg-warning-500/10 border-l-4 border-warning-500/40">
+                            <p className="text-sm font-medium text-warning-600 dark:text-warning-400 mb-2">Informe o motivo:</p>
                             <div className="flex gap-2">
                               <input
                                 autoFocus
@@ -674,43 +986,43 @@ export default function PagamentoPage({
                                 value={motivoCancelamento}
                                 onChange={(e) => setMotivoCancelamento(e.target.value)}
                                 placeholder="Ex: Digitação errada, pagamento duplicado..."
-                                className="input flex-1 text-sm"
+                                className="flex-1 px-3 py-2 border border-border rounded-lg text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
                               />
-                              <button
+                              <Button
+                                size="sm"
                                 onClick={() => handleCancelarPagamento(pag.id)}
                                 disabled={!motivoCancelamento.trim()}
-                                className="btn btn-primary text-sm disabled:opacity-50"
                               >
                                 Confirmar
-                              </button>
-                              <button onClick={() => setCancelandoId(null)} className="btn btn-secondary text-sm">
+                              </Button>
+                              <Button size="sm" variant="secondary" onClick={() => setCancelandoId(null)}>
                                 Voltar
-                              </button>
+                              </Button>
                             </div>
                           </td>
                         </tr>
                       )}
-                    </>
+                    </React.Fragment>
                   ))}
                 </tbody>
-                <tfoot className="bg-success-50">
+                <tfoot className="bg-success-500/10">
                   <tr>
-                    <td colSpan={2} className="px-4 py-3 font-semibold text-success-700">Total Pago</td>
-                    <td className="px-4 py-3 text-right font-bold text-lg text-success-700">
+                    <td colSpan={2} className="px-4 py-3 font-semibold text-success-600 dark:text-success-400">Total Pago</td>
+                    <td className="px-4 py-3 text-right font-bold text-lg text-success-600 dark:text-success-400">
                       {formatarMoeda(totalPago)}
                     </td>
                     <td />
                   </tr>
                 </tfoot>
               </table>
-            </div>
+            </Card>
           )}
         </div>
 
         {/* ─── DIREITA: Procedimentos ─── */}
-        <div className="card">
+        <Card>
           <h2 className="text-lg font-semibold mb-1">Procedimentos</h2>
-          <p className="text-xs text-muted mb-4">
+          <p className="text-xs text-muted-foreground mb-4">
             Defina o que será feito hoje, agendado para outra sessão ou deixado pendente.
             Somente procedimentos pagos podem ser feitos hoje.
           </p>
@@ -718,23 +1030,137 @@ export default function PagamentoPage({
           <div className="space-y-2">
             {atendimento.itens.map((item) => {
               const pago = item.status === 'pago';
-              const modeloEtapas = (item.etapas ?? []).filter(e => e.tipo === 'modelo');
+              const modeloEtapas = (item.etapas ?? []);
 
               // Procedimento com sessões: exibe cada sessão como linha independente
               if (modeloEtapas.length > 0) {
                 const nomeBase = item.dente_unico
                   ? `${item.procedimento_nome} • Dente ${item.dente_unico}`
                   : item.procedimento_nome;
-                return (
-                  <div key={item.id} className="border border-neutral-200 rounded-lg overflow-hidden">
-                    {/* Cabeçalho do procedimento */}
-                    <div className="flex items-center justify-between px-3 py-2 bg-neutral-100 border-b border-neutral-200">
-                      <div className="flex items-center gap-2">
-                        <StatusBadge type="item" status={item.status} />
-                        <span className="text-xs font-semibold text-neutral-700">{nomeBase}</span>
+                const jaConcluidoMulti = item.status === 'concluido';
+                const realizadoEmExecucaoMulti = item.adicionado_em_execucao === 1;
+                const faltaCobrarMulti = item.valor_pago < item.valor;
+
+                // Se o item já foi concluído (voltou de em_execucao), colapsa sem botões
+                if (jaConcluidoMulti) {
+                  return (
+                    <div
+                      key={item.id}
+                      className="border border-success-500/30 bg-success-500/10 rounded-lg p-3"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                          <StatusBadge type="item" status={item.status} />
+                          <span className="text-sm font-medium">{nomeBase}</span>
+                          {realizadoEmExecucaoMulti && (
+                            <span className="text-xs font-semibold text-primary-600 bg-primary-500/10 border border-primary-500/30 px-2 py-0.5 rounded-full">
+                              Realizado em execução
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-sm font-semibold shrink-0">{formatarMoeda(item.valor)}</span>
                       </div>
-                      <span className="text-xs text-muted">{modeloEtapas.length} sessão/ões</span>
+                      {item.etapa_label && (
+                        <div className="text-xs text-muted-foreground mb-1">
+                          Sessão(ões): {item.etapa_label}
+                        </div>
+                      )}
+                      <div className="text-xs text-success-600 dark:text-success-400 font-medium">
+                        {faltaCobrarMulti
+                          ? `Procedimento já concluído — falta cobrar ${formatarMoeda(item.valor - item.valor_pago)}.`
+                          : 'Procedimento já concluído e pago.'}
+                      </div>
                     </div>
+                  );
+                }
+
+                const temDescontoMulti = item.valor_original != null && item.valor_original > item.valor;
+                const editandoMulti = editandoValorItemId === item.id;
+                return (
+                  <div key={item.id} className="border border-border rounded-lg overflow-hidden">
+                    {/* Cabeçalho do procedimento */}
+                    <div className="flex items-center justify-between px-3 py-2 bg-muted border-b border-border">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <StatusBadge type="item" status={item.status} />
+                        <span className="text-xs font-semibold text-foreground">{nomeBase}</span>
+                        {temDescontoMulti && (
+                          <span className="text-xs font-semibold text-warning-600 bg-warning-500/10 border border-warning-500/30 px-2 py-0.5 rounded-full">
+                            Com desconto
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {temDescontoMulti && (
+                          <span className="text-xs text-muted-foreground line-through">
+                            {formatarMoeda(item.valor_original!)}
+                          </span>
+                        )}
+                        <span className="text-xs font-semibold">{formatarMoeda(item.valor)}</span>
+                        {!editandoMulti && (
+                          <button
+                            type="button"
+                            onClick={() => abrirEdicaoValor(item)}
+                            className="text-xs text-primary-600 hover:underline font-medium"
+                            title="Editar valor (aplicar desconto)"
+                          >
+                            editar
+                          </button>
+                        )}
+                        <span className="text-xs text-muted-foreground">· {modeloEtapas.length} sessão/ões</span>
+                      </div>
+                    </div>
+                    {editandoMulti && (
+                      <div className="p-2 border-b border-border bg-background">
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
+                          Novo valor total {item.valor_original != null && `(original: ${formatarMoeda(item.valor_original)})`}
+                        </label>
+                        <div className="flex gap-2 items-start">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={valorEditando}
+                            onChange={e => setValorEditando(e.target.value)}
+                            className="flex-1 px-2 py-1 border border-input rounded text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => confirmarEdicaoValor(item.id)}
+                            disabled={salvandoValor}
+                            className="text-xs px-3 py-1 rounded bg-primary-600 text-white font-medium disabled:opacity-50"
+                          >
+                            {salvandoValor ? '...' : 'Salvar'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelarEdicaoValor}
+                            disabled={salvandoValor}
+                            className="text-xs px-3 py-1 rounded border border-input text-muted-foreground"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                        {item.valor_original != null && item.valor !== item.valor_original && (
+                          <button
+                            type="button"
+                            onClick={() => restaurarValorOriginal(item)}
+                            disabled={salvandoValor}
+                            className="mt-2 text-xs text-primary-600 hover:underline"
+                          >
+                            Restaurar valor original ({formatarMoeda(item.valor_original)})
+                          </button>
+                        )}
+                        {erroEdicaoValor && (
+                          <div className="mt-2 text-xs text-error-600 dark:text-error-400">{erroEdicaoValor}</div>
+                        )}
+                      </div>
+                    )}
+                    {temDescontoMulti && !editandoMulti && (
+                      <div className="px-3 py-1.5 text-xs text-warning-600 dark:text-warning-400 bg-warning-500/5 border-b border-border">
+                        Desconto aplicado: {formatarMoeda(item.valor_original! - item.valor)}
+                      </div>
+                    )}
                     {/* Sessões */}
                     {(() => {
                       // Sessões pagas: se há etapa_label (pagamento total ou parcial),
@@ -743,25 +1169,28 @@ export default function PagamentoPage({
                         ? new Set(item.etapa_label.split(', ').map(s => s.trim()))
                         : (pago ? null : new Set<string>()); // null = todas pagas; empty set = nenhuma
                       return (
-                        <div className="divide-y divide-neutral-100">
+                        <div className="divide-y divide-border">
                           {modeloEtapas.map((etapa) => {
                             const acao = acaoEtapas[etapa.id] ?? 'pendente';
                             // null = todas pagas; set = verifica por nome
                             const sessaoPaga = sessoesPagas === null
                               ? true
                               : sessoesPagas.has(etapa.nome ?? '');
+                            const editandoEstaEtapaDir = editandoEtapaId === etapa.id;
+                            const podeEditarEtapaValor = !sessaoPaga && atendimento.status === 'aguardando_pagamento';
                             return (
                               <div
                                 key={etapa.id}
-                                className={`px-3 py-2.5 transition-colors ${
+                                className={cn(
+                                  "px-3 py-2.5 transition-colors",
                                   acao === 'hoje'
-                                    ? 'bg-success-50'
+                                    ? "bg-success-500/10"
                                     : acao === 'agendar'
-                                    ? 'bg-warning-50'
+                                    ? "bg-warning-500/10"
                                     : sessaoPaga
-                                    ? 'bg-info-50'
-                                    : 'bg-surface'
-                                }`}
+                                    ? "bg-muted/50"
+                                    : "bg-background"
+                                )}
                               >
                                 <div className="flex items-center justify-between gap-2 mb-2">
                                   <div className="flex items-center gap-2 min-w-0">
@@ -770,51 +1199,115 @@ export default function PagamentoPage({
                                       <span className="text-xs text-warning-600 font-medium shrink-0">· não pago</span>
                                     )}
                                   </div>
-                                  {etapa.valor != null && (
-                                    <span className="text-sm font-semibold shrink-0">{formatarMoeda(etapa.valor)}</span>
-                                  )}
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {etapa.valor != null && (
+                                      <span className="text-sm font-semibold">{formatarMoeda(etapa.valor)}</span>
+                                    )}
+                                    {podeEditarEtapaValor && !editandoEstaEtapaDir && (
+                                      <button
+                                        type="button"
+                                        onClick={() => abrirEdicaoEtapa(etapa.id, etapa.valor ?? null, item.valor, modeloEtapas.length)}
+                                        className="text-[11px] text-primary-600 hover:underline font-medium"
+                                        title="Editar valor da sessão"
+                                      >
+                                        editar
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
+                                {editandoEstaEtapaDir && (
+                                  <div className="mb-2 bg-background border border-border rounded p-2">
+                                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                                      Valor desta sessão
+                                    </label>
+                                    <div className="flex gap-2 items-start">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={valorEditandoEtapa}
+                                        onChange={e => setValorEditandoEtapa(e.target.value)}
+                                        className="flex-1 px-2 py-1 border border-input rounded text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+                                        autoFocus
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => confirmarEdicaoEtapa(item.id, etapa.id)}
+                                        disabled={salvandoEtapa}
+                                        className="text-xs px-3 py-1 rounded bg-primary-600 text-white font-medium disabled:opacity-50"
+                                      >
+                                        {salvandoEtapa ? '...' : 'Salvar'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={cancelarEdicaoEtapa}
+                                        disabled={salvandoEtapa}
+                                        className="text-xs px-3 py-1 rounded border border-input text-muted-foreground"
+                                      >
+                                        Cancelar
+                                      </button>
+                                    </div>
+                                    {erroEdicaoEtapa && (
+                                      <div className="mt-2 text-xs text-error-600 dark:text-error-400">{erroEdicaoEtapa}</div>
+                                    )}
+                                  </div>
+                                )}
                                 <div className="flex gap-1.5 flex-wrap">
                                   <button
                                     onClick={() => setAcaoEtapas(prev => ({ ...prev, [etapa.id]: 'hoje' }))}
                                     disabled={!sessaoPaga}
-                                    className={`text-xs px-3 py-1 rounded-full font-medium border transition-colors ${
+                                    className={cn(
+                                      "text-xs px-3 py-1 rounded-full font-medium border transition-colors",
                                       acao === 'hoje'
-                                        ? 'bg-success-600 border-success-600 text-white'
+                                        ? "bg-success-600 border-success-600 text-white"
                                         : sessaoPaga
-                                        ? 'border-success-400 text-success-700 hover:bg-success-100'
-                                        : 'border-neutral-200 text-neutral-400 cursor-not-allowed'
-                                    }`}
+                                        ? "border-success-500/40 text-success-600 dark:text-success-400 hover:bg-success-500/10"
+                                        : "border-border text-muted-foreground cursor-not-allowed"
+                                    )}
                                   >
                                     Fazer hoje
                                   </button>
                                   <button
                                     onClick={() => setAcaoEtapas(prev => ({ ...prev, [etapa.id]: 'agendar' }))}
-                                    className={`text-xs px-3 py-1 rounded-full font-medium border transition-colors ${
+                                    className={cn(
+                                      "text-xs px-3 py-1 rounded-full font-medium border transition-colors",
                                       acao === 'agendar'
-                                        ? 'bg-warning-500 border-warning-500 text-white'
-                                        : 'border-warning-400 text-warning-700 hover:bg-warning-50'
-                                    }`}
+                                        ? "bg-warning-500 border-warning-500 text-white"
+                                        : "border-warning-500/40 text-warning-600 dark:text-warning-400 hover:bg-warning-500/10"
+                                    )}
                                   >
                                     Agendar
                                   </button>
-                                  {acao !== 'pendente' && (
-                                    <button
-                                      onClick={() => setAcaoEtapas(prev => ({ ...prev, [etapa.id]: 'pendente' }))}
-                                      className="text-xs px-3 py-1 rounded-full font-medium border border-neutral-300 text-neutral-500 hover:bg-neutral-50 transition-colors"
-                                    >
-                                      Pendente
-                                    </button>
-                                  )}
+                                  <button
+                                    onClick={() => setAcaoEtapas(prev => ({ ...prev, [etapa.id]: 'pendente' }))}
+                                    className={cn(
+                                      "text-xs px-3 py-1 rounded-full font-medium border transition-colors",
+                                      acao === 'pendente'
+                                        ? "bg-muted border-border text-foreground"
+                                        : "border-input text-muted-foreground hover:bg-muted"
+                                    )}
+                                  >
+                                    Deixar pendente
+                                  </button>
                                 </div>
                                 {acao === 'agendar' && (
-                                  <div className="mt-2">
+                                  <div className="mt-2 space-y-2">
                                     <input
                                       type="date"
                                       value={datasEtapasAgendamento[etapa.id] ?? ''}
                                       onChange={e => setDatasEtapasAgendamento(prev => ({ ...prev, [etapa.id]: e.target.value }))}
-                                      className="input text-sm py-1"
+                                      className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent text-sm py-1"
                                     />
+                                    <select
+                                      value={executoresEtapasAgendamento[etapa.id] ?? ''}
+                                      onChange={e => setExecutoresEtapasAgendamento(prev => ({ ...prev, [etapa.id]: e.target.value }))}
+                                      className="w-full px-3 py-1 border border-input rounded-lg text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                                    >
+                                      <option value="">Executor (opcional)</option>
+                                      {executores.map(ex => (
+                                        <option key={ex.id} value={ex.id}>{ex.nome}</option>
+                                      ))}
+                                    </select>
                                   </div>
                                 )}
                               </div>
@@ -829,68 +1322,181 @@ export default function PagamentoPage({
 
               // Procedimento simples (sem sessões): linha única
               const acao = acaoItens[item.id] ?? 'pendente';
+              const jaConcluido = item.status === 'concluido';
+              const realizadoEmExecucao = item.adicionado_em_execucao === 1;
+              const faltaCobrar = item.valor_pago < item.valor;
+              const temDesconto = item.valor_original != null && item.valor_original > item.valor;
+              const podeEditarValor = !jaConcluido;
+              const editando = editandoValorItemId === item.id;
               return (
                 <div
                   key={item.id}
-                  className={`border rounded-lg p-3 transition-colors ${
-                    acao === 'hoje'
-                      ? 'border-success-300 bg-success-50'
+                  className={cn(
+                    "border rounded-lg p-3 transition-colors",
+                    jaConcluido
+                      ? "border-success-500/30 bg-success-500/10"
+                      : acao === 'hoje'
+                      ? "border-success-500/30 bg-success-500/10"
                       : acao === 'agendar'
-                      ? 'border-warning-300 bg-warning-50'
+                      ? "border-warning-500/30 bg-warning-500/10"
                       : pago
-                      ? 'border-info-200 bg-info-50'
-                      : 'border-neutral-200 bg-surface'
-                  }`}
+                      ? "border-border bg-muted/50"
+                      : "border-border bg-background"
+                  )}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2.5">
                     <div className="flex items-center gap-2 min-w-0 flex-wrap">
                       <StatusBadge type="item" status={item.status} />
                       <span className="text-sm font-medium">{nomeProcedimento(item)}</span>
+                      {realizadoEmExecucao && jaConcluido && (
+                        <span className="text-xs font-semibold text-primary-600 bg-primary-500/10 border border-primary-500/30 px-2 py-0.5 rounded-full">
+                          Realizado em execução
+                        </span>
+                      )}
+                      {temDesconto && (
+                        <span className="text-xs font-semibold text-warning-600 bg-warning-500/10 border border-warning-500/30 px-2 py-0.5 rounded-full">
+                          Com desconto
+                        </span>
+                      )}
                     </div>
-                    <span className="text-sm font-semibold shrink-0">{formatarMoeda(item.valor)}</span>
-                  </div>
-                  <div className="flex gap-1.5 flex-wrap">
-                    <button
-                      onClick={() => setAcaoItens(prev => ({ ...prev, [item.id]: 'hoje' }))}
-                      disabled={!pago}
-                      className={`text-xs px-3 py-1 rounded-full font-medium border transition-colors ${
-                        acao === 'hoje'
-                          ? 'bg-success-600 border-success-600 text-white'
-                          : pago
-                          ? 'border-success-400 text-success-700 hover:bg-success-100'
-                          : 'border-neutral-200 text-neutral-400 cursor-not-allowed'
-                      }`}
-                    >
-                      Fazer hoje
-                    </button>
-                    <button
-                      onClick={() => setAcaoItens(prev => ({ ...prev, [item.id]: 'agendar' }))}
-                      className={`text-xs px-3 py-1 rounded-full font-medium border transition-colors ${
-                        acao === 'agendar'
-                          ? 'bg-warning-500 border-warning-500 text-white'
-                          : 'border-warning-400 text-warning-700 hover:bg-warning-50'
-                      }`}
-                    >
-                      Agendar
-                    </button>
-                    {acao !== 'pendente' && (
-                      <button
-                        onClick={() => setAcaoItens(prev => ({ ...prev, [item.id]: 'pendente' }))}
-                        className="text-xs px-3 py-1 rounded-full font-medium border border-neutral-300 text-neutral-500 hover:bg-neutral-50 transition-colors"
-                      >
-                        Deixar pendente
-                      </button>
-                    )}
-                  </div>
-                  {acao === 'agendar' && (
-                    <div className="mt-2">
-                      <input
-                        type="date"
-                        value={datasAgendamento[item.id] ?? ''}
-                        onChange={e => setDatasAgendamento(prev => ({ ...prev, [item.id]: e.target.value }))}
-                        className="input text-sm py-1"
-                      />
+                    <div className="flex items-center gap-2 shrink-0">
+                      {temDesconto && (
+                        <span className="text-xs text-muted-foreground line-through">
+                          {formatarMoeda(item.valor_original!)}
+                        </span>
+                      )}
+                      <span className="text-sm font-semibold">{formatarMoeda(item.valor)}</span>
+                      {podeEditarValor && !editando && (
+                        <button
+                          type="button"
+                          onClick={() => abrirEdicaoValor(item)}
+                          className="text-xs text-primary-600 hover:underline font-medium"
+                          title="Editar valor (aplicar desconto)"
+                        >
+                          editar
+                        </button>
+                      )}
                     </div>
+                  </div>
+                  {temDesconto && !editando && (
+                    <div className="text-xs text-warning-600 dark:text-warning-400 mb-2">
+                      Desconto aplicado: {formatarMoeda(item.valor_original! - item.valor)}
+                    </div>
+                  )}
+                  {editando && (
+                    <div className="mb-3 p-2 border border-input rounded-lg bg-background">
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        Novo valor {item.valor_original != null && `(original: ${formatarMoeda(item.valor_original)})`}
+                      </label>
+                      <div className="flex gap-2 items-start">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={valorEditando}
+                          onChange={e => setValorEditando(e.target.value)}
+                          className="flex-1 px-2 py-1 border border-input rounded text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={() => confirmarEdicaoValor(item.id)}
+                          disabled={salvandoValor}
+                          className="text-xs px-3 py-1 rounded bg-primary-600 text-white font-medium disabled:opacity-50"
+                        >
+                          {salvandoValor ? '...' : 'Salvar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelarEdicaoValor}
+                          disabled={salvandoValor}
+                          className="text-xs px-3 py-1 rounded border border-input text-muted-foreground"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                      {item.valor_original != null && item.valor !== item.valor_original && (
+                        <button
+                          type="button"
+                          onClick={() => restaurarValorOriginal(item)}
+                          disabled={salvandoValor}
+                          className="mt-2 text-xs text-primary-600 hover:underline"
+                        >
+                          Restaurar valor original ({formatarMoeda(item.valor_original)})
+                        </button>
+                      )}
+                      {erroEdicaoValor && (
+                        <div className="mt-2 text-xs text-error-600 dark:text-error-400">{erroEdicaoValor}</div>
+                      )}
+                    </div>
+                  )}
+                  {jaConcluido ? (
+                    <div className="text-xs text-success-600 dark:text-success-400 font-medium">
+                      {faltaCobrar
+                        ? `Procedimento já concluído — falta cobrar ${formatarMoeda(item.valor - item.valor_pago)}.`
+                        : 'Procedimento já concluído e pago.'}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex gap-1.5 flex-wrap">
+                        <button
+                          onClick={() => setAcaoItens(prev => ({ ...prev, [item.id]: 'hoje' }))}
+                          disabled={!pago}
+                          className={cn(
+                            "text-xs px-3 py-1 rounded-full font-medium border transition-colors",
+                            acao === 'hoje'
+                              ? "bg-success-600 border-success-600 text-white"
+                              : pago
+                              ? "border-success-500/40 text-success-600 dark:text-success-400 hover:bg-success-500/10"
+                              : "border-border text-muted-foreground cursor-not-allowed"
+                          )}
+                        >
+                          Fazer hoje
+                        </button>
+                        <button
+                          onClick={() => setAcaoItens(prev => ({ ...prev, [item.id]: 'agendar' }))}
+                          className={cn(
+                            "text-xs px-3 py-1 rounded-full font-medium border transition-colors",
+                            acao === 'agendar'
+                              ? "bg-warning-500 border-warning-500 text-white"
+                              : "border-warning-500/40 text-warning-600 dark:text-warning-400 hover:bg-warning-500/10"
+                          )}
+                        >
+                          Agendar
+                        </button>
+                        <button
+                          onClick={() => setAcaoItens(prev => ({ ...prev, [item.id]: 'pendente' }))}
+                          className={cn(
+                            "text-xs px-3 py-1 rounded-full font-medium border transition-colors",
+                            acao === 'pendente'
+                              ? "bg-muted border-border text-foreground"
+                              : "border-input text-muted-foreground hover:bg-muted"
+                          )}
+                        >
+                          Deixar pendente
+                        </button>
+                      </div>
+                      {acao === 'agendar' && (
+                        <div className="mt-2 space-y-2">
+                          <input
+                            type="date"
+                            value={datasAgendamento[item.id] ?? ''}
+                            onChange={e => setDatasAgendamento(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent text-sm py-1"
+                          />
+                          <select
+                            value={executoresAgendamento[item.id] ?? ''}
+                            onChange={e => setExecutoresAgendamento(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            className="w-full px-3 py-1 border border-input rounded-lg text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                          >
+                            <option value="">Executor (opcional)</option>
+                            {executores.map(ex => (
+                              <option key={ex.id} value={ex.id}>{ex.nome}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               );
@@ -899,43 +1505,64 @@ export default function PagamentoPage({
 
           {/* Resumo */}
           {(hojeCount > 0 || agendarCount > 0) && (
-            <div className="mt-4 flex gap-4 text-sm border-t border-neutral-200 pt-3">
+            <div className="mt-4 flex gap-4 text-sm border-t border-border pt-3">
               {hojeCount > 0 && (
-                <span className="text-success-700 font-medium">{hojeCount} para fazer hoje</span>
+                <span className="text-success-600 dark:text-success-400 font-medium">{hojeCount} para fazer hoje</span>
               )}
               {agendarCount > 0 && (
-                <span className="text-warning-700 font-medium">{agendarCount} para agendar</span>
+                <span className="text-warning-600 dark:text-warning-400 font-medium">{agendarCount} para agendar</span>
               )}
             </div>
           )}
 
-          {/* Enviar para execução */}
+          {/* Enviar para execução / Finalizar */}
           {atendimento.status === 'aguardando_pagamento' && temPagamentoAtivo && (
-            <div className="mt-4 pt-4 border-t border-neutral-200">
-              <button
-                onClick={handleEnviarParaExecucao}
-                disabled={enviando}
-                className="btn btn-primary w-full disabled:opacity-50"
-              >
-                {enviando ? 'Enviando...' : 'Enviar para Execução →'}
-              </button>
-              {hojeCount === 0 && (
-                <p className="text-xs text-muted text-center mt-2">
-                  Nenhum procedimento marcado para hoje — apenas os agendamentos serão processados.
-                </p>
+            <div className="mt-4 pt-4 border-t border-border">
+              {todosItensConcluidos ? (
+                <>
+                  <Button
+                    onClick={handleFinalizarAtendimento}
+                    disabled={enviando || itensPendentes.length > 0}
+                    loading={enviando}
+                    className="w-full"
+                  >
+                    Finalizar Atendimento →
+                  </Button>
+                  {itensPendentes.length > 0 && (
+                    <p className="text-xs text-warning-600 dark:text-warning-400 text-center mt-2">
+                      Existem procedimentos pendentes de pagamento.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Button
+                    onClick={handleEnviarParaExecucao}
+                    disabled={enviando}
+                    loading={enviando}
+                    className="w-full"
+                  >
+                    Enviar para Execução →
+                  </Button>
+                  {hojeCount === 0 && (
+                    <p className="text-xs text-muted-foreground text-center mt-2">
+                      Nenhum procedimento marcado para hoje — apenas os agendamentos serão processados.
+                    </p>
+                  )}
+                </>
               )}
             </div>
           )}
 
           {atendimento.status === 'em_execucao' && (
-            <div className="mt-4 p-3 bg-success-50 border border-success-200 rounded-lg text-sm text-success-700 text-center">
+            <div className="mt-4 p-3 bg-success-500/10 border border-success-500/20 rounded-lg text-sm text-success-600 dark:text-success-400 text-center">
               Atendimento em execução.{' '}
               <Link href={`/atendimentos/${id}`} className="font-medium underline">
                 Ver atendimento →
               </Link>
             </div>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );

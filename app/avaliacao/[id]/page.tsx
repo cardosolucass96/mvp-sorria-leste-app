@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 import { formatarMoeda } from '@/lib/utils/formatters';
-import { Search } from 'lucide-react';
+import { Search, Trash2, Pencil, Plus, CheckCircle2 } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Card, Button, Select, Input, EmptyState, ConfirmDialog } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
+import { cn } from '@/lib/utils';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface EtapaModelo {
@@ -26,6 +27,7 @@ interface Procedimento {
   valor: number;
   por_dente: number;
   tem_etapas: number;
+  tem_face: number;
 }
 
 interface Usuario {
@@ -43,6 +45,7 @@ interface ItemAtendimento {
   criado_por_id: number | null;
   criado_por_nome: string | null;
   valor: number;
+  valor_original: number | null;
   status: string;
   dente_unico: string | null;
   etapa_label: string | null;
@@ -145,7 +148,7 @@ export default function AvaliacaoDetalhePage({
       setError('Selecione pelo menos um dente para este procedimento');
       return;
     }
-    if (proc?.por_dente && dentesFaces.some(d => d.faces.length === 0)) {
+    if (proc?.por_dente && proc?.tem_face && dentesFaces.some(d => d.faces.length === 0)) {
       setError('Selecione ao menos uma face para cada dente');
       return;
     }
@@ -191,6 +194,7 @@ export default function AvaliacaoDetalhePage({
       setObservacoes('');
       setEtapasModelo([]);
       await carregarDados();
+      toast.success('Procedimento adicionado!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao adicionar');
     } finally {
@@ -244,16 +248,42 @@ export default function AvaliacaoDetalhePage({
   const handleAtualizarValor = async (itemId: number) => {
     const novoValor = parseFloat(editingValorValue);
     setEditingValorId(null);
-    if (isNaN(novoValor) || novoValor <= 0) return;
+    if (isNaN(novoValor) || novoValor < 0) return;
     try {
-      await unitFetch(`/api/atendimentos/${id}/itens/${itemId}`, {
+      const res = await unitFetch(`/api/atendimentos/${id}/itens/${itemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ valor: novoValor }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || 'Não foi possível salvar o novo valor');
+        return;
+      }
       await carregarDados();
     } catch (err) {
       console.error('Erro ao atualizar valor:', err);
+      toast.error('Erro ao atualizar valor');
+    }
+  };
+
+  const handleRestaurarValorOriginal = async (item: ItemAtendimento) => {
+    if (item.valor_original == null) return;
+    setEditingValorId(null);
+    try {
+      const res = await unitFetch(`/api/atendimentos/${id}/itens/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valor: item.valor_original }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || 'Não foi possível restaurar o valor original');
+        return;
+      }
+      await carregarDados();
+    } catch (err) {
+      console.error('Erro ao restaurar valor:', err);
     }
   };
 
@@ -290,7 +320,6 @@ export default function AvaliacaoDetalhePage({
     p => p.id === parseInt(procedimentoId)
   );
 
-  // Calcular valor total com base em dentes selecionados
   const calcularValorTotal = () => {
     if (!procedimentoSelecionado) return 0;
     const valorBase = valorCustom ? parseFloat(valorCustom) : procedimentoSelecionado.valor;
@@ -305,7 +334,7 @@ export default function AvaliacaoDetalhePage({
   if (!atendimento) {
     return (
       <EmptyState
-        icon={<Search className="w-7 h-7" />}
+        icon={<Search className="h-6 w-6" />}
         title="Atendimento não encontrado"
         actionLabel="Voltar para fila"
         onAction={() => router.push('/avaliacao')}
@@ -314,232 +343,211 @@ export default function AvaliacaoDetalhePage({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6">
       <PageHeader
-        title={`Avaliação - ${atendimento.cliente_nome}`}
-        icon={<Search className="w-7 h-7" />}
-        description={`Atendimento #${atendimento.id}`}
+        title={atendimento.cliente_nome}
+        icon={<Search className="h-6 w-6" />}
+        description={`Avaliação · Atendimento #${atendimento.id}`}
         breadcrumb={[
           { label: 'Avaliações', href: '/avaliacao' },
           { label: atendimento.cliente_nome },
         ]}
       />
 
-      {error && <Alert type="error">{error}</Alert>}
+      {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Adicionar Procedimento */}
-        <Card>
-          <h2 className="text-lg font-semibold mb-4">Adicionar Procedimento</h2>
-
-          <form onSubmit={handleAdicionarProcedimento} className="space-y-4">
-            <div>
-              <Select
-                label="Procedimento *"
-                name="procedimento"
-                value={procedimentoId}
-                onChange={async (value) => {
-                  setProcedimentoId(value);
-                  setValorCustom('');
-                  setDentesFaces([]);
-                  setEtapasModelo([]);
-                  if (!value) return;
-                  const proc = procedimentos.find(p => p.id === parseInt(value));
-                  if (proc?.tem_etapas) {
-                    setLoadingEtapas(true);
-                    try {
-                      const res = await fetch(`/api/procedimentos/${value}`);
-                      const data = await res.json();
-                      setEtapasModelo(data.etapas ?? []);
-                    } finally {
-                      setLoadingEtapas(false);
-                    }
-                  }
-                }}
-                options={procedimentos.map((proc) => ({
-                  value: String(proc.id),
-                  label: `${proc.nome} — ${formatarMoeda(proc.valor)}${proc.por_dente ? ' (por dente)' : ''}${proc.tem_etapas ? ' · multi-sessão' : ''}`,
-                }))}
-                placeholder="Selecione..."
-                required
-              />
-            </div>
-
-            {/* Etapas do procedimento multi-sessão */}
-            {procedimentoSelecionado?.tem_etapas === 1 && (
-              <div className="border rounded-lg overflow-hidden">
-                <div className="px-3 py-2 bg-warning-50 border-b border-warning-200">
-                  <p className="text-sm font-medium text-warning-800">
-                    {loadingEtapas ? 'Carregando etapas...' : `${etapasModelo.length} etapas de execução`}
-                  </p>
-                  <p className="text-xs text-warning-700 mt-0.5">
-                    As etapas serão acompanhadas durante a execução
-                  </p>
-                </div>
-                {!loadingEtapas && etapasModelo.length > 0 && (
-                  <div className="divide-y">
-                    {etapasModelo.map((etapa, idx) => (
-                      <div key={etapa.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                        <span className="text-neutral-700">
-                          <span className="text-muted mr-2">{idx + 1}.</span>
-                          {etapa.nome}
-                        </span>
-                        <span className="text-neutral-600 font-medium">
-                          {etapa.valor != null ? formatarMoeda(etapa.valor) : 'Proporcional'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Seletor de Dentes (se aplicável) */}
-            {procedimentoSelecionado?.por_dente === 1 && (
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Dentes *
-                </label>
-                <SeletorDentes
-                  valor={dentesFaces}
-                  onChange={setDentesFaces}
-                  disabled={adicionando}
-                />
-                {dentesFaces.length > 0 && (
-                  <p className="text-sm text-info-600 mt-2">
-                    Valor: {formatarMoeda(procedimentoSelecionado.valor)} x {dentesFaces.length} dentes = <strong>{formatarMoeda(calcularValorTotal())}</strong>
-                  </p>
-                )}
-              </div>
-            )}
-
-            <div>
-              <Select
-                label="Executor"
-                name="executor"
-                value={executorId}
-                onChange={(value) => setExecutorId(value)}
-                options={executores.map((exec) => ({ value: String(exec.id), label: exec.nome }))}
-                placeholder="Definir depois"
-              />
-            </div>
-
-            {procedimentoSelecionado?.tem_etapas !== 1 && (
-              <div>
-                <Input
-                  label="Valor (R$)"
-                  name="valor"
-                  type="number"
-                  value={valorCustom}
-                  onChange={(value) => setValorCustom(value)}
-                  placeholder={procedimentoSelecionado
-                    ? `Padrão: ${procedimentoSelecionado.valor}`
-                    : 'Selecione um procedimento'}
-                  hint={procedimentoSelecionado && !valorCustom
-                    ? `Valor padrão será usado: ${formatarMoeda(procedimentoSelecionado.valor)}`
-                    : undefined}
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Obs / Laudo <span className="text-muted font-normal">(opcional)</span>
-              </label>
-              <textarea
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-                rows={2}
-                placeholder="Observações ou laudo do procedimento..."
-                className="input w-full resize-none"
-                disabled={adicionando}
-              />
-            </div>
-
-            <Button
-              type="submit"
-              variant="secondary"
-              disabled={!procedimentoId || adicionando || loadingEtapas}
-              loading={adicionando}
-              className="w-full"
-            >
-              + Adicionar
-            </Button>
-          </form>
-        </Card>
-
-      </div>
-
-      {/* Lista de Procedimentos */}
+      {/* ── Adicionar Procedimento ── */}
       <Card>
-        <h2 className="text-lg font-semibold mb-4">Procedimentos Adicionados</h2>
+        <h2 className="text-lg font-bold mb-4">
+          <Plus className="w-5 h-5 inline-block mr-1.5 -mt-0.5" />
+          Adicionar Procedimento
+        </h2>
+
+        <form onSubmit={handleAdicionarProcedimento} className="space-y-4">
+          <Select
+            label="Procedimento *"
+            name="procedimento"
+            value={procedimentoId}
+            onChange={async (value) => {
+              setProcedimentoId(value);
+              setValorCustom('');
+              setDentesFaces([]);
+              setEtapasModelo([]);
+              if (!value) return;
+              const proc = procedimentos.find(p => p.id === parseInt(value));
+              if (proc?.tem_etapas) {
+                setLoadingEtapas(true);
+                try {
+                  const res = await fetch(`/api/procedimentos/${value}`);
+                  const data = await res.json();
+                  setEtapasModelo(data.etapas ?? []);
+                } finally {
+                  setLoadingEtapas(false);
+                }
+              }
+            }}
+            options={procedimentos.map((proc) => ({
+              value: String(proc.id),
+              label: `${proc.nome} — ${formatarMoeda(proc.valor)}${proc.por_dente ? ' (por dente)' : ''}${proc.tem_etapas ? ' · multi-sessão' : ''}`,
+            }))}
+            placeholder="Selecione..."
+            required
+          />
+
+          {/* Etapas do procedimento multi-sessão */}
+          {procedimentoSelecionado?.tem_etapas === 1 && (
+            <div className="rounded-lg border overflow-hidden">
+              <div className="px-3 py-2 bg-warning-500/10 border-b border-warning-500/20">
+                <p className="text-sm font-medium text-warning-600 dark:text-warning-400">
+                  {loadingEtapas ? 'Carregando etapas...' : `${etapasModelo.length} etapas de execução`}
+                </p>
+                <p className="text-xs text-warning-600/70 dark:text-warning-400/70 mt-0.5">
+                  As etapas serão acompanhadas durante a execução
+                </p>
+              </div>
+              {!loadingEtapas && etapasModelo.length > 0 && (
+                <div className="divide-y divide-border">
+                  {etapasModelo.map((etapa, idx) => (
+                    <div key={etapa.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                      <span className="text-foreground">
+                        <span className="text-muted-foreground mr-2">{idx + 1}.</span>
+                        {etapa.nome}
+                      </span>
+                      <span className="text-muted-foreground font-medium">
+                        {etapa.valor != null ? formatarMoeda(etapa.valor) : 'Proporcional'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Seletor de Dentes */}
+          {procedimentoSelecionado?.por_dente === 1 && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Dentes *
+              </label>
+              <SeletorDentes
+                valor={dentesFaces}
+                onChange={setDentesFaces}
+                disabled={adicionando}
+                mostrarFaces={procedimentoSelecionado?.tem_face === 1}
+              />
+              {dentesFaces.length > 0 && (
+                <p className="text-sm text-primary mt-2">
+                  Valor: {formatarMoeda(procedimentoSelecionado.valor)} x {dentesFaces.length} dentes = <strong>{formatarMoeda(calcularValorTotal())}</strong>
+                </p>
+              )}
+            </div>
+          )}
+
+          <Select
+            label="Executor"
+            name="executor"
+            value={executorId}
+            onChange={(value) => setExecutorId(value)}
+            options={executores.map((exec) => ({ value: String(exec.id), label: exec.nome }))}
+            placeholder="Definir depois"
+          />
+
+          {procedimentoSelecionado?.tem_etapas !== 1 && (
+            <Input
+              label="Valor (R$)"
+              name="valor"
+              type="number"
+              value={valorCustom}
+              onChange={(value) => setValorCustom(value)}
+              placeholder={procedimentoSelecionado
+                ? `Padrão: ${procedimentoSelecionado.valor}`
+                : 'Selecione um procedimento'}
+              hint={procedimentoSelecionado && !valorCustom
+                ? `Valor padrão será usado: ${formatarMoeda(procedimentoSelecionado.valor)}`
+                : undefined}
+            />
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">
+              Obs / Laudo <span className="text-muted-foreground font-normal">(opcional)</span>
+            </label>
+            <textarea
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              rows={2}
+              placeholder="Observações ou laudo do procedimento..."
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent resize-none"
+              disabled={adicionando}
+            />
+          </div>
+
+          <Button
+            type="submit"
+            variant="secondary"
+            disabled={!procedimentoId || adicionando || loadingEtapas}
+            loading={adicionando}
+            className="w-full"
+          >
+            <Plus className="w-4 h-4 mr-1.5 inline-block" />
+            Adicionar
+          </Button>
+        </form>
+      </Card>
+
+      {/* ── Lista de Procedimentos ── */}
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold">Procedimentos</h2>
+          {atendimento.itens.length > 0 && (
+            <span className="text-sm font-semibold px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+              {atendimento.itens.length} {atendimento.itens.length === 1 ? 'item' : 'itens'}
+            </span>
+          )}
+        </div>
 
         {atendimento.itens.length === 0 ? (
-          <div className="text-center py-8 text-muted">
-            <p>Nenhum procedimento adicionado ainda</p>
-            <p className="text-sm mt-2">
-              Use o formulário ao lado para adicionar procedimentos
-            </p>
+          <div className="text-center py-8 text-muted-foreground">
+            <p className="text-sm">Nenhum procedimento adicionado ainda</p>
+            <p className="text-xs mt-1">Use o formulário acima para adicionar</p>
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-neutral-200">
-            <thead className="bg-surface-secondary">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
-                  Procedimento
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
-                  Vendedor
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">
-                  Executor
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
-                  Valor
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">
-                  Ações
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-surface divide-y divide-neutral-200">
-              {atendimento.itens.map((item) => (
-                <tr key={item.id}>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-foreground">
-                      {item.procedimento_nome}
+          <div className="space-y-2">
+            {atendimento.itens.map((item) => (
+              <div key={item.id} className="rounded-lg border border-border bg-background">
+                {/* Header do item */}
+                <div className="px-4 py-3 flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm text-foreground">
+                        {item.procedimento_nome}
+                      </span>
                       {item.dente_unico && (
-                        <span className="text-sm text-muted font-normal ml-1">— dente {item.dente_unico}</span>
+                        <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-medium">
+                          dente {item.dente_unico}
+                        </span>
                       )}
                       {item.etapa_label && (
-                        <span className="text-sm text-muted font-normal ml-1">— {item.etapa_label}</span>
+                        <span className="text-xs bg-primary-500/10 text-primary-600 dark:text-primary-400 px-1.5 py-0.5 rounded font-medium">
+                          {item.etapa_label}
+                        </span>
                       )}
                       {item.tem_etapas === 1 && !item.etapa_label && (
-                        <span className="ml-1.5 text-xs bg-warning-100 text-warning-700 px-1.5 py-0.5 rounded font-medium">multi-sessão</span>
+                        <span className="text-xs bg-warning-500/10 text-warning-600 dark:text-warning-400 px-1.5 py-0.5 rounded font-medium">
+                          multi-sessão
+                        </span>
                       )}
-                    </p>
+                    </div>
                     {item.observacoes && (
-                      <p className="text-xs text-muted mt-0.5">{item.observacoes}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{item.observacoes}</p>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-neutral-600">
-                    {item.criado_por_nome || 'N/A'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={item.executor_id || ''}
-                      onChange={(e) => handleAtualizarExecutor(item.id, e.target.value)}
-                      className="input text-sm py-1"
-                    >
-                      <option value="">Não definido</option>
-                      {executores.map((exec) => (
-                        <option key={exec.id} value={exec.id}>
-                          {exec.nome}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium">
+                    {item.criado_por_nome && (
+                      <p className="text-xs text-muted-foreground mt-0.5">Vendedor: {item.criado_por_nome}</p>
+                    )}
+                  </div>
+
+                  {/* Valor */}
+                  <div className="text-right shrink-0">
                     {editingValorId === item.id ? (
                       <input
                         type="number"
@@ -553,43 +561,92 @@ export default function AvaliacaoDetalhePage({
                           if (e.key === 'Enter') handleAtualizarValor(item.id);
                           if (e.key === 'Escape') setEditingValorId(null);
                         }}
-                        className="input text-sm py-1 w-28 text-right"
+                        className="w-28 px-2 py-1 border border-border rounded-lg text-sm text-right bg-transparent focus:outline-none focus:ring-2 focus:ring-ring"
                       />
                     ) : (
-                      <button
-                        onClick={() => { setEditingValorId(item.id); setEditingValorValue(String(item.valor)); }}
-                        className="hover:text-info-600 hover:underline cursor-pointer"
-                        title="Clique para editar"
-                      >
-                        {formatarMoeda(item.valor)}
-                      </button>
+                      <div className="flex flex-col items-end gap-0.5">
+                        {item.valor_original != null && item.valor_original > item.valor && (
+                          <span className="text-xs text-muted-foreground line-through">
+                            {formatarMoeda(item.valor_original)}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => { setEditingValorId(item.id); setEditingValorValue(String(item.valor)); }}
+                          className="font-bold text-sm text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                          title="Clique para editar valor"
+                        >
+                          {formatarMoeda(item.valor)}
+                          <Pencil className="w-3 h-3 text-muted-foreground" />
+                        </button>
+                        {item.valor_original != null && item.valor_original > item.valor && (
+                          <button
+                            onClick={() => handleRestaurarValorOriginal(item)}
+                            className="text-[10px] text-primary-600 hover:underline"
+                            title="Restaurar valor original"
+                          >
+                            restaurar original
+                          </button>
+                        )}
+                      </div>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => handleRemoverItem(item.id)}
-                      className="text-error-600 hover:text-error-800 text-sm"
-                    >
-                      Remover
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-surface-secondary">
-              <tr>
-                <td colSpan={3} className="px-4 py-3 text-right font-semibold">
-                  Total:
-                </td>
-                <td className="px-4 py-3 text-right font-bold text-lg text-info-600">
-                  {formatarMoeda(atendimento.total)}
-                </td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
+                  </div>
+                </div>
+                {item.valor_original != null && item.valor_original > item.valor && editingValorId !== item.id && (
+                  <div className="px-4 py-1 border-t border-border bg-warning-500/5">
+                    <span className="text-xs font-medium text-warning-600 dark:text-warning-400">
+                      Desconto: {formatarMoeda(item.valor_original - item.valor)}
+                    </span>
+                  </div>
+                )}
+
+                {/* Footer do item: executor + a��ões */}
+                <div className="px-4 py-2 border-t border-border bg-muted/40 flex items-center justify-between gap-3">
+                  <select
+                    value={item.executor_id || ''}
+                    onChange={(e) => handleAtualizarExecutor(item.id, e.target.value)}
+                    className="flex-1 min-w-0 px-2 py-1 border border-border rounded-lg text-xs bg-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Executor: não definido</option>
+                    {executores.map((exec) => (
+                      <option key={exec.id} value={exec.id}>
+                        {exec.nome}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleRemoverItem(item.id)}
+                    className="text-error-600 hover:text-error-500 dark:text-error-400 shrink-0 p-1"
+                    title="Remover procedimento"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Total */}
+            <div className="flex items-center justify-between px-4 py-3 bg-muted rounded-lg mt-3">
+              <span className="font-semibold text-sm text-muted-foreground">Total</span>
+              <span className="font-bold text-lg text-foreground">{formatarMoeda(atendimento.total)}</span>
+            </div>
+          </div>
         )}
       </Card>
+
+      {/* ── Finalizar Avaliação ── */}
+      {atendimento.itens.length > 0 && (
+        <div className="sticky bottom-20 md:bottom-0 z-10">
+          <Button
+            onClick={handleFinalizarAvaliacao}
+            disabled={finalizando}
+            loading={finalizando}
+            className="w-full text-lg py-3 shadow-lg"
+          >
+            <CheckCircle2 className="w-5 h-5 mr-2 inline-block" />
+            Finalizar Avaliação — Encaminhar para Pagamento
+          </Button>
+        </div>
+      )}
 
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
@@ -600,29 +657,6 @@ export default function AvaliacaoDetalhePage({
         confirmLabel={confirmDialog.confirmLabel}
         type={confirmDialog.type}
       />
-
-      {/* Aviso para finalizar */}
-      {atendimento.itens.length > 0 && (
-        <Card className="bg-success-50 border border-success-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-success-900">
-                Avaliação pronta para ser finalizada
-              </p>
-              <p className="text-sm text-success-700">
-                O paciente será encaminhado para pagamento
-              </p>
-            </div>
-            <Button
-              onClick={handleFinalizarAvaliacao}
-              disabled={finalizando}
-              loading={finalizando}
-            >
-              Finalizar Avaliação
-            </Button>
-          </div>
-        </Card>
-      )}
     </div>
   );
 }
