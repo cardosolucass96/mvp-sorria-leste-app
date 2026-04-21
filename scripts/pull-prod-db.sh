@@ -12,7 +12,6 @@ APP_TABLES=(
   atendimentos
   clientes
   comissoes
-  etapas_procedimento
   itens_atendimento
   movimentacoes_saldo
   notas_execucao
@@ -21,7 +20,6 @@ APP_TABLES=(
   parcelas
   procedimentos
   prontuarios
-  prontuarios_etapa
   saldo_clientes
   usuarios
 )

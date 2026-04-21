@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS procedimentos (
   comissao_execucao REAL NOT NULL DEFAULT 0, -- % comissão do executor
   por_dente INTEGER NOT NULL DEFAULT 0, -- 1 se o valor é cobrado por dente
   tem_etapas INTEGER NOT NULL DEFAULT 0, -- 1 se o procedimento tem etapas/sessões distintas
+  tem_face INTEGER NOT NULL DEFAULT 0, -- 1 se a seleção de faces do dente é obrigatória (apenas para por_dente)
   ativo INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
@@ -88,7 +89,8 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   procedimento_id INTEGER NOT NULL,
   executor_id INTEGER, -- Dentista que vai executar
   criado_por_id INTEGER NOT NULL, -- Quem criou (avaliador ou executor)
-  valor REAL NOT NULL, -- Valor do procedimento no momento
+  valor REAL NOT NULL, -- Valor efetivo do procedimento (pode ter sido editado pelo atendente)
+  valor_original REAL, -- Valor de tabela/orçamento no momento da criação (snapshot); desconto = valor_original - valor
   valor_pago REAL NOT NULL DEFAULT 0, -- Quanto já foi pago deste procedimento
   dentes TEXT, -- Dentes selecionados (JSON array: ["11", "21", "31"])
   quantidade INTEGER NOT NULL DEFAULT 1, -- Quantidade de dentes (para cálculo do valor)
@@ -99,6 +101,7 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   etapa_label TEXT,        -- Label da(s) etapa(s) desta sessão ex: "Etapa 1" ou "Etapa 1, Etapa 2"
   status TEXT NOT NULL DEFAULT 'pendente'
     CHECK (status IN ('pendente', 'pago', 'executando', 'concluido')),
+  adicionado_em_execucao INTEGER NOT NULL DEFAULT 0, -- 1 se foi adicionado pelo executor durante a execução (pode ser concluído antes do pagamento)
   observacoes TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   concluido_at TEXT,
@@ -116,7 +119,7 @@ CREATE TABLE IF NOT EXISTS pagamentos (
   atendimento_id INTEGER NOT NULL,
   recebido_por_id INTEGER NOT NULL,
   valor REAL NOT NULL,
-  metodo TEXT NOT NULL CHECK (metodo IN ('dinheiro', 'pix', 'cartao_debito', 'cartao_credito')),
+  metodo TEXT NOT NULL CHECK (metodo IN ('dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'crediario', 'afins_sorria')),
   observacoes TEXT,
   cancelado INTEGER DEFAULT 0,
   motivo_cancelamento TEXT,
@@ -167,6 +170,21 @@ CREATE TABLE IF NOT EXISTS anexos_execucao (
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
 
+-- Anexos do Cliente (arquivos vinculados diretamente ao cliente — exames, prontuários externos, etc.)
+CREATE TABLE IF NOT EXISTS anexos_cliente (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cliente_id INTEGER NOT NULL,
+  usuario_id INTEGER NOT NULL, -- Quem fez upload
+  nome_arquivo TEXT NOT NULL,
+  tipo_arquivo TEXT NOT NULL, -- ex: image/jpeg, application/pdf
+  caminho TEXT NOT NULL, -- Chave no R2
+  tamanho INTEGER NOT NULL, -- Tamanho em bytes
+  descricao TEXT, -- Observação do atendente sobre o arquivo
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+);
+
 -- Prontuário de Execução (obrigatório para conclusão do procedimento)
 CREATE TABLE IF NOT EXISTS prontuarios (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -177,35 +195,6 @@ CREATE TABLE IF NOT EXISTS prontuarios (
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
-  FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-);
-
--- Etapas de Procedimento (uma por dente+face, para itens por_dente)
-CREATE TABLE IF NOT EXISTS etapas_procedimento (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  item_atendimento_id INTEGER NOT NULL,
-  dente TEXT NOT NULL,           -- Número do dente (notação FDI, ex: "11")
-  face TEXT NOT NULL             -- V | L | M | D | O
-    CHECK (face IN ('V', 'L', 'M', 'D', 'O')),
-  status TEXT NOT NULL DEFAULT 'pendente'
-    CHECK (status IN ('pendente', 'concluido')),
-  concluido_at TEXT,
-  concluido_por_id INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
-  FOREIGN KEY (concluido_por_id) REFERENCES usuarios(id)
-);
-
--- Prontuários de Etapa (um por etapa concluída)
-CREATE TABLE IF NOT EXISTS prontuarios_etapa (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  etapa_id INTEGER NOT NULL UNIQUE,
-  usuario_id INTEGER NOT NULL,
-  descricao TEXT NOT NULL,       -- Mínimo 50 caracteres
-  observacoes TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  FOREIGN KEY (etapa_id) REFERENCES etapas_procedimento(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
 
@@ -320,9 +309,7 @@ CREATE INDEX IF NOT EXISTS idx_comissoes_usuario ON comissoes(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_comissoes_tipo ON comissoes(tipo);
 CREATE INDEX IF NOT EXISTS idx_notas_item ON notas_execucao(item_atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_anexos_item ON anexos_execucao(item_atendimento_id);
-CREATE INDEX IF NOT EXISTS idx_etapas_item ON etapas_procedimento(item_atendimento_id);
-CREATE INDEX IF NOT EXISTS idx_etapas_status ON etapas_procedimento(status);
-CREATE INDEX IF NOT EXISTS idx_prontuarios_etapa ON prontuarios_etapa(etapa_id);
+CREATE INDEX IF NOT EXISTS idx_anexos_cliente ON anexos_cliente(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_cliente ON agendamentos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_atendimento ON agendamentos(atendimento_origem_id);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_status ON agendamentos(status);

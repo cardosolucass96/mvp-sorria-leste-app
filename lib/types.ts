@@ -64,6 +64,8 @@ export interface Procedimento {
   comissao_venda: number;
   comissao_execucao: number;
   por_dente: number; // 0 ou 1 - indica se o valor é cobrado por dente
+  tem_etapas: number; // 0 ou 1 - indica se o procedimento tem etapas/sessões distintas
+  tem_face: number; // 0 ou 1 - indica se a seleção de faces do dente é obrigatória (apenas para por_dente)
   ativo: number;
   created_at: string;
 }
@@ -107,6 +109,8 @@ export interface ItemAtendimento {
   executor_id: number | null;
   criado_por_id: number;
   valor: number;
+  valor_original: number | null; // Valor de tabela/orçamento (snapshot); desconto = valor_original - valor
+  etapas_valores: string | null; // JSON override por etapa: {"<etapa_modelo_id>": valor}; soma = item.valor
   valor_pago: number;
   dentes: string | null; // JSON array com números dos dentes
   quantidade: number; // Quantidade de dentes
@@ -116,6 +120,7 @@ export interface ItemAtendimento {
   etapa_modelo_id: number | null;
   etapa_label: string | null;
   status: ItemStatus;
+  adicionado_em_execucao: number; // 1 se foi adicionado pelo executor durante a execução
   observacoes: string | null;
   created_at: string;
   concluido_at: string | null;
