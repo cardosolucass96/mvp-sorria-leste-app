@@ -1,15 +1,15 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import { formatarMoeda } from '@/lib/utils/formatters';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
 
 interface Etapa {
   id: number;
   item_atendimento_id: number;
-  dente: string;
-  face: string;
   status: string;
   nome?: string;
-  tipo?: 'face' | 'modelo';
   valor?: number | null;
 }
 
@@ -25,14 +25,6 @@ interface ItemAtendimento {
   etapa_label: string | null;
   etapas?: Etapa[];
 }
-
-const FACE_LABEL: Record<string, string> = {
-  V: 'Vestibular',
-  L: 'Lingual',
-  M: 'Mesial',
-  D: 'Distal',
-  O: 'Oclusal',
-};
 
 interface Props {
   itens: ItemAtendimento[];
@@ -52,10 +44,9 @@ interface Props {
 // Calcula o valor efetivo de um item considerando apenas as etapas selecionadas
 function calcularValorEfetivo(item: ItemAtendimento, etapasHoje: Set<number>): number {
   const etapas = item.etapas ?? [];
-  const etapasModelo = etapas.filter(e => e.tipo === 'modelo');
-  if (etapasModelo.length === 0) return item.valor;
-  const selecionadas = etapasModelo.filter(e => etapasHoje.has(e.id));
-  if (selecionadas.length === etapasModelo.length) return item.valor;
+  if (etapas.length === 0) return item.valor;
+  const selecionadas = etapas.filter(e => etapasHoje.has(e.id));
+  if (selecionadas.length === etapas.length) return item.valor;
   if (selecionadas.length === 0) return 0;
   const todosTemValor = selecionadas.every(e => e.valor != null);
   if (!todosTemValor) return item.valor;
@@ -87,15 +78,15 @@ export default function SelecaoProcedimentosHoje({
 
   return (
     <div className="space-y-6">
-      <div className="card">
+      <Card>
         <div className="mb-4">
           <h2 className="text-xl font-bold text-foreground">O que será feito hoje?</h2>
-          <p className="text-sm text-muted mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Selecione os procedimentos (e etapas) que serão realizados nesta sessão. Os não selecionados irão para a fila de agendamentos.
           </p>
         </div>
 
-        <div className="divide-y divide-neutral-200 border border-neutral-200 rounded-lg overflow-hidden">
+        <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
           {itens.map((item) => {
             const selecionado = itensHoje.has(item.id);
             const etapas = item.etapas ?? [];
@@ -109,7 +100,7 @@ export default function SelecaoProcedimentosHoje({
               : item.valor;
 
             return (
-              <div key={item.id} className={`${selecionado ? 'bg-surface' : 'bg-neutral-50'}`}>
+              <div key={item.id} className={cn(selecionado ? "bg-background" : "bg-muted")}>
                 {/* Linha do item */}
                 <div className="px-4 py-3">
                   <label className="flex items-center gap-3 cursor-pointer">
@@ -117,19 +108,19 @@ export default function SelecaoProcedimentosHoje({
                       type="checkbox"
                       checked={selecionado}
                       onChange={() => onToggleItem(item.id)}
-                      className="w-4 h-4 accent-primary-600 shrink-0"
+                      className="w-4 h-4 accent-primary shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <span className={`text-sm font-medium ${selecionado ? 'text-foreground' : 'text-neutral-500'}`}>
+                      <span className={cn("text-sm font-medium", selecionado ? "text-foreground" : "text-muted-foreground")}>
                         {label}
                       </span>
                       {temEtapas && selecionado && (
-                        <span className="ml-2 text-xs text-muted">
+                        <span className="ml-2 text-xs text-muted-foreground">
                           {etapas.filter(e => etapasHoje.has(e.id)).length}/{etapas.length} etapa(s)
                         </span>
                       )}
                     </div>
-                    <span className={`text-sm font-semibold shrink-0 ${selecionado ? 'text-foreground' : 'text-neutral-400'}`}>
+                    <span className={cn("text-sm font-semibold shrink-0", selecionado ? "text-foreground" : "text-muted-foreground")}>
                       {formatarMoeda(valorExibido)}
                     </span>
                   </label>
@@ -137,14 +128,14 @@ export default function SelecaoProcedimentosHoje({
                   {/* Data de agendamento (quando item inteiro não selecionado) */}
                   {!selecionado && (
                     <div className="mt-2 ml-7">
-                      <label className="block text-xs text-muted mb-1">
+                      <label className="block text-xs text-muted-foreground mb-1">
                         Data prevista para agendamento (opcional)
                       </label>
                       <input
                         type="date"
                         value={datasAgendamento[item.id] ?? ''}
                         onChange={(e) => onSetData(item.id, e.target.value)}
-                        className="input text-sm py-1"
+                        className="w-full px-3 py-1 border border-border rounded-lg text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
                       />
                     </div>
                   )}
@@ -152,25 +143,23 @@ export default function SelecaoProcedimentosHoje({
 
                 {/* Sub-lista de etapas (apenas quando item está selecionado e tem etapas) */}
                 {selecionado && temEtapas && (
-                  <div className="ml-7 mr-4 mb-3 border border-neutral-200 rounded-lg overflow-hidden">
+                  <div className="ml-7 mr-4 mb-3 border border-border rounded-lg overflow-hidden">
                     {etapas.map((etapa) => {
                       const etapaSelecionada = etapasHoje.has(etapa.id);
                       return (
-                        <div key={etapa.id} className={`px-3 py-2 border-b border-neutral-100 last:border-b-0 ${etapaSelecionada ? '' : 'bg-neutral-50'}`}>
+                        <div key={etapa.id} className={cn("px-3 py-2 border-b border-border last:border-b-0", !etapaSelecionada && "bg-muted")}>
                           <label className="flex items-center gap-2 cursor-pointer">
                             <input
                               type="checkbox"
                               checked={etapaSelecionada}
                               onChange={() => onToggleEtapa(etapa.id)}
-                              className="w-3.5 h-3.5 accent-primary-600 shrink-0"
+                              className="w-3.5 h-3.5 accent-primary shrink-0"
                             />
-                            <span className={`text-xs font-medium flex-1 ${etapaSelecionada ? 'text-foreground' : 'text-neutral-500'}`}>
-                              {etapa.tipo === 'modelo'
-                                ? (etapa.nome ?? `Etapa ${etapas.indexOf(etapa) + 1}`)
-                                : `Dente ${etapa.dente} — ${FACE_LABEL[etapa.face] ?? etapa.face} (${etapa.face})`}
+                            <span className={cn("text-xs font-medium flex-1", etapaSelecionada ? "text-foreground" : "text-muted-foreground")}>
+                              {etapa.nome ?? `Etapa ${etapas.indexOf(etapa) + 1}`}
                             </span>
-                            {etapa.tipo === 'modelo' && etapa.valor != null && (
-                              <span className={`text-xs font-semibold ${etapaSelecionada ? 'text-foreground' : 'text-neutral-400'}`}>
+                            {etapa.valor != null && (
+                              <span className={cn("text-xs font-semibold", etapaSelecionada ? "text-foreground" : "text-muted-foreground")}>
                                 {formatarMoeda(etapa.valor)}
                               </span>
                             )}
@@ -184,7 +173,7 @@ export default function SelecaoProcedimentosHoje({
                                 type="date"
                                 value={etapasDatas[etapa.id] ?? ''}
                                 onChange={(e) => onSetEtapaData(etapa.id, e.target.value)}
-                                className="input text-xs py-0.5"
+                                className="w-full px-3 py-0.5 border border-border rounded-lg text-xs bg-transparent focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
                                 placeholder="Data prevista (opcional)"
                               />
                             </div>
@@ -200,7 +189,7 @@ export default function SelecaoProcedimentosHoje({
         </div>
 
         {/* Resumo */}
-        <div className="mt-4 flex flex-col gap-1 text-sm text-muted">
+        <div className="mt-4 flex flex-col gap-1 text-sm text-muted-foreground">
           <span>
             {itensParaHoje.length > 0
               ? `${itensParaHoje.length} procedimento(s) hoje — ${formatarMoeda(totalHoje)}`
@@ -220,24 +209,27 @@ export default function SelecaoProcedimentosHoje({
 
         <div className="mt-4">
           {nenhumSelecionado ? (
-            <button
+            <Button
+              variant="secondary"
+              className="w-full"
               onClick={onFinalizarSemProcedimentos}
               disabled={confirmando}
-              className="btn btn-secondary w-full disabled:opacity-50"
+              loading={confirmando}
             >
-              {confirmando ? 'Processando...' : 'Confirmar sem procedimentos hoje'}
-            </button>
+              Confirmar sem procedimentos hoje
+            </Button>
           ) : (
-            <button
+            <Button
+              className="w-full"
               onClick={onConfirmar}
               disabled={confirmando}
-              className="btn btn-primary w-full disabled:opacity-50"
+              loading={confirmando}
             >
-              {confirmando ? 'Confirmando...' : 'Confirmar e ir para execução →'}
-            </button>
+              Confirmar e ir para execução →
+            </Button>
           )}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

@@ -36,7 +36,7 @@ export default function ComissoesResumo({
       render: (c) => (
         <div>
           <span className="font-medium text-foreground">{c.nome}</span>
-          <span className="text-xs text-muted ml-2">({c.role})</span>
+          <span className="text-xs text-muted-foreground ml-2">({c.role})</span>
         </div>
       ),
     },
@@ -45,7 +45,7 @@ export default function ComissoesResumo({
       label: 'Comissão Venda',
       align: 'right',
       render: (c) => (
-        <span className={c.total_venda > 0 ? 'text-info-700 font-medium' : 'text-neutral-400'}>
+        <span className={c.total_venda > 0 ? 'text-info-600 dark:text-info-400 font-medium' : 'text-muted-foreground'}>
           {formatarMoeda(c.total_venda)}
         </span>
       ),
@@ -55,7 +55,7 @@ export default function ComissoesResumo({
       label: 'Comissão Execução',
       align: 'right',
       render: (c) => (
-        <span className={c.total_execucao > 0 ? 'text-success-700 font-medium' : 'text-neutral-400'}>
+        <span className={c.total_execucao > 0 ? 'text-success-600 dark:text-success-400 font-medium' : 'text-muted-foreground'}>
           {formatarMoeda(c.total_execucao)}
         </span>
       ),
@@ -85,12 +85,12 @@ export default function ComissoesResumo({
         loading={loading}
         keyExtractor={(c) => c.id}
         emptyMessage="Nenhuma comissão registrada"
-        emptyIcon={<Banknote className="w-8 h-8 text-neutral-300" />}
+        emptyIcon={<Banknote className="w-8 h-8 text-muted-foreground/50" />}
         caption="Resumo de comissões por profissional"
       />
       {comissoes.length > 0 && (
         <div className="mt-3 text-right text-sm">
-          <span className="text-muted">Total Geral: </span>
+          <span className="text-muted-foreground">Total Geral: </span>
           <span className="font-bold text-foreground">{formatarMoeda(totalGeral)}</span>
         </div>
       )}

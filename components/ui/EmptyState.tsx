@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils';
 import { Inbox } from 'lucide-react';
 import Button from './Button';
 
@@ -12,7 +13,7 @@ export interface EmptyStateProps {
 }
 
 export default function EmptyState({
-  icon = <Inbox className="w-12 h-12 text-neutral-300" />,
+  icon = <Inbox className="w-12 h-12 text-muted-foreground/50" />,
   title,
   description,
   actionLabel,
@@ -20,12 +21,12 @@ export default function EmptyState({
   className = '',
 }: EmptyStateProps) {
   return (
-    <div className={`flex flex-col items-center justify-center py-12 px-4 text-center ${className}`}>
+    <div className={cn("flex flex-col items-center justify-center py-12 px-4 text-center", className)}>
       <div className="mb-4" aria-hidden="true">
         {icon}
       </div>
       <h3 className="text-lg font-semibold text-foreground mb-1">{title}</h3>
-      {description && <p className="text-sm text-muted max-w-md mb-4">{description}</p>}
+      {description && <p className="text-sm text-muted-foreground max-w-md mb-4">{description}</p>}
       {actionLabel && onAction && (
         <Button variant="primary" onClick={onAction}>
           {actionLabel}

@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils';
 import { obterIniciais } from '@/lib/utils/formatters';
 
 export interface AvatarProps {
@@ -15,7 +16,7 @@ const sizeClasses: Record<NonNullable<AvatarProps['size']>, string> = {
 /** Gera cor determinística baseada no nome */
 function hashColor(name: string): string {
   const colors = [
-    'bg-primary-500',
+    'bg-primary',
     'bg-info-500',
     'bg-success-500',
     'bg-evaluation-500',
@@ -37,13 +38,13 @@ export default function Avatar({ nome, size = 'md', className = '' }: AvatarProp
 
   return (
     <span
-      className={`
-        inline-flex items-center justify-center rounded-full
-        text-white font-semibold select-none shrink-0
-        ${bg}
-        ${sizeClasses[size]}
-        ${className}
-      `.trim()}
+      className={cn(
+        "inline-flex items-center justify-center rounded-full",
+        "text-white font-semibold select-none shrink-0",
+        bg,
+        sizeClasses[size],
+        className
+      )}
       title={nome}
       aria-label={nome}
     >

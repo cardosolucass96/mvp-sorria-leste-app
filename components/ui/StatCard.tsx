@@ -1,10 +1,12 @@
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 export interface StatCardProps {
   icon: React.ReactNode;
   label: string;
   value: string | number;
   color?: string;
+  iconColor?: string;
   href?: string;
   description?: string;
   className?: string;
@@ -14,29 +16,30 @@ export default function StatCard({
   icon,
   label,
   value,
-  color = 'border-primary-400',
+  color = 'border-primary/40',
+  iconColor = 'text-muted-foreground',
   href,
   description,
   className = '',
 }: StatCardProps) {
   const content = (
     <div
-      className={`
-        bg-surface rounded-xl shadow-md border border-border-light p-5
-        border-l-4 ${color}
-        ${href ? 'hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200' : ''}
-        ${className}
-      `.trim()}
+      className={cn(
+        "bg-card rounded-xl shadow-sm border border-border p-4 border-l-4",
+        color,
+        href && "hover:shadow-md transition-all duration-200",
+        className
+      )}
     >
-      <div className="flex items-start gap-4">
-        <div className="shrink-0 text-neutral-400" aria-hidden="true">
+      <div className="flex items-start gap-3">
+        <div className={cn("shrink-0 mt-0.5", iconColor)} aria-hidden="true">
           {icon}
         </div>
         <div className="min-w-0">
-          <p className="text-sm text-muted truncate">{label}</p>
+          <p className="text-xs text-muted-foreground truncate">{label}</p>
           <p className="text-2xl font-bold text-foreground mt-0.5">{value}</p>
           {description && (
-            <p className="text-xs text-neutral-400 mt-1">{description}</p>
+            <p className="text-xs text-muted-foreground mt-1">{description}</p>
           )}
         </div>
       </div>

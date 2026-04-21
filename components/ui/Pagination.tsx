@@ -1,5 +1,6 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import Button from './Button';
 
 export interface PaginationProps {
@@ -54,7 +55,7 @@ export default function Pagination({
   const pages = getPageRange(page, totalPages, siblingCount);
 
   return (
-    <nav aria-label="Paginação" className={`flex items-center justify-center gap-1 ${className}`}>
+    <nav aria-label="Paginação" className={cn("flex items-center justify-center gap-1", className)}>
       <Button
         variant="ghost"
         size="sm"
@@ -68,7 +69,7 @@ export default function Pagination({
       <div className="flex items-center gap-1">
         {pages.map((p, idx) =>
           p === 'ellipsis' ? (
-            <span key={`ellipsis-${idx}`} className="px-2 text-muted select-none" aria-hidden="true">
+            <span key={`ellipsis-${idx}`} className="px-2 text-muted-foreground select-none" aria-hidden="true">
               …
             </span>
           ) : (
@@ -78,11 +79,12 @@ export default function Pagination({
               disabled={p === page}
               aria-label={`Página ${p}`}
               aria-current={p === page ? 'page' : undefined}
-              className={`min-w-[2rem] h-8 rounded-md text-sm font-medium transition-colors duration-150
-                ${p === page
-                  ? 'bg-primary-500 text-white cursor-default'
-                  : 'text-neutral-700 hover:bg-neutral-100 cursor-pointer'
-                }`}
+              className={cn(
+                "min-w-[2rem] h-8 rounded-md text-sm font-medium transition-colors duration-150",
+                p === page
+                  ? "bg-primary text-white cursor-default"
+                  : "text-foreground hover:bg-muted cursor-pointer"
+              )}
             >
               {p}
             </button>

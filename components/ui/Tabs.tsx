@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useCallback } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface Tab {
   key: string;
@@ -57,7 +58,7 @@ export default function Tabs({
 
   if (variant === 'underline') {
     return (
-      <div className={`border-b border-border ${className}`}>
+      <div className={cn("border-b border-border", className)}>
         <nav
           ref={tabListRef}
           className="flex gap-0 -mb-px overflow-x-auto"
@@ -73,21 +74,21 @@ export default function Tabs({
                 aria-selected={isActive}
                 tabIndex={isActive ? 0 : -1}
                 onClick={() => onTabChange(tab.key)}
-                className={`
-                  whitespace-nowrap border-b-2 font-medium transition-colors
-                  ${size === 'sm' ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}
-                  ${isActive
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
-                  }
-                `}
+                className={cn(
+                  "whitespace-nowrap border-b-2 font-medium transition-colors",
+                  size === 'sm' ? "px-3 py-2 text-xs" : "px-4 py-3 text-sm",
+                  isActive
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-input"
+                )}
               >
                 {tab.label}
                 {tab.count != null && (
                   <span
-                    className={`ml-2 px-1.5 py-0.5 rounded-full text-xs font-semibold ${
-                      isActive ? 'bg-primary-100 text-primary-700' : 'bg-neutral-100 text-neutral-600'
-                    }`}
+                    className={cn(
+                      "ml-2 px-1.5 py-0.5 rounded-full text-xs font-semibold",
+                      isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                    )}
                   >
                     {tab.count}
                   </span>
@@ -104,7 +105,7 @@ export default function Tabs({
   return (
     <div
       ref={tabListRef}
-      className={`flex flex-wrap gap-1 p-1 bg-neutral-100 rounded-lg ${className}`}
+      className={cn("flex flex-wrap gap-1 p-1 bg-muted rounded-lg", className)}
       role="tablist"
       onKeyDown={handleKeyDown}
     >
@@ -117,21 +118,21 @@ export default function Tabs({
             aria-selected={isActive}
             tabIndex={isActive ? 0 : -1}
             onClick={() => onTabChange(tab.key)}
-            className={`
-              rounded-md font-medium transition-all
-              ${size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'}
-              ${isActive
-                ? 'bg-primary-500 text-white shadow-sm'
-                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200'
-              }
-            `}
+            className={cn(
+              "rounded-md font-medium transition-all",
+              size === 'sm' ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
+              isActive
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-accent"
+            )}
           >
             {tab.label}
             {tab.count != null && (
               <span
-                className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${
-                  isActive ? 'bg-primary-400/30 text-white' : 'bg-neutral-200 text-neutral-600'
-                }`}
+                className={cn(
+                  "ml-1.5 px-1.5 py-0.5 rounded-full text-xs font-semibold",
+                  isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+                )}
               >
                 {tab.count}
               </span>

@@ -1,3 +1,5 @@
+import { cn } from '@/lib/utils';
+
 export interface DividerProps {
   /** Texto opcional exibido no centro do divisor */
   label?: string;
@@ -16,16 +18,16 @@ export default function Divider({
       <div
         role="separator"
         aria-orientation="vertical"
-        className={`inline-block w-px bg-border self-stretch mx-2 ${className}`}
+        className={cn("inline-block w-px bg-border self-stretch mx-2", className)}
       />
     );
   }
 
   if (label) {
     return (
-      <div role="separator" className={`flex items-center gap-3 my-4 ${className}`}>
+      <div role="separator" className={cn("flex items-center gap-3 my-4", className)}>
         <div className="flex-1 h-px bg-border" />
-        <span className="text-sm text-muted font-medium whitespace-nowrap">{label}</span>
+        <span className="text-sm text-muted-foreground font-medium whitespace-nowrap">{label}</span>
         <div className="flex-1 h-px bg-border" />
       </div>
     );
@@ -34,7 +36,7 @@ export default function Divider({
   return (
     <hr
       role="separator"
-      className={`border-0 h-px bg-border my-4 ${className}`}
+      className={cn("border-0 h-px bg-border my-4", className)}
     />
   );
 }

@@ -6,6 +6,7 @@
 'use client';
 
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import Textarea from '@/components/ui/Textarea';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
@@ -46,7 +47,7 @@ export default function ProntuarioEditor({
   };
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={cn("space-y-4", className)}>
       {error && <Alert type="error">{error}</Alert>}
 
       <Textarea
@@ -73,21 +74,21 @@ export default function ProntuarioEditor({
       {/* Histórico */}
       {entries.length > 0 && (
         <div className="space-y-3 border-t pt-4">
-          <h3 className="text-sm font-semibold text-neutral-700">Histórico</h3>
+          <h3 className="text-sm font-semibold text-foreground">Histórico</h3>
           {entries.map((entry) => (
             <div
               key={entry.id}
-              className="p-3 bg-surface-secondary rounded-lg border border-border"
+              className="p-3 bg-muted rounded-lg border border-border"
             >
               <div className="flex justify-between items-start mb-1">
                 <span className="text-sm font-medium text-foreground">
                   {entry.autor_nome}
                 </span>
-                <span className="text-xs text-muted">
+                <span className="text-xs text-muted-foreground">
                   {formatarDataCompleta(entry.created_at)}
                 </span>
               </div>
-              <p className="text-sm text-neutral-700 whitespace-pre-wrap">
+              <p className="text-sm text-foreground whitespace-pre-wrap">
                 {entry.texto}
               </p>
             </div>

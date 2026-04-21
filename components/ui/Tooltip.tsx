@@ -63,7 +63,7 @@ export default function Tooltip({
           role="tooltip"
           className={`
             absolute z-50 px-2.5 py-1.5 text-xs font-medium
-            bg-neutral-900 text-white rounded-lg shadow-lg
+            bg-foreground text-background rounded-lg shadow-lg
             whitespace-nowrap pointer-events-none
             ${positionClasses[position]}
           `.trim()}

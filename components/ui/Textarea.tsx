@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, forwardRef } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface TextareaProps {
   label: string;
@@ -42,8 +43,8 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     const belowMin = minLength ? value.length < minLength && value.length > 0 : false;
 
     return (
-      <div className={`w-full ${className}`}>
-        <label htmlFor={id} className="block text-sm font-medium text-neutral-700 mb-1">
+      <div className={cn("w-full", className)}>
+        <label htmlFor={id} className="block text-sm font-medium text-foreground mb-1">
           {label}
           {required && <span className="text-error-500 ml-0.5" aria-hidden="true">*</span>}
         </label>
@@ -61,16 +62,15 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           maxLength={maxLength}
           aria-invalid={!!error}
           aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
-          className={`
-            w-full px-3 py-2 border rounded-lg text-sm resize-y
-            transition-colors duration-200
-            focus:outline-none focus:ring-2 focus:border-transparent
-            disabled:bg-neutral-50 disabled:text-neutral-500 disabled:cursor-not-allowed
-            ${error
-              ? 'border-error-300 focus:ring-error-400 text-error-900 placeholder-error-300'
-              : 'border-neutral-300 focus:ring-primary-500'
-            }
-          `.trim()}
+          className={cn(
+            "w-full px-3 py-2 border rounded-lg text-sm resize-y",
+            "transition-colors duration-200",
+            "focus:outline-none focus:ring-2 focus:border-transparent",
+            "disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed",
+            error
+              ? "border-error-300 focus:ring-error-400 text-error-900 placeholder-error-300"
+              : "border-input focus:ring-ring"
+          )}
         />
 
         <div className="flex justify-between mt-1">
@@ -81,7 +81,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
               </p>
             )}
             {!error && hint && (
-              <p id={`${id}-hint`} className="text-sm text-neutral-500">
+              <p id={`${id}-hint`} className="text-sm text-muted-foreground">
                 {hint}
               </p>
             )}
@@ -95,7 +95,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           {maxLength != null && (
             <span
               className={`text-xs ${
-                remaining !== null && remaining <= 20 ? 'text-error-500 font-medium' : 'text-neutral-400'
+                remaining !== null && remaining <= 20 ? 'text-error-500 font-medium' : 'text-muted-foreground'
               }`}
             >
               {value.length}/{maxLength}
@@ -109,3 +109,5 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
 
 Textarea.displayName = 'Textarea';
 export default Textarea;
+
+export { Textarea };

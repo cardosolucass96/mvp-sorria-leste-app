@@ -122,13 +122,13 @@ export default function TrocarSenhaModal({ isOpen, onClose }: TrocarSenhaModalPr
         />
 
         {erro && (
-          <div className="bg-error-50 border border-error-200 text-error-700 px-4 py-3 rounded-lg text-sm">
+          <div className="bg-error-500/10 border border-error-500/20 text-error-600 dark:text-error-400 px-4 py-3 rounded-lg text-sm">
             {erro}
           </div>
         )}
 
         {sucesso && (
-          <div className="bg-success-50 border border-success-200 text-success-700 px-4 py-3 rounded-lg text-sm">
+          <div className="bg-success-500/10 border border-success-500/20 text-success-600 dark:text-success-400 px-4 py-3 rounded-lg text-sm">
             {sucesso}
           </div>
         )}

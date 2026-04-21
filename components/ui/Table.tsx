@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { cn } from '@/lib/utils';
 import { Inbox, ChevronsUpDown, ChevronUp, ChevronDown } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -41,7 +42,7 @@ function SkeletonRow({ cols, rowIndex = 0 }: { cols: number; rowIndex?: number }
     <tr>
       {Array.from({ length: cols }).map((_, i) => (
         <td key={i} className="px-4 py-3">
-          <div className="h-4 bg-neutral-200 rounded animate-pulse" style={{ width: `${50 + ((rowIndex * 17 + i * 13) % 40)}%` }} />
+          <div className="h-4 bg-muted rounded animate-pulse" style={{ width: `${50 + ((rowIndex * 17 + i * 13) % 40)}%` }} />
         </td>
       ))}
     </tr>
@@ -55,7 +56,7 @@ export default function Table<T>({
   data,
   loading = false,
   emptyMessage = 'Nenhum registro encontrado',
-  emptyIcon = <Inbox className="w-8 h-8 text-neutral-300" />,
+  emptyIcon = <Inbox className="w-8 h-8 text-muted-foreground/50" />,
   onRowClick,
   keyExtractor,
   stickyHeader = false,
@@ -75,35 +76,35 @@ export default function Table<T>({
   };
 
   const SortIcon = ({ field }: { field: string }) => {
-    if (sortKey !== field) return <ChevronsUpDown className="w-3.5 h-3.5 text-primary-400" />;
+    if (sortKey !== field) return <ChevronsUpDown className="w-3.5 h-3.5 text-primary/70" />;
     return sortDir === 'asc'
-      ? <ChevronUp className="w-3.5 h-3.5 text-primary-700" />
-      : <ChevronDown className="w-3.5 h-3.5 text-primary-700" />;
+      ? <ChevronUp className="w-3.5 h-3.5 text-primary" />
+      : <ChevronDown className="w-3.5 h-3.5 text-primary" />;
   };
 
   return (
-    <div className={`overflow-x-auto rounded-xl border border-border-light ${className}`}>
+    <div className={cn("overflow-x-auto rounded-xl border border-border", className)}>
       <table className="w-full text-sm" aria-busy={loading || undefined}>
         {caption && <caption className="sr-only">{caption}</caption>}
 
-        <thead className="bg-primary-50">
+        <thead className="bg-muted">
           <tr>
             {columns.map((col) => (
               <th
                 key={col.key}
                 scope="col"
-                className={`
-                  px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900
-                  ${alignClass(col.align)}
-                  ${stickyHeader ? 'sticky top-0 bg-primary-50 z-10' : ''}
-                `}
+                className={cn(
+                  "px-4 py-3 text-xs font-semibold uppercase tracking-wider text-foreground",
+                  alignClass(col.align),
+                  stickyHeader && "sticky top-0 bg-muted z-10"
+                )}
                 style={col.width ? { width: col.width } : undefined}
               >
                 {col.sortField && onSort ? (
                   <button
                     type="button"
                     onClick={() => handleSort(col.sortField!)}
-                    className="inline-flex items-center gap-1 hover:text-primary-700 transition-colors"
+                    className="inline-flex items-center gap-1 hover:text-primary transition-colors"
                   >
                     {col.label}
                     <SortIcon field={col.sortField} />
@@ -116,7 +117,7 @@ export default function Table<T>({
           </tr>
         </thead>
 
-        <tbody className="divide-y divide-neutral-100 bg-surface">
+        <tbody className="divide-y divide-border bg-background">
           {loading ? (
             <>
               <SkeletonRow cols={columns.length} rowIndex={0} />
@@ -126,7 +127,7 @@ export default function Table<T>({
           ) : data.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="px-4 py-12 text-center">
-                <div className="flex flex-col items-center gap-2 text-muted">
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
                   <div aria-hidden="true">{emptyIcon}</div>
                   <p className="text-sm">{emptyMessage}</p>
                 </div>
@@ -140,11 +141,11 @@ export default function Table<T>({
                 onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(item); } } : undefined}
                 tabIndex={onRowClick ? 0 : undefined}
                 role={onRowClick ? 'row' : undefined}
-                className={`
-                  transition-colors
-                  ${onRowClick ? 'cursor-pointer hover:bg-primary-50/50 focus:bg-primary-50/50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500' : ''}
-                  ${index % 2 === 1 ? 'bg-neutral-50/30' : ''}
-                `}
+                className={cn(
+                  "transition-colors",
+                  onRowClick && "cursor-pointer hover:bg-muted/50 focus:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring",
+                  index % 2 === 1 && "bg-muted/30"
+                )}
               >
                 {columns.map((col) => (
                   <td key={col.key} className={`px-4 py-3 ${alignClass(col.align)}`}>

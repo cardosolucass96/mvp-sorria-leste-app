@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { cn } from '@/lib/utils';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
@@ -82,7 +83,7 @@ export default function AnexosGallery({
   };
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={cn("space-y-4", className)}>
       {/* Upload */}
       <div className="flex items-center gap-3">
         <Button
@@ -127,14 +128,14 @@ export default function AnexosGallery({
                   className="w-full h-32 object-cover"
                 />
               ) : (
-                <div className="w-full h-32 flex items-center justify-center bg-surface-secondary">
+                <div className="w-full h-32 flex items-center justify-center bg-muted">
                   <span className="text-3xl">📄</span>
                 </div>
               )}
 
               <div className="p-2">
-                <p className="text-xs font-medium text-neutral-700 truncate">{anexo.nome}</p>
-                <p className="text-xs text-muted">{formatFileSize(anexo.tamanho)}</p>
+                <p className="text-xs font-medium text-foreground truncate">{anexo.nome}</p>
+                <p className="text-xs text-muted-foreground">{formatFileSize(anexo.tamanho)}</p>
               </div>
 
               {/* Delete button overlay */}
@@ -170,13 +171,13 @@ export default function AnexosGallery({
           ) : (
             <div className="text-center py-8">
               <span className="text-5xl mb-4 block">📄</span>
-              <p className="text-neutral-600">{previewAnexo.nome}</p>
-              <p className="text-sm text-muted">{formatFileSize(previewAnexo.tamanho)}</p>
+              <p className="text-muted-foreground">{previewAnexo.nome}</p>
+              <p className="text-sm text-muted-foreground">{formatFileSize(previewAnexo.tamanho)}</p>
               <a
                 href={previewAnexo.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 inline-block text-info-600 hover:text-info-800 font-medium"
+                className="mt-4 inline-block text-info-600 hover:text-info-600 dark:text-info-400 font-medium"
               >
                 Abrir arquivo →
               </a>

@@ -5,6 +5,8 @@
 
 'use client';
 
+import { cn } from '@/lib/utils';
+
 export interface ViewModeOption {
   key: string;
   label: string;
@@ -25,7 +27,7 @@ export default function ViewModeToggle({
   className = '',
 }: ViewModeToggleProps) {
   return (
-    <div className={`inline-flex bg-neutral-100 rounded-lg p-1 ${className}`} role="tablist">
+    <div className={cn("inline-flex bg-muted rounded-lg p-1", className)} role="tablist">
       {options.map((option) => {
         const isActive = option.key === active;
         return (
@@ -34,14 +36,12 @@ export default function ViewModeToggle({
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(option.key)}
-            className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium
-              transition-all duration-200
-              ${isActive
-                ? 'bg-surface text-primary-700 shadow-sm'
-                : 'text-muted hover:text-neutral-700'
-              }
-            `.trim()}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200",
+              isActive
+                ? "bg-background text-primary shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
           >
             {option.icon && <span>{option.icon}</span>}
             {option.label}

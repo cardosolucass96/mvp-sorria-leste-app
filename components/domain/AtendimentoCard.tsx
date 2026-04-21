@@ -41,21 +41,21 @@ export default function AtendimentoCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-primary-50 flex items-center justify-center shrink-0" aria-hidden="true">
-              <Stethoscope className="w-5 h-5 text-primary-500" />
+            <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0" aria-hidden="true">
+              <Stethoscope className="w-5 h-5 text-primary" />
             </div>
             <div className="min-w-0">
               <h3 className="font-semibold text-lg text-foreground truncate">
                 {atendimento.cliente_nome}
               </h3>
-              <p className="text-sm text-muted">
+              <p className="text-sm text-muted-foreground">
                 Atendimento #{atendimento.id} • {formatarDataHora(atendimento.created_at)}
               </p>
             </div>
           </div>
 
           {!compact && (
-            <div className="mt-3 flex flex-wrap gap-4 text-sm text-neutral-500">
+            <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground">
               {atendimento.total != null && (
                 <span className="flex items-center gap-1">
                   <DollarSign className="w-3.5 h-3.5" />

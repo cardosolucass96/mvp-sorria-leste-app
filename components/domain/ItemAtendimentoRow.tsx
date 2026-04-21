@@ -48,22 +48,22 @@ export default function ItemAtendimentoRow({
   const dentesFormatados = formatarDentes(item.dentes);
 
   return (
-    <tr className="hover:bg-neutral-50">
+    <tr className="hover:bg-muted">
       <td className="px-4 py-3">
         <div className="font-medium text-foreground">
           {item.procedimento_nome}
           {item.dente_unico && (
-            <span className="text-sm text-muted font-normal ml-1">• Dente {item.dente_unico}</span>
+            <span className="text-sm text-muted-foreground font-normal ml-1">• Dente {item.dente_unico}</span>
           )}
           {item.etapa_label && (
-            <span className="text-sm text-muted font-normal ml-1">— {item.etapa_label}</span>
+            <span className="text-sm text-muted-foreground font-normal ml-1">— {item.etapa_label}</span>
           )}
         </div>
         {item.observacoes && (
-          <div className="text-xs text-muted mt-0.5">{item.observacoes}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{item.observacoes}</div>
         )}
       </td>
-      <td className="px-4 py-3 text-neutral-600">
+      <td className="px-4 py-3 text-muted-foreground">
         {item.executor_nome || '-'}
       </td>
       <td className="px-4 py-3 text-right font-medium">
@@ -76,7 +76,7 @@ export default function ItemAtendimentoRow({
         {dentesFormatados ? (
           <Badge color="orange" size="sm">{dentesFormatados}</Badge>
         ) : (
-          <span className="text-neutral-400">-</span>
+          <span className="text-muted-foreground">-</span>
         )}
       </td>
       {showActions && (

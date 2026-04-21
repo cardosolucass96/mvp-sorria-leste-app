@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import Breadcrumb, { type BreadcrumbItem } from './Breadcrumb';
 
 export interface PageHeaderProps {
@@ -22,7 +23,7 @@ export default function PageHeader({
   className = '',
 }: PageHeaderProps) {
   return (
-    <div className={`mb-6 ${className}`}>
+    <div className={cn("mb-6", className)}>
       {breadcrumb && breadcrumb.length > 0 && (
         <Breadcrumb items={breadcrumb} className="mb-3" />
       )}
@@ -30,7 +31,7 @@ export default function PageHeader({
       {!breadcrumb && backHref && (
         <Link
           href={backHref}
-          className="inline-flex items-center gap-1 text-sm text-muted hover:text-primary-600 mb-3 transition-colors"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary mb-3 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -43,12 +44,12 @@ export default function PageHeader({
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-3">
             {icon && (
-              <span className="text-primary-500" aria-hidden="true">{icon}</span>
+              <span className="text-primary" aria-hidden="true">{icon}</span>
             )}
             {title}
           </h1>
           {description && (
-            <p className="mt-1 text-sm text-muted">{description}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           )}
         </div>
 

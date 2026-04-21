@@ -150,7 +150,7 @@ export default function ProcedimentoForm({
           </div>
         )}
 
-        <div className="p-3 bg-primary-50 border border-primary-200 rounded-lg">
+        <div className="p-3 bg-muted border border-primary/20 rounded-lg">
           <Checkbox
             label="Cobrar por dente"
             name="por_dente"

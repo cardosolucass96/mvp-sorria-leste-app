@@ -7,6 +7,7 @@
 'use client';
 
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Textarea from '@/components/ui/Textarea';
@@ -93,7 +94,8 @@ export default function ClienteForm({
     else if (formData.nome.trim().length < 2) errors.nome = 'Nome deve ter ao menos 2 caracteres';
     if (formData.cpf && !validarCPF(unmask(formData.cpf))) errors.cpf = 'CPF inválido';
     if (formData.email && !validarEmail(formData.email)) errors.email = 'Email inválido';
-    if (formData.telefone && !validarTelefone(unmask(formData.telefone))) errors.telefone = 'Telefone inválido';
+    if (!formData.telefone.trim()) errors.telefone = 'Telefone é obrigatório';
+    else if (!validarTelefone(unmask(formData.telefone))) errors.telefone = 'Telefone inválido';
     if (!formData.origem) errors.origem = 'Origem é obrigatória';
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -106,7 +108,7 @@ export default function ClienteForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className={`space-y-6 ${className}`}>
+    <form onSubmit={handleSubmit} className={cn("space-y-6", className)}>
       {error && (
         <Alert type="error">{error}</Alert>
       )}
@@ -155,7 +157,7 @@ export default function ClienteForm({
               const m = hoje.getMonth() - nasc.getMonth();
               if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
               return idade >= 0 ? (
-                <p className="text-sm text-gray-500 mt-1">{idade} anos</p>
+                <p className="text-sm text-muted-foreground mt-1">{idade} anos</p>
               ) : null;
             })()}
           </div>
@@ -204,6 +206,7 @@ export default function ClienteForm({
             value={formData.telefone}
             onChange={handleChange('telefone')}
             mask="telefone"
+            required
             placeholder="(00) 00000-0000"
             disabled={loading}
             error={fieldErrors.telefone}

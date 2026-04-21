@@ -1,8 +1,8 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, useEffect } from 'react';
+import { cn } from '@/lib/utils';
 import useDebounce from '@/lib/utils/useDebounce';
-import { useEffect } from 'react';
 
 export interface SearchInputProps {
   value: string;
@@ -31,14 +31,14 @@ export default function SearchInput({
   }, [debouncedValue, onSearch]);
 
   return (
-    <div className={`w-full ${className}`}>
+    <div className={cn("w-full", className)}>
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-neutral-700 mb-1">
+        <label htmlFor={id} className="block text-sm font-medium text-foreground mb-1">
           {label}
         </label>
       )}
       <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -49,13 +49,13 @@ export default function SearchInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="w-full pl-10 pr-3 py-2 border border-input rounded-lg text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
         />
         {value && (
           <button
             type="button"
             onClick={() => onChange('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors"
             aria-label="Limpar busca"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -1,6 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface FormFieldProps {
   label: string;
@@ -22,10 +23,10 @@ export default function FormField({
   children,
 }: FormFieldProps) {
   return (
-    <div className={`space-y-1 ${className}`}>
+    <div className={cn("flex flex-col gap-1", className)}>
       <label
         htmlFor={htmlFor}
-        className="block text-sm font-medium text-neutral-700"
+        className="block text-sm font-medium text-foreground"
       >
         {label}
         {required && <span className="text-error-500 ml-0.5" aria-hidden="true">*</span>}
@@ -40,7 +41,7 @@ export default function FormField({
       )}
 
       {hint && !error && (
-        <p className="text-sm text-muted" id={htmlFor ? `${htmlFor}-hint` : undefined}>
+        <p className="text-sm text-muted-foreground" id={htmlFor ? `${htmlFor}-hint` : undefined}>
           {hint}
         </p>
       )}

@@ -6,6 +6,7 @@
 'use client';
 
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
@@ -72,7 +73,7 @@ export default function PagamentoForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className={`space-y-4 ${className}`}>
+    <form onSubmit={handleSubmit} className={cn("space-y-4", className)}>
       {error && <Alert type="error">{error}</Alert>}
 
       <Select

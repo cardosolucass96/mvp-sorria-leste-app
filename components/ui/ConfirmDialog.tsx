@@ -1,9 +1,17 @@
 'use client';
 
-import Modal from './Modal';
+import { cn } from '@/lib/utils';
 import Button from './Button';
 import { Trash2, AlertTriangle, Info } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+} from '@/components/ui/_shadcn/alert-dialog';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -40,14 +48,26 @@ export default function ConfirmDialog({
   type = 'danger',
   loading = false,
 }: ConfirmDialogProps) {
+  const Icon = typeIcons[type];
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={title}
-      size="sm"
-      footer={
-        <>
+    <AlertDialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <AlertDialogContent size="default">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>
+            <span className="flex gap-3 items-start">
+              <Icon className="size-5 shrink-0 text-muted-foreground mt-0.5" aria-hidden="true" />
+              <span>{message}</span>
+            </span>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={loading}>
             {cancelLabel}
           </Button>
@@ -58,13 +78,8 @@ export default function ConfirmDialog({
           >
             {confirmLabel}
           </Button>
-        </>
-      }
-    >
-      <div className="flex gap-4 items-start">
-        {(() => { const Icon = typeIcons[type]; return <Icon className="w-6 h-6 shrink-0 text-neutral-500 mt-0.5" aria-hidden="true" />; })()}
-        <p className="text-sm text-neutral-600 leading-relaxed">{message}</p>
-      </div>
-    </Modal>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

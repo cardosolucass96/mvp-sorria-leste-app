@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import { Info, CheckCircle, AlertTriangle, XCircle, X } from 'lucide-react';
 
 export interface AlertProps {
@@ -14,27 +15,27 @@ export interface AlertProps {
 
 const typeConfig = {
   info: {
-    bg: 'bg-info-50',
-    border: 'border-info-200',
-    text: 'text-info-800',
+    bg: 'bg-info-500/10',
+    border: 'border-info-500/20',
+    text: 'text-info-600 dark:text-info-400',
     Icon: Info,
   },
   success: {
-    bg: 'bg-success-50',
-    border: 'border-success-200',
-    text: 'text-success-800',
+    bg: 'bg-success-500/10',
+    border: 'border-success-500/20',
+    text: 'text-success-600 dark:text-success-400',
     Icon: CheckCircle,
   },
   warning: {
-    bg: 'bg-warning-50',
-    border: 'border-warning-200',
-    text: 'text-warning-800',
+    bg: 'bg-warning-500/10',
+    border: 'border-warning-500/20',
+    text: 'text-warning-600 dark:text-warning-400',
     Icon: AlertTriangle,
   },
   error: {
-    bg: 'bg-error-50',
-    border: 'border-error-200',
-    text: 'text-error-800',
+    bg: 'bg-error-500/10',
+    border: 'border-error-500/20',
+    text: 'text-error-600 dark:text-error-400',
     Icon: XCircle,
   },
 } as const;
@@ -61,7 +62,7 @@ export default function Alert({
     <div
       role={type === 'error' || type === 'warning' ? 'alert' : 'status'}
       aria-live={type === 'error' || type === 'warning' ? 'assertive' : 'polite'}
-      className={`flex gap-3 p-4 rounded-lg border ${bg} ${border} ${text} ${className}`.trim()}
+      className={cn("flex gap-3 p-4 rounded-lg border", bg, border, text, className)}
     >
       <Icon className="shrink-0 w-5 h-5 mt-0.5" aria-hidden="true" />
 

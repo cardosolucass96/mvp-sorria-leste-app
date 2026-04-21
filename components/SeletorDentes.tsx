@@ -28,9 +28,11 @@ interface SeletorDentesProps {
   valor: DenteFaceInput[];
   onChange: (valor: DenteFaceInput[]) => void;
   disabled?: boolean;
+  /** Quando false (default), oculta a seleção de faces por dente — usado para procedimentos por_dente que não usam faces (ex: canal). */
+  mostrarFaces?: boolean;
 }
 
-export default function SeletorDentes({ valor, onChange, disabled = false }: SeletorDentesProps) {
+export default function SeletorDentes({ valor, onChange, disabled = false, mostrarFaces = false }: SeletorDentesProps) {
   const [expandido, setExpandido] = useState(false);
 
   const dentesSelecionados = valor.map(d => d.dente);
@@ -82,11 +84,11 @@ export default function SeletorDentes({ valor, onChange, disabled = false }: Sel
             type="button"
             onClick={() => setExpandido(!expandido)}
             disabled={disabled}
-            className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center gap-1"
+            className="text-sm text-primary hover:text-primary font-medium flex items-center gap-1"
           >
             {expandido ? '▼' : '▶'} Selecionar dentes
             {dentesSelecionados.length > 0 && (
-              <span className="ml-2 px-2 py-0.5 bg-primary-100 text-primary-800 rounded-full text-xs">
+              <span className="ml-2 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs">
                 {dentesSelecionados.length} {dentesSelecionados.length === 1 ? 'dente' : 'dentes'}
               </span>
             )}
@@ -96,7 +98,7 @@ export default function SeletorDentes({ valor, onChange, disabled = false }: Sel
               type="button"
               onClick={limpar}
               disabled={disabled}
-              className="text-xs text-muted hover:text-neutral-700"
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
               Limpar
             </button>
@@ -104,7 +106,7 @@ export default function SeletorDentes({ valor, onChange, disabled = false }: Sel
         </div>
 
         {expandido && (
-          <div className="border border-border rounded-lg p-4 bg-surface-secondary space-y-3">
+          <div className="border border-border rounded-lg p-4 bg-muted space-y-3">
             {Object.entries(DENTES_PERMANENTES).map(([quadrante, dentes]) => {
               const todosSelecionados = dentes.every(d => dentesSelecionados.includes(d));
               const algunsSelecionados =
@@ -115,14 +117,14 @@ export default function SeletorDentes({ valor, onChange, disabled = false }: Sel
                     type="button"
                     onClick={() => selecionarQuadrante(dentes)}
                     disabled={disabled}
-                    className="text-xs font-medium text-neutral-600 hover:text-primary-600 flex items-center gap-1"
+                    className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1"
                   >
                     <input
                       type="checkbox"
                       checked={todosSelecionados}
                       ref={input => { if (input) input.indeterminate = algunsSelecionados; }}
                       onChange={() => {}}
-                      className="rounded text-primary-600"
+                      className="rounded text-primary"
                     />
                     {quadrante}
                   </button>
@@ -137,8 +139,8 @@ export default function SeletorDentes({ valor, onChange, disabled = false }: Sel
                           disabled={disabled}
                           className={`px-2 py-1.5 text-xs font-medium rounded transition-all
                             ${selecionado
-                              ? 'bg-primary-600 text-white shadow-sm'
-                              : 'bg-surface text-neutral-700 border border-neutral-300 hover:border-primary-400 hover:bg-primary-50'
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-background text-foreground border border-input hover:border-primary/40 hover:bg-muted'
                             }
                             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                         >
@@ -155,9 +157,9 @@ export default function SeletorDentes({ valor, onChange, disabled = false }: Sel
       </div>
 
       {/* Seletor de faces por dente */}
-      {valor.length > 0 && (
+      {mostrarFaces && valor.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted uppercase tracking-wide">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Faces a tratar por dente
           </p>
           <div className="space-y-1.5">
@@ -166,9 +168,9 @@ export default function SeletorDentes({ valor, onChange, disabled = false }: Sel
               .map(item => (
                 <div
                   key={item.dente}
-                  className="flex items-center gap-3 bg-surface-secondary rounded-lg px-3 py-2"
+                  className="flex items-center gap-3 bg-muted rounded-lg px-3 py-2"
                 >
-                  <span className="text-sm font-bold text-primary-700 w-8 shrink-0">
+                  <span className="text-sm font-bold text-primary w-8 shrink-0">
                     {item.dente}
                   </span>
                   <div className="flex gap-1.5 flex-wrap flex-1">
@@ -184,7 +186,7 @@ export default function SeletorDentes({ valor, onChange, disabled = false }: Sel
                           className={`px-2 py-1 text-xs font-semibold rounded transition-all
                             ${ativa
                               ? 'bg-info-600 text-white'
-                              : 'bg-surface text-neutral-600 border border-neutral-300 hover:border-info-400 hover:bg-info-50'
+                              : 'bg-background text-muted-foreground border border-input hover:border-info-500/40 hover:bg-info-500/10'
                             }
                             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                         >
@@ -199,7 +201,7 @@ export default function SeletorDentes({ valor, onChange, disabled = false }: Sel
                 </div>
               ))}
           </div>
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted-foreground">
             V = Vestibular · L = Lingual/Palatina · M = Mesial · D = Distal · O = Oclusal/Incisal
           </p>
         </div>

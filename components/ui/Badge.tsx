@@ -1,19 +1,22 @@
+import { cn } from '@/lib/utils';
+
 export interface BadgeProps {
   children: React.ReactNode;
-  color?: 'gray' | 'orange' | 'amber' | 'green' | 'red' | 'blue' | 'evaluation' | 'yellow';
+  color?: 'gray' | 'orange' | 'amber' | 'green' | 'red' | 'blue' | 'purple' | 'evaluation' | 'yellow';
   size?: 'sm' | 'md';
   className?: string;
 }
 
 const colorClasses: Record<NonNullable<BadgeProps['color']>, string> = {
-  gray: 'bg-neutral-100 text-neutral-800',
-  orange: 'bg-primary-100 text-primary-800',
-  amber: 'bg-warning-100 text-warning-800',
-  green: 'bg-success-100 text-success-800',
-  red: 'bg-error-100 text-error-800',
-  blue: 'bg-info-100 text-info-800',
-  evaluation: 'bg-evaluation-100 text-evaluation-800',
-  yellow: 'bg-warning-100 text-warning-800',
+  gray: 'bg-muted text-foreground',
+  orange: 'bg-primary/10 text-primary',
+  amber: 'bg-warning-500/10 text-warning-600 dark:text-warning-400',
+  green: 'bg-success-500/10 text-success-600 dark:text-success-400',
+  red: 'bg-error-500/10 text-error-600 dark:text-error-400',
+  blue: 'bg-info-500/10 text-info-600 dark:text-info-400',
+  purple: 'bg-evaluation-500/10 text-evaluation-600 dark:text-evaluation-400',
+  evaluation: 'bg-evaluation-500/10 text-evaluation-600 dark:text-evaluation-400',
+  yellow: 'bg-warning-500/10 text-warning-600 dark:text-warning-400',
 };
 
 const sizeClasses: Record<NonNullable<BadgeProps['size']>, string> = {
@@ -29,12 +32,12 @@ export default function Badge({
 }: BadgeProps) {
   return (
     <span
-      className={`
-        inline-flex items-center font-semibold rounded-full whitespace-nowrap
-        ${colorClasses[color]}
-        ${sizeClasses[size]}
-        ${className}
-      `.trim()}
+      className={cn(
+        "inline-flex items-center font-semibold rounded-full whitespace-nowrap",
+        colorClasses[color],
+        sizeClasses[size],
+        className
+      )}
     >
       {children}
     </span>
