@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, UserCheck, UserX, MessageCircle, CalendarClock, X, RefreshCw, Plus } from 'lucide-react';
+import { Calendar, UserCheck, UserX, MessageCircle, CalendarClock, X, RefreshCw, Plus, FileText, List, CalendarDays } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingState from '@/components/ui/LoadingState';
 import Alert from '@/components/ui/Alert';
@@ -14,7 +14,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import Modal from '@/components/ui/Modal';
 import Textarea from '@/components/ui/Textarea';
-import { StatusBadge } from '@/components/domain';
+import { StatusBadge, ProntuarioDrawer, AgendaCalendario } from '@/components/domain';
 import { useToast } from '@/components/ui/Toast';
 import { formatarDataAgendada, formatarTelefone } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -125,6 +125,28 @@ export default function AgendaPage() {
 
   // Loading por grupo (clienteId_dataKey)
   const [grupoLoading, setGrupoLoading] = useState<string | null>(null);
+  const [drawerClienteId, setDrawerClienteId] = useState<number | null>(null);
+
+  // View mode + calendar state
+  const [viewMode, setViewMode] = useState<'lista' | 'calendario'>('lista');
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+
+  // Persistir viewMode no localStorage
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('agenda-view-mode') : null;
+    if (saved === 'calendario' || saved === 'lista') {
+      setViewMode(saved);
+    }
+  }, []);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('agenda-view-mode', viewMode);
+    }
+  }, [viewMode]);
 
   // Executores (para trocar executor)
   const [executores, setExecutores] = useState<Usuario[]>([]);
@@ -187,10 +209,20 @@ export default function AgendaPage() {
       const params = new URLSearchParams();
       if (filtroStatus) params.append('status', filtroStatus);
       if (busca) params.append('busca', busca);
-      if (dataInicio) params.append('data_inicio', dataInicio);
-      if (dataFim) params.append('data_fim', dataFim);
-      params.append('page', String(page));
-      params.append('limit', String(LIMIT));
+
+      if (viewMode === 'calendario') {
+        // No modo calendário, data_inicio/fim são os limites do mês visível
+        const inicioMes = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+        const fimMes = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+        params.append('data_inicio', formatDate(inicioMes));
+        params.append('data_fim', formatDate(fimMes));
+        params.append('limit', '500');
+      } else {
+        if (dataInicio) params.append('data_inicio', dataInicio);
+        if (dataFim) params.append('data_fim', dataFim);
+        params.append('page', String(page));
+        params.append('limit', String(LIMIT));
+      }
       params.append('order_by', 'cliente_nome');
       params.append('order_dir', 'asc');
 
@@ -213,7 +245,7 @@ export default function AgendaPage() {
     } finally {
       setLoading(false);
     }
-  }, [filtroStatus, busca, dataInicio, dataFim, page, isDentista, user, unitFetch]);
+  }, [filtroStatus, busca, dataInicio, dataFim, page, isDentista, user, unitFetch, viewMode, calendarMonth]);
 
   useEffect(() => {
     carregarAgendamentos();
@@ -667,12 +699,22 @@ export default function AgendaPage() {
 
           {/* Ações */}
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setDrawerClienteId(grupo.cliente_id); }}
+              title="Ver prontuário"
+              className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1.5 rounded-lg border border-border text-muted hover:text-primary-700 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Prontuário</span>
+            </button>
             {isAdminOrAtendente && grupo.cliente_telefone && (
               <a
                 href={gerarLinkWhatsApp(grupo)}
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Lembrete WhatsApp"
+                onClick={(e) => e.stopPropagation()}
                 className="inline-flex items-center justify-center p-1.5 rounded text-[#25D366] hover:bg-[#25D366]/10 transition-colors"
               >
                 <MessageCircle className="w-4 h-4" />
@@ -801,10 +843,38 @@ export default function AgendaPage() {
         icon={<Calendar className="w-7 h-7" />}
         description={isDentista ? `Seus agendamentos, ${user?.nome}` : 'Gestão de retornos agendados'}
         actions={
-          <Button onClick={abrirNovoAgendamento}>
-            <Plus className="w-4 h-4 mr-1" />
-            Novo Agendamento
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border overflow-hidden text-sm">
+              <button
+                onClick={() => setViewMode('lista')}
+                className={`flex items-center gap-1.5 px-3 py-2 transition-colors ${
+                  viewMode === 'lista'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-surface text-muted hover:bg-surface-secondary'
+                }`}
+                title="Lista"
+              >
+                <List className="w-4 h-4" />
+                <span className="hidden sm:inline">Lista</span>
+              </button>
+              <button
+                onClick={() => setViewMode('calendario')}
+                className={`flex items-center gap-1.5 px-3 py-2 transition-colors border-l border-border ${
+                  viewMode === 'calendario'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-surface text-muted hover:bg-surface-secondary'
+                }`}
+                title="Calendário"
+              >
+                <CalendarDays className="w-4 h-4" />
+                <span className="hidden sm:inline">Calendário</span>
+              </button>
+            </div>
+            <Button onClick={abrirNovoAgendamento}>
+              <Plus className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Novo Agendamento</span>
+            </Button>
+          </div>
         }
       />
 
@@ -830,38 +900,81 @@ export default function AgendaPage() {
               placeholder="Todos"
             />
           </div>
-          <div className="min-w-[160px]">
-            <Input label="Data início" name="dataInicio" type="date" value={dataInicio} onChange={(v) => { setDataInicio(v); setFiltroRapido(null); }} />
-          </div>
-          <div className="min-w-[160px]">
-            <Input label="Data fim" name="dataFim" type="date" value={dataFim} onChange={(v) => { setDataFim(v); setFiltroRapido(null); }} />
-          </div>
+          {viewMode === 'lista' && (
+            <>
+              <div className="min-w-[160px]">
+                <Input label="Data início" name="dataInicio" type="date" value={dataInicio} onChange={(v) => { setDataInicio(v); setFiltroRapido(null); }} />
+              </div>
+              <div className="min-w-[160px]">
+                <Input label="Data fim" name="dataFim" type="date" value={dataFim} onChange={(v) => { setDataFim(v); setFiltroRapido(null); }} />
+              </div>
+            </>
+          )}
           <Button type="submit" variant="secondary">Buscar</Button>
         </form>
 
-        {/* Filtros rápidos */}
-        <div className="flex gap-2 mt-3 pt-3 border-t border-border-light">
-          {FILTROS_RAPIDOS.map(f => (
-            <button
-              key={f.id}
-              onClick={() => aplicarFiltroRapido(f.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                filtroRapido === f.id
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-surface-secondary text-muted hover:text-foreground hover:bg-neutral-200'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        {/* Filtros rápidos — só no modo lista */}
+        {viewMode === 'lista' && (
+          <div className="flex gap-2 mt-3 pt-3 border-t border-border-light">
+            {FILTROS_RAPIDOS.map(f => (
+              <button
+                key={f.id}
+                onClick={() => aplicarFiltroRapido(f.id)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  filtroRapido === f.id
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-surface-secondary text-muted hover:text-foreground hover:bg-neutral-200'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="text-sm text-muted">
         {total > 0 ? `${agrupados.length} cliente(s) · ${total} agendamento(s)` : 'Nenhum resultado'}
       </div>
 
-      {agendamentos.length === 0 ? (
+      {viewMode === 'calendario' ? (
+        <div className="grid gap-6 md:grid-cols-[1fr_minmax(0,420px)]">
+          <AgendaCalendario
+            agendamentos={agendamentos}
+            month={calendarMonth}
+            onMonthChange={(d) => { setCalendarMonth(d); setSelectedDay(null); }}
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
+          />
+          <div className="space-y-3">
+            {(() => {
+              if (!selectedDay) {
+                return (
+                  <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted">
+                    Selecione um dia no calendário para ver os agendamentos.
+                  </div>
+                );
+              }
+              const dayKey = `${selectedDay.getFullYear()}-${String(selectedDay.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.getDate()).padStart(2, '0')}`;
+              const gruposDoDia = agrupadosComData.filter(g => g.data_key === dayKey);
+              const label = selectedDay.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+              if (gruposDoDia.length === 0) {
+                return (
+                  <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted">
+                    Nenhum agendamento em {label}.
+                  </div>
+                );
+              }
+              return (
+                <>
+                  <h3 className="text-sm font-semibold text-foreground capitalize">{label}</h3>
+                  {gruposDoDia.map(renderGrupoCard)}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      ) : agendamentos.length === 0 ? (
         <EmptyState
           title="Nenhum agendamento encontrado"
           description="Não há agendamentos que correspondam aos filtros selecionados."
@@ -890,7 +1003,7 @@ export default function AgendaPage() {
       )}
 
       {/* Paginação */}
-      {pages > 1 && (
+      {viewMode === 'lista' && pages > 1 && (
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted">Página {page} de {pages} · {total} registros</span>
           <div className="flex items-center gap-1">
@@ -1073,6 +1186,12 @@ export default function AgendaPage() {
           </div>
         </Modal>
       )}
+
+      <ProntuarioDrawer
+        clienteId={drawerClienteId}
+        open={drawerClienteId !== null}
+        onClose={() => setDrawerClienteId(null)}
+      />
 
       {/* Novo agendamento */}
       <Modal isOpen={novoDialog} onClose={() => setNovoDialog(false)} title="Novo Agendamento" size="md">

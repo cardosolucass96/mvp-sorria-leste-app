@@ -4,9 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
-import { Activity, LayoutList, Users } from 'lucide-react';
+import { Activity, LayoutList, Users, FileText } from 'lucide-react';
 import { PageHeader, Card, LoadingState, EmptyState, Alert, ConfirmDialog } from '@/components/ui';
-import { StatusBadge } from '@/components/domain';
+import { StatusBadge, ProntuarioDrawer } from '@/components/domain';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface Procedimento {
@@ -15,6 +15,7 @@ interface Procedimento {
   procedimento_nome: string;
   etapa_label: string | null;
   tem_etapas: number;
+  cliente_id: number;
   cliente_nome: string;
   executor_id: number | null;
   status: string;
@@ -65,6 +66,7 @@ export default function ExecucaoPage() {
     onConfirm: () => Promise<void>;
   }>({ isOpen: false, title: '', message: '', onConfirm: async () => {} });
   const [pegando, setPegando] = useState<number | null>(null);
+  const [drawerClienteId, setDrawerClienteId] = useState<number | null>(null);
 
   const carregarProcedimentos = useCallback(async () => {
     try {
@@ -117,11 +119,12 @@ export default function ExecucaoPage() {
 
   // Agrupamento por paciente (atendimento)
   const porPaciente = Object.values(
-    todos.reduce<Record<number, { atendimento_id: number; cliente_nome: string; itens: Procedimento[] }>>(
+    todos.reduce<Record<number, { atendimento_id: number; cliente_id: number; cliente_nome: string; itens: Procedimento[] }>>(
       (acc, proc) => {
         if (!acc[proc.atendimento_id]) {
           acc[proc.atendimento_id] = {
             atendimento_id: proc.atendimento_id,
+            cliente_id: proc.cliente_id,
             cliente_nome: proc.cliente_nome,
             itens: [],
           };
@@ -237,6 +240,7 @@ export default function ExecucaoPage() {
                 pegando={pegando}
                 onPegarTodos={confirmarPegarTodos}
                 onVerProcedimento={id => router.push(`/execucao/${id}`)}
+                onVerProntuario={setDrawerClienteId}
               />
               <PacienteSection
                 label="Pacientes Disponíveis"
@@ -247,6 +251,7 @@ export default function ExecucaoPage() {
                 pegando={pegando}
                 onPegarTodos={confirmarPegarTodos}
                 onVerProcedimento={id => router.push(`/execucao/${id}`)}
+                onVerProntuario={setDrawerClienteId}
               />
             </div>
           );
@@ -260,6 +265,11 @@ export default function ExecucaoPage() {
         message={confirmDialog.message}
         confirmLabel="Pegar todos"
         type="info"
+      />
+      <ProntuarioDrawer
+        clienteId={drawerClienteId}
+        open={drawerClienteId !== null}
+        onClose={() => setDrawerClienteId(null)}
       />
     </div>
   );
@@ -291,12 +301,13 @@ function Section({
 
 interface GrupoPaciente {
   atendimento_id: number;
+  cliente_id: number;
   cliente_nome: string;
   itens: Procedimento[];
 }
 
 function PacienteSection({
-  label, badgeClass, grupos, empty, userId, pegando, onPegarTodos, onVerProcedimento,
+  label, badgeClass, grupos, empty, userId, pegando, onPegarTodos, onVerProcedimento, onVerProntuario,
 }: {
   label: string;
   badgeClass: string;
@@ -306,6 +317,7 @@ function PacienteSection({
   pegando: number | null;
   onPegarTodos: (atendimento_id: number, cliente_nome: string, disp: Procedimento[]) => void;
   onVerProcedimento: (id: number) => void;
+  onVerProntuario: (clienteId: number) => void;
 }) {
   return (
     <section>
@@ -329,6 +341,14 @@ function PacienteSection({
                     <p className="text-xs text-muted">Atendimento #{grupo.atendimento_id}</p>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onVerProntuario(grupo.cliente_id)}
+                      className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1.5 rounded-lg border border-border text-muted hover:text-primary-700 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+                      title="Ver prontuário"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Prontuário</span>
+                    </button>
                     {disp.length > 0 && (
                       <button
                         onClick={() => onPegarTodos(grupo.atendimento_id, grupo.cliente_nome, disp)}

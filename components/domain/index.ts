@@ -40,3 +40,9 @@ export type { ViewModeToggleProps, ViewModeOption } from './ViewModeToggle';
 
 export { default as TrocarSenhaModal } from './TrocarSenhaModal';
 export type { TrocarSenhaModalProps } from './TrocarSenhaModal';
+
+export { default as ProntuarioDrawer } from './ProntuarioDrawer';
+export type { ProntuarioDrawerProps } from './ProntuarioDrawer';
+
+export { default as AgendaCalendario } from './AgendaCalendario';
+export type { AgendaCalendarioProps } from './AgendaCalendario';

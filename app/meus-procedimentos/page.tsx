@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useAuth } from '@/contexts/AuthContext';
-import { ClipboardList, Search, Activity } from 'lucide-react';
+import { ClipboardList, Search, Activity, FileText } from 'lucide-react';
 import { PageHeader, StatCard, Badge, LoadingState, Tabs, Alert, Table } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
-import { StatusBadge } from '@/components/domain';
+import { StatusBadge, ProntuarioDrawer } from '@/components/domain';
 import { formatarData } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
 interface Procedimento {
@@ -14,6 +14,7 @@ interface Procedimento {
   item_id: number;
   atendimento_id: number;
   procedimento_nome: string;
+  cliente_id: number;
   cliente_nome: string;
   dentes: string | null;
   quantidade: number;
@@ -31,6 +32,7 @@ export default function MeusProcedimentosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filtro, setFiltro] = useState<string>('todos');
+  const [drawerClienteId, setDrawerClienteId] = useState<number | null>(null);
 
   const carregarProcedimentos = useCallback(async () => {
     if (!user) return;
@@ -166,12 +168,34 @@ export default function MeusProcedimentosPage() {
             align: 'right',
             render: (proc) => <span className="text-sm text-muted">{formatarData(proc.concluido_at || proc.created_at)}</span>,
           },
+          {
+            key: 'acoes',
+            label: '',
+            align: 'right',
+            render: (proc) => (
+              <button
+                type="button"
+                onClick={() => setDrawerClienteId(proc.cliente_id)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 px-2 py-1 rounded-md transition-colors"
+                title="Ver prontuário"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Prontuário</span>
+              </button>
+            ),
+          },
         ] as TableColumn<Procedimento>[]}
         data={procedimentosFiltrados}
         keyExtractor={(proc) => `${proc.tipo}-${proc.item_id}`}
         emptyMessage="Nenhum procedimento encontrado"
         emptyIcon="📭"
         caption="Meus procedimentos"
+      />
+
+      <ProntuarioDrawer
+        clienteId={drawerClienteId}
+        open={drawerClienteId !== null}
+        onClose={() => setDrawerClienteId(null)}
       />
     </div>
   );

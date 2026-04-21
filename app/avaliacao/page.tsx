@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, User, Stethoscope, PlusCircle } from 'lucide-react';
+import { Search, User, Stethoscope, PlusCircle, FileText } from 'lucide-react';
 import { PageHeader, Card, Badge, Button, LoadingState, Alert } from '@/components/ui';
+import { ProntuarioDrawer } from '@/components/domain';
 import { formatarDataHora } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
@@ -27,6 +28,7 @@ export default function AvaliacaoPage() {
   const [meusAtendimentos, setMeusAtendimentos] = useState<Atendimento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [drawerClienteId, setDrawerClienteId] = useState<number | null>(null);
 
   const carregarAtendimentos = useCallback(async () => {
     if (!user) return;
@@ -133,9 +135,19 @@ export default function AvaliacaoPage() {
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end">
                     <Badge color="blue">Em Avaliação</Badge>
-                    
+
+                    <button
+                      type="button"
+                      onClick={() => setDrawerClienteId(atendimento.cliente_id)}
+                      className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1.5 rounded-lg border border-border text-muted hover:text-primary-700 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+                      title="Ver prontuário"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Prontuário</span>
+                    </button>
+
                     <Link href={`/avaliacao/${atendimento.id}`}>
                       <Button>Continuar</Button>
                     </Link>
@@ -189,9 +201,19 @@ export default function AvaliacaoPage() {
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end">
                     <Badge color="amber">Sem Avaliador</Badge>
-                    
+
+                    <button
+                      type="button"
+                      onClick={() => setDrawerClienteId(atendimento.cliente_id)}
+                      className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1.5 rounded-lg border border-border text-muted hover:text-primary-700 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+                      title="Ver prontuário"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Prontuário</span>
+                    </button>
+
                     <Button onClick={() => handleAssumirAtendimento(atendimento.id)}>
                       Atender
                     </Button>
@@ -210,6 +232,12 @@ export default function AvaliacaoPage() {
           <span>Disponíveis: <strong>{atendimentosDisponiveis.length}</strong></span>
         </div>
       </div>
+
+      <ProntuarioDrawer
+        clienteId={drawerClienteId}
+        open={drawerClienteId !== null}
+        onClose={() => setDrawerClienteId(null)}
+      />
     </div>
   );
 }

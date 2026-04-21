@@ -1,13 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
+import { withAuth } from '@/lib/auth/middleware';
 
 // GET /api/clientes/[id]/ficha - Retorna dados completos do cliente para a ficha
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (_request, context) => {
   try {
-    const { id } = await params;
+    const params = await context.params!;
+    const id = params.id as string;
     const clienteId = parseInt(id);
 
     const cliente = await queryOne('SELECT id FROM clientes WHERE id = ?', [clienteId]);
@@ -179,4 +178,4 @@ export async function GET(
     console.error('Erro ao buscar ficha:', error);
     return NextResponse.json({ error: 'Erro ao buscar ficha' }, { status: 500 });
   }
-}
+});

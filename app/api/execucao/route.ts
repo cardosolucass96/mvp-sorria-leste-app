@@ -11,6 +11,7 @@ interface ProcedimentoExecucao {
   tem_etapas: number;
   executor_id: number | null;
   executor_nome: string | null;
+  cliente_id: number;
   cliente_nome: string;
   status: string;
   created_at: string;
@@ -44,6 +45,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         p.tem_etapas,
         i.executor_id,
         e.nome as executor_nome,
+        c.id as cliente_id,
         c.nome as cliente_nome,
         i.status,
         i.created_at,
