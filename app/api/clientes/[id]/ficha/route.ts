@@ -63,7 +63,7 @@ export const GET = withAuth(async (_request, context) => {
     );
 
     // Histórico — executado em queries separadas para evitar limite de compound SELECT do D1
-    const [hCriados, hLiberados, hFinalizados, hPagamentos, hProcedimentos, hEtapas, hMovimentacoes] = await Promise.all([
+    const [hCriados, hLiberados, hFinalizados, hPagamentos, hProcedimentos, hMovimentacoes] = await Promise.all([
       query(
         `SELECT 'atendimento_criado' as tipo, a.created_at as data,
                 'Atendimento #' || a.id || ' criado (status: ' || a.status || ')' as descricao,
@@ -111,20 +111,6 @@ export const GET = withAuth(async (_request, context) => {
         [clienteId]
       ),
       query(
-        `SELECT 'etapa_concluida' as tipo, e.concluido_at as data,
-                'Etapa ' || e.face || ' do dente ' || e.dente ||
-                ' concluída em "' || p.nome || '" (atend. #' || a.id || ')' ||
-                CASE WHEN u.nome IS NOT NULL THEN ' por ' || u.nome ELSE '' END as descricao,
-                a.id as ref_id
-         FROM etapas_procedimento e
-         INNER JOIN itens_atendimento i ON e.item_atendimento_id = i.id
-         INNER JOIN atendimentos a ON i.atendimento_id = a.id
-         INNER JOIN procedimentos p ON i.procedimento_id = p.id
-         LEFT JOIN usuarios u ON e.concluido_por_id = u.id
-         WHERE a.cliente_id = ? AND e.concluido_at IS NOT NULL`,
-        [clienteId]
-      ),
-      query(
         `SELECT ms.tipo as tipo, ms.created_at as data,
                 ms.observacoes as descricao,
                 COALESCE(ms.item_atendimento_id, 0) as ref_id,
@@ -137,7 +123,7 @@ export const GET = withAuth(async (_request, context) => {
     ]);
     const historico = [
       ...hCriados, ...hLiberados, ...hFinalizados,
-      ...hPagamentos, ...hProcedimentos, ...hEtapas, ...hMovimentacoes,
+      ...hPagamentos, ...hProcedimentos, ...hMovimentacoes,
     ].sort((a, b) => {
       const da = (a as { data: string }).data;
       const db2 = (b as { data: string }).data;

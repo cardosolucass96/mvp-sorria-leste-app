@@ -117,23 +117,10 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     
     // Busca etapas pendentes para os itens
     // - Procedimentos com tem_etapas=1: usa procedimento_etapas_modelo (sessões)
-    // - Demais procedimentos: usa etapas_procedimento (faces por dente)
+    // - Demais procedimentos: sem etapas (face-per-dente removida do MVP)
     let itensComEtapas: ItemAtendimento[] = itens;
     if (itens.length > 0) {
-      const itensFace = itens.filter(i => !i.tem_etapas);
       const itensModelo = itens.filter(i => i.tem_etapas);
-
-      // Face-level etapas (restauração, por dente+face)
-      let faceEtapas: EtapaItem[] = [];
-      if (itensFace.length > 0) {
-        const placeholders = itensFace.map(() => '?').join(',');
-        faceEtapas = await query<EtapaItem>(
-          `SELECT id, item_atendimento_id, dente, face, status
-           FROM etapas_procedimento
-           WHERE item_atendimento_id IN (${placeholders}) AND status = 'pendente'`,
-          itensFace.map(i => i.id)
-        );
-      }
 
       // Session-level etapas (canal, implante, etc — usa modelo do procedimento)
       const modeloEtapasMap = new Map<number, EtapaItem[]>();
@@ -201,9 +188,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 
       itensComEtapas = itens.map(item => ({
         ...item,
-        etapas: item.tem_etapas
-          ? (modeloEtapasMap.get(item.id) ?? [])
-          : faceEtapas.filter(e => e.item_atendimento_id === item.id),
+        etapas: item.tem_etapas ? (modeloEtapasMap.get(item.id) ?? []) : [],
         progresso_etapas: progressoMap.get(item.id) ?? null,
       }));
     }

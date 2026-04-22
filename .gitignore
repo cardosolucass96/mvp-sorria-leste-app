@@ -45,3 +45,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .tmp-prod-backup.sql
+backup-prod-*.sql
