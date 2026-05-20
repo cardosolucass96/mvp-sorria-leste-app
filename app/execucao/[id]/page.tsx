@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter, useParams } from 'next/navigation';
 import { formatarDataHora } from '@/lib/utils/formatters';
-import { StatusBadge } from '@/components/domain';
+import { StatusBadge, ProntuarioDrawer } from '@/components/domain';
 import {
   Activity, Save, Paperclip, FileText,
   CheckCircle2, Circle, ChevronDown, ChevronUp,
@@ -138,6 +138,9 @@ export default function ExecucaoProcedimentoPage() {
   const [etapaDescricao, setEtapaDescricao] = useState<Record<number, string>>({});
   const [etapaObservacoes, setEtapaObservacoes] = useState<Record<number, string>>({});
   const [salvandoEtapa, setSalvandoEtapa] = useState<number | null>(null);
+
+  // Drawer de prontuário do paciente
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // ─── Load ──────────────────────────────────────────────────────────────────
 
@@ -559,6 +562,14 @@ export default function ExecucaoProcedimentoPage() {
 
         {/* Ações */}
         <div className="space-y-3">
+          <Button
+            onClick={() => setDrawerOpen(true)}
+            variant="ghost"
+            className="w-full"
+          >
+            <FileText className="w-4 h-4 mr-1.5 inline-block" />
+            Ver prontuário do paciente
+          </Button>
           {/* Sessão atual para procedimentos multi-sessão */}
           {isMultiSessao && item.etapa_label && (
             <div className="p-3 bg-primary-50 border border-primary-200 rounded-lg text-sm text-primary-800">
@@ -834,6 +845,12 @@ export default function ExecucaoProcedimentoPage() {
         message={confirmDialog.message}
         confirmLabel={confirmDialog.confirmLabel}
         type={confirmDialog.type}
+      />
+
+      <ProntuarioDrawer
+        clienteId={drawerOpen ? item.cliente_id : null}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
       />
     </div>
   );

@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2 } from 'lucide-react';
+import { Building2, Activity } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { MENU_ITEMS } from '@/lib/constants/navigation';
+import { MENU_ITEMS, type MenuItem } from '@/lib/constants/navigation';
+import { useCategoriasFila } from '@/lib/hooks/useCategoriasFila';
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent,
@@ -18,15 +21,38 @@ import {
   SidebarRail,
 } from '@/components/ui/_shadcn/sidebar';
 
+function resolveIcon(name: string): LucideIcon {
+  const icons = LucideIcons as unknown as Record<string, LucideIcon>;
+  return icons[name] ?? Activity;
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, hasRole, currentUnidade, unidadeNomes } = useAuth();
+  const categoriasFila = useCategoriasFila();
 
-  const visibleMenuItems = MENU_ITEMS.filter((item) => {
+  const visibleStaticItems = MENU_ITEMS.filter((item) => {
     if (!item.roles) return true;
     if (!user) return false;
     return hasRole(item.roles);
   });
+
+  // Injeta items de fila dinâmicos logo após "Agenda"
+  const agendaIdx = visibleStaticItems.findIndex(i => i.href === '/agenda');
+  const filaItems: MenuItem[] = categoriasFila.map(c => ({
+    href: `/fila/${c.slug}`,
+    label: `Fila ${c.nome}`,
+    icon: resolveIcon(c.icone),
+  }));
+
+  const visibleMenuItems: MenuItem[] =
+    agendaIdx >= 0
+      ? [
+          ...visibleStaticItems.slice(0, agendaIdx + 1),
+          ...filaItems,
+          ...visibleStaticItems.slice(agendaIdx + 1),
+        ]
+      : [...visibleStaticItems, ...filaItems];
 
   return (
     <ShadcnSidebar collapsible="icon" className="border-r border-sidebar-border">

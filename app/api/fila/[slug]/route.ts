@@ -1,0 +1,106 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { query, queryOne } from '@/lib/db';
+import { withUnit, UnitAuthenticatedContext, getUserRoles } from '@/lib/auth/middleware';
+import { Categoria } from '@/lib/types';
+
+interface ProcedimentoExecucao {
+  id: number;
+  atendimento_id: number;
+  procedimento_id: number;
+  procedimento_nome: string;
+  etapa_label: string | null;
+  tem_etapas: number;
+  executor_id: number | null;
+  executor_nome: string | null;
+  cliente_id: number;
+  cliente_nome: string;
+  status: string;
+  created_at: string;
+  concluido_at: string | null;
+  dente_unico: string | null;
+}
+
+// GET /api/fila/[slug]?executor_id=X - Lista procedimentos da fila (filtrados por categoria)
+export const GET = withUnit(async (
+  request: NextRequest,
+  context: UnitAuthenticatedContext
+) => {
+  try {
+    const { slug } = (await context.params) as { slug: string };
+    const { searchParams } = new URL(request.url);
+    const executorId = searchParams.get('executor_id');
+
+    if (!executorId) {
+      return NextResponse.json({ error: 'executor_id é obrigatório' }, { status: 400 });
+    }
+
+    const categoria = await queryOne<Categoria>(
+      'SELECT * FROM categorias WHERE slug = ? AND ativo = 1',
+      [slug]
+    );
+    if (!categoria) {
+      return NextResponse.json({ error: 'Categoria não encontrada' }, { status: 404 });
+    }
+
+    // Só quem tem role amarrada à categoria pode ver a fila
+    const userRoles = getUserRoles(context.user);
+    const catRoles = await query<{ role: string }>(
+      'SELECT role FROM categoria_roles WHERE categoria_id = ?',
+      [categoria.id]
+    );
+    const allowed = catRoles.some(cr => userRoles.includes(cr.role));
+    if (!allowed) {
+      return NextResponse.json({ error: 'Sem acesso a esta fila' }, { status: 403 });
+    }
+
+    const procedimentos = await query<ProcedimentoExecucao>(
+      `SELECT
+        i.id,
+        i.atendimento_id,
+        i.procedimento_id,
+        p.nome as procedimento_nome,
+        i.etapa_label,
+        p.tem_etapas,
+        i.executor_id,
+        e.nome as executor_nome,
+        c.id as cliente_id,
+        c.nome as cliente_nome,
+        i.status,
+        i.created_at,
+        i.concluido_at,
+        json_extract(i.dentes, '$[0].dente') as dente_unico
+      FROM itens_atendimento i
+      INNER JOIN atendimentos a ON i.atendimento_id = a.id
+      INNER JOIN clientes c ON a.cliente_id = c.id
+      INNER JOIN procedimentos p ON i.procedimento_id = p.id
+      LEFT JOIN usuarios e ON i.executor_id = e.id
+      WHERE a.status = 'em_execucao'
+        AND a.unidade_id = ?
+        AND a.categoria_id = ?
+        AND i.status IN ('pago', 'executando')
+        AND (i.executor_id = ? OR i.executor_id IS NULL)
+      ORDER BY
+        CASE WHEN i.executor_id = ? THEN 0 ELSE 1 END,
+        i.created_at DESC`,
+      [context.unidadeId, categoria.id, parseInt(executorId), parseInt(executorId)]
+    );
+
+    const meusProcedimentos = procedimentos.filter(p => p.executor_id === parseInt(executorId));
+    const disponiveis = procedimentos.filter(p => p.executor_id === null);
+
+    return NextResponse.json({
+      categoria: {
+        id: categoria.id,
+        nome: categoria.nome,
+        slug: categoria.slug,
+        cor: categoria.cor,
+        icone: categoria.icone,
+      },
+      meusProcedimentos,
+      disponiveis,
+    });
+  } catch (error) {
+    console.error('Erro ao buscar fila:', error);
+    return NextResponse.json({ error: 'Erro ao buscar fila' }, { status: 500 });
+  }
+});
