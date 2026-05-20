@@ -67,6 +67,7 @@ interface Atendimento {
   liberado_por_nome: string | null;
   status: string;
   tipo: string | null;
+  categoria_id: number | null;
   created_at: string;
   liberado_em: string | null;
   finalizado_at: string | null;
@@ -165,9 +166,11 @@ export default function AtendimentoDetalhePage({
   const carregarExecutores = async () => {
     if (executores.length > 0) return;
     try {
-      const res = await fetch('/api/usuarios');
+      const catId = atendimento?.categoria_id;
+      const url = catId ? `/api/usuarios?categoria_id=${catId}` : '/api/usuarios';
+      const res = await fetch(url);
       const data: Usuario[] = await res.json();
-      setExecutores(data.filter(u => u.role === 'executor' || u.role === 'admin'));
+      setExecutores(catId ? data : data.filter(u => u.role === 'executor' || u.role === 'admin'));
     } catch {}
   };
 
@@ -276,13 +279,15 @@ export default function AtendimentoDetalhePage({
     if (procedimentos.length > 0) return;
     setLoadingDadosProc(true);
     try {
+      const catId = atendimento?.categoria_id;
+      const usuariosUrl = catId ? `/api/usuarios?categoria_id=${catId}` : '/api/usuarios';
       const [resProc, resUsers] = await Promise.all([
         fetch('/api/procedimentos'),
-        fetch('/api/usuarios'),
+        fetch(usuariosUrl),
       ]);
       setProcedimentos(await resProc.json());
       const usersData: Usuario[] = await resUsers.json();
-      setExecutores(usersData.filter(u => u.role === 'executor' || u.role === 'admin'));
+      setExecutores(catId ? usersData : usersData.filter(u => u.role === 'executor' || u.role === 'admin'));
     } finally {
       setLoadingDadosProc(false);
     }
@@ -449,13 +454,15 @@ export default function AtendimentoDetalhePage({
     if (procedimentos.length === 0) {
       setLoadingDadosProc(true);
       try {
+        const catId = atendimento?.categoria_id;
+        const usuariosUrl = catId ? `/api/usuarios?categoria_id=${catId}` : '/api/usuarios';
         const [resProc, resUsers] = await Promise.all([
           fetch('/api/procedimentos'),
-          fetch('/api/usuarios'),
+          fetch(usuariosUrl),
         ]);
         setProcedimentos(await resProc.json());
         const usersData: Usuario[] = await resUsers.json();
-        setExecutores(usersData.filter(u => u.role === 'executor' || u.role === 'admin'));
+        setExecutores(catId ? usersData : usersData.filter(u => u.role === 'executor' || u.role === 'admin'));
       } finally {
         setLoadingDadosProc(false);
       }

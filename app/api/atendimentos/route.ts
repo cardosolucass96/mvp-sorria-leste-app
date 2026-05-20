@@ -98,7 +98,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 export const POST = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const body = await request.json();
-    const { cliente_id, avaliador_id, tipo_orto, executor_id, procedimento_id, valor, criado_por_id } = body;
+    const { cliente_id, avaliador_id, tipo_orto, executor_id, procedimento_id, valor, criado_por_id, categoria_id, categoria_slug } = body;
     
     // Validações
     if (!cliente_id) {
@@ -134,7 +134,34 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         { status: 400 }
       );
     }
-    
+
+    // Resolve categoria: por id explícito, por slug, ou por flag legada tipo_orto
+    interface CategoriaRow { id: number; slug: string; pula_avaliacao: number }
+    let categoriaResolvida: CategoriaRow | null = null;
+    if (categoria_id) {
+      categoriaResolvida = await queryOne<CategoriaRow>(
+        'SELECT id, slug, pula_avaliacao FROM categorias WHERE id = ? AND ativo = 1',
+        [categoria_id]
+      );
+      if (!categoriaResolvida) {
+        return NextResponse.json({ error: 'Categoria inválida' }, { status: 400 });
+      }
+    } else if (categoria_slug) {
+      categoriaResolvida = await queryOne<CategoriaRow>(
+        'SELECT id, slug, pula_avaliacao FROM categorias WHERE slug = ? AND ativo = 1',
+        [categoria_slug]
+      );
+      if (!categoriaResolvida) {
+        return NextResponse.json({ error: 'Categoria inválida' }, { status: 400 });
+      }
+    } else if (tipo_orto) {
+      categoriaResolvida = await queryOne<CategoriaRow>(
+        "SELECT id, slug, pula_avaliacao FROM categorias WHERE slug = 'orto'"
+      );
+    }
+    const categoriaIdFinal = categoriaResolvida?.id ?? null;
+    const pulaAvaliacao = categoriaResolvida?.pula_avaliacao === 1 || !!tipo_orto;
+
     // Verifica avaliador se fornecido (fluxo normal)
     if (avaliador_id && !tipo_orto) {
       const avaliador = await queryOne<{ id: number; role: string }>(
@@ -157,8 +184,8 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       }
     }
     
-    // === FLUXO ORTO ===
-    if (tipo_orto) {
+    // === FLUXO CATEGORIA COM pula_avaliacao (antes: apenas orto) ===
+    if (pulaAvaliacao) {
       if (!procedimento_id) {
         return NextResponse.json(
           { error: 'Procedimento é obrigatório para atendimento orto' },
@@ -198,10 +225,12 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       const valorFinal = valor || procedimento.valor;
 
       // Cria atendimento já em aguardando_pagamento
+      // NOTE: mantém `tipo='orto'` quando categoria for orto para compat com código legado que ainda lê tipo.
+      const tipoLegado = categoriaResolvida?.slug === 'orto' ? 'orto' : 'normal';
       const result = await execute(
-        `INSERT INTO atendimentos (cliente_id, avaliador_id, status, observacoes, unidade_id)
-         VALUES (?, NULL, 'aguardando_pagamento', ?, ?)`,
-        [cliente_id, 'Atendimento Orto', context.unidadeId]
+        `INSERT INTO atendimentos (cliente_id, avaliador_id, status, observacoes, unidade_id, categoria_id, tipo)
+         VALUES (?, NULL, 'aguardando_pagamento', ?, ?, ?, ?)`,
+        [cliente_id, 'Atendimento Orto', context.unidadeId, categoriaIdFinal, tipoLegado]
       );
 
       const atendimentoId = result.lastInsertRowid;
@@ -233,9 +262,9 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     // === FLUXO NORMAL ===
     // Cria atendimento com status inicial 'triagem'
     const result = await execute(
-      `INSERT INTO atendimentos (cliente_id, avaliador_id, status, unidade_id)
-       VALUES (?, ?, 'triagem', ?)`,
-      [cliente_id, avaliador_id || null, context.unidadeId]
+      `INSERT INTO atendimentos (cliente_id, avaliador_id, status, unidade_id, categoria_id)
+       VALUES (?, ?, 'triagem', ?, ?)`,
+      [cliente_id, avaliador_id || null, context.unidadeId, categoriaIdFinal]
     );
     
     // Busca atendimento criado com dados do cliente

@@ -113,10 +113,9 @@ export default function AvaliacaoDetalhePage({
 
   const carregarDados = async () => {
     try {
-      const [resAtend, resProc, resUsers] = await Promise.all([
+      const [resAtend, resProc] = await Promise.all([
         unitFetch(`/api/atendimentos/${id}`),
         fetch('/api/procedimentos'),
-        fetch('/api/usuarios'),
       ]);
 
       if (!resAtend.ok) throw new Error('Atendimento não encontrado');
@@ -126,9 +125,16 @@ export default function AvaliacaoDetalhePage({
       const procData = await resProc.json();
       setProcedimentos(procData);
 
+      // Busca executores filtrados pela categoria do atendimento (se houver)
+      const usuariosUrl = atendData.categoria_id
+        ? `/api/usuarios?categoria_id=${atendData.categoria_id}`
+        : '/api/usuarios';
+      const resUsers = await fetch(usuariosUrl);
       const usersData = await resUsers.json();
       setExecutores(
-        usersData.filter((u: Usuario) => u.role === 'executor' || u.role === 'admin')
+        atendData.categoria_id
+          ? usersData
+          : usersData.filter((u: Usuario) => u.role === 'executor' || u.role === 'admin')
       );
     } catch (err) {
       setError('Erro ao carregar dados');

@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FileText, Plus, Trash2 } from 'lucide-react';
-import { PageHeader, Button, Input, Checkbox, Badge, Alert, Modal, LoadingState, Card, Table, ConfirmDialog } from '@/components/ui';
+import { PageHeader, Button, Input, Select, Checkbox, Badge, Alert, Modal, LoadingState, Card, Table, ConfirmDialog } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import type { CategoriaComRoles } from '@/lib/types';
 
 interface EtapaModelo {
   id?: number;
@@ -24,6 +25,7 @@ interface Procedimento {
   comissao_execucao: number;
   por_dente: number;
   tem_etapas: number;
+  categoria_id: number | null;
   ativo: number;
   created_at: string;
 }
@@ -35,6 +37,7 @@ interface FormData {
   comissao_execucao: string;
   por_dente: boolean;
   tem_etapas: boolean;
+  categoria_id: string;
   etapas: EtapaModelo[];
 }
 
@@ -47,6 +50,7 @@ const initialFormData: FormData = {
   comissao_execucao: '',
   por_dente: false,
   tem_etapas: false,
+  categoria_id: '',
   etapas: [],
 };
 
@@ -54,6 +58,7 @@ export default function ProcedimentosPage() {
   usePageTitle('Procedimentos');
   const { user } = useAuth();
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaComRoles[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [mostrarInativos, setMostrarInativos] = useState(false);
@@ -99,6 +104,17 @@ export default function ProcedimentosPage() {
     carregarProcedimentos();
   }, [carregarProcedimentos]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/categorias?ativo=1');
+        if (res.ok) setCategorias(await res.json());
+      } catch {
+        // degrada para seleção manual
+      }
+    })();
+  }, []);
+
   const abrirModalNovo = () => {
     setFormData(initialFormData);
     setEditingId(null);
@@ -122,6 +138,7 @@ export default function ProcedimentosPage() {
         comissao_execucao: proc.comissao_execucao.toString(),
         por_dente: proc.por_dente === 1,
         tem_etapas: proc.tem_etapas === 1,
+        categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
         etapas: (data.etapas ?? []).map((e: { nome: string; valor: number | null; comissao_venda: number; comissao_execucao: number }) => ({
           nome: e.nome,
           valor: e.valor != null ? String(e.valor) : '',
@@ -137,6 +154,7 @@ export default function ProcedimentosPage() {
         comissao_execucao: proc.comissao_execucao.toString(),
         por_dente: proc.por_dente === 1,
         tem_etapas: proc.tem_etapas === 1,
+        categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
         etapas: [],
       });
     }
@@ -189,6 +207,7 @@ export default function ProcedimentosPage() {
         comissao_execucao: parseFloat(formData.comissao_execucao) || 0,
         por_dente: formData.por_dente,
         tem_etapas: formData.tem_etapas,
+        categoria_id: formData.categoria_id ? parseInt(formData.categoria_id) : null,
         etapas: formData.tem_etapas
           ? formData.etapas.map((e, idx) => ({
               nome: e.nome.trim(),
@@ -407,6 +426,21 @@ export default function ProcedimentosPage() {
             disabled={saving}
             hint={formData.tem_etapas ? 'Valor total do procedimento completo (soma de todas as sessões)' : undefined}
           />
+
+          {categorias.length > 0 && (
+            <Select
+              label="Categoria (fila)"
+              name="categoria_id"
+              value={formData.categoria_id}
+              onChange={(v) => setFormData({ ...formData, categoria_id: v })}
+              options={[
+                { value: '', label: '— Selecionar —' },
+                ...categorias.map(c => ({ value: String(c.id), label: c.nome })),
+              ]}
+              disabled={saving}
+              hint="Fila de execução em que esse procedimento será atendido"
+            />
+          )}
 
           {podeVerComissoes && !formData.tem_etapas && (
             <div className="grid grid-cols-2 gap-4">

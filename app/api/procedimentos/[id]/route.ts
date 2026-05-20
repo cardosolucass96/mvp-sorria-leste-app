@@ -61,7 +61,7 @@ export async function PUT(
     const { id } = await params;
     const procId = parseInt(id);
     const body = await request.json();
-    const { nome, valor, comissao_venda, comissao_execucao, ativo, por_dente, tem_etapas, etapas } = body;
+    const { nome, valor, comissao_venda, comissao_execucao, ativo, por_dente, tem_etapas, etapas, categoria_id } = body;
 
     const existe = await queryOne<Procedimento>(
       'SELECT * FROM procedimentos WHERE id = ?',
@@ -95,6 +95,10 @@ export async function PUT(
     if (ativo !== undefined) { updates.push('ativo = ?'); updateParams.push(ativo ? 1 : 0); }
     if (por_dente !== undefined) { updates.push('por_dente = ?'); updateParams.push(por_dente ? 1 : 0); }
     if (tem_etapas !== undefined) { updates.push('tem_etapas = ?'); updateParams.push(tem_etapas ? 1 : 0); }
+    if (categoria_id !== undefined) {
+      updates.push('categoria_id = ?');
+      updateParams.push(categoria_id === null ? null as unknown as number : categoria_id);
+    }
 
     if (updates.length === 0 && etapas === undefined) {
       return NextResponse.json({ error: 'Nenhum campo para atualizar' }, { status: 400 });

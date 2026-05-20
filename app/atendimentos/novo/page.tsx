@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ClipboardList, Search, Calendar } from 'lucide-react';
-import { Alert, LoadingState, PageHeader, Card, Button, Select, SearchInput, Modal } from '@/components/ui';
+import { Alert, LoadingState, PageHeader, Card, Button, Input, Select, SearchInput, Modal } from '@/components/ui';
 import { ClienteForm, ClienteFormData } from '@/components/domain';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { formatarDataAgendada } from '@/lib/utils/formatters';
+import type { CategoriaComRoles } from '@/lib/types';
 
 interface Agendamento {
   id: number;
@@ -30,6 +32,14 @@ interface Usuario {
   role: string;
 }
 
+interface ProcedimentoLite {
+  id: number;
+  nome: string;
+  valor: number;
+  categoria_id: number | null;
+  ativo: number;
+}
+
 type TipoAtendimento = 'normal' | 'sessao';
 
 function NovoAtendimentoForm() {
@@ -37,6 +47,7 @@ function NovoAtendimentoForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const unitFetch = useUnitFetch();
+  const { user } = useAuth();
   const clienteIdParam = searchParams.get('cliente');
 
   // Clientes (busca via API)
@@ -48,11 +59,23 @@ function NovoAtendimentoForm() {
   const [clienteId, setClienteId] = useState(clienteIdParam || '');
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
   const [tipoAtendimento, setTipoAtendimento] = useState<TipoAtendimento>('normal');
+  const [categoriaId, setCategoriaId] = useState<string>('');
   const [avaliadorId, setAvaliadorId] = useState('');
 
+  // Campos do fluxo pula_avaliacao (orto-like)
+  const [procedimentoId, setProcedimentoId] = useState<string>('');
+  const [executorId, setExecutorId] = useState<string>('');
+  const [valorProcedimento, setValorProcedimento] = useState<string>('');
+
   // Dados estáticos
+  const [categorias, setCategorias] = useState<CategoriaComRoles[]>([]);
   const [avaliadores, setAvaliadores] = useState<Usuario[]>([]);
+  const [procedimentosCategoria, setProcedimentosCategoria] = useState<ProcedimentoLite[]>([]);
+  const [executoresCategoria, setExecutoresCategoria] = useState<Usuario[]>([]);
   const [loadingDados, setLoadingDados] = useState(true);
+
+  const categoriaSelecionada = categorias.find(c => String(c.id) === categoriaId) || null;
+  const pulaAvaliacao = categoriaSelecionada?.pula_avaliacao === 1;
 
   // Modal novo cliente
   const [modalNovoCliente, setModalNovoCliente] = useState(false);
@@ -88,9 +111,18 @@ function NovoAtendimentoForm() {
 
     const carregarDados = async () => {
       try {
-        const resUsuarios = await fetch('/api/usuarios');
+        const [resUsuarios, resCategorias] = await Promise.all([
+          fetch('/api/usuarios'),
+          fetch('/api/categorias?ativo=1'),
+        ]);
         const usuariosData: Usuario[] = await resUsuarios.json();
         setAvaliadores(usuariosData.filter((u) => u.role === 'avaliador' || u.role === 'admin'));
+        if (resCategorias.ok) {
+          const cats: CategoriaComRoles[] = await resCategorias.json();
+          setCategorias(cats);
+          const geral = cats.find(c => c.slug === 'geral');
+          if (geral) setCategoriaId(String(geral.id));
+        }
       } finally {
         setLoadingDados(false);
       }
@@ -98,6 +130,37 @@ function NovoAtendimentoForm() {
     carregarDados();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Quando a categoria mudar e for pula_avaliacao, carrega procedimentos da categoria e executores compatíveis
+  useEffect(() => {
+    if (!categoriaId || !pulaAvaliacao) {
+      setProcedimentosCategoria([]);
+      setExecutoresCategoria([]);
+      setProcedimentoId('');
+      setExecutorId('');
+      return;
+    }
+    (async () => {
+      const [resProcs, resExecs] = await Promise.all([
+        fetch('/api/procedimentos'),
+        fetch(`/api/usuarios?categoria_id=${categoriaId}`),
+      ]);
+      const procsData: ProcedimentoLite[] = await resProcs.json();
+      setProcedimentosCategoria(procsData.filter(p => p.categoria_id === parseInt(categoriaId)));
+      if (resExecs.ok) {
+        const execsData: Usuario[] = await resExecs.json();
+        setExecutoresCategoria(execsData);
+      }
+    })();
+  }, [categoriaId, pulaAvaliacao]);
+
+  useEffect(() => {
+    const proc = procedimentosCategoria.find(p => String(p.id) === procedimentoId);
+    if (proc && !valorProcedimento) {
+      setValorProcedimento(String(proc.valor));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [procedimentoId]);
 
   // Pré-selecionar cliente vindo de ?cliente=
   useEffect(() => {
@@ -181,8 +244,22 @@ function NovoAtendimentoForm() {
     try {
       const payload: Record<string, unknown> = {
         cliente_id: parseInt(clienteId),
-        avaliador_id: avaliadorId ? parseInt(avaliadorId) : null,
+        categoria_id: categoriaId ? parseInt(categoriaId) : null,
       };
+
+      if (pulaAvaliacao) {
+        if (!procedimentoId) {
+          setError('Selecione um procedimento');
+          setSaving(false);
+          return;
+        }
+        payload.procedimento_id = parseInt(procedimentoId);
+        if (executorId) payload.executor_id = parseInt(executorId);
+        if (valorProcedimento) payload.valor = parseFloat(valorProcedimento);
+        payload.criado_por_id = user?.id;
+      } else {
+        payload.avaliador_id = avaliadorId ? parseInt(avaliadorId) : null;
+      }
 
       const res = await unitFetch('/api/atendimentos', {
         method: 'POST',
@@ -269,9 +346,29 @@ function NovoAtendimentoForm() {
           )}
         </Card>
 
-        {/* 2 — Tipo */}
+        {/* 2 — Categoria (fila) */}
+        {categorias.length > 0 && (
+          <Card>
+            <h2 className="text-lg font-semibold mb-3">2. Categoria</h2>
+            <p className="text-sm text-muted mb-3">Define em qual fila de execução o atendimento entrará.</p>
+            <Select
+              label="Categoria"
+              name="categoria_id"
+              value={categoriaId}
+              onChange={setCategoriaId}
+              options={categorias.map(c => ({
+                value: String(c.id),
+                label: c.pula_avaliacao ? `${c.nome} (pula avaliação)` : c.nome,
+              }))}
+              placeholder="-- Selecionar --"
+            />
+          </Card>
+        )}
+
+        {/* 3 — Tipo (apenas se NÃO pula avaliação) */}
+        {!pulaAvaliacao && (
         <Card>
-          <h2 className="text-lg font-semibold mb-3">2. Tipo de Atendimento</h2>
+          <h2 className="text-lg font-semibold mb-3">3. Tipo de Atendimento</h2>
           <div className="grid grid-cols-2 gap-3">
             <button type="button" onClick={() => setTipoAtendimento('normal')}
               className={`p-4 rounded-lg border-2 text-left transition-all ${
@@ -294,11 +391,49 @@ function NovoAtendimentoForm() {
             </button>
           </div>
         </Card>
+        )}
 
-        {/* 3 — Avaliador ou Sessão */}
-        {tipoAtendimento === 'normal' ? (
+        {/* 4 — Fluxo */}
+        {pulaAvaliacao ? (
           <Card>
-            <h2 className="text-lg font-semibold mb-1">3. Avaliador</h2>
+            <h2 className="text-lg font-semibold mb-3">3. Procedimento e Executor</h2>
+            <p className="text-sm text-muted mb-3">Esta categoria pula avaliação — o atendimento vai direto para pagamento.</p>
+            <div className="space-y-3">
+              <Select
+                label="Procedimento"
+                name="procedimento_id"
+                value={procedimentoId}
+                onChange={setProcedimentoId}
+                options={procedimentosCategoria.map(p => ({
+                  value: String(p.id),
+                  label: p.nome,
+                }))}
+                placeholder="-- Selecionar --"
+                required
+              />
+              {procedimentoId && (
+                <Input
+                  label="Valor (R$)"
+                  name="valor"
+                  type="number"
+                  value={valorProcedimento}
+                  onChange={setValorProcedimento}
+                  placeholder="0,00"
+                />
+              )}
+              <Select
+                label="Executor (opcional)"
+                name="executor_id"
+                value={executorId}
+                onChange={setExecutorId}
+                options={executoresCategoria.map(u => ({ value: String(u.id), label: u.nome }))}
+                placeholder="-- Deixar disponível para qualquer executor --"
+              />
+            </div>
+          </Card>
+        ) : tipoAtendimento === 'normal' ? (
+          <Card>
+            <h2 className="text-lg font-semibold mb-1">4. Avaliador</h2>
             <p className="text-sm text-muted mb-3">Opcional — pode ser definido depois</p>
             <Select label="Avaliador" name="avaliador" value={avaliadorId} onChange={setAvaliadorId}
               options={avaliadores.map((a) => ({ value: String(a.id), label: a.nome }))}
@@ -306,7 +441,7 @@ function NovoAtendimentoForm() {
           </Card>
         ) : (
           <Card className="border-l-4 border-l-warning-500">
-            <h2 className="text-lg font-semibold mb-3">3. Sessão Agendada</h2>
+            <h2 className="text-lg font-semibold mb-3">4. Sessão Agendada</h2>
             {!clienteSelecionado ? (
               <p className="text-sm text-muted">Selecione um cliente acima para ver os agendamentos pendentes.</p>
             ) : loadingAgendamentos ? (

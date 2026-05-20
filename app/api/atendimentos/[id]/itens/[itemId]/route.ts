@@ -20,6 +20,7 @@ interface Atendimento {
   id: number;
   status: string;
   unidade_id: number;
+  categoria_id: number | null;
 }
 
 // PUT /api/atendimentos/[id]/itens/[itemId] - Atualiza item
@@ -34,7 +35,7 @@ export const PUT = withUnit(async (
 
     // Verifica se atendimento existe e pertence à unidade
     const atendimento = await queryOne<Atendimento>(
-      'SELECT id, status, unidade_id FROM atendimentos WHERE id = ?',
+      'SELECT id, status, unidade_id, categoria_id FROM atendimentos WHERE id = ?',
       [parseInt(id)]
     );
 
@@ -81,6 +82,23 @@ export const PUT = withUnit(async (
         { error: 'Não é possível trocar o executor após o procedimento ter sido iniciado' },
         { status: 400 }
       );
+    }
+
+    // Validação: executor precisa ter role compatível com a categoria do atendimento
+    if (executor_id && atendimento.categoria_id) {
+      const compatRow = await queryOne<{ n: number }>(
+        `SELECT COUNT(*) as n
+           FROM usuario_roles ur
+           JOIN categoria_roles cr ON cr.role = ur.role
+          WHERE ur.usuario_id = ? AND cr.categoria_id = ?`,
+        [executor_id, atendimento.categoria_id]
+      );
+      if (!compatRow || compatRow.n === 0) {
+        return NextResponse.json(
+          { error: 'Executor não tem permissão para esta categoria' },
+          { status: 400 }
+        );
+      }
     }
 
     // Validação: edição de valor só em avaliacao ou aguardando_pagamento

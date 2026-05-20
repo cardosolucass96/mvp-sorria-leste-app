@@ -23,12 +23,14 @@ interface Procedimento {
   nome: string;
   valor: number;
   por_dente: number;
+  categoria_id: number | null;
 }
 
 interface Atendimento {
   id: number;
   status: string;
   unidade_id: number;
+  categoria_id: number | null;
 }
 
 type VerificarResult =
@@ -37,7 +39,7 @@ type VerificarResult =
 
 async function verificarAtendimentoUnidade(atendimentoId: number, unidadeId: number): Promise<VerificarResult> {
   const at = await queryOne<Atendimento>(
-    'SELECT id, status, unidade_id FROM atendimentos WHERE id = ?',
+    'SELECT id, status, unidade_id, categoria_id FROM atendimentos WHERE id = ?',
     [atendimentoId]
   );
   if (!at) return { kind: 'error', response: NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 }) };
@@ -117,14 +119,31 @@ export const POST = withUnit(async (
       'SELECT * FROM procedimentos WHERE id = ? AND ativo = 1',
       [procedimento_id]
     );
-    
+
     if (!procedimento) {
       return NextResponse.json(
         { error: 'Procedimento não encontrado ou inativo' },
         { status: 404 }
       );
     }
-    
+
+    // Validação / herança de categoria
+    if (atendimento.categoria_id && procedimento.categoria_id &&
+        atendimento.categoria_id !== procedimento.categoria_id) {
+      return NextResponse.json(
+        { error: 'Procedimento não pertence à categoria deste atendimento' },
+        { status: 400 }
+      );
+    }
+    // Se atendimento ainda não tem categoria, herda do procedimento (primeiro item)
+    if (!atendimento.categoria_id && procedimento.categoria_id) {
+      await execute(
+        'UPDATE atendimentos SET categoria_id = ? WHERE id = ? AND categoria_id IS NULL',
+        [procedimento.categoria_id, parseInt(id as string)]
+      );
+      atendimento.categoria_id = procedimento.categoria_id;
+    }
+
     // Verifica executor se fornecido
     if (executor_id) {
       const executor = await queryOne<{ id: number; role: string }>(
