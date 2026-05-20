@@ -8,6 +8,7 @@ export type ViewMode = 'admin' | 'dentista';
 interface UsuarioComUnidades extends Usuario {
   unidade_ids: number[];
   unidade_atual: number;
+  roles?: UserRole[];
 }
 
 interface AuthContextType {
@@ -182,13 +183,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasRole = (roles: UserRole | UserRole[]): boolean => {
     if (!user) return false;
     const roleArray = Array.isArray(roles) ? roles : [roles];
-    
-    // Admin em modo dentista: simula avaliador + executor
-    if (user.role === 'admin' && viewMode === 'dentista') {
-      return roleArray.includes('avaliador') || roleArray.includes('executor');
+    const userRoles: UserRole[] = (user.roles && user.roles.length > 0)
+      ? user.roles
+      : [user.role];
+
+    // Admin em modo dentista: simula avaliador + executor + ortodontista
+    if (userRoles.includes('admin') && viewMode === 'dentista') {
+      return roleArray.some(r => ['avaliador', 'executor', 'ortodontista'].includes(r));
     }
-    
-    return roleArray.includes(user.role);
+
+    return roleArray.some(r => userRoles.includes(r));
   };
 
   return (

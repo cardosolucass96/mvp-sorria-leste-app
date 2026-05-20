@@ -67,6 +67,19 @@ export function withAuth(handler: AuthenticatedHandler) {
 }
 
 /**
+ * Retorna todas as roles efetivas do usuário (usa `roles` do JWT ou faz fallback para [role]).
+ */
+export function getUserRoles(user: JwtPayload): string[] {
+  return user.roles && user.roles.length > 0 ? user.roles : [user.role];
+}
+
+/** Verifica se o usuário tem pelo menos uma das roles informadas. */
+export function userHasAnyRole(user: JwtPayload, roles: UserRole[]): boolean {
+  const userRoles = getUserRoles(user);
+  return roles.some((r) => userRoles.includes(r));
+}
+
+/**
  * Middleware que exige autenticação + role específica.
  * Rejeita com 401 se não autenticado, 403 se role não permitida.
  */
@@ -75,7 +88,7 @@ export function withRole(
   handler: AuthenticatedHandler
 ) {
   return withAuth(async (request: NextRequest, context: AuthenticatedContext) => {
-    if (!roles.includes(context.user.role as UserRole)) {
+    if (!userHasAnyRole(context.user, roles)) {
       return NextResponse.json(
         { error: 'Acesso não autorizado para este perfil' },
         { status: 403 }
@@ -103,7 +116,8 @@ export function getUnidadeFromRequest(
   if (headerUnit) {
     const parsed = parseInt(headerUnit);
     if (!isNaN(parsed)) {
-      if (user.role === 'admin' || (user.unidade_ids && user.unidade_ids.includes(parsed))) {
+      const isAdmin = getUserRoles(user).includes('admin');
+      if (isAdmin || (user.unidade_ids && user.unidade_ids.includes(parsed))) {
         return parsed;
       }
     }

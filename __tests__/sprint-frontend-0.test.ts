@@ -395,8 +395,8 @@ describe('Sprint 0: origens', () => {
 // =====================================================
 
 describe('Sprint 0: roles', () => {
-  test('ROLE_LABELS tem 4 roles', () => {
-    expect(Object.keys(ROLE_LABELS)).toHaveLength(4);
+  test('ROLE_LABELS tem 5 roles', () => {
+    expect(Object.keys(ROLE_LABELS)).toHaveLength(5);
     expect(ROLE_LABELS.admin).toBe('Administrador');
   });
 
@@ -412,8 +412,8 @@ describe('Sprint 0: roles', () => {
     });
   });
 
-  test('ALL_ROLES tem 4 roles', () => {
-    expect(ALL_ROLES).toEqual(['admin', 'atendente', 'avaliador', 'executor']);
+  test('ALL_ROLES tem 5 roles', () => {
+    expect(ALL_ROLES).toEqual(['admin', 'atendente', 'avaliador', 'executor', 'ortodontista']);
   });
 
   test('getRoleLabel retorna label correto', () => {

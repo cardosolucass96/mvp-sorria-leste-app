@@ -16,7 +16,8 @@ interface JwtHeader {
 export interface JwtPayload {
   sub: number;       // user id
   email: string;
-  role: string;
+  role: string;      // role primária (display). Autorização usa `roles`.
+  roles: string[];   // todas as roles efetivas (source of truth: usuario_roles)
   nome: string;
   unidade_ids: number[];  // unidades que o usuário pertence
   unidade_atual: number;  // unidade selecionada no momento
@@ -86,6 +87,7 @@ export async function generateToken(user: {
   id: number;
   email: string;
   role: string;
+  roles?: string[];
   nome: string;
   unidade_ids: number[];
   unidade_atual: number;
@@ -97,6 +99,7 @@ export async function generateToken(user: {
     sub: user.id,
     email: user.email,
     role: user.role,
+    roles: user.roles ?? [user.role],
     nome: user.nome,
     unidade_ids: user.unidade_ids,
     unidade_atual: user.unidade_atual,
@@ -132,6 +135,11 @@ export async function verifyToken(token: string): Promise<JwtPayload | null> {
     // Verificar expiração
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp < now) return null;
+
+    // Fallback para tokens antigos sem roles[]
+    if (!payload.roles) {
+      payload.roles = payload.role ? [payload.role] : [];
+    }
 
     return payload;
   } catch {

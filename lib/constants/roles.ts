@@ -10,6 +10,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   atendente: 'Atendente',
   avaliador: 'Avaliador',
   executor: 'Executor',
+  ortodontista: 'Ortodontista',
 };
 
 /** Labels descritivos (para tela de gestão de usuários) */
@@ -18,6 +19,7 @@ export const ROLE_LABELS_DESCRITIVOS: Record<UserRole, string> = {
   atendente: 'Atendente',
   avaliador: 'Avaliador (Dentista)',
   executor: 'Executor (Dentista)',
+  ortodontista: 'Ortodontista (Dentista)',
 };
 
 /** Cores por role (Tailwind classes) */
@@ -26,10 +28,11 @@ export const ROLE_COLORS: Record<UserRole, { cor: string; bgCor: string }> = {
   atendente: { cor: 'text-blue-700', bgCor: 'bg-blue-100' },
   avaliador: { cor: 'text-amber-700', bgCor: 'bg-amber-100' },
   executor: { cor: 'text-green-700', bgCor: 'bg-green-100' },
+  ortodontista: { cor: 'text-info-700', bgCor: 'bg-info-100' },
 };
 
 /** Lista de todos os roles disponíveis */
-export const ALL_ROLES: UserRole[] = ['admin', 'atendente', 'avaliador', 'executor'];
+export const ALL_ROLES: UserRole[] = ['admin', 'atendente', 'avaliador', 'executor', 'ortodontista'];
 
 /** Retorna label para qualquer role. Seguro para role desconhecido. */
 export function getRoleLabel(role: string): string {

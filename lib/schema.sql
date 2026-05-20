@@ -2,7 +2,10 @@
 -- SCHEMA DO BANCO DE DADOS - SORRIA LESTE MVP
 -- =====================================================
 
--- Tabela de Usuários (Atendente, Avaliador, Executor)
+-- Tabela de Usuários (Atendente, Avaliador, Executor, Ortodontista)
+-- NOTE: `role` é a role primária (display/badge). Autorização real lê de usuario_roles (M2M).
+-- O CHECK abaixo NÃO inclui 'ortodontista' — SQLite não faz DROP CONSTRAINT.
+-- Um ortodontista puro tem usuarios.role = 'executor' (ou outro válido) e usuario_roles traz 'ortodontista'.
 CREATE TABLE IF NOT EXISTS usuarios (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nome TEXT NOT NULL,
@@ -11,6 +14,37 @@ CREATE TABLE IF NOT EXISTS usuarios (
   role TEXT NOT NULL CHECK (role IN ('atendente', 'avaliador', 'executor', 'admin')),
   ativo INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+-- M2M: roles efetivas do usuário (source of truth de autorização)
+CREATE TABLE IF NOT EXISTS usuario_roles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  UNIQUE (usuario_id, role)
+);
+
+-- Categorias (filas dinâmicas — ex: Geral, Ortodontia, ...)
+CREATE TABLE IF NOT EXISTS categorias (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nome TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  cor TEXT NOT NULL DEFAULT 'primary',
+  icone TEXT NOT NULL DEFAULT 'Activity',
+  ativo INTEGER NOT NULL DEFAULT 1,
+  ordem INTEGER NOT NULL DEFAULT 0,
+  pula_avaliacao INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+-- Roles que atendem cada categoria
+CREATE TABLE IF NOT EXISTS categoria_roles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  categoria_id INTEGER NOT NULL REFERENCES categorias(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  UNIQUE (categoria_id, role)
 );
 
 -- Tabela de Clientes (Pacientes)
@@ -40,6 +74,7 @@ CREATE TABLE IF NOT EXISTS procedimentos (
   por_dente INTEGER NOT NULL DEFAULT 0, -- 1 se o valor é cobrado por dente
   tem_etapas INTEGER NOT NULL DEFAULT 0, -- 1 se o procedimento tem etapas/sessões distintas
   tem_face INTEGER NOT NULL DEFAULT 0, -- 1 se a seleção de faces do dente é obrigatória (apenas para por_dente)
+  categoria_id INTEGER REFERENCES categorias(id),
   ativo INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
@@ -68,7 +103,8 @@ CREATE TABLE IF NOT EXISTS atendimentos (
   agendamento_id INTEGER,
   unidade_id INTEGER,
   tipo TEXT NOT NULL DEFAULT 'normal'
-    CHECK (tipo IN ('normal','sessao','orto')),
+    CHECK (tipo IN ('normal','sessao','orto')), -- LEGADO: categoria_id é o novo discriminador de fila
+  categoria_id INTEGER REFERENCES categorias(id),
   motivo_saida TEXT,
   observacoes TEXT,
   observacoes_encerramento TEXT,
@@ -323,3 +359,11 @@ CREATE INDEX IF NOT EXISTS idx_usu_unid_usuario ON usuario_unidades(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_usu_unid_unidade ON usuario_unidades(unidade_id);
 CREATE INDEX IF NOT EXISTS idx_atendimentos_unidade ON atendimentos(unidade_id);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_unidade ON agendamentos(unidade_id);
+CREATE INDEX IF NOT EXISTS idx_categorias_slug ON categorias(slug);
+CREATE INDEX IF NOT EXISTS idx_categorias_ativo ON categorias(ativo);
+CREATE INDEX IF NOT EXISTS idx_categoria_roles_cat ON categoria_roles(categoria_id);
+CREATE INDEX IF NOT EXISTS idx_categoria_roles_role ON categoria_roles(role);
+CREATE INDEX IF NOT EXISTS idx_usuario_roles_usuario ON usuario_roles(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_usuario_roles_role ON usuario_roles(role);
+CREATE INDEX IF NOT EXISTS idx_procedimentos_categoria ON procedimentos(categoria_id);
+CREATE INDEX IF NOT EXISTS idx_atendimentos_categoria ON atendimentos(categoria_id);

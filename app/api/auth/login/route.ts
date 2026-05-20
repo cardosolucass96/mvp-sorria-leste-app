@@ -74,11 +74,26 @@ export async function POST(request: NextRequest) {
       // Tabelas de unidade ainda não existem — usar padrão
     }
 
+    // Buscar roles efetivas do usuário (M2M). Fallback: [user.role] se tabela ainda não existe.
+    let roles: string[] = [user.role];
+    try {
+      const rolesRows = await query<{ role: string }>(
+        'SELECT role FROM usuario_roles WHERE usuario_id = ?',
+        [user.id]
+      );
+      if (rolesRows.length > 0) {
+        roles = rolesRows.map(r => r.role);
+      }
+    } catch {
+      // Tabela usuario_roles ainda não existe — usar [role] primária
+    }
+
     // Gerar JWT
     const token = await generateToken({
       id: user.id,
       email: user.email,
       role: user.role,
+      roles,
       nome: user.nome,
       unidade_ids: unidadeIds,
       unidade_atual: unidadeAtual,
@@ -88,6 +103,7 @@ export async function POST(request: NextRequest) {
     const { senha: _, ...userSemSenha } = user;
     const userComUnidades = {
       ...userSemSenha,
+      roles,
       unidade_ids: unidadeIds,
       unidade_atual: unidadeAtual,
     };

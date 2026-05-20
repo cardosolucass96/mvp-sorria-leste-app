@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
 import { Usuario } from '@/lib/types';
+import { ALL_ROLES } from '@/lib/constants/roles';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-// GET /api/usuarios/[id] - Buscar usuário por ID (com suas unidades)
+// GET /api/usuarios/[id] - Buscar usuário por ID (com suas unidades e roles)
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
@@ -22,14 +23,24 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Buscar unidades do usuário
     const unidades = await query<{ unidade_id: number }>(
       'SELECT unidade_id FROM usuario_unidades WHERE usuario_id = ? ORDER BY unidade_id',
       [id]
     );
     const unidade_ids = unidades.map(u => u.unidade_id);
 
-    return NextResponse.json({ ...usuario, unidade_ids });
+    let roles: string[] = [usuario.role];
+    try {
+      const rolesRows = await query<{ role: string }>(
+        'SELECT role FROM usuario_roles WHERE usuario_id = ?',
+        [id]
+      );
+      if (rolesRows.length > 0) roles = rolesRows.map(r => r.role);
+    } catch {
+      // tabela não existe ainda
+    }
+
+    return NextResponse.json({ ...usuario, unidade_ids, roles });
   } catch (error) {
     console.error('Erro ao buscar usuário:', error);
     return NextResponse.json(
@@ -44,7 +55,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nome, email, role, ativo, unidade_ids } = body;
+    const { nome, email, role, roles, role_primaria, ativo, unidade_ids } = body;
 
     // Verifica se usuário existe
     const existing = await queryOne<Usuario>(
@@ -59,16 +70,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Validações
-    if (role) {
-      const validRoles = ['admin', 'atendente', 'avaliador', 'executor'];
-      if (!validRoles.includes(role)) {
-        return NextResponse.json(
-          { error: 'Role inválido' },
-          { status: 400 }
-        );
+    // Resolve roles e primária quando enviados
+    const rolesEfetivas: string[] | null = Array.isArray(roles) && roles.length > 0 ? roles : null;
+    const primariaBody: string | null = role_primaria || role || null;
+
+    if (rolesEfetivas) {
+      for (const r of rolesEfetivas) {
+        if (!ALL_ROLES.includes(r as typeof ALL_ROLES[number])) {
+          return NextResponse.json({ error: `Role inválida: ${r}` }, { status: 400 });
+        }
+      }
+      if (primariaBody && !rolesEfetivas.includes(primariaBody)) {
+        return NextResponse.json({ error: 'Role primária deve estar em roles' }, { status: 400 });
+      }
+    } else if (role) {
+      if (!ALL_ROLES.includes(role as typeof ALL_ROLES[number])) {
+        return NextResponse.json({ error: 'Role inválido' }, { status: 400 });
       }
     }
+
+    // Role primária na coluna usuarios.role (CHECK constraint antigo não permite 'ortodontista')
+    const primariaParaColuna = primariaBody
+      ? (primariaBody === 'ortodontista' ? 'executor' : primariaBody)
+      : null;
 
     // Verifica duplicidade de email
     if (email && email !== existing.email) {
@@ -87,7 +111,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Atualiza
     await execute(
-      `UPDATE usuarios SET 
+      `UPDATE usuarios SET
         nome = COALESCE(?, nome),
         email = COALESCE(?, email),
         role = COALESCE(?, role),
@@ -96,7 +120,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       [
         nome?.trim() || null,
         email?.toLowerCase().trim() || null,
-        role || null,
+        primariaParaColuna,
         ativo !== undefined ? (ativo ? 1 : 0) : null,
         id
       ]
@@ -113,6 +137,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // Atualizar roles efetivas (M2M). Se `roles` não foi enviado, não mexe.
+    if (rolesEfetivas) {
+      await execute('DELETE FROM usuario_roles WHERE usuario_id = ?', [id]);
+      for (const r of rolesEfetivas) {
+        await execute(
+          'INSERT OR IGNORE INTO usuario_roles (usuario_id, role) VALUES (?, ?)',
+          [id, r]
+        );
+      }
+    }
+
     const updated = await queryOne<Usuario>(
       'SELECT id, nome, email, role, ativo, created_at FROM usuarios WHERE id = ?',
       [id]
@@ -124,7 +159,16 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       [id]
     );
 
-    return NextResponse.json({ ...updated, unidade_ids: unidades.map(u => u.unidade_id) });
+    const rolesFinais = await query<{ role: string }>(
+      'SELECT role FROM usuario_roles WHERE usuario_id = ?',
+      [id]
+    );
+
+    return NextResponse.json({
+      ...updated,
+      unidade_ids: unidades.map(u => u.unidade_id),
+      roles: rolesFinais.length > 0 ? rolesFinais.map(r => r.role) : [updated?.role || 'atendente'],
+    });
   } catch (error) {
     console.error('Erro ao atualizar usuário:', error);
     return NextResponse.json(

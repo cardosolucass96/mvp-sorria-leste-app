@@ -1,6 +1,6 @@
 // Tipos do banco de dados
 
-export type UserRole = 'admin' | 'atendente' | 'avaliador' | 'executor';
+export type UserRole = 'admin' | 'atendente' | 'avaliador' | 'executor' | 'ortodontista';
 
 export type AtendimentoStatus =
   | 'triagem'
@@ -36,8 +36,39 @@ export interface Usuario {
   id: number;
   nome: string;
   email: string;
-  role: UserRole;
+  role: UserRole;           // Role primária (display/badge). Autorização usa `roles`.
+  roles?: UserRole[];       // Todas as roles do usuário (source of truth em usuario_roles)
   ativo: number; // 0 ou 1
+  created_at: string;
+}
+
+export interface Categoria {
+  id: number;
+  nome: string;
+  slug: string;
+  cor: string;
+  icone: string;
+  ativo: number;
+  ordem: number;
+  pula_avaliacao: number;
+  created_at: string;
+}
+
+export interface CategoriaComRoles extends Categoria {
+  roles: UserRole[];
+}
+
+export interface UsuarioRole {
+  id: number;
+  usuario_id: number;
+  role: UserRole;
+  created_at: string;
+}
+
+export interface CategoriaRole {
+  id: number;
+  categoria_id: number;
+  role: UserRole;
   created_at: string;
 }
 
@@ -66,6 +97,7 @@ export interface Procedimento {
   por_dente: number; // 0 ou 1 - indica se o valor é cobrado por dente
   tem_etapas: number; // 0 ou 1 - indica se o procedimento tem etapas/sessões distintas
   tem_face: number; // 0 ou 1 - indica se a seleção de faces do dente é obrigatória (apenas para por_dente)
+  categoria_id: number | null;
   ativo: number;
   created_at: string;
 }
@@ -95,6 +127,7 @@ export interface Atendimento {
   unidade_id: number;
   status: AtendimentoStatus;
   tipo: AtendimentoTipo;
+  categoria_id: number | null;
   motivo_saida: MotivoSaida | null;
   observacoes: string | null;
   created_at: string;

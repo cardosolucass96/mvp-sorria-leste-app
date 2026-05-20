@@ -2,32 +2,30 @@
 
 import { useState, useEffect } from 'react';
 import { Usuario, UserRole, Unidade } from '@/lib/types';
-import { Users, Building2 } from 'lucide-react';
-import { PageHeader, Card, Button, Input, Select, Badge, Alert, LoadingState, Table, ConfirmDialog } from '@/components/ui';
+import { Users, Building2, Shield } from 'lucide-react';
+import { PageHeader, Card, Button, Input, Badge, Alert, LoadingState, Table, ConfirmDialog } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
-import { ROLE_LABELS_DESCRITIVOS } from '@/lib/constants/roles';
+import { ROLE_LABELS_DESCRITIVOS, ROLE_LABELS, ALL_ROLES } from '@/lib/constants/roles';
 import usePageTitle from '@/lib/utils/usePageTitle';
-
-const roleOptions = Object.entries(ROLE_LABELS_DESCRITIVOS).map(([value, label]) => ({
-  value,
-  label,
-}));
 
 interface UsuarioComUnidades extends Usuario {
   unidade_ids?: number[];
+  roles?: UserRole[];
 }
 
 interface UsuarioFormData {
   nome: string;
   email: string;
-  role: UserRole;
+  roles: UserRole[];
+  role_primaria: UserRole;
   unidade_ids: number[];
 }
 
 const initialFormData: UsuarioFormData = {
   nome: '',
   email: '',
-  role: 'atendente',
+  roles: ['atendente'],
+  role_primaria: 'atendente',
   unidade_ids: [1],
 };
 
@@ -99,10 +97,13 @@ export default function UsuariosPage() {
 
   // Abrir formulário para editar
   const handleEdit = (usuario: UsuarioComUnidades) => {
+    const userRoles: UserRole[] = usuario.roles && usuario.roles.length > 0 ? usuario.roles : [usuario.role];
+    const primaria: UserRole = userRoles.includes(usuario.role) ? usuario.role : userRoles[0];
     setFormData({
       nome: usuario.nome,
       email: usuario.email,
-      role: usuario.role,
+      roles: userRoles,
+      role_primaria: primaria,
       unidade_ids: usuario.unidade_ids || [1],
     });
     setEditingId(usuario.id);
@@ -123,14 +124,31 @@ export default function UsuariosPage() {
     e.preventDefault();
     setError('');
 
+    if (formData.roles.length === 0) {
+      setError('Selecione ao menos uma role');
+      return;
+    }
+    if (!formData.roles.includes(formData.role_primaria)) {
+      setError('Role primária deve estar entre as selecionadas');
+      return;
+    }
+
     try {
       const url = editingId ? `/api/usuarios/${editingId}` : '/api/usuarios';
       const method = editingId ? 'PUT' : 'POST';
 
+      const payload = {
+        nome: formData.nome,
+        email: formData.email,
+        roles: formData.roles,
+        role_primaria: formData.role_primaria,
+        unidade_ids: formData.unidade_ids,
+      };
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -199,14 +217,30 @@ export default function UsuariosPage() {
     }
   };
 
-  const getRoleBadgeColor = (role: UserRole): 'evaluation' | 'blue' | 'amber' | 'green' => {
-    const map: Record<UserRole, 'evaluation' | 'blue' | 'amber' | 'green'> = {
+  const getRoleBadgeColor = (role: UserRole): 'evaluation' | 'blue' | 'amber' | 'green' | 'purple' => {
+    const map: Record<UserRole, 'evaluation' | 'blue' | 'amber' | 'green' | 'purple'> = {
       admin: 'evaluation',
       atendente: 'blue',
       avaliador: 'amber',
       executor: 'green',
+      ortodontista: 'purple',
     };
     return map[role];
+  };
+
+  const toggleRole = (role: UserRole) => {
+    setFormData(prev => {
+      const has = prev.roles.includes(role);
+      const newRoles = has ? prev.roles.filter(r => r !== role) : [...prev.roles, role];
+      let primaria = prev.role_primaria;
+      if (has && role === primaria) {
+        primaria = newRoles[0] || 'atendente';
+      }
+      if (!has && newRoles.length === 1) {
+        primaria = role;
+      }
+      return { ...prev, roles: newRoles, role_primaria: primaria };
+    });
   };
 
   if (isLoading) {
@@ -253,14 +287,45 @@ export default function UsuariosPage() {
                 required
               />
             </div>
-            <Select
-              label="Perfil"
-              name="role"
-              value={formData.role}
-              onChange={(v) => setFormData({ ...formData, role: v as UserRole })}
-              options={roleOptions}
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">
+                <Shield className="w-4 h-4 inline mr-1" />
+                Perfis (marque quantos quiser)
+              </label>
+              <div className="space-y-2">
+                {ALL_ROLES.map(role => {
+                  const checked = formData.roles.includes(role);
+                  return (
+                    <div key={role} className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer flex-1">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleRole(role)}
+                          className="w-4 h-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+                        />
+                        <span className="text-sm text-neutral-700">{ROLE_LABELS_DESCRITIVOS[role]}</span>
+                      </label>
+                      {checked && (
+                        <label className="flex items-center gap-1 cursor-pointer text-xs text-muted">
+                          <input
+                            type="radio"
+                            name="role_primaria"
+                            checked={formData.role_primaria === role}
+                            onChange={() => setFormData({ ...formData, role_primaria: role })}
+                            className="w-3.5 h-3.5 text-brand-600 focus:ring-brand-500"
+                          />
+                          Primária
+                        </label>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {formData.roles.length === 0 && (
+                <p className="text-xs text-error-600 mt-1">Selecione ao menos um perfil</p>
+              )}
+            </div>
             {unidades.length > 0 && (
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-2">
@@ -323,12 +388,24 @@ export default function UsuariosPage() {
           },
           {
             key: 'role',
-            label: 'Perfil',
-            render: (u) => (
-              <Badge color={getRoleBadgeColor(u.role)}>
-                {ROLE_LABELS_DESCRITIVOS[u.role]}
-              </Badge>
-            ),
+            label: 'Perfis',
+            render: (u) => {
+              const rolesList: UserRole[] = u.roles && u.roles.length > 0 ? u.roles : [u.role];
+              return (
+                <div className="flex flex-wrap gap-1">
+                  {rolesList.map(r => (
+                    <Badge
+                      key={r}
+                      color={getRoleBadgeColor(r)}
+                      className={r === u.role ? 'ring-1 ring-offset-0' : ''}
+                    >
+                      {ROLE_LABELS[r]}
+                      {r === u.role && ' ★'}
+                    </Badge>
+                  ))}
+                </div>
+              );
+            },
           },
           {
             key: 'unidades',

@@ -2,17 +2,40 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, execute } from '@/lib/db';
 import { Usuario } from '@/lib/types';
 import { hashPassword } from '@/lib/auth';
+import { ALL_ROLES } from '@/lib/constants/roles';
 
-// GET /api/usuarios - Listar todos os usuários (com suas unidades)
+// GET /api/usuarios - Listar todos os usuários (com suas unidades e roles)
+// Params: ?unidade_id=X | ?categoria_id=X | ?role=X (filtra por roles válidas p/ a categoria ou pela role exata)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const unidadeId = searchParams.get('unidade_id');
+    const categoriaId = searchParams.get('categoria_id');
+    const role = searchParams.get('role');
 
-    let usuarios: (Usuario & { unidade_ids?: number[] })[];
+    let usuarios: (Usuario & { unidade_ids?: number[]; roles?: string[] })[];
 
-    if (unidadeId) {
-      // Filtrar por unidade específica
+    if (categoriaId) {
+      // Usuários cuja ALGUMA role está em categoria_roles desta categoria
+      usuarios = await query<Usuario>(
+        `SELECT DISTINCT u.id, u.nome, u.email, u.role, u.ativo, u.created_at
+           FROM usuarios u
+           JOIN usuario_roles ur ON ur.usuario_id = u.id
+           JOIN categoria_roles cr ON cr.role = ur.role
+          WHERE cr.categoria_id = ? AND u.ativo = 1
+          ORDER BY u.nome`,
+        [parseInt(categoriaId)]
+      );
+    } else if (role) {
+      usuarios = await query<Usuario>(
+        `SELECT DISTINCT u.id, u.nome, u.email, u.role, u.ativo, u.created_at
+           FROM usuarios u
+           JOIN usuario_roles ur ON ur.usuario_id = u.id
+          WHERE ur.role = ? AND u.ativo = 1
+          ORDER BY u.nome`,
+        [role]
+      );
+    } else if (unidadeId) {
       usuarios = await query<Usuario>(
         `SELECT DISTINCT u.id, u.nome, u.email, u.role, u.ativo, u.created_at
          FROM usuarios u
@@ -39,9 +62,24 @@ export async function GET(request: NextRequest) {
       unidadesMap.get(row.usuario_id)!.push(row.unidade_id);
     }
 
+    // Buscar roles de cada usuário (fallback graceful se tabela não existir ainda)
+    const rolesMap = new Map<number, string[]>();
+    try {
+      const rolesRows = await query<{ usuario_id: number; role: string }>(
+        'SELECT usuario_id, role FROM usuario_roles'
+      );
+      for (const row of rolesRows) {
+        if (!rolesMap.has(row.usuario_id)) rolesMap.set(row.usuario_id, []);
+        rolesMap.get(row.usuario_id)!.push(row.role);
+      }
+    } catch {
+      // tabela ainda não migrada
+    }
+
     const result = usuarios.map(u => ({
       ...u,
       unidade_ids: unidadesMap.get(u.id) || [],
+      roles: rolesMap.get(u.id) || [u.role],
     }));
 
     return NextResponse.json(result);
@@ -58,10 +96,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nome, email, role, unidade_ids } = body;
+    const { nome, email, role, roles, role_primaria, unidade_ids } = body;
+
+    // Resolve roles efetivas e role primária (compatibilidade com clientes antigos que só mandavam `role`).
+    const rolesEfetivas: string[] = Array.isArray(roles) && roles.length > 0 ? roles : (role ? [role] : []);
+    const primaria: string = role_primaria || role || rolesEfetivas[0];
 
     // Validações
-    if (!nome || !email || !role) {
+    if (!nome || !email || rolesEfetivas.length === 0) {
       return NextResponse.json(
         { error: 'Nome, email e role são obrigatórios' },
         { status: 400 }
@@ -82,13 +124,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const validRoles = ['admin', 'atendente', 'avaliador', 'executor'];
-    if (!validRoles.includes(role)) {
-      return NextResponse.json(
-        { error: 'Role inválido' },
-        { status: 400 }
-      );
+    for (const r of rolesEfetivas) {
+      if (!ALL_ROLES.includes(r as typeof ALL_ROLES[number])) {
+        return NextResponse.json({ error: `Role inválida: ${r}` }, { status: 400 });
+      }
     }
+    if (!rolesEfetivas.includes(primaria)) {
+      return NextResponse.json({ error: 'Role primária deve estar em roles' }, { status: 400 });
+    }
+
+    // Para o CHECK constraint de usuarios.role (que não inclui 'ortodontista'), armazenamos a primária
+    // convertendo 'ortodontista' → 'executor' (role primária de display sem afetar autorização).
+    const primariaParaColuna = primaria === 'ortodontista' ? 'executor' : primaria;
 
     // Verifica se email já existe
     const existing = await query<Usuario>(
@@ -108,7 +155,7 @@ export async function POST(request: Request) {
 
     const result = await execute(
       'INSERT INTO usuarios (nome, email, role, senha) VALUES (?, ?, ?, ?)',
-      [nome.trim(), email.toLowerCase().trim(), role, senhaHash]
+      [nome.trim(), email.toLowerCase().trim(), primariaParaColuna, senhaHash]
     );
 
     const userId = result.lastInsertRowid as number;
@@ -122,12 +169,24 @@ export async function POST(request: Request) {
       );
     }
 
+    // Atribuir todas as roles efetivas (M2M)
+    for (const r of rolesEfetivas) {
+      await execute(
+        'INSERT OR IGNORE INTO usuario_roles (usuario_id, role) VALUES (?, ?)',
+        [userId, r]
+      );
+    }
+
     const novoUsuario = await query<Usuario>(
       'SELECT id, nome, email, role, ativo, created_at FROM usuarios WHERE id = ?',
       [userId]
     );
 
-    return NextResponse.json({ ...novoUsuario[0], unidade_ids: idsToAssign }, { status: 201 });
+    return NextResponse.json({
+      ...novoUsuario[0],
+      unidade_ids: idsToAssign,
+      roles: rolesEfetivas,
+    }, { status: 201 });
   } catch (error) {
     console.error('Erro ao criar usuário:', error);
     return NextResponse.json(
