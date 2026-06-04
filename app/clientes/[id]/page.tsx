@@ -226,6 +226,25 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     }
   }, [error, success]);
 
+  useEffect(() => {
+    if (!transferBusca || transferBusca.length < 2) { setTransferResultados([]); return; }
+    setTransferBuscando(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/clientes?busca=${encodeURIComponent(transferBusca)}&limit=5`);
+        if (res.ok) {
+          const data = await res.json();
+          setTransferResultados(
+            (data.clientes ?? data).filter((c: { id: number }) => c.id !== parseInt(id, 10))
+          );
+        }
+      } catch { /* silently fail */ } finally {
+        setTransferBuscando(false);
+      }
+    }, 300);
+    return () => { clearTimeout(t); setTransferBuscando(false); };
+  }, [transferBusca, id]);
+
   const handleSubmit = async (formData: ClienteFormData) => {
     setError('');
     setIsSaving(true);
@@ -248,6 +267,19 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   };
 
   const handleDelete = () => {
+    const temAtendimentos = (ficha?.atendimentos.length ?? 0) > 0;
+    if (temAtendimentos) {
+      openConfirm({
+        title: 'Não é possível excluir',
+        message: `O cliente "${cliente?.nome}" possui ${ficha?.atendimentos.length} atendimento(s) vinculado(s). Não é possível excluir clientes com atendimentos.`,
+        confirmLabel: 'Entendi',
+        type: 'warning',
+        onConfirm: async () => {
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        },
+      });
+      return;
+    }
     openConfirm({
       title: 'Excluir Cliente',
       message: `Deseja excluir o cliente "${cliente?.nome}"? Esta ação não pode ser desfeita.`,
@@ -377,23 +409,6 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       setError('Erro ao transferir saldo');
     } finally {
       setTransferindo(false);
-    }
-  };
-
-  const handleBuscarTransferDestino = async (termo: string) => {
-    setTransferBusca(termo);
-    if (termo.length < 2) { setTransferResultados([]); return; }
-    setTransferBuscando(true);
-    try {
-      const res = await fetch(`/api/clientes?busca=${encodeURIComponent(termo)}&limit=5`);
-      if (res.ok) {
-        const data = await res.json();
-        setTransferResultados(
-          (data.clientes ?? data).filter((c: { id: number }) => c.id !== parseInt(id, 10))
-        );
-      }
-    } catch { /* silently fail */ } finally {
-      setTransferBuscando(false);
     }
   };
 
@@ -820,37 +835,58 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           </h2>
           {!ficha?.historico.length ? (
             <p className="text-center py-8 text-muted">Nenhum evento registrado</p>
-          ) : (
-            <div className="relative">
-              <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-neutral-200" />
-              <div className="space-y-4">
-                {ficha.historico.map((ev, i) => {
-                  const cfg = HISTORICO_CONFIG[ev.tipo] ?? { label: ev.tipo, cor: 'bg-neutral-400' };
-                  return (
-                    <div key={i} className="flex gap-4 relative">
-                      <div className={`w-3 h-3 rounded-full mt-1.5 shrink-0 z-10 ${cfg.cor}`} style={{ marginLeft: '10px' }} />
-                      <div className="flex-1 pb-2">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <span className="text-xs font-semibold uppercase tracking-wide text-muted">{cfg.label}</span>
-                            <p className="text-sm text-foreground mt-0.5">{ev.descricao}</p>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-xs text-muted">{formatarDataHora(ev.data)}</p>
-                            {ev.ref_id > 0 && (
-                              <Link href={`/atendimentos/${ev.ref_id}`} className="text-xs text-info-600 hover:text-info-800">
-                                Ver atend. →
-                              </Link>
-                            )}
+          ) : (() => {
+            const TIPOS_SALDO = new Set(['credito', 'debito', 'estorno', 'transferencia_saida', 'transferencia_entrada']);
+            const eventosAtendimento = ficha.historico.filter(ev => !TIPOS_SALDO.has(ev.tipo));
+            const eventosSaldo = ficha.historico.filter(ev => TIPOS_SALDO.has(ev.tipo));
+            const renderTimeline = (eventos: EventoHistorico[]) => (
+              <div className="relative">
+                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-neutral-200" />
+                <div className="space-y-4">
+                  {eventos.map((ev, i) => {
+                    const cfg = HISTORICO_CONFIG[ev.tipo] ?? { label: ev.tipo, cor: 'bg-neutral-400' };
+                    return (
+                      <div key={i} className="flex gap-4 relative">
+                        <div className={`w-3 h-3 rounded-full mt-1.5 shrink-0 z-10 ${cfg.cor}`} style={{ marginLeft: '10px' }} />
+                        <div className="flex-1 pb-2">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <span className="text-xs font-semibold uppercase tracking-wide text-muted">{cfg.label}</span>
+                              <p className="text-sm text-foreground mt-0.5">{ev.descricao}</p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs text-muted">{formatarDataHora(ev.data)}</p>
+                              {ev.ref_id > 0 && (
+                                <Link href={`/atendimentos/${ev.ref_id}`} className="text-xs text-info-600 hover:text-info-800">
+                                  Ver atend. →
+                                </Link>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+            return (
+              <div className="space-y-6">
+                {eventosAtendimento.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted mb-4">Atendimentos & Procedimentos</h3>
+                    {renderTimeline(eventosAtendimento)}
+                  </div>
+                )}
+                {eventosSaldo.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted mb-4 pt-2 border-t border-neutral-200">Movimentações de Saldo</h3>
+                    {renderTimeline(eventosSaldo)}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </Card>
       )}
 
@@ -1158,7 +1194,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 <input
                   type="text"
                   value={transferBusca}
-                  onChange={(e) => handleBuscarTransferDestino(e.target.value)}
+                  onChange={(e) => setTransferBusca(e.target.value)}
                   placeholder="Buscar por nome ou CPF..."
                   className="input w-full"
                   autoFocus

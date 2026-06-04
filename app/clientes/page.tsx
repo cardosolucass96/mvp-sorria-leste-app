@@ -20,6 +20,7 @@ export default function ClientesPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [limit, setLimit] = useState(50);
   const router = useRouter();
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -46,6 +47,7 @@ export default function ClientesPage() {
       setClientes(data.clientes);
       setTotal(data.total);
       setTotalPages(data.totalPages);
+      if (data.limit) setLimit(data.limit);
     } catch {
       setError('Erro ao carregar clientes');
     } finally {
@@ -197,7 +199,7 @@ export default function ClientesPage() {
 
       {!isLoading && total > 0 && (
         <p className="text-sm text-muted text-center">
-          {((page - 1) * 50) + 1}–{Math.min(page * 50, total)} de {total} cliente(s)
+          {((page - 1) * limit) + 1}–{Math.min(page * limit, total)} de {total} cliente(s)
         </p>
       )}
 
