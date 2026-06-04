@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import {
@@ -52,19 +52,22 @@ function UserAvatar({ nome, className }: { nome: string; className?: string }) {
   );
 }
 
+const subscribe = () => () => {};
+
 export default function Header() {
   const { user, logout, viewMode, toggleViewMode, isAdmin } = useAuth();
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
+  const sidebarContext = useSidebar();
+  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
   const [showSenhaModal, setShowSenhaModal] = useState(false);
 
-  // Access sidebar context safely — only available when inside SidebarProvider
-  let sidebarContext: ReturnType<typeof useSidebar> | null = null;
-  try {
-    sidebarContext = useSidebar();
-  } catch {
-    // Not wrapped in SidebarProvider (e.g. public routes)
-  }
+  const isDarkMode = mounted && resolvedTheme === 'dark';
+  const themeActionLabel = isDarkMode ? 'Modo claro' : 'Modo escuro';
+
+  const handleThemeToggle = () => {
+    setTheme(isDarkMode ? 'light' : 'dark');
+  };
 
   const handleLogout = () => {
     logout();
@@ -100,12 +103,13 @@ export default function Header() {
 
               {/* Theme toggle */}
               <button
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                onClick={handleThemeToggle}
                 className="hidden sm:flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
-                aria-label={theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
+                title={themeActionLabel}
+                aria-label={`Ativar ${themeActionLabel.toLowerCase()}`}
+                disabled={!mounted}
               >
-                {theme === 'dark' ? (
+                {isDarkMode ? (
                   <Sun className="size-4" />
                 ) : (
                   <Moon className="size-4" />
@@ -164,10 +168,10 @@ export default function Header() {
                   {/* Mobile-only: theme toggle */}
                   <DropdownMenuItem
                     className="sm:hidden"
-                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                    onClick={handleThemeToggle}
                   >
-                    {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-                    {theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+                    {isDarkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                    {themeActionLabel}
                   </DropdownMenuItem>
 
                   {/* Mobile-only: Admin/Dentista toggle */}

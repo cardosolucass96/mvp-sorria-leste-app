@@ -14,7 +14,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import Modal from '@/components/ui/Modal';
 import Textarea from '@/components/ui/Textarea';
-import { StatusBadge, ProntuarioDrawer, AgendaCalendario } from '@/components/domain';
+import { StatusBadge, ProntuarioDrawer, AgendaCalendario, ViewModeToggle } from '@/components/domain';
 import { useToast } from '@/components/ui/Toast';
 import { formatarDataAgendada, formatarTelefone } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -640,11 +640,11 @@ export default function AgendaPage() {
         onClick={cardDestino ? () => router.push(cardDestino) : undefined}
       >
         {/* Cabeçalho */}
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border-light bg-surface-raised flex-wrap">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border-light bg-surface-secondary flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-foreground">{grupo.cliente_nome}</span>
             {grupo.cliente_telefone && (
-              <span className="text-sm text-muted">{formatarTelefone(grupo.cliente_telefone)}</span>
+              <span className="text-sm text-muted-foreground">{formatarTelefone(grupo.cliente_telefone)}</span>
             )}
             {dataGrupo
               ? <Badge color="blue" size="sm">{formatarDataAgendada(dataGrupo)}</Badge>
@@ -703,7 +703,7 @@ export default function AgendaPage() {
               type="button"
               onClick={(e) => { e.stopPropagation(); setDrawerClienteId(grupo.cliente_id); }}
               title="Ver prontuário"
-              className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1.5 rounded-lg border border-border text-muted hover:text-primary-700 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+              className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700"
             >
               <FileText className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Prontuário</span>
@@ -789,7 +789,7 @@ export default function AgendaPage() {
                   <span className="text-sm text-foreground">
                     {ag.procedimento_nome}
                     {ag.etapa_modelo_nome && (
-                      <span className="text-muted ml-1">— {ag.etapa_modelo_nome}</span>
+                      <span className="ml-1 text-muted-foreground">— {ag.etapa_modelo_nome}</span>
                     )}
                   </span>
                   {(() => {
@@ -798,19 +798,19 @@ export default function AgendaPage() {
                       return podTrocar ? (
                         <button
                           onClick={(e) => { e.stopPropagation(); carregarExecutores(); setExecutorDialog({ isOpen: true, agendamento: ag, executorId: String(ag.executor_id ?? '') }); }}
-                          className="block text-xs text-muted hover:text-primary-600 hover:underline transition-colors"
+                          className="block text-xs text-muted-foreground transition-colors hover:text-primary-600 hover:underline"
                           title={`Clique para trocar ${roleLabel.toLowerCase()}`}
                         >
                           {roleLabel}: {ag.executor_nome}
                         </button>
                       ) : (
-                        <span className="block text-xs text-muted">{roleLabel}: {ag.executor_nome}</span>
+                        <span className="block text-xs text-muted-foreground">{roleLabel}: {ag.executor_nome}</span>
                       );
                     }
                     return podTrocar ? (
                       <button
                         onClick={(e) => { e.stopPropagation(); carregarExecutores(); setExecutorDialog({ isOpen: true, agendamento: ag, executorId: '' }); }}
-                        className="block text-xs text-muted italic hover:text-primary-600 hover:underline transition-colors"
+                        className="block text-xs italic text-muted-foreground transition-colors hover:text-primary-600 hover:underline"
                         title={`Clique para definir ${roleLabel.toLowerCase()}`}
                       >
                         Sem {roleLabel.toLowerCase()}
@@ -844,32 +844,14 @@ export default function AgendaPage() {
         description={isDentista ? `Seus agendamentos, ${user?.nome}` : 'Gestão de retornos agendados'}
         actions={
           <div className="flex items-center gap-2">
-            <div className="flex rounded-lg border border-border overflow-hidden text-sm">
-              <button
-                onClick={() => setViewMode('lista')}
-                className={`flex items-center gap-1.5 px-3 py-2 transition-colors ${
-                  viewMode === 'lista'
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-surface text-muted hover:bg-surface-secondary'
-                }`}
-                title="Lista"
-              >
-                <List className="w-4 h-4" />
-                <span className="hidden sm:inline">Lista</span>
-              </button>
-              <button
-                onClick={() => setViewMode('calendario')}
-                className={`flex items-center gap-1.5 px-3 py-2 transition-colors border-l border-border ${
-                  viewMode === 'calendario'
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-surface text-muted hover:bg-surface-secondary'
-                }`}
-                title="Calendário"
-              >
-                <CalendarDays className="w-4 h-4" />
-                <span className="hidden sm:inline">Calendário</span>
-              </button>
-            </div>
+            <ViewModeToggle
+              options={[
+                { key: 'lista', label: 'Lista', icon: <List className="w-4 h-4" /> },
+                { key: 'calendario', label: 'Calendário', icon: <CalendarDays className="w-4 h-4" /> },
+              ]}
+              active={viewMode}
+              onChange={(key) => setViewMode(key as 'lista' | 'calendario')}
+            />
             <Button onClick={abrirNovoAgendamento}>
               <Plus className="w-4 h-4 mr-1" />
               <span className="hidden sm:inline">Novo Agendamento</span>
@@ -923,7 +905,7 @@ export default function AgendaPage() {
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   filtroRapido === f.id
                     ? 'bg-primary-600 text-white'
-                    : 'bg-surface-secondary text-muted hover:text-foreground hover:bg-neutral-200'
+                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-foreground'
                 }`}
               >
                 {f.label}
@@ -933,7 +915,7 @@ export default function AgendaPage() {
         )}
       </div>
 
-      <div className="text-sm text-muted">
+      <div className="text-sm text-muted-foreground">
         {total > 0 ? `${agrupados.length} cliente(s) · ${total} agendamento(s)` : 'Nenhum resultado'}
       </div>
 
@@ -950,7 +932,7 @@ export default function AgendaPage() {
             {(() => {
               if (!selectedDay) {
                 return (
-                  <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted">
+                  <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                     Selecione um dia no calendário para ver os agendamentos.
                   </div>
                 );
@@ -960,7 +942,7 @@ export default function AgendaPage() {
               const label = selectedDay.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
               if (gruposDoDia.length === 0) {
                 return (
-                  <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted">
+                  <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                     Nenhum agendamento em {label}.
                   </div>
                 );
@@ -991,7 +973,7 @@ export default function AgendaPage() {
           {/* Agendamentos sem data */}
           {agrupadosSemData.length > 0 && (
             <div className="mt-8">
-              <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-600">
                 Sem data agendada ({agrupadosSemData.reduce((s, g) => s + g.agendamentos.length, 0)})
               </h3>
               <div className="space-y-3">
@@ -1005,7 +987,7 @@ export default function AgendaPage() {
       {/* Paginação */}
       {viewMode === 'lista' && pages > 1 && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted">Página {page} de {pages} · {total} registros</span>
+          <span className="text-muted-foreground">Página {page} de {pages} · {total} registros</span>
           <div className="flex items-center gap-1">
             <Button variant="secondary" size="sm" onClick={() => setPage(1)} disabled={page === 1}>«</Button>
             <Button variant="secondary" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Anterior</Button>
@@ -1017,7 +999,7 @@ export default function AgendaPage() {
                   key={n}
                   onClick={() => setPage(n)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    n === page ? 'bg-primary text-white' : 'border border-border-light text-muted hover:text-foreground'
+                    n === page ? 'bg-primary text-white' : 'border border-border-light text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {n}
@@ -1045,10 +1027,10 @@ export default function AgendaPage() {
       {/* Faltou + Reagendar */}
       {reagendarDialog.isOpen && reagendarDialog.grupo && (
         <Modal isOpen onClose={() => setReagendarDialog({ isOpen: false, grupo: null, novaData: '' })} title="Faltou — Reagendar">
-          <p className="text-sm text-muted mb-1">
+          <p className="mb-1 text-sm text-muted-foreground">
             <strong>{reagendarDialog.grupo.cliente_nome}</strong>
           </p>
-          <p className="text-sm text-muted mb-4">
+          <p className="mb-4 text-sm text-muted-foreground">
             Escolha a nova data para todos os procedimentos:
           </p>
           <ul className="mb-4 space-y-1">
@@ -1068,7 +1050,7 @@ export default function AgendaPage() {
               min={new Date().toISOString().slice(0, 16)}
               value={reagendarDialog.novaData}
               onChange={e => setReagendarDialog(prev => ({ ...prev, novaData: e.target.value }))}
-              className="w-full border border-border-light rounded-lg px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-light bg-surface px-3 py-2 text-sm text-foreground"
             />
           </div>
           <div className="flex justify-end gap-2">
@@ -1090,7 +1072,7 @@ export default function AgendaPage() {
       {/* Reagendar direto (sem faltou) */}
       {reagendarDiretoDialog.isOpen && reagendarDiretoDialog.grupo && (
         <Modal isOpen onClose={() => setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '' })} title="Reagendar">
-          <p className="text-sm text-muted mb-4">
+          <p className="mb-4 text-sm text-muted-foreground">
             Alterar a data de agendamento de <strong>{reagendarDiretoDialog.grupo.cliente_nome}</strong>:
           </p>
           <ul className="mb-4 space-y-1">
@@ -1110,7 +1092,7 @@ export default function AgendaPage() {
               min={new Date().toISOString().slice(0, 16)}
               value={reagendarDiretoDialog.novaData}
               onChange={e => setReagendarDiretoDialog(prev => ({ ...prev, novaData: e.target.value }))}
-              className="w-full border border-border-light rounded-lg px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-light bg-surface px-3 py-2 text-sm text-foreground"
             />
           </div>
           <div className="flex justify-end gap-2">
@@ -1132,7 +1114,7 @@ export default function AgendaPage() {
       {/* Cancelar agendamento */}
       {cancelarDialog.isOpen && cancelarDialog.grupo && (
         <Modal isOpen onClose={() => setCancelarDialog({ isOpen: false, grupo: null, motivo: '' })} title="Cancelar Agendamento">
-          <p className="text-sm text-muted mb-4">
+          <p className="mb-4 text-sm text-muted-foreground">
             Cancelar todos os agendamentos ativos de <strong>{cancelarDialog.grupo.cliente_nome}</strong>?
           </p>
           <Textarea
@@ -1162,7 +1144,7 @@ export default function AgendaPage() {
       {/* Trocar executor */}
       {executorDialog.isOpen && executorDialog.agendamento && (
         <Modal isOpen onClose={() => setExecutorDialog({ isOpen: false, agendamento: null, executorId: '' })} title="Trocar Executor">
-          <p className="text-sm text-muted mb-4">
+          <p className="mb-4 text-sm text-muted-foreground">
             {executorDialog.agendamento.procedimento_nome}
             {executorDialog.agendamento.etapa_modelo_nome && ` — ${executorDialog.agendamento.etapa_modelo_nome}`}
           </p>
@@ -1206,7 +1188,7 @@ export default function AgendaPage() {
               value={novoBuscaCliente}
               onChange={e => buscarClientes(e.target.value)}
               placeholder="Digite o nome do cliente..."
-              className="w-full border border-border-light rounded-lg px-3 py-2 text-sm mb-2"
+              className="mb-2 w-full rounded-lg border border-border-light bg-surface px-3 py-2 text-sm text-foreground placeholder:text-neutral-500"
               autoFocus
             />
             {novoClientes.length > 0 && (
@@ -1215,16 +1197,16 @@ export default function AgendaPage() {
                   <button
                     key={c.id}
                     onClick={() => { setNovoClienteSelecionado(c); setNovoClientes([]); }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-surface-secondary transition-colors border-b border-border-light last:border-0"
+                    className="w-full border-b border-border-light px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-secondary last:border-0"
                   >
                     <span className="font-medium">{c.nome}</span>
-                    {c.telefone && <span className="text-muted ml-2">{formatarTelefone(c.telefone)}</span>}
+                    {c.telefone && <span className="ml-2 text-muted-foreground">{formatarTelefone(c.telefone)}</span>}
                   </button>
                 ))}
               </div>
             )}
             {novoBuscaCliente.length >= 2 && novoClientes.length === 0 && (
-              <p className="text-sm text-muted mt-1">Nenhum cliente encontrado</p>
+              <p className="mt-1 text-sm text-muted-foreground">Nenhum cliente encontrado</p>
             )}
           </div>
         ) : (
@@ -1234,12 +1216,12 @@ export default function AgendaPage() {
               <div>
                 <span className="text-sm font-medium">{novoClienteSelecionado.nome}</span>
                 {novoClienteSelecionado.telefone && (
-                  <span className="text-xs text-muted ml-2">{formatarTelefone(novoClienteSelecionado.telefone)}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">{formatarTelefone(novoClienteSelecionado.telefone)}</span>
                 )}
               </div>
               <button
                 onClick={() => { setNovoClienteSelecionado(null); setNovoBuscaCliente(''); }}
-                className="text-muted hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1254,7 +1236,7 @@ export default function AgendaPage() {
                   className={`flex-1 px-4 py-2 font-medium transition-colors ${
                     novoTipo === 'avaliacao'
                       ? 'bg-primary-600 text-white'
-                      : 'bg-surface text-muted hover:bg-surface-secondary'
+                      : 'bg-surface text-muted-foreground hover:bg-surface-secondary hover:text-foreground'
                   }`}
                 >
                   Avaliação
@@ -1264,7 +1246,7 @@ export default function AgendaPage() {
                   className={`flex-1 px-4 py-2 font-medium transition-colors border-l border-border ${
                     novoTipo === 'procedimento'
                       ? 'bg-primary-600 text-white'
-                      : 'bg-surface text-muted hover:bg-surface-secondary'
+                      : 'bg-surface text-muted-foreground hover:bg-surface-secondary hover:text-foreground'
                   }`}
                 >
                   Procedimento
@@ -1295,7 +1277,7 @@ export default function AgendaPage() {
                 ]}
               />
             ) : (
-              <p className="text-sm text-muted">
+              <p className="text-sm text-muted-foreground">
                 {novoTipo === 'avaliacao' ? 'Avaliador' : 'Executor'}: <strong>{user?.nome}</strong>
               </p>
             )}

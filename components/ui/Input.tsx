@@ -105,7 +105,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               icon && "pl-10",
               error
                 ? "border-error-300 focus:ring-error-400 text-error-900 placeholder-error-300"
-                : "border-input focus:ring-ring"
+                : "border-input text-foreground placeholder:text-neutral-500 focus:ring-ring"
             )}
           />
         </div>

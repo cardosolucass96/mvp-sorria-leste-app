@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 export interface ViewModeOption {
   key: string;
   label: string;
-  icon?: string;
+  icon?: React.ReactNode;
 }
 
 export interface ViewModeToggleProps {

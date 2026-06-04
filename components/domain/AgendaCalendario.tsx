@@ -127,7 +127,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
       </div>
 
       {/* Legenda */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted">
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
         {(['agendado', 'pendente', 'faltou', 'realizado', 'cancelado'] as const).map((s) => (
           <span key={s} className="inline-flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${STATUS_DOT_BG[s]}`} />
