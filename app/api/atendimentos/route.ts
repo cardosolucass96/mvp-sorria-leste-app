@@ -204,8 +204,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         }
       }
 
-      // criado_por_id: usa executor se informado, senão usa quem criou (passado pelo frontend)
-      const criadoPorId = executor_id || criado_por_id;
+      const criadoPorId = criado_por_id || executor_id || context.user.sub;
       if (!criadoPorId) {
         return NextResponse.json(
           { error: 'Não foi possível identificar o criador do atendimento' },
@@ -222,7 +221,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         return NextResponse.json({ error: 'Procedimento não encontrado' }, { status: 404 });
       }
 
-      const valorFinal = valor || procedimento.valor;
+      const valorFinal = valor != null ? valor : procedimento.valor;
 
       // Cria atendimento já em aguardando_pagamento
       // NOTE: mantém `tipo='orto'` quando categoria for orto para compat com código legado que ainda lê tipo.
