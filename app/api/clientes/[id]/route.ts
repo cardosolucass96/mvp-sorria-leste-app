@@ -99,7 +99,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         data_nascimento = ?,
         endereco = ?,
         origem = COALESCE(?, origem),
-        sexo = COALESCE(?, sexo),
+        sexo = ?,
         plano_odontologico = ?,
         observacoes = ?
       WHERE id = ?`,

@@ -67,8 +67,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     await batch([
       // Decrementar saldo da origem
       {
-        sql: `UPDATE saldo_clientes SET saldo = ?, updated_at = datetime('now', 'localtime') WHERE cliente_id = ?`,
-        params: [saldoOrigemNovo, clienteOrigemId],
+        sql: `INSERT INTO saldo_clientes (cliente_id, saldo, updated_at)
+              VALUES (?, ?, datetime('now', 'localtime'))
+              ON CONFLICT(cliente_id) DO UPDATE SET
+                saldo = ?, updated_at = datetime('now', 'localtime')`,
+        params: [clienteOrigemId, saldoOrigemNovo, saldoOrigemNovo],
       },
       // Incrementar saldo do destino (upsert)
       {

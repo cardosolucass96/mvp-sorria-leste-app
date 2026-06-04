@@ -68,8 +68,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     await batch([
       {
-        sql: `UPDATE saldo_clientes SET saldo = ?, updated_at = datetime('now', 'localtime') WHERE cliente_id = ?`,
-        params: [saldoNovo, clienteId],
+        sql: `INSERT INTO saldo_clientes (cliente_id, saldo, updated_at)
+              VALUES (?, ?, datetime('now', 'localtime'))
+              ON CONFLICT(cliente_id) DO UPDATE SET
+                saldo = ?, updated_at = datetime('now', 'localtime')`,
+        params: [clienteId, saldoNovo, saldoNovo],
       },
       {
         sql: `INSERT INTO movimentacoes_saldo
