@@ -11,7 +11,11 @@ import {
   formatarDataHora,
   formatarDataCompleta,
   formatarCPF,
+  formatarDentes,
+  formatarDenteUnicoComFaces,
   formatarTelefone,
+  nomeProcedimentoItem,
+  parseDentesLabels,
   formatarPorcentagem,
   obterIniciais,
 } from '@/lib/utils/formatters';
@@ -145,6 +149,49 @@ describe('formatarCPF', () => {
     // String vazia '' é falsy em JS, então !cpf === true → retorna '-'
     const result = formatarCPF('');
     expect(result).toBe('-');
+  });
+});
+
+// ===========================================
+// dentes / faces
+// ===========================================
+describe('formatarDentes', () => {
+  test('formata array legado de strings', () => {
+    expect(formatarDentes('["11","21"]')).toBe('11, 21');
+  });
+
+  test('formata dente com uma face', () => {
+    expect(formatarDentes('[{"dente":"11","faces":[{"nome":"V"}]}]')).toBe('11V');
+  });
+
+  test('formata dente com múltiplas faces em ordem fixa', () => {
+    expect(formatarDentes('[{"dente":"11","faces":[{"nome":"D"},{"nome":"V"}]}]')).toBe('11(V,D)');
+  });
+});
+
+describe('parseDentesLabels', () => {
+  test('retorna labels individuais por dente', () => {
+    expect(parseDentesLabels('[{"dente":"11","faces":[{"nome":"V"}]},{"dente":"21","faces":[{"nome":"M"}]}]')).toEqual(['11V', '21M']);
+  });
+});
+
+describe('formatarDenteUnicoComFaces', () => {
+  test('prioriza dentes com faces quando presentes', () => {
+    expect(formatarDenteUnicoComFaces({
+      dente_unico: '11',
+      dentes: '[{"dente":"11","faces":[{"nome":"V"},{"nome":"D"}]}]',
+    })).toBe('11(V,D)');
+  });
+});
+
+describe('nomeProcedimentoItem', () => {
+  test('inclui faces no nome do procedimento', () => {
+    expect(nomeProcedimentoItem({
+      procedimento_nome: 'Restauração',
+      dentes: '[{"dente":"11","faces":[{"nome":"V"},{"nome":"D"}]}]',
+      dente_unico: '11',
+      etapa_label: 'Etapa 1',
+    })).toBe('Restauração • 11(V,D) — Etapa 1');
   });
 });
 

@@ -6,7 +6,7 @@
 
 import StatusBadge from './StatusBadge';
 import Badge from '@/components/ui/Badge';
-import { formatarMoeda } from '@/lib/utils/formatters';
+import { formatarDentes, formatarMoeda, formatarDenteUnicoComFaces } from '@/lib/utils/formatters';
 import type { ItemStatus } from '@/lib/types';
 
 export interface ItemAtendimentoData {
@@ -29,16 +29,6 @@ export interface ItemAtendimentoRowProps {
   showActions?: boolean;
 }
 
-function formatarDentes(dentes: string | null): string | null {
-  if (!dentes) return null;
-  try {
-    const arr = JSON.parse(dentes);
-    return arr.join(', ');
-  } catch {
-    return dentes;
-  }
-}
-
 export default function ItemAtendimentoRow({
   item,
   onEdit,
@@ -46,14 +36,17 @@ export default function ItemAtendimentoRow({
   showActions = true,
 }: ItemAtendimentoRowProps) {
   const dentesFormatados = formatarDentes(item.dentes);
+  const denteLabel = formatarDenteUnicoComFaces(item);
 
   return (
     <tr className="hover:bg-muted">
       <td className="px-4 py-3">
         <div className="font-medium text-foreground">
           {item.procedimento_nome}
-          {item.dente_unico && (
-            <span className="text-sm text-muted-foreground font-normal ml-1">• Dente {item.dente_unico}</span>
+          {denteLabel && (
+            <span className="text-sm text-muted-foreground font-normal ml-1">
+              • {item.dentes ? denteLabel : `Dente ${denteLabel}`}
+            </span>
           )}
           {item.etapa_label && (
             <span className="text-sm text-muted-foreground font-normal ml-1">— {item.etapa_label}</span>

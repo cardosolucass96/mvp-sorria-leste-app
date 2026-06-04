@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatarMoeda, formatarDataHora } from '@/lib/utils/formatters';
+import { formatarMoeda, formatarDataHora, nomeProcedimentoItem } from '@/lib/utils/formatters';
 import { StatusBadge } from '@/components/domain';
 import Alert from '@/components/ui/Alert';
 import LoadingState from '@/components/ui/LoadingState';
@@ -35,6 +35,7 @@ interface ItemAtendimento {
   valor_pago: number;
   status: string;
   group_id: string | null;
+  dentes?: string | null;
   dente_unico: string | null;
   executor_id: number | null;
   adicionado_em_execucao: number;
@@ -87,10 +88,7 @@ const METODOS_PAGAMENTO = [
 ];
 
 function nomeProcedimento(item: ItemAtendimento): string {
-  let nome = item.procedimento_nome;
-  if (item.dente_unico) nome += ` • Dente ${item.dente_unico}`;
-  if (item.etapa_label) nome += ` — ${item.etapa_label}`;
-  return nome;
+  return nomeProcedimentoItem(item);
 }
 
 export default function PagamentoPage({

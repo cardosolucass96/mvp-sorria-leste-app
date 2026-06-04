@@ -24,7 +24,7 @@ import {
   ITEM_CANAL_EXECUTANDO,
   PROC_LIMPEZA,
   PROC_RESTAURACAO,
-  USUARIO_EXECUTOR,
+  PROC_CANAL,
 } from '../../helpers/seed';
 
 jest.mock('@/lib/auth/jwt', () => ({
@@ -137,14 +137,14 @@ describe('POST /api/atendimentos/[id]/itens', () => {
   it('adiciona item em em_execucao com status=pago e adicionado_em_execucao=1', async () => {
     setLastInsertId(12);
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
-    mockQueryResponse('select * from procedimentos where id', PROC_RESTAURACAO);
+    mockQueryResponse('select * from procedimentos where id', PROC_CANAL);
     mockQueryResponse('select id, role from usuarios where id', { id: 4, role: 'executor' });
     mockQueryResponse('from itens_atendimento i', novoItem);
 
     const ctx = createRouteContext({ id: '4' });
     const { status } = await callRoute(addItem, '/api/atendimentos/4/itens', {
       method: 'POST',
-      body: { procedimento_id: 2, executor_id: 4, criado_por_id: 3 },
+      body: { procedimento_id: 3, executor_id: 4, criado_por_id: 3 },
     }, ctx);
 
     expect(status).toBe(201);
@@ -257,6 +257,51 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
     expect(insertQuery!.params[4]).toBe(300);
+  });
+
+  it('aceita procedimento por_dente com faces e mantém 1 item por dente', async () => {
+    setLastInsertId(19);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from procedimentos where id', PROC_RESTAURACAO);
+
+    const ctx = createRouteContext({ id: '2' });
+    const { status, data } = await callRoute<{ itens: number[] }>(addItem, '/api/atendimentos/2/itens', {
+      method: 'POST',
+      body: {
+        procedimento_id: 2,
+        valor: 400,
+        dentes: JSON.stringify([
+          { dente: '11', faces: [{ nome: 'V' }, { nome: 'D' }] },
+          { dente: '21', faces: [{ nome: 'M' }] },
+        ]),
+      },
+    }, ctx);
+
+    expect(status).toBe(201);
+    expect(data.itens).toHaveLength(2);
+
+    const inserts = getExecutedQueries().filter(q => q.sql.includes('INSERT INTO itens_atendimento'));
+    expect(inserts).toHaveLength(2);
+    expect(inserts[0].params[4]).toBe(200);
+    expect(inserts[1].params[4]).toBe(200);
+  });
+
+  it('rejeita procedimento com tem_face sem face em um dos dentes', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from procedimentos where id', PROC_RESTAURACAO);
+
+    const ctx = createRouteContext({ id: '2' });
+    const { status, data } = await callRoute<{ error: string }>(addItem, '/api/atendimentos/2/itens', {
+      method: 'POST',
+      body: {
+        procedimento_id: 2,
+        valor: 200,
+        dentes: JSON.stringify([{ dente: '11', faces: [] }]),
+      },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Selecione ao menos uma face para cada dente');
   });
 
   it('salva valor_original = valor no INSERT (snapshot de orçamento)', async () => {

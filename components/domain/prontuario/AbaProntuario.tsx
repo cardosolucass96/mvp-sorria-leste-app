@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FileText } from 'lucide-react';
-import { formatarDataHora } from '@/lib/utils/formatters';
+import { formatarDataHora, formatarDentes } from '@/lib/utils/formatters';
 import type { ItemProntuario } from './types';
 
 export interface AbaProntuarioProps {
@@ -22,7 +22,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
   return (
     <div className="space-y-4">
       {prontuarios.map(item => {
-        const dentes = item.dentes ? safeParseDentes(item.dentes) : [];
+        const dentes = formatarDentes(item.dentes);
         return (
           <div key={item.item_id} className="rounded-lg border border-neutral-200 p-4">
             <div className="flex items-start justify-between gap-3 mb-3">
@@ -36,9 +36,9 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
                       Executor: <span className="text-foreground">{item.executor_nome}</span>
                     </span>
                   )}
-                  {dentes.length > 0 && (
+                  {dentes && (
                     <span>
-                      Dentes: <span className="text-foreground">{dentes.join(', ')}</span>
+                      Dentes: <span className="text-foreground">{dentes}</span>
                     </span>
                   )}
                   {item.quantidade > 1 && (
@@ -111,16 +111,4 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
       })}
     </div>
   );
-}
-
-function safeParseDentes(raw: string): string[] {
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed.map(d => (typeof d === 'string' ? d : d?.dente ?? String(d))).filter(Boolean);
-    }
-  } catch {
-    /* noop */
-  }
-  return [];
 }

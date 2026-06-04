@@ -19,6 +19,7 @@ export interface ProcedimentoFormData {
   comissao_venda: string;
   comissao_execucao: string;
   por_dente: boolean;
+  tem_face: boolean;
 }
 
 export interface ProcedimentoFormProps {
@@ -38,6 +39,7 @@ const emptyForm: ProcedimentoFormData = {
   comissao_venda: '',
   comissao_execucao: '',
   por_dente: false,
+  tem_face: false,
 };
 
 export default function ProcedimentoForm({
@@ -56,8 +58,10 @@ export default function ProcedimentoForm({
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
-      setFormData({ ...emptyForm, ...initialData });
-      setFieldErrors({});
+      queueMicrotask(() => {
+        setFormData({ ...emptyForm, ...initialData });
+        setFieldErrors({});
+      });
     }
   }, [isOpen, initialData]);
 
@@ -155,11 +159,28 @@ export default function ProcedimentoForm({
             label="Cobrar por dente"
             name="por_dente"
             checked={formData.por_dente}
-            onChange={(checked) => setFormData((prev) => ({ ...prev, por_dente: checked }))}
+            onChange={(checked) => setFormData((prev) => ({
+              ...prev,
+              por_dente: checked,
+              tem_face: checked ? prev.tem_face : false,
+            }))}
             hint="Se marcado, o avaliador poderá selecionar múltiplos dentes e o valor será multiplicado pela quantidade"
             disabled={loading}
           />
         </div>
+
+        {formData.por_dente && (
+          <div className="p-3 bg-info-50 border border-info-200 rounded-lg">
+            <Checkbox
+              label="Selecionar faces do dente"
+              name="tem_face"
+              checked={formData.tem_face}
+              onChange={(checked) => setFormData((prev) => ({ ...prev, tem_face: checked }))}
+              hint="Se marcado, após escolher os dentes será preciso marcar as faces tratadas em cada um"
+              disabled={loading}
+            />
+          </div>
+        )}
 
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>

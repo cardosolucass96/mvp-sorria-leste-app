@@ -8,10 +8,8 @@ import { User, ClipboardList, Activity, CreditCard, Clock, FileText, Users, Plus
 import { PageHeader, Card, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 import { ClienteForm, ClienteFormData } from '@/components/domain';
-import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarTelefone } from '@/lib/utils/formatters';
+import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarTelefone, formatarDentes, parseDentesLabels } from '@/lib/utils/formatters';
 import { getOrigemLabel } from '@/lib/constants/origens';
-import { STATUS_CONFIG } from '@/lib/constants/status';
-import type { AtendimentoStatus } from '@/lib/types';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 const METODOS_LABEL: Record<string, string> = {
@@ -762,7 +760,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             </Card>
           ) : (
             ficha.prontuarios.map(item => {
-              const dentes = item.dentes ? JSON.parse(item.dentes) as string[] : [];
+              const dentes = formatarDentes(item.dentes);
               return (
                 <Card key={item.item_id}>
                   <div className="flex items-start justify-between gap-4 mb-4">
@@ -772,7 +770,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                       </h3>
                       <div className="flex flex-wrap gap-3 mt-1 text-sm text-muted">
                         {item.executor_nome && <span>Executor: <span className="text-foreground">{item.executor_nome}</span></span>}
-                        {dentes.length > 0 && <span>Dentes: <span className="text-foreground">{dentes.join(', ')}</span></span>}
+                        {dentes && <span>Dentes: <span className="text-foreground">{dentes}</span></span>}
                         {item.quantidade > 1 && <span>Qtd: <span className="text-foreground">{item.quantidade}</span></span>}
                         <Link href={`/atendimentos/${item.atendimento_id}`} className="text-info-600 hover:text-info-800">
                           Atend. #{item.atendimento_id} →
@@ -1058,7 +1056,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             </div>
 
             {modalProcedimento.dentes && (() => {
-              const dentes = JSON.parse(modalProcedimento.dentes!) as string[];
+              const dentes = parseDentesLabels(modalProcedimento.dentes);
               return dentes.length > 0 ? (
                 <div>
                   <p className="text-xs text-muted uppercase tracking-wide mb-1">Dentes</p>

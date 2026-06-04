@@ -8,6 +8,7 @@ interface Procedimento {
   comissao_venda: number;
   comissao_execucao: number;
   por_dente: number;
+  tem_face: number;
   tem_etapas: number;
   ativo: number;
   created_at: string;
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { nome, valor, comissao_venda, comissao_execucao, por_dente, tem_etapas, etapas, categoria_id } = body;
+    const { nome, valor, comissao_venda, comissao_execucao, por_dente, tem_face, tem_etapas, etapas, categoria_id } = body;
 
     if (!nome || nome.trim() === '') {
       return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
@@ -78,15 +79,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Comissão de execução deve estar entre 0 e 100' }, { status: 400 });
     }
 
+    const porDenteFlag = por_dente ? 1 : 0;
+    const temFaceFlag = porDenteFlag ? (tem_face ? 1 : 0) : 0;
+
     const result = await execute(
-      `INSERT INTO procedimentos (nome, valor, comissao_venda, comissao_execucao, por_dente, tem_etapas, categoria_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO procedimentos (nome, valor, comissao_venda, comissao_execucao, por_dente, tem_face, tem_etapas, categoria_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         nome.trim(),
         valor,
         comissao_venda ?? 0,
         comissao_execucao ?? 0,
-        por_dente ? 1 : 0,
+        porDenteFlag,
+        temFaceFlag,
         tem_etapas ? 1 : 0,
         categoria_id ?? null,
       ]

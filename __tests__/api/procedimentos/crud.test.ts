@@ -17,7 +17,6 @@ import {
 import {
   PROC_LIMPEZA,
   PROC_RESTAURACAO,
-  PROC_CANAL,
   PROC_INATIVO,
   TODOS_PROCEDIMENTOS,
 } from '../../helpers/seed';
@@ -164,6 +163,7 @@ describe('POST /api/procedimentos', () => {
       comissao_venda: 0,
       comissao_execucao: 0,
       por_dente: 0,
+      tem_face: 0,
       ativo: 1,
       created_at: '2025-03-20 10:00:00',
     }]);
@@ -189,6 +189,7 @@ describe('POST /api/procedimentos', () => {
       comissao_venda: 15,
       comissao_execucao: 30,
       por_dente: 1,
+      tem_face: 1,
       ativo: 1,
       created_at: '2025-03-20',
     }]);
@@ -201,6 +202,7 @@ describe('POST /api/procedimentos', () => {
         comissao_venda: 15,
         comissao_execucao: 30,
         por_dente: true,
+        tem_face: true,
       },
     });
 
@@ -212,7 +214,7 @@ describe('POST /api/procedimentos', () => {
     setLastInsertId(12);
     mockQueryResponse('select * from procedimentos where id', [{
       id: 12, nome: 'Trimmed', valor: 100, comissao_venda: 0,
-      comissao_execucao: 0, por_dente: 0, ativo: 1, created_at: '2025-03-20',
+      comissao_execucao: 0, por_dente: 0, tem_face: 0, ativo: 1, created_at: '2025-03-20',
     }]);
 
     await callRoute(createProcedimento, '/api/procedimentos', {
@@ -229,7 +231,7 @@ describe('POST /api/procedimentos', () => {
     setLastInsertId(13);
     mockQueryResponse('select * from procedimentos where id', [{
       id: 13, nome: 'Default', valor: 100, comissao_venda: 0,
-      comissao_execucao: 0, por_dente: 0, ativo: 1, created_at: '2025-03-20',
+      comissao_execucao: 0, por_dente: 0, tem_face: 0, ativo: 1, created_at: '2025-03-20',
     }]);
 
     await callRoute(createProcedimento, '/api/procedimentos', {
@@ -247,7 +249,7 @@ describe('POST /api/procedimentos', () => {
     setLastInsertId(14);
     mockQueryResponse('select * from procedimentos where id', [{
       id: 14, nome: 'PorDente', valor: 200, comissao_venda: 0,
-      comissao_execucao: 0, por_dente: 1, ativo: 1, created_at: '2025-03-20',
+      comissao_execucao: 0, por_dente: 1, tem_face: 0, ativo: 1, created_at: '2025-03-20',
     }]);
 
     await callRoute(createProcedimento, '/api/procedimentos', {
@@ -258,13 +260,14 @@ describe('POST /api/procedimentos', () => {
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO procedimentos'));
     expect(insertQuery!.params[4]).toBe(1); // por_dente
+    expect(insertQuery!.params[5]).toBe(0); // tem_face
 
     // Reset para testar false
     resetMockDb();
     setLastInsertId(15);
     mockQueryResponse('select * from procedimentos where id', [{
       id: 15, nome: 'NaoPorDente', valor: 200, comissao_venda: 0,
-      comissao_execucao: 0, por_dente: 0, ativo: 1, created_at: '2025-03-20',
+      comissao_execucao: 0, por_dente: 0, tem_face: 0, ativo: 1, created_at: '2025-03-20',
     }]);
 
     await callRoute(createProcedimento, '/api/procedimentos', {
@@ -275,6 +278,25 @@ describe('POST /api/procedimentos', () => {
     const queries2 = getExecutedQueries();
     const insertQuery2 = queries2.find(q => q.sql.includes('INSERT INTO procedimentos'));
     expect(insertQuery2!.params[4]).toBe(0);
+    expect(insertQuery2!.params[5]).toBe(0);
+  });
+
+  it('salva tem_face quando procedimento é por_dente', async () => {
+    setLastInsertId(18);
+    mockQueryResponse('select * from procedimentos where id', [{
+      id: 18, nome: 'Face', valor: 210, comissao_venda: 0,
+      comissao_execucao: 0, por_dente: 1, tem_face: 1, ativo: 1, created_at: '2025-03-20',
+    }]);
+
+    await callRoute(createProcedimento, '/api/procedimentos', {
+      method: 'POST',
+      body: { nome: 'Face', valor: 210, por_dente: true, tem_face: true },
+    });
+
+    const queries = getExecutedQueries();
+    const insertQuery = queries.find(q => q.sql.includes('INSERT INTO procedimentos'));
+    expect(insertQuery!.params[4]).toBe(1);
+    expect(insertQuery!.params[5]).toBe(1);
   });
 
   it('permite valor = 0', async () => {
@@ -420,6 +442,36 @@ describe('PUT /api/procedimentos/[id]', () => {
     const updateQuery = queries.find(q => q.sql.includes('UPDATE procedimentos'));
     expect(updateQuery!.sql).toContain('por_dente = ?');
     expect(updateQuery!.params).toContain(1);
+  });
+
+  it('atualiza tem_face quando procedimento é por_dente', async () => {
+    mockQueryResponse('select * from procedimentos where id', PROC_RESTAURACAO);
+
+    const ctx = createRouteContext({ id: '2' });
+    await callRoute(updateProcedimento, '/api/procedimentos/2', {
+      method: 'PUT',
+      body: { tem_face: false },
+    }, ctx);
+
+    const queries = getExecutedQueries();
+    const updateQuery = queries.find(q => q.sql.includes('UPDATE procedimentos'));
+    expect(updateQuery!.sql).toContain('tem_face = ?');
+    expect(updateQuery!.params).toContain(0);
+  });
+
+  it('zera tem_face ao desligar por_dente', async () => {
+    mockQueryResponse('select * from procedimentos where id', PROC_RESTAURACAO);
+
+    const ctx = createRouteContext({ id: '2' });
+    await callRoute(updateProcedimento, '/api/procedimentos/2', {
+      method: 'PUT',
+      body: { por_dente: false, tem_face: true },
+    }, ctx);
+
+    const queries = getExecutedQueries();
+    const updateQuery = queries.find(q => q.sql.includes('UPDATE procedimentos'));
+    expect(updateQuery!.params).toContain(0);
+    expect(updateQuery!.sql).toContain('tem_face = ?');
   });
 
   it('ativa/desativa via PUT (ativo boolean → int)', async () => {

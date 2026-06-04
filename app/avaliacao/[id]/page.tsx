@@ -5,11 +5,10 @@ import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
-import { formatarMoeda } from '@/lib/utils/formatters';
+import { formatarMoeda, formatarDenteUnicoComFaces } from '@/lib/utils/formatters';
 import { Search, Trash2, Pencil, Plus, CheckCircle2 } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Card, Button, Select, Input, EmptyState, ConfirmDialog } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
-import { cn } from '@/lib/utils';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface EtapaModelo {
@@ -47,6 +46,7 @@ interface ItemAtendimento {
   valor: number;
   valor_original: number | null;
   status: string;
+  dentes: string | null;
   dente_unico: string | null;
   etapa_label: string | null;
   tem_etapas: number;
@@ -519,7 +519,9 @@ export default function AvaliacaoDetalhePage({
           </div>
         ) : (
           <div className="space-y-2">
-            {atendimento.itens.map((item) => (
+            {atendimento.itens.map((item) => {
+              const denteLabel = formatarDenteUnicoComFaces(item);
+              return (
               <div key={item.id} className="rounded-lg border border-border bg-background">
                 {/* Header do item */}
                 <div className="px-4 py-3 flex items-start justify-between gap-3">
@@ -528,9 +530,9 @@ export default function AvaliacaoDetalhePage({
                       <span className="font-semibold text-sm text-foreground">
                         {item.procedimento_nome}
                       </span>
-                      {item.dente_unico && (
+                      {denteLabel && (
                         <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-medium">
-                          dente {item.dente_unico}
+                          {item.dentes ? denteLabel : `dente ${denteLabel}`}
                         </span>
                       )}
                       {item.etapa_label && (
@@ -628,7 +630,8 @@ export default function AvaliacaoDetalhePage({
                   </button>
                 </div>
               </div>
-            ))}
+            );
+            })}
 
             {/* Total */}
             <div className="flex items-center justify-between px-4 py-3 bg-muted rounded-lg mt-3">

@@ -23,6 +23,7 @@ interface Procedimento {
   nome: string;
   valor: number;
   por_dente: number;
+  tem_face: number;
   categoria_id: number | null;
 }
 
@@ -242,6 +243,16 @@ export const POST = withUnit(async (
         }
       } catch {
         // dentes is a plain string (legacy format) — skip per-dente logic
+      }
+    }
+
+    if (procedimento.por_dente && procedimento.tem_face) {
+      const algumSemFace = dentesArray.some((item) => !Array.isArray(item.faces) || item.faces.length === 0);
+      if (dentesArray.length === 0 || algumSemFace) {
+        return NextResponse.json(
+          { error: 'Selecione ao menos uma face para cada dente' },
+          { status: 400 }
+        );
       }
     }
 

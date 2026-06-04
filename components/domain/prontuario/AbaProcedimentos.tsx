@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { StatusBadge } from '@/components/domain';
-import { formatarData, formatarMoeda } from '@/lib/utils/formatters';
+import { formatarData, formatarMoeda, parseDentesLabels } from '@/lib/utils/formatters';
 import type { ItemProcedimento } from './types';
 
 export interface AbaProcedimentosProps {
@@ -17,7 +17,7 @@ export default function AbaProcedimentos({ procedimentos }: AbaProcedimentosProp
   return (
     <div className="space-y-2">
       {procedimentos.map(p => {
-        const dentes = p.dentes ? safeParseDentes(p.dentes) : [];
+        const dentes = parseDentesLabels(p.dentes);
         return (
           <div key={p.id} className="rounded-lg border border-neutral-200 p-3">
             <div className="flex items-start justify-between gap-2">
@@ -58,16 +58,4 @@ export default function AbaProcedimentos({ procedimentos }: AbaProcedimentosProp
       })}
     </div>
   );
-}
-
-function safeParseDentes(raw: string): string[] {
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed.map(d => (typeof d === 'string' ? d : d?.dente ?? String(d))).filter(Boolean);
-    }
-  } catch {
-    /* noop */
-  }
-  return [];
 }

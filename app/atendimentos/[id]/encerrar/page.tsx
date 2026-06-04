@@ -4,7 +4,7 @@ import { useState, useEffect, use, useCallback } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatarMoeda, formatarDataHora } from '@/lib/utils/formatters';
+import { formatarMoeda, formatarDataHora, nomeProcedimentoItem } from '@/lib/utils/formatters';
 import { StatusBadge } from '@/components/domain';
 import { Alert, LoadingState, PageHeader, Card, Button, Textarea } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
@@ -19,6 +19,7 @@ interface ItemAtendimento {
   valor: number;
   valor_pago: number;
   status: string;
+  dentes?: string | null;
   dente_unico: string | null;
 }
 
@@ -54,10 +55,7 @@ const METODO_LABELS: Record<string, string> = {
 
 
 function nomeProcedimento(item: ItemAtendimento): string {
-  let nome = item.procedimento_nome;
-  if (item.dente_unico) nome += ` • Dente ${item.dente_unico}`;
-  if (item.etapa_label) nome += ` — ${item.etapa_label}`;
-  return nome;
+  return nomeProcedimentoItem(item);
 }
 
 export default function EncerrarAtendimentoPage({

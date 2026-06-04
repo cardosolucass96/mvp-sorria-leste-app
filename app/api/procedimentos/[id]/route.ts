@@ -8,6 +8,7 @@ interface Procedimento {
   comissao_venda: number;
   comissao_execucao: number;
   por_dente: number;
+  tem_face: number;
   tem_etapas: number;
   ativo: number;
   created_at: string;
@@ -61,7 +62,7 @@ export async function PUT(
     const { id } = await params;
     const procId = parseInt(id);
     const body = await request.json();
-    const { nome, valor, comissao_venda, comissao_execucao, ativo, por_dente, tem_etapas, etapas, categoria_id } = body;
+    const { nome, valor, comissao_venda, comissao_execucao, ativo, por_dente, tem_face, tem_etapas, etapas, categoria_id } = body;
 
     const existe = await queryOne<Procedimento>(
       'SELECT * FROM procedimentos WHERE id = ?',
@@ -85,6 +86,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Comissão de execução deve estar entre 0 e 100' }, { status: 400 });
     }
 
+    const porDenteFinal = por_dente !== undefined ? Boolean(por_dente) : existe.por_dente === 1;
+    const temFaceFinal = porDenteFinal && tem_face !== undefined
+      ? Boolean(tem_face)
+      : porDenteFinal && existe.tem_face === 1;
+
     const updates: string[] = [];
     const updateParams: (string | number)[] = [];
 
@@ -94,6 +100,10 @@ export async function PUT(
     if (comissao_execucao !== undefined) { updates.push('comissao_execucao = ?'); updateParams.push(comissao_execucao); }
     if (ativo !== undefined) { updates.push('ativo = ?'); updateParams.push(ativo ? 1 : 0); }
     if (por_dente !== undefined) { updates.push('por_dente = ?'); updateParams.push(por_dente ? 1 : 0); }
+    if (por_dente !== undefined || tem_face !== undefined) {
+      updates.push('tem_face = ?');
+      updateParams.push(temFaceFinal ? 1 : 0);
+    }
     if (tem_etapas !== undefined) { updates.push('tem_etapas = ?'); updateParams.push(tem_etapas ? 1 : 0); }
     if (categoria_id !== undefined) {
       updates.push('categoria_id = ?');

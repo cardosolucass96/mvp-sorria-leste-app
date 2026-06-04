@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatarMoeda, formatarDataHora, tempoDecorrido } from '@/lib/utils/formatters';
+import { formatarMoeda, formatarDataHora, tempoDecorrido, nomeProcedimentoItem, formatarDenteUnicoComFaces } from '@/lib/utils/formatters';
 import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PROXIMOS_STATUS } from '@/lib/constants/status';
 import type { AtendimentoStatus, AtendimentoTipo, ItemStatus } from '@/lib/types';
 import { StatusBadge, StatusPipeline } from '@/components/domain';
@@ -14,12 +14,22 @@ import usePageTitle from '@/lib/utils/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 
+interface EtapaModelo {
+  id: number;
+  nome: string;
+  valor: number | null;
+  comissao_venda: number;
+  comissao_execucao: number;
+  ordem: number;
+}
+
 interface Procedimento {
   id: number;
   nome: string;
   valor: number;
   por_dente: number;
   tem_face: number;
+  tem_etapas: number;
 }
 
 interface Usuario {
@@ -51,6 +61,7 @@ interface ItemAtendimento {
   valor_pago: number;
   status: string;
   group_id: string | null;
+  dentes?: string | null;
   dente_unico: string | null;
   progresso_etapas: ProgressoEtapa[] | null;
 }
@@ -859,13 +870,7 @@ export default function AtendimentoDetalhePage({
                     return (
                       <tr key={item.id}>
                         <td className="px-4 py-3">
-                          <div>
-                            {item.dente_unico
-                              ? `${item.procedimento_nome} • Dente ${item.dente_unico}${item.etapa_label ? ` — ${item.etapa_label}` : ''}`
-                              : item.etapa_label
-                                ? `${item.procedimento_nome} — ${item.etapa_label}`
-                                : item.procedimento_nome}
-                          </div>
+                          <div>{nomeProcedimentoItem(item)}</div>
                           {item.progresso_etapas && item.progresso_etapas.length > 0 && (
                             <ProgressoEtapas etapas={item.progresso_etapas} />
                           )}
@@ -988,7 +993,11 @@ export default function AtendimentoDetalhePage({
                       {expandido && grupoItens.map((item) => (
                         <tr key={item.id} className="bg-neutral-50/50">
                           <td className="px-4 py-2 pl-12">
-                            <span className="text-muted">Dente {item.dente_unico}</span>
+                            <span className="text-muted">
+                              {item.dentes
+                                ? formatarDenteUnicoComFaces(item)
+                                : item.dente_unico ? `Dente ${item.dente_unico}` : '-'}
+                            </span>
                           </td>
                           <td className="px-4 py-2" />
                           <td className="px-4 py-2" />
@@ -1248,11 +1257,7 @@ export default function AtendimentoDetalhePage({
                         <div key={item.id} className="flex items-center gap-3 px-3 py-2">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">
-                              {item.dente_unico
-                                ? `${item.procedimento_nome} • Dente ${item.dente_unico}${item.etapa_label ? ` — ${item.etapa_label}` : ''}`
-                                : item.etapa_label
-                                  ? `${item.procedimento_nome} — ${item.etapa_label}`
-                                  : item.procedimento_nome}
+                              {nomeProcedimentoItem(item)}
                             </p>
                             <p className="text-xs text-muted">
                               Falta pagar: {formatarMoeda(devido)}

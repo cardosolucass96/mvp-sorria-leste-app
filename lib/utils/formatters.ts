@@ -87,17 +87,95 @@ export function formatarCPF(cpf: string | null): string {
   return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
 }
 
+type FaceNome = 'V' | 'L' | 'M' | 'D' | 'O';
+
+interface DenteFaceLike {
+  dente?: string | number | null;
+  faces?: Array<string | { nome?: string | null } | null> | null;
+}
+
+const ORDEM_FACES: FaceNome[] = ['V', 'L', 'M', 'D', 'O'];
+
+function normalizarFace(face: string | { nome?: string | null } | null): FaceNome | null {
+  if (!face) return null;
+  const valor = typeof face === 'string' ? face : face.nome;
+  if (!valor) return null;
+  const upper = valor.toUpperCase() as FaceNome;
+  return ORDEM_FACES.includes(upper) ? upper : null;
+}
+
+function ordenarFaces(faces: FaceNome[]): FaceNome[] {
+  return [...faces].sort((a, b) => ORDEM_FACES.indexOf(a) - ORDEM_FACES.indexOf(b));
+}
+
+function formatarEntradaDente(item: string | number | DenteFaceLike | null): string | null {
+  if (item == null) return null;
+  if (typeof item === 'string' || typeof item === 'number') {
+    const dente = String(item).trim();
+    return dente || null;
+  }
+
+  const dente = item.dente != null ? String(item.dente).trim() : '';
+  if (!dente) return null;
+
+  const faces = ordenarFaces(
+    (item.faces ?? [])
+      .map(normalizarFace)
+      .filter((face): face is FaceNome => face !== null)
+  );
+
+  if (faces.length === 0) return dente;
+  if (faces.length === 1) return `${dente}${faces[0]}`;
+  return `${dente}(${faces.join(',')})`;
+}
+
+export function parseDentesLabels(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => formatarEntradaDente(item as string | number | DenteFaceLike | null))
+      .filter((item): item is string => Boolean(item));
+  } catch {
+    return raw
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+}
+
+export function formatarDentes(raw: string | null | undefined): string | null {
+  const dentes = parseDentesLabels(raw);
+  return dentes.length > 0 ? dentes.join(', ') : null;
+}
+
+export function formatarDenteUnicoComFaces(item: {
+  dente_unico?: string | null;
+  dentes?: string | null;
+}): string | null {
+  const dentes = parseDentesLabels(item.dentes);
+  if (dentes.length > 0) return dentes[0];
+  return item.dente_unico?.trim() || null;
+}
+
 /**
  * Retorna o nome completo do item de atendimento incluindo etapa quando aplicável.
- * Ex: "Canal • Dente 18 — Etapa 1"
+ * Ex: "Canal • Dente 18" ou "Restauração • 11(V,D) — Etapa 1"
  */
 export function nomeProcedimentoItem(item: {
   procedimento_nome: string;
   etapa_label?: string | null;
   dente_unico?: string | null;
+  dentes?: string | null;
 }): string {
   let nome = item.procedimento_nome;
-  if (item.dente_unico) nome += ` • Dente ${item.dente_unico}`;
+  const denteLabel = formatarDenteUnicoComFaces(item);
+  if (denteLabel) {
+    const prefixo = item.dentes ? '' : 'Dente ';
+    nome += ` • ${prefixo}${denteLabel}`;
+  }
   if (item.etapa_label) nome += ` — ${item.etapa_label}`;
   return nome;
 }

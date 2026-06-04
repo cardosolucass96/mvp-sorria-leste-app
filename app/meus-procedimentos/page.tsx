@@ -7,7 +7,7 @@ import { ClipboardList, Search, Activity, FileText } from 'lucide-react';
 import { PageHeader, StatCard, Badge, LoadingState, Tabs, Alert, Table } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { StatusBadge, ProntuarioDrawer } from '@/components/domain';
-import { formatarData } from '@/lib/utils/formatters';
+import { formatarData, formatarDentes } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
 interface Procedimento {
   id: number;
@@ -52,16 +52,6 @@ export default function MeusProcedimentosPage() {
   useEffect(() => {
     carregarProcedimentos();
   }, [carregarProcedimentos]);
-
-  const formatarDentes = (dentes: string | null) => {
-    if (!dentes) return null;
-    try {
-      const arr = JSON.parse(dentes);
-      return arr.join(', ');
-    } catch {
-      return dentes;
-    }
-  };
 
   const procedimentosFiltrados = procedimentos.filter((p) => {
     if (filtro === 'todos') return true;

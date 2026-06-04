@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { formatarMoeda } from '@/lib/utils/formatters';
+import { formatarMoeda, nomeProcedimentoItem } from '@/lib/utils/formatters';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 
@@ -21,6 +21,7 @@ interface ItemAtendimento {
   valor_pago: number;
   status: string;
   group_id: string | null;
+  dentes?: string | null;
   dente_unico: string | null;
   etapa_label: string | null;
   etapas?: Etapa[];
@@ -91,10 +92,7 @@ export default function SelecaoProcedimentosHoje({
             const selecionado = itensHoje.has(item.id);
             const etapas = item.etapas ?? [];
             const temEtapas = etapas.length > 0;
-            let label = item.dente_unico
-              ? `${item.procedimento_nome} • Dente ${item.dente_unico}`
-              : item.procedimento_nome;
-            if (item.etapa_label) label += ` — ${item.etapa_label}`;
+            const label = nomeProcedimentoItem(item);
             const valorExibido = selecionado
               ? calcularValorEfetivo(item, etapasHoje)
               : item.valor;

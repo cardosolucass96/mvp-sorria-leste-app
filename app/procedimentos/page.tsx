@@ -24,6 +24,7 @@ interface Procedimento {
   comissao_venda: number;
   comissao_execucao: number;
   por_dente: number;
+  tem_face: number;
   tem_etapas: number;
   categoria_id: number | null;
   ativo: number;
@@ -36,6 +37,7 @@ interface FormData {
   comissao_venda: string;
   comissao_execucao: string;
   por_dente: boolean;
+  tem_face: boolean;
   tem_etapas: boolean;
   categoria_id: string;
   etapas: EtapaModelo[];
@@ -49,6 +51,7 @@ const initialFormData: FormData = {
   comissao_venda: '',
   comissao_execucao: '',
   por_dente: false,
+  tem_face: false,
   tem_etapas: false,
   categoria_id: '',
   etapas: [],
@@ -139,6 +142,7 @@ export default function ProcedimentosPage() {
         comissao_venda: proc.comissao_venda.toString(),
         comissao_execucao: proc.comissao_execucao.toString(),
         por_dente: proc.por_dente === 1,
+        tem_face: proc.tem_face === 1,
         tem_etapas: proc.tem_etapas === 1,
         categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
         etapas: (data.etapas ?? []).map((e: { nome: string; valor: number | null; comissao_venda: number; comissao_execucao: number }) => ({
@@ -155,6 +159,7 @@ export default function ProcedimentosPage() {
         comissao_venda: proc.comissao_venda.toString(),
         comissao_execucao: proc.comissao_execucao.toString(),
         por_dente: proc.por_dente === 1,
+        tem_face: proc.tem_face === 1,
         tem_etapas: proc.tem_etapas === 1,
         categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
         etapas: [],
@@ -177,6 +182,7 @@ export default function ProcedimentosPage() {
         comissao_venda: proc.comissao_venda.toString(),
         comissao_execucao: proc.comissao_execucao.toString(),
         por_dente: proc.por_dente === 1,
+        tem_face: proc.tem_face === 1,
         tem_etapas: proc.tem_etapas === 1,
         categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
         etapas: (data.etapas ?? []).map((e: { nome: string; valor: number | null; comissao_venda: number; comissao_execucao: number }) => ({
@@ -193,6 +199,7 @@ export default function ProcedimentosPage() {
         comissao_venda: proc.comissao_venda.toString(),
         comissao_execucao: proc.comissao_execucao.toString(),
         por_dente: proc.por_dente === 1,
+        tem_face: proc.tem_face === 1,
         tem_etapas: proc.tem_etapas === 1,
         categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
         etapas: [],
@@ -247,6 +254,7 @@ export default function ProcedimentosPage() {
         comissao_venda: parseFloat(formData.comissao_venda) || 0,
         comissao_execucao: parseFloat(formData.comissao_execucao) || 0,
         por_dente: formData.por_dente,
+        tem_face: formData.por_dente && formData.tem_face,
         tem_etapas: formData.tem_etapas,
         categoria_id: formData.categoria_id ? parseInt(formData.categoria_id) : null,
         etapas: formData.tem_etapas
@@ -371,7 +379,14 @@ export default function ProcedimentosPage() {
             key: 'por_dente',
             label: 'Por Dente',
             align: 'center',
-            render: (proc) => proc.por_dente ? <Badge color="amber">Sim</Badge> : <span className="text-neutral-400">-</span>,
+            render: (proc) => (
+              proc.por_dente ? (
+                <div className="flex items-center justify-center gap-1.5">
+                  <Badge color="amber">Sim</Badge>
+                  {proc.tem_face === 1 && <Badge color="blue">Faces</Badge>}
+                </div>
+              ) : <span className="text-neutral-400">-</span>
+            ),
           },
           ...(podeVerComissoes ? [
             {
@@ -514,7 +529,7 @@ export default function ProcedimentosPage() {
             <Checkbox
               label="Cobrar por dente"
               checked={formData.por_dente}
-              onChange={(v) => setFormData({ ...formData, por_dente: v })}
+              onChange={(v) => setFormData({ ...formData, por_dente: v, tem_face: v ? formData.tem_face : false })}
               hint="Valor multiplicado pela quantidade de dentes"
             />
             <Checkbox
@@ -524,6 +539,15 @@ export default function ProcedimentosPage() {
               hint="Ex: aparelho, implante, canal"
             />
           </div>
+
+          {formData.por_dente && (
+            <Checkbox
+              label="Usa faces do dente"
+              checked={formData.tem_face}
+              onChange={(v) => setFormData({ ...formData, tem_face: v })}
+              hint="Exige a marcação das faces tratadas para cada dente selecionado"
+            />
+          )}
 
           {/* Etapas */}
           {formData.tem_etapas && (
