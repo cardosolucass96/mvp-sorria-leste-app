@@ -82,7 +82,7 @@ interface Prontuario {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MIN_CHARS = 50;
+const MIN_CHARS = 10;
 
 const FACE_LABELS: Record<string, string> = {
   V: 'Vestibular',

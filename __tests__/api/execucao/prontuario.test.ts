@@ -37,8 +37,8 @@ const PRONTUARIO_EXEMPLO = {
   updated_at: '2025-02-10 16:00:00',
 };
 
-const DESCRICAO_VALIDA = 'Realizada restauração do dente 11 com resina composta A2. Sem intercorrências.'; // > 50 chars
-const DESCRICAO_CURTA = 'Procedimento feito com sucesso. Ok.'; // < 50 chars
+const DESCRICAO_VALIDA = 'Realizada restauração do dente 11 com resina composta A2. Sem intercorrências.'; // > 10 chars
+const DESCRICAO_CURTA = 'Curta'; // < 10 chars
 
 // =============================================================================
 // GET /api/execucao/item/[id]/prontuario
@@ -157,7 +157,7 @@ describe('POST /api/execucao/item/[id]/prontuario', () => {
     expect(updateQ!.sql).toContain("updated_at = datetime('now', 'localtime')");
   });
 
-  it('rejeita descrição com menos de 50 caracteres', async () => {
+  it('rejeita descrição com menos de 10 caracteres', async () => {
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<{ error: string }>(
       saveProntuario,
@@ -171,7 +171,7 @@ describe('POST /api/execucao/item/[id]/prontuario', () => {
 
     expect(status).toBe(400);
     expect(data.error).toContain('mínimo');
-    expect(data.error).toContain('50');
+    expect(data.error).toContain('10');
   });
 
   it('rejeita sem descrição', async () => {
@@ -222,7 +222,7 @@ describe('POST /api/execucao/item/[id]/prontuario', () => {
 
   it('faz trim na descrição antes de validar', async () => {
     const ctx = createRouteContext({ id: '3' });
-    // Espaços antes e depois — após trim, fica com < 50 chars
+    // Espaços antes e depois — após trim, fica com < 10 chars
     const { status } = await callRoute(
       saveProntuario,
       '/api/execucao/item/3/prontuario',
@@ -233,11 +233,11 @@ describe('POST /api/execucao/item/[id]/prontuario', () => {
       ctx
     );
 
-    expect(status).toBe(400); // DESCRICAO_CURTA < 50 chars
+    expect(status).toBe(400); // DESCRICAO_CURTA < 10 chars
   });
 
-  it('aceita descrição de exatamente 50 caracteres', async () => {
-    const descricao50 = 'A'.repeat(50);
+  it('aceita descrição de exatamente 10 caracteres', async () => {
+    const descricao10 = 'A'.repeat(10);
     // queryOne → null (novo prontuário)
     mockQueryResponse('from prontuarios p', PRONTUARIO_EXEMPLO);
 
@@ -247,7 +247,7 @@ describe('POST /api/execucao/item/[id]/prontuario', () => {
       '/api/execucao/item/3/prontuario',
       {
         method: 'POST',
-        body: { usuario_id: 4, descricao: descricao50 },
+        body: { usuario_id: 4, descricao: descricao10 },
       },
       ctx
     );

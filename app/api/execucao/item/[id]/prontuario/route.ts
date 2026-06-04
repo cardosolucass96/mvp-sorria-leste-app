@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne, execute } from '@/lib/db';
+import { queryOne, execute } from '@/lib/db';
 
 interface Prontuario {
   id: number;
@@ -12,7 +12,7 @@ interface Prontuario {
   updated_at: string;
 }
 
-const MIN_CARACTERES = 50;
+const MIN_CARACTERES = 10;
 
 // GET /api/execucao/item/[id]/prontuario - Busca prontuário do item
 export async function GET(
