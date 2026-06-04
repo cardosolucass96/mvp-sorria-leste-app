@@ -11,6 +11,9 @@ interface ItemAtendimento {
   criado_por_id: number | null;
   valor: number;
   valor_original: number | null;
+  valor_final: number | null;
+  desconto_valor: number;
+  desconto_motivo: string | null;
   etapas_valores: string | null;
   valor_pago: number;
   status: string;
@@ -31,7 +34,17 @@ export const PUT = withUnit(async (
   try {
     const { id, itemId } = await context.params! as { id: string; itemId: string };
     const body = await request.json();
-    const { executor_id, valor, status, usuario_id, dentes, etapa_modelo_id, etapa_valor } = body;
+    const {
+      executor_id,
+      valor,
+      valor_final,
+      desconto_motivo,
+      status,
+      usuario_id,
+      dentes,
+      etapa_modelo_id,
+      etapa_valor,
+    } = body;
 
     // Verifica se atendimento existe e pertence à unidade
     const atendimento = await queryOne<Atendimento>(
@@ -103,7 +116,8 @@ export const PUT = withUnit(async (
 
     // Validação: edição de valor só em avaliacao ou aguardando_pagamento
     // Garante também valor >= 0 e valor >= valor_pago (sem criar excesso não tratado).
-    if (valor !== undefined) {
+    const valorRecebido = valor_final !== undefined ? valor_final : valor;
+    if (valorRecebido !== undefined) {
       if (!['avaliacao', 'aguardando_pagamento'].includes(atendimento.status)) {
         return NextResponse.json(
           { error: 'Só é possível editar o valor durante a avaliação ou enquanto aguarda pagamento' },
@@ -111,7 +125,7 @@ export const PUT = withUnit(async (
         );
       }
 
-      const valorNum = Number(valor);
+      const valorNum = Number(valorRecebido);
       if (!Number.isFinite(valorNum) || valorNum < 0) {
         return NextResponse.json(
           { error: 'Valor inválido' },
@@ -205,15 +219,39 @@ export const PUT = withUnit(async (
       updateParams.push(JSON.stringify(overrides));
       updates.push('valor = ?');
       updateParams.push(newItemValor);
+      updates.push('valor_final = ?');
+      updateParams.push(newItemValor);
+      updates.push('desconto_valor = ?');
+      updateParams.push(0);
+      updates.push('desconto_motivo = ?');
+      updateParams.push(null);
+      updates.push('desconto_aplicado_por_id = ?');
+      updateParams.push(null);
+      updates.push('desconto_aplicado_em = ?');
+      updateParams.push(null);
 
       // Snapshot de valor_original no primeiro override
       if (item.valor_original === null || item.valor_original === undefined) {
         updates.push('valor_original = ?');
         updateParams.push(item.valor);
       }
-    } else if (valor !== undefined) {
+    } else if (valorRecebido !== undefined) {
+      const valorNum = Number(valorRecebido);
+      const baseline = item.valor_original ?? item.valor_final ?? item.valor;
+      const descontoValor = Math.max(0, baseline - valorNum);
+
       updates.push('valor = ?');
-      updateParams.push(valor);
+      updateParams.push(valorNum);
+      updates.push('valor_final = ?');
+      updateParams.push(valorNum);
+      updates.push('desconto_valor = ?');
+      updateParams.push(descontoValor);
+      updates.push('desconto_motivo = ?');
+      updateParams.push(descontoValor > 0 ? (desconto_motivo?.trim() || null) : null);
+      updates.push('desconto_aplicado_por_id = ?');
+      updateParams.push(descontoValor > 0 ? context.user.sub : null);
+      updates.push('desconto_aplicado_em = ?');
+      updateParams.push(descontoValor > 0 ? new Date().toISOString() : null);
 
       // Backfill defensivo: se o item é legacy (valor_original IS NULL),
       // snapshota o valor atual (antes da edição) como baseline do orçamento.

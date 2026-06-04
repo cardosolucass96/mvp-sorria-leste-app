@@ -158,6 +158,8 @@ export const METODO_PAGAMENTO_LABELS: Record<MetodoPagamento, string> = {
   pix: 'PIX',
   cartao_debito: 'Cartão Débito',
   cartao_credito: 'Cartão Crédito',
+  crediario: 'Crediário',
+  afins_sorria: 'Afins Sorria',
 };
 
 // ─── Helpers ────────────────────────────────────────────────────

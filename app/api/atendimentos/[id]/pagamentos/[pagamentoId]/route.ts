@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne, execute } from '@/lib/db';
+import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { recalcularFinanceiroAgendamentos, recalcularFinanceiroItens } from '@/lib/helpers/pagamentoFlow';
 
 interface Pagamento {
   id: number;
@@ -63,21 +64,25 @@ export const PUT = withUnit(async (
       [motivo.trim(), parseInt(pagamentoId)]
     );
 
-    // Verifica se ainda existe algum pagamento ativo para este atendimento
-    const pagamentoAtivo = await queryOne<{ count: number }>(
-      'SELECT COUNT(*) as count FROM pagamentos WHERE atendimento_id = ? AND cancelado = 0',
-      [atendimentoId]
+    const alocacoes = await query<{ item_atendimento_id: number | null; agendamento_id: number | null }>(
+      `SELECT item_atendimento_id, agendamento_id
+       FROM pagamentos_alocacoes
+       WHERE pagamento_id = ?`,
+      [parseInt(pagamentoId)]
     );
 
-    // Se não há mais pagamentos ativos, reverte os itens 'pago' → 'pendente'
-    if (!pagamentoAtivo || pagamentoAtivo.count === 0) {
-      await execute(
-        `UPDATE itens_atendimento
-         SET valor_pago = 0,
-             status = 'pendente'
-         WHERE atendimento_id = ? AND status = 'pago'`,
-        [atendimentoId]
-      );
+    const itemIds = alocacoes
+      .map(alocacao => alocacao.item_atendimento_id)
+      .filter((value): value is number => Number.isFinite(value));
+    const agendamentoIds = alocacoes
+      .map(alocacao => alocacao.agendamento_id)
+      .filter((value): value is number => Number.isFinite(value));
+
+    if (itemIds.length > 0) {
+      await recalcularFinanceiroItens(itemIds);
+    }
+    if (agendamentoIds.length > 0) {
+      await recalcularFinanceiroAgendamentos(agendamentoIds);
     }
 
     return NextResponse.json({ success: true });

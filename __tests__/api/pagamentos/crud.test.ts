@@ -102,12 +102,23 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
   const baseBody = {
     valor: 400,
     metodo: 'pix',
+    alocacoes: [{ item_id: 101, valor: 400 }],
   };
+
+  function mockPagamentoPadrao(atendimento = ATENDIMENTO_AGUARDANDO_PGTO) {
+    mockQueryResponse('from atendimentos where id', atendimento);
+    mockQueryResponse('status, procedimento_id, etapas_valores', {
+      id: 101, valor: 400, valor_final: 400, valor_pago: 0, status: 'pendente', procedimento_id: 1, etapas_valores: null,
+    });
+    mockQueryResponse('from itens_atendimento', [
+      { id: 101, procedimento_id: 1, valor: 400, valor_final: 400, valor_pago: 0, etapas_valores: null },
+    ]);
+    mockQueryResponse('coalesce(sum(pa.valor_alocado), 0) as total', { total: 400 });
+  }
 
   it('cria pagamento com sucesso em aguardando_pagamento', async () => {
     setLastInsertId(1);
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('select id from usuarios limit 1', { id: 2 });
+    mockPagamentoPadrao();
     mockQueryResponse('from pagamentos where id', { ...PAGAMENTO_PIX, id: 1 });
 
     const ctx = createRouteContext({ id: '3' });
@@ -122,8 +133,7 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
 
   it('cria pagamento com sucesso em em_execucao', async () => {
     setLastInsertId(2);
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_EM_EXECUCAO);
-    mockQueryResponse('select id from usuarios limit 1', { id: 2 });
+    mockPagamentoPadrao(ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('from pagamentos where id', { ...PAGAMENTO_PIX, id: 2 });
 
     const ctx = createRouteContext({ id: '4' });
@@ -173,7 +183,7 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
   });
 
   it('rejeita valor zero', async () => {
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
+    mockPagamentoPadrao();
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<{ error: string }>(createPagamento, '/api/atendimentos/3/pagamentos', {
@@ -186,7 +196,7 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
   });
 
   it('rejeita valor negativo', async () => {
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
+    mockPagamentoPadrao();
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
@@ -198,7 +208,7 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
   });
 
   it('rejeita sem valor', async () => {
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
+    mockPagamentoPadrao();
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
@@ -210,7 +220,7 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
   });
 
   it('rejeita sem método de pagamento', async () => {
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
+    mockPagamentoPadrao();
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<{ error: string }>(createPagamento, '/api/atendimentos/3/pagamentos', {
@@ -223,7 +233,7 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
   });
 
   it('rejeita método de pagamento inválido', async () => {
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
+    mockPagamentoPadrao();
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<{ error: string }>(createPagamento, '/api/atendimentos/3/pagamentos', {
@@ -237,14 +247,13 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
 
   it('aceita dinheiro como método', async () => {
     setLastInsertId(3);
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('select id from usuarios limit 1', { id: 2 });
+    mockPagamentoPadrao();
     mockQueryResponse('from pagamentos where id', { ...PAGAMENTO_PIX, metodo: 'dinheiro' });
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: { valor: 100, metodo: 'dinheiro' },
+      body: { valor: 100, metodo: 'dinheiro', alocacoes: [{ item_id: 101, valor: 100 }] },
     }, ctx);
 
     expect(status).toBe(201);
@@ -252,14 +261,13 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
 
   it('aceita cartao_debito como método', async () => {
     setLastInsertId(4);
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('select id from usuarios limit 1', { id: 2 });
+    mockPagamentoPadrao();
     mockQueryResponse('from pagamentos where id', { ...PAGAMENTO_PIX, metodo: 'cartao_debito' });
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: { valor: 100, metodo: 'cartao_debito' },
+      body: { valor: 100, metodo: 'cartao_debito', alocacoes: [{ item_id: 101, valor: 100 }] },
     }, ctx);
 
     expect(status).toBe(201);
@@ -267,14 +275,13 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
 
   it('aceita cartao_credito como método', async () => {
     setLastInsertId(5);
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('select id from usuarios limit 1', { id: 2 });
+    mockPagamentoPadrao();
     mockQueryResponse('from pagamentos where id', { ...PAGAMENTO_PIX, metodo: 'cartao_credito' });
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: { valor: 100, metodo: 'cartao_credito' },
+      body: { valor: 100, metodo: 'cartao_credito', alocacoes: [{ item_id: 101, valor: 100 }] },
     }, ctx);
 
     expect(status).toBe(201);
@@ -282,14 +289,13 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
 
   it('salva observações quando fornecidas', async () => {
     setLastInsertId(7);
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('select id from usuarios limit 1', { id: 2 });
+    mockPagamentoPadrao();
     mockQueryResponse('from pagamentos where id', { ...PAGAMENTO_PIX });
 
     const ctx = createRouteContext({ id: '3' });
     await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: { valor: 100, metodo: 'pix', observacoes: 'Pagamento parcial' },
+      body: { valor: 100, metodo: 'pix', observacoes: 'Pagamento parcial', alocacoes: [{ item_id: 101, valor: 100 }] },
     }, ctx);
 
     const queries = getExecutedQueries();
@@ -309,7 +315,7 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
 
   it('recebido_por_id usa o usuário logado (context.user.sub)', async () => {
     setLastInsertId(8);
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
+    mockPagamentoPadrao();
     mockQueryResponse('from pagamentos where id', { ...PAGAMENTO_PIX });
 
     const ctx = createRouteContext({ id: '3' });

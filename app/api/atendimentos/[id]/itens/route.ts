@@ -274,8 +274,8 @@ export const POST = withUnit(async (
       for (const d of dentesArray) {
         const res = await execute(
           `INSERT INTO itens_atendimento
-            (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, dentes, quantidade, group_id, dente_unico, observacoes, status, adicionado_em_execucao)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+            (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, valor_final, desconto_valor, dentes, quantidade, group_id, dente_unico, observacoes, status, adicionado_em_execucao)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 1, ?, ?, ?, ?, ?)`,
           [
             parseInt(id as string),
             procedimento_id,
@@ -283,6 +283,7 @@ export const POST = withUnit(async (
             criado_por_id || null,
             valorPorDente,
             valorPorDente, // valor_original = snapshot do valor inicial
+            valorPorDente,
             JSON.stringify([d]),
             groupId,
             d.dente,
@@ -301,8 +302,8 @@ export const POST = withUnit(async (
     // Fluxo original para procedimentos NÃO por_dente
     const insertResult = await execute(
       `INSERT INTO itens_atendimento
-        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, dentes, quantidade, observacoes, status, adicionado_em_execucao)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, valor_final, desconto_valor, dentes, quantidade, observacoes, status, adicionado_em_execucao)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
       [
         parseInt(id as string),
         procedimento_id,
@@ -310,6 +311,7 @@ export const POST = withUnit(async (
         criado_por_id || null,
         valorFinal,
         valorFinal, // valor_original = snapshot do valor inicial
+        valorFinal,
         dentes || null,
         quantidadeFinal,
         observacoes || null,

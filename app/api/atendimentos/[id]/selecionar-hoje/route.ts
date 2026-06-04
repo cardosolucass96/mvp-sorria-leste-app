@@ -1,220 +1,263 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne, execute } from '@/lib/db';
+import { execute, query, queryOne } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
+
+type DestinoStatus = 'fazer_hoje' | 'agendar' | 'pago_sem_data' | 'nao_pago_sem_data';
 
 interface AtendimentoRow {
   id: number;
   cliente_id: number;
-  agendamento_id: number | null;
   unidade_id: number;
   status: string;
 }
 
 interface ItemRow {
   id: number;
+  atendimento_id: number;
   procedimento_id: number;
   executor_id: number | null;
+  criado_por_id: number;
+  valor: number;
+  valor_original: number | null;
+  valor_final: number | null;
+  valor_pago: number;
+  dentes: string | null;
+  quantidade: number;
+  group_id: string | null;
+  dente_unico: string | null;
+  observacoes: string | null;
   status: string;
+  etapas_valores: string | null;
 }
 
-interface EtapaAgendar {
-  etapa_id: number;
+interface DestinoInput {
   item_id: number;
+  etapa_modelo_id?: number | null;
+  destino_status: DestinoStatus;
   data_agendada?: string | null;
-  valor?: number | null;
-  pago_override?: 0 | 1; // quando definido, usa este valor em vez de inferir pelo status do item
-  executor_id?: number | null; // opcional — sobrescreve o executor padrão do item
+  executor_id?: number | null;
 }
 
-// POST /api/atendimentos/[id]/selecionar-hoje
-// Confirma quais procedimentos serão feitos hoje e agenda os demais
-export const POST = withUnit(
-  async (
-    request: NextRequest,
-    context: UnitAuthenticatedContext
-  ) => {
-    try {
-      const params = await context.params;
-      const id = parseInt(params!.id as string);
+function inferirStatusAgendamento(destino: DestinoStatus, dataAgendada?: string | null) {
+  if (destino === 'agendar' && dataAgendada) return 'agendado';
+  return 'pendente';
+}
 
-      const body = await request.json();
-      const {
-        itens_hoje,
-        itens_agendar,
-        etapas_agendar = [],
-      }: {
-        itens_hoje: number[];
-        itens_agendar: Array<{ item_id: number; data_agendada?: string | null; executor_id?: number | null }>;
-        etapas_agendar?: EtapaAgendar[];
-      } = body;
+async function criarAgendamentoFuturo({
+  atendimento,
+  item,
+  etapaModeloId,
+  executorId,
+  dataAgendada,
+  destinoStatus,
+  valor,
+  valorPago,
+}: {
+  atendimento: AtendimentoRow;
+  item: ItemRow;
+  etapaModeloId: number | null;
+  executorId: number | null | undefined;
+  dataAgendada?: string | null;
+  destinoStatus: DestinoStatus;
+  valor: number;
+  valorPago: number;
+}) {
+  const result = await execute(
+    `INSERT INTO agendamentos
+      (cliente_id, atendimento_origem_id, procedimento_id, executor_id, data_agendada, status, etapa_modelo_id, pago, valor, valor_pago, unidade_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      atendimento.cliente_id,
+      atendimento.id,
+      item.procedimento_id,
+      executorId ?? item.executor_id ?? null,
+      dataAgendada ?? null,
+      inferirStatusAgendamento(destinoStatus, dataAgendada),
+      etapaModeloId,
+      valorPago >= valor ? 1 : 0,
+      valor,
+      valorPago,
+      atendimento.unidade_id,
+    ]
+  );
 
-      if (!Array.isArray(itens_hoje) || !Array.isArray(itens_agendar)) {
-        return NextResponse.json(
-          { error: 'itens_hoje e itens_agendar são obrigatórios' },
-          { status: 400 }
+  return result.lastInsertRowid as number;
+}
+
+export const POST = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
+  try {
+    const params = await context.params;
+    const atendimentoId = parseInt(params!.id as string);
+    const body = await request.json();
+    const destinos = (body.destinos ?? []) as DestinoInput[];
+
+    if (!Array.isArray(destinos) || destinos.length === 0) {
+      return NextResponse.json({ error: 'destinos é obrigatório' }, { status: 400 });
+    }
+
+    const atendimento = await queryOne<AtendimentoRow>(
+      'SELECT id, cliente_id, unidade_id, status FROM atendimentos WHERE id = ? AND unidade_id = ?',
+      [atendimentoId, context.unidadeId]
+    );
+
+    if (!atendimento) {
+      return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 });
+    }
+
+    if (atendimento.status !== 'aguardando_pagamento') {
+      return NextResponse.json({ error: 'Atendimento não está em aguardando_pagamento' }, { status: 400 });
+    }
+
+    await execute('DELETE FROM itens_atendimento_destinos WHERE atendimento_id = ?', [atendimentoId]);
+
+    for (const destino of destinos) {
+      await execute(
+        `INSERT INTO itens_atendimento_destinos
+          (atendimento_id, item_atendimento_id, etapa_modelo_id, destino_status, data_agendada, executor_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          atendimentoId,
+          destino.item_id,
+          destino.etapa_modelo_id ?? null,
+          destino.destino_status,
+          destino.data_agendada ?? null,
+          destino.executor_id ?? null,
+        ]
+      );
+    }
+
+    const itens = await query<ItemRow>(
+      'SELECT * FROM itens_atendimento WHERE atendimento_id = ? ORDER BY id ASC',
+      [atendimentoId]
+    );
+    const destinosPorItem = new Map<number, DestinoInput[]>();
+    for (const destino of destinos) {
+      const atual = destinosPorItem.get(destino.item_id) ?? [];
+      atual.push(destino);
+      destinosPorItem.set(destino.item_id, atual);
+    }
+
+    let agendamentosCriados = 0;
+    let itensHoje = 0;
+
+    for (const item of itens) {
+      const destinosItem = destinosPorItem.get(item.id) ?? [];
+      const temEtapas = !!(await queryOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM procedimento_etapas_modelo WHERE procedimento_id = ?',
+        [item.procedimento_id]
+      ))?.count;
+
+      if (!temEtapas) {
+        const destino = destinosItem[0];
+        if (!destino || destino.destino_status === 'fazer_hoje') {
+          itensHoje += 1;
+          continue;
+        }
+
+        const agendamentoId = await criarAgendamentoFuturo({
+          atendimento,
+          item,
+          etapaModeloId: null,
+          executorId: destino.executor_id,
+          dataAgendada: destino.data_agendada,
+          destinoStatus: destino.destino_status,
+          valor: roundMoney(item.valor_final ?? item.valor),
+          valorPago: roundMoney(item.valor_pago),
+        });
+        agendamentosCriados += 1;
+
+        await execute(
+          `UPDATE pagamentos_alocacoes
+           SET agendamento_id = ?, item_atendimento_id = NULL
+           WHERE item_atendimento_id = ? AND (etapa_modelo_id IS NULL OR etapa_modelo_id = 0)`,
+          [agendamentoId, item.id]
         );
+        await execute('DELETE FROM itens_atendimento_destinos WHERE item_atendimento_id = ?', [item.id]);
+        await execute('DELETE FROM itens_atendimento WHERE id = ?', [item.id]);
+        continue;
       }
 
-      // Valida atendimento e verifica unidade
-      const atendimento = await queryOne<AtendimentoRow>(
-        'SELECT id, cliente_id, agendamento_id, unidade_id, status FROM atendimentos WHERE id = ? AND unidade_id = ?',
-        [id, context.unidadeId]
+      const etapas = await buscarEtapasComValor(item);
+      if (etapas.length === 0) {
+        itensHoje += 1;
+        continue;
+      }
+
+      const destinoPorEtapa = new Map<number, DestinoInput>(
+        destinosItem
+          .filter(destino => destino.etapa_modelo_id != null)
+          .map(destino => [Number(destino.etapa_modelo_id), destino])
       );
 
-      if (!atendimento) {
-        return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 });
-      }
+      for (const etapa of etapas) {
+        const destino = destinoPorEtapa.get(etapa.id);
+        const valorEtapa = roundMoney(etapa.valor ?? 0);
+        const valorPagoEtapa = await somarAlocacoesAtivasDaEtapa(item.id, etapa.id);
 
-      if (atendimento.status !== 'aguardando_pagamento') {
-        return NextResponse.json(
-          { error: 'Atendimento não está em aguardando_pagamento' },
-          { status: 400 }
-        );
-      }
-
-      if (itens_agendar.length === 0 && etapas_agendar.length === 0) {
-        return NextResponse.json({ agendamentos_criados: 0 });
-      }
-
-      // ── Itens inteiros adiados (procedimento sem etapas selecionado para outra data) ──
-
-      for (const { item_id, data_agendada, executor_id: executorOverride } of itens_agendar) {
-        const item = await queryOne<ItemRow>(
-          'SELECT id, procedimento_id, executor_id, status FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
-          [item_id, id]
-        );
-
-        if (!item) continue;
-
-        const statusAgendamento = data_agendada ? 'agendado' : 'pendente';
-        const pagoFlag = item.status === 'pago' ? 1 : 0;
-        const executorFinal = executorOverride !== undefined ? executorOverride : item.executor_id;
-        await execute(
-          `INSERT INTO agendamentos
-            (cliente_id, atendimento_origem_id, procedimento_id, executor_id, data_agendada, status, pago, unidade_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            atendimento.cliente_id,
-            atendimento.id,
-            item.procedimento_id,
-            executorFinal ?? null,
-            data_agendada ?? null,
-            statusAgendamento,
-            pagoFlag,
-            atendimento.unidade_id,
-          ]
-        );
-
-        // Anula referências FK antes de deletar o item
-        await execute(
-          'UPDATE agendamentos SET item_atendimento_origem_id = NULL WHERE item_atendimento_origem_id = ?',
-          [item.id]
-        );
-
-        await execute('DELETE FROM itens_atendimento WHERE id = ?', [item.id]);
-      }
-
-      // ── Etapas individuais adiadas (sessões multi-encontro de canal/implante) ──
-      // 1 agendamento por etapa — cada sessão é independente
-      if (etapas_agendar.length > 0) {
-        // Rastreia etapas adiadas por item para calcular valor e label das feitas hoje
-        const etapasDeferidas = new Map<number, { procedimento_id: number; etapa_modelo_ids: Set<number> }>();
-
-        for (const { etapa_id, item_id, data_agendada, pago_override, executor_id: executorOverride } of etapas_agendar) {
-          const item = await queryOne<ItemRow>(
-            'SELECT id, procedimento_id, executor_id, status FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
-            [item_id, id]
-          );
-          if (!item) continue;
-
-          // Decodifica o ID virtual: etapa_id = item_id * 100000 + etapa_modelo.id
-          const etapaModeloId = etapa_id - item_id * 100000;
-
-          const statusAgendamento = data_agendada ? 'agendado' : 'pendente';
-          const pagoFlagModelo = pago_override !== undefined && pago_override !== null
-            ? pago_override
-            : (item.status === 'pago' ? 1 : 0);
-          const executorFinalModelo = executorOverride !== undefined ? executorOverride : item.executor_id;
-          await execute(
-            `INSERT INTO agendamentos
-              (cliente_id, atendimento_origem_id, procedimento_id, executor_id, data_agendada, status, etapa_modelo_id, pago, unidade_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        if (!destino || destino.destino_status === 'fazer_hoje') {
+          const insertResult = await execute(
+            `INSERT INTO itens_atendimento
+              (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, valor_final, desconto_valor, valor_pago, dentes, quantidade, group_id, dente_unico, observacoes, status, etapa_modelo_id, etapa_label)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              atendimento.cliente_id,
-              atendimento.id,
+              atendimentoId,
               item.procedimento_id,
-              executorFinalModelo ?? null,
-              data_agendada ?? null,
-              statusAgendamento,
-              etapaModeloId,
-              pagoFlagModelo,
-              atendimento.unidade_id,
+              (destino?.executor_id ?? item.executor_id) || null,
+              item.criado_por_id,
+              valorEtapa,
+              valorEtapa,
+              valorEtapa,
+              valorPagoEtapa,
+              item.dentes,
+              item.quantidade,
+              item.group_id,
+              item.dente_unico,
+              item.observacoes,
+              valorPagoEtapa >= valorEtapa ? 'pago' : 'pendente',
+              etapa.id,
+              etapa.nome,
             ]
           );
-
-          if (!etapasDeferidas.has(item_id)) {
-            etapasDeferidas.set(item_id, { procedimento_id: item.procedimento_id, etapa_modelo_ids: new Set() });
-          }
-          etapasDeferidas.get(item_id)!.etapa_modelo_ids.add(etapaModeloId);
+          const novoItemId = insertResult.lastInsertRowid as number;
+          await execute(
+            `UPDATE pagamentos_alocacoes
+             SET item_atendimento_id = ?
+             WHERE item_atendimento_id = ? AND etapa_modelo_id = ?`,
+            [novoItemId, item.id, etapa.id]
+          );
+          itensHoje += 1;
+          continue;
         }
 
-        // Para cada item afetado: seta valor = soma das etapas feitas hoje e grava etapa_label
-        for (const [item_id, { procedimento_id, etapa_modelo_ids }] of etapasDeferidas) {
-          const todasEtapas = await query<{ id: number; nome: string; valor: number | null }>(
-            'SELECT id, nome, valor FROM procedimento_etapas_modelo WHERE procedimento_id = ? ORDER BY ordem ASC',
-            [procedimento_id]
-          );
+        const agendamentoId = await criarAgendamentoFuturo({
+          atendimento,
+          item,
+          etapaModeloId: etapa.id,
+          executorId: destino.executor_id,
+          dataAgendada: destino.data_agendada,
+          destinoStatus: destino.destino_status,
+          valor: valorEtapa,
+          valorPago: valorPagoEtapa,
+        });
+        agendamentosCriados += 1;
 
-          // Aplica override per-item se houver
-          const itemOverride = await queryOne<{ etapas_valores: string | null }>(
-            'SELECT etapas_valores FROM itens_atendimento WHERE id = ?',
-            [item_id]
-          );
-          let overrides: Record<string, number> = {};
-          if (itemOverride?.etapas_valores) {
-            try {
-              overrides = JSON.parse(itemOverride.etapas_valores) as Record<string, number>;
-            } catch {
-              overrides = {};
-            }
-          }
-          const etapasComValor = todasEtapas.map(e => ({
-            id: e.id,
-            nome: e.nome,
-            valor: overrides[String(e.id)] ?? e.valor,
-          }));
-          const etapasHoje = etapasComValor.filter(e => !etapa_modelo_ids.has(e.id));
-
-          if (etapasHoje.length > 0 && etapasHoje.length < etapasComValor.length) {
-            const label = etapasHoje.map(e => e.nome).join(', ');
-            const todosTemValor = etapasHoje.every(e => e.valor != null);
-
-            if (todosTemValor) {
-              // Seta o valor exato das etapas feitas hoje (não subtrai — evita dependência do valor base).
-              // valor_original também é resetado para a nova baseline: mudar a seleção de sessões
-              // invalida qualquer desconto aplicado anteriormente (o atendente reaplica se quiser).
-              const valorHoje = etapasHoje.reduce((sum, e) => sum + (e.valor ?? 0), 0);
-              await execute(
-                "UPDATE itens_atendimento SET valor = ?, valor_original = ?, etapa_label = ? WHERE id = ?",
-                [valorHoje, valorHoje, label, item_id]
-              );
-            } else {
-              await execute(
-                "UPDATE itens_atendimento SET etapa_label = ? WHERE id = ?",
-                [label, item_id]
-              );
-            }
-          }
-        }
+        await execute(
+          `UPDATE pagamentos_alocacoes
+           SET agendamento_id = ?, item_atendimento_id = NULL
+           WHERE item_atendimento_id = ? AND etapa_modelo_id = ?`,
+          [agendamentoId, item.id, etapa.id]
+        );
       }
 
-      const agendamentosCriados = itens_agendar.length + etapas_agendar.length;
-
-      return NextResponse.json({ agendamentos_criados: agendamentosCriados });
-    } catch (error) {
-      console.error('Erro ao selecionar procedimentos:', error);
-      const msg = error instanceof Error ? error.message : String(error);
-      return NextResponse.json({ error: `Erro ao processar seleção: ${msg}` }, { status: 500 });
+      await execute('DELETE FROM itens_atendimento_destinos WHERE item_atendimento_id = ?', [item.id]);
+      await execute('DELETE FROM itens_atendimento WHERE id = ?', [item.id]);
     }
+
+    return NextResponse.json({ agendamentos_criados: agendamentosCriados, itens_hoje: itensHoje });
+  } catch (error) {
+    console.error('Erro ao selecionar procedimentos:', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: `Erro ao processar seleção: ${msg}` }, { status: 500 });
   }
-);
+});

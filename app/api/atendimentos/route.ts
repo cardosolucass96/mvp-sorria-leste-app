@@ -236,9 +236,12 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
       // Cria item — executor_id pode ser null (disponível para alguém assumir)
       await execute(
-        `INSERT INTO itens_atendimento (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, quantidade, status)
-         VALUES (?, ?, ?, ?, ?, ?, 1, 'pendente')`,
-        [atendimentoId, procedimento_id, executor_id || null, criadoPorId, valorFinal, valorFinal]
+        `INSERT INTO itens_atendimento (
+          atendimento_id, procedimento_id, executor_id, criado_por_id,
+          valor, valor_original, valor_final, desconto_valor, quantidade, status
+        )
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, 'pendente')`,
+        [atendimentoId, procedimento_id, executor_id || null, criadoPorId, valorFinal, valorFinal, valorFinal]
       );
       
       // Busca atendimento criado

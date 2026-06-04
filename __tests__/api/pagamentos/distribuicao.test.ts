@@ -1,12 +1,3 @@
-/**
- * Pagamentos — modelo simplificado (sem distribuição por item)
- *
- * Cobre: POST /api/atendimentos/[id]/pagamentos
- *   - marca todos os itens pendentes do atendimento como 'pago' ao registrar pagamento
- *   - aceita crediario e afins_sorria (métodos adicionais)
- *   - rejeita método inválido com mensagem unificada
- */
-
 import { callRoute, createRouteContext } from '../../helpers/api-test-helper';
 import {
   setupCloudflareContextMock,
@@ -16,10 +7,7 @@ import {
   setLastInsertId,
   getExecutedQueries,
 } from '../../helpers/db-mock';
-import {
-  ATENDIMENTO_AGUARDANDO_PGTO,
-  PAGAMENTO_PIX,
-} from '../../helpers/seed';
+import { ATENDIMENTO_AGUARDANDO_PGTO, PAGAMENTO_PIX } from '../../helpers/seed';
 
 jest.mock('@/lib/auth/jwt', () => ({
   extractToken: jest.fn().mockReturnValue('mock-token'),
@@ -42,98 +30,66 @@ afterEach(() => {
   teardownCloudflareContextMock();
 });
 
-describe('POST /api/atendimentos/[id]/pagamentos — modelo simplificado', () => {
-  it('marca itens pendentes como pago ao registrar pagamento', async () => {
-    setLastInsertId(10);
+describe('POST /api/atendimentos/[id]/pagamentos — alocação explícita', () => {
+  function mockFluxoPadrao() {
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('select id from usuarios limit 1', { id: 1 });
+    mockQueryResponse('status, procedimento_id, etapas_valores', {
+      id: 101, valor: 500, valor_final: 500, valor_pago: 0, status: 'pendente', procedimento_id: 1, etapas_valores: null,
+    });
+    mockQueryResponse('from itens_atendimento', [
+      { id: 101, procedimento_id: 1, valor: 500, valor_final: 500, valor_pago: 0, etapas_valores: null },
+    ]);
+    mockQueryResponse('coalesce(sum(pa.valor_alocado), 0) as total', { total: 500 });
+  }
+
+  it('grava pagamento e alocação por item', async () => {
+    setLastInsertId(10);
+    mockFluxoPadrao();
     mockQueryResponse('select * from pagamentos where id', { ...PAGAMENTO_PIX, id: 10 });
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: { valor: 300, metodo: 'pix' },
+      body: {
+        valor: 500,
+        metodo: 'pix',
+        alocacoes: [{ item_id: 101, valor: 500 }],
+      },
     }, ctx);
 
     expect(status).toBe(201);
 
     const queries = getExecutedQueries();
-    const updateQ = queries.find(q => q.sql.toLowerCase().includes("status = 'pago'"));
-    expect(updateQ).toBeDefined();
-    expect(updateQ!.sql.toLowerCase()).toContain("status = 'pendente'");
+    expect(queries.some((query) => query.sql.includes('INSERT INTO pagamentos_alocacoes'))).toBe(true);
   });
 
-  it('não exige distribuição por item no body', async () => {
-    setLastInsertId(11);
-    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('select id from usuarios limit 1', { id: 1 });
-    mockQueryResponse('select * from pagamentos where id', { ...PAGAMENTO_PIX, id: 11 });
-
-    const ctx = createRouteContext({ id: '3' });
-    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
-      method: 'POST',
-      body: { valor: 500, metodo: 'dinheiro' },
-    }, ctx);
-
-    expect(status).toBe(201);
-
-    const queries = getExecutedQueries();
-    // pagamentos_itens table has been removed - no vinculação queries expected
-  });
-
-  it('aceita crediario como método válido', async () => {
-    setLastInsertId(12);
-    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('select id from usuarios limit 1', { id: 1 });
-    mockQueryResponse('select * from pagamentos where id', { ...PAGAMENTO_PIX, metodo: 'crediario' });
-
-    const ctx = createRouteContext({ id: '3' });
-    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
-      method: 'POST',
-      body: { valor: 200, metodo: 'crediario' },
-    }, ctx);
-
-    expect(status).toBe(201);
-  });
-
-  it('aceita afins_sorria como método válido', async () => {
-    setLastInsertId(13);
-    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('select id from usuarios limit 1', { id: 1 });
-    mockQueryResponse('select * from pagamentos where id', { ...PAGAMENTO_PIX, metodo: 'afins_sorria' });
-
-    const ctx = createRouteContext({ id: '3' });
-    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
-      method: 'POST',
-      body: { valor: 150, metodo: 'afins_sorria' },
-    }, ctx);
-
-    expect(status).toBe(201);
-  });
-
-  it('rejeita método inválido com mensagem unificada', async () => {
+  it('rejeita quando não há alocações', async () => {
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<{ error: string }>(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: { valor: 100, metodo: 'cheque' },
+      body: { valor: 100, metodo: 'pix' },
     }, ctx);
 
     expect(status).toBe(400);
-    expect(data.error).toBe('Método de pagamento inválido');
+    expect(data.error).toBe('Informe ao menos uma alocação de pagamento');
   });
 
-  it('rejeita ausência de método com mensagem unificada', async () => {
-    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+  it('rejeita quando o valor não bate com a soma das alocações', async () => {
+    mockFluxoPadrao();
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<{ error: string }>(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
-      body: { valor: 100 },
+      body: {
+        valor: 500,
+        metodo: 'pix',
+        alocacoes: [{ item_id: 101, valor: 300 }],
+      },
     }, ctx);
 
     expect(status).toBe(400);
-    expect(data.error).toBe('Método de pagamento inválido');
+    expect(data.error).toBe('O valor do pagamento deve ser igual à soma das alocações');
   });
 });

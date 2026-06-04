@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
 
 interface Atendimento {
   id: number;
@@ -27,7 +28,13 @@ interface ItemAtendimento {
   criado_por_id: number | null;
   valor: number;
   valor_original: number | null;
+  valor_final: number | null;
+  desconto_valor: number;
+  desconto_motivo: string | null;
+  desconto_aplicado_por_id: number | null;
+  desconto_aplicado_em: string | null;
   etapas_valores: string | null;
+  valor_pago: number;
   status: string;
   created_at: string;
   concluido_at: string | null;
@@ -50,6 +57,12 @@ interface EtapaItem {
   nome?: string;
   tipo?: 'face' | 'modelo';
   valor?: number | null;
+  valor_pago?: number;
+  saldo?: number;
+  financeiro_status?: 'nao_pago' | 'parcial' | 'pago';
+  destino_status?: string | null;
+  data_agendada?: string | null;
+  executor_destino_id?: number | null;
 }
 
 interface CountResult {
@@ -58,6 +71,14 @@ interface CountResult {
 
 interface SumResult {
   total: number | null;
+}
+
+interface DestinoRow {
+  item_atendimento_id: number;
+  etapa_modelo_id: number | null;
+  destino_status: string;
+  data_agendada: string | null;
+  executor_id: number | null;
 }
 
 // GET /api/atendimentos/[id] - Busca atendimento por ID com detalhes
@@ -121,35 +142,46 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     let itensComEtapas: ItemAtendimento[] = itens;
     if (itens.length > 0) {
       const itensModelo = itens.filter(i => i.tem_etapas);
+      const destinos = await query<DestinoRow>(
+        `SELECT item_atendimento_id, etapa_modelo_id, destino_status, data_agendada, executor_id
+         FROM itens_atendimento_destinos
+         WHERE atendimento_id = ?`,
+        [parseInt(id)]
+      );
+      const destinoMap = new Map(destinos.map((destino) => [
+        `${destino.item_atendimento_id}:${destino.etapa_modelo_id ?? 'item'}`,
+        destino,
+      ]));
 
       // Session-level etapas (canal, implante, etc — usa modelo do procedimento)
       const modeloEtapasMap = new Map<number, EtapaItem[]>();
       for (const item of itensModelo) {
-        const modelos = await query<{ id: number; nome: string; valor: number | null; ordem: number }>(
-          `SELECT id, nome, valor, ordem FROM procedimento_etapas_modelo WHERE procedimento_id = ? ORDER BY ordem ASC`,
-          [item.procedimento_id]
-        );
-        // Aplica override per-item: se item.etapas_valores tem a etapa, usa o valor override.
-        // Caso contrário, usa valor do template (pode ser null = proporcional).
-        let overrides: Record<string, number> = {};
-        if (item.etapas_valores) {
-          try {
-            overrides = JSON.parse(item.etapas_valores) as Record<string, number>;
-          } catch {
-            overrides = {};
-          }
-        }
+        const modelos = await buscarEtapasComValor(item);
         // ID virtual único por item: evita colisão quando dois itens usam o mesmo procedimento
-        modeloEtapasMap.set(item.id, modelos.map(m => ({
-          id: item.id * 100000 + m.id,
-          item_atendimento_id: item.id,
-          dente: '',
-          face: '' as 'V',
-          status: 'pendente',
-          nome: m.nome,
-          tipo: 'modelo' as const,
-          valor: overrides[String(m.id)] ?? m.valor,
-        })));
+        const etapas: EtapaItem[] = [];
+        for (const m of modelos) {
+          const valorPagoEtapa = await somarAlocacoesAtivasDaEtapa(item.id, m.id);
+          const valorEtapa = roundMoney(m.valor ?? 0);
+          const saldo = roundMoney(Math.max(0, valorEtapa - valorPagoEtapa));
+          const destino = destinoMap.get(`${item.id}:${m.id}`);
+          etapas.push({
+            id: item.id * 100000 + m.id,
+            item_atendimento_id: item.id,
+            dente: '',
+            face: '' as 'V',
+            status: 'pendente',
+            nome: m.nome,
+            tipo: 'modelo' as const,
+            valor: valorEtapa,
+            valor_pago: valorPagoEtapa,
+            saldo,
+            financeiro_status: valorPagoEtapa <= 0 ? 'nao_pago' : valorPagoEtapa >= valorEtapa ? 'pago' : 'parcial',
+            destino_status: destino?.destino_status ?? null,
+            data_agendada: destino?.data_agendada ?? null,
+            executor_destino_id: destino?.executor_id ?? null,
+          });
+        }
+        modeloEtapasMap.set(item.id, etapas);
       }
 
       // Para itens com tem_etapas=1, busca progresso geral (etapas concluídas em outros atendimentos do mesmo cliente+procedimento)
@@ -186,22 +218,37 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         }
       }
 
-      itensComEtapas = itens.map(item => ({
-        ...item,
-        etapas: item.tem_etapas ? (modeloEtapasMap.get(item.id) ?? []) : [],
-        progresso_etapas: progressoMap.get(item.id) ?? null,
-      }));
+      itensComEtapas = itens.map(item => {
+        const destinoItem = destinoMap.get(`${item.id}:item`);
+        return {
+          ...item,
+          valor_final: item.valor_final ?? item.valor,
+          etapas: item.tem_etapas ? (modeloEtapasMap.get(item.id) ?? []) : [],
+          progresso_etapas: progressoMap.get(item.id) ?? null,
+          destino_status: destinoItem?.destino_status ?? null,
+          destino_data_agendada: destinoItem?.data_agendada ?? null,
+          destino_executor_id: destinoItem?.executor_id ?? null,
+          saldo: roundMoney(Math.max(0, (item.valor_final ?? item.valor) - item.valor_pago)),
+          financeiro_status: item.valor_pago <= 0
+            ? 'nao_pago'
+            : item.valor_pago >= (item.valor_final ?? item.valor)
+              ? 'pago'
+              : 'parcial',
+        };
+      });
     }
 
     // Calcula totais
     const totalResult = await queryOne<SumResult>(
-      'SELECT SUM(valor) as total FROM itens_atendimento WHERE atendimento_id = ?',
+      'SELECT SUM(COALESCE(valor_final, valor)) as total FROM itens_atendimento WHERE atendimento_id = ?',
       [parseInt(id)]
     );
 
-    // total_pago = soma dos pagamentos não cancelados (modelo simplificado sem distribuição por item)
+    // total_pago = quanto os itens deste atendimento já têm quitado.
+    // Usa valor_pago dos itens para cobrir sessões/agendamentos pré-pagos,
+    // mesmo quando não houve novo registro em pagamentos neste atendimento.
     const totalPagoResult = await queryOne<SumResult>(
-      'SELECT COALESCE(SUM(valor), 0) as total FROM pagamentos WHERE atendimento_id = ? AND cancelado = 0',
+      'SELECT COALESCE(SUM(valor_pago), 0) as total FROM itens_atendimento WHERE atendimento_id = ?',
       [parseInt(id)]
     );
     
@@ -450,17 +497,32 @@ async function validarTransicao(
     }
   }
   
-  // Aguardando Pagamento → Em Execução: precisa ter ao menos 1 pagamento ativo
+  // Aguardando Pagamento → Em Execução: os itens que ficaram neste atendimento
+  // precisam estar financeiramente cobertos (inclusive pré-pagos vindos da agenda).
   if (statusAtual === 'aguardando_pagamento' && novoStatus === 'em_execucao') {
-    const pagamentoAtivo = await queryOne<CountResult>(
-      'SELECT COUNT(*) as count FROM pagamentos WHERE atendimento_id = ? AND cancelado = 0',
+    const itensRestantes = await queryOne<CountResult>(
+      'SELECT COUNT(*) as count FROM itens_atendimento WHERE atendimento_id = ?',
+      [atendimentoId]
+    );
+    if (!itensRestantes || itensRestantes.count === 0) {
+      return {
+        valido: false,
+        mensagem: 'Defina ao menos um procedimento para hoje antes de liberar a execução',
+      };
+    }
+
+    const itensSemCobertura = await queryOne<CountResult>(
+      `SELECT COUNT(*) as count
+       FROM itens_atendimento
+       WHERE atendimento_id = ?
+         AND valor_pago + 0.001 < COALESCE(valor_final, valor)`,
       [atendimentoId]
     );
 
-    if (!pagamentoAtivo || pagamentoAtivo.count === 0) {
+    if (itensSemCobertura && itensSemCobertura.count > 0) {
       return {
         valido: false,
-        mensagem: 'É necessário registrar ao menos um pagamento para liberar o atendimento',
+        mensagem: 'Ainda existem procedimentos de hoje sem cobertura financeira suficiente',
       };
     }
   }

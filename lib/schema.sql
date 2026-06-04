@@ -127,6 +127,11 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   criado_por_id INTEGER NOT NULL, -- Quem criou (avaliador ou executor)
   valor REAL NOT NULL, -- Valor efetivo do procedimento (pode ter sido editado pelo atendente)
   valor_original REAL, -- Valor de tabela/orçamento no momento da criação (snapshot); desconto = valor_original - valor
+  valor_final REAL, -- Valor final cobrado após desconto; mantemos `valor` espelhado por compatibilidade
+  desconto_valor REAL NOT NULL DEFAULT 0,
+  desconto_motivo TEXT,
+  desconto_aplicado_por_id INTEGER,
+  desconto_aplicado_em TEXT,
   valor_pago REAL NOT NULL DEFAULT 0, -- Quanto já foi pago deste procedimento
   dentes TEXT, -- Dentes selecionados (JSON array: ["11", "21", "31"])
   quantidade INTEGER NOT NULL DEFAULT 1, -- Quantidade de dentes (para cálculo do valor)
@@ -145,6 +150,7 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
   FOREIGN KEY (executor_id) REFERENCES usuarios(id),
   FOREIGN KEY (criado_por_id) REFERENCES usuarios(id),
+  FOREIGN KEY (desconto_aplicado_por_id) REFERENCES usuarios(id),
   FOREIGN KEY (origem_agendamento_id) REFERENCES agendamentos(id),
   FOREIGN KEY (etapa_modelo_id) REFERENCES procedimento_etapas_modelo(id)
 );
@@ -162,6 +168,38 @@ CREATE TABLE IF NOT EXISTS pagamentos (
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (recebido_por_id) REFERENCES usuarios(id)
+);
+
+CREATE TABLE IF NOT EXISTS pagamentos_alocacoes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  pagamento_id INTEGER NOT NULL,
+  item_atendimento_id INTEGER,
+  agendamento_id INTEGER,
+  etapa_modelo_id INTEGER,
+  valor_alocado REAL NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (pagamento_id) REFERENCES pagamentos(id),
+  FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
+  FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id),
+  FOREIGN KEY (etapa_modelo_id) REFERENCES procedimento_etapas_modelo(id)
+);
+
+CREATE TABLE IF NOT EXISTS itens_atendimento_destinos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  atendimento_id INTEGER NOT NULL,
+  item_atendimento_id INTEGER NOT NULL,
+  etapa_modelo_id INTEGER,
+  destino_status TEXT NOT NULL
+    CHECK (destino_status IN ('indefinido', 'fazer_hoje', 'agendar', 'pago_sem_data', 'nao_pago_sem_data')),
+  data_agendada TEXT,
+  executor_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE (item_atendimento_id, etapa_modelo_id),
+  FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
+  FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
+  FOREIGN KEY (etapa_modelo_id) REFERENCES procedimento_etapas_modelo(id),
+  FOREIGN KEY (executor_id) REFERENCES usuarios(id)
 );
 
 -- Comissões (geradas ao finalizar atendimento)
@@ -253,6 +291,8 @@ CREATE TABLE IF NOT EXISTS agendamentos (
   reagendado_de_id INTEGER,
   etapa_modelo_id INTEGER, -- Etapa específica do procedimento (quando tem_etapas=1)
   pago INTEGER NOT NULL DEFAULT 0, -- 1 se o item já foi pago antes de ser adiado
+  valor REAL,
+  valor_pago REAL NOT NULL DEFAULT 0,
   unidade_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),

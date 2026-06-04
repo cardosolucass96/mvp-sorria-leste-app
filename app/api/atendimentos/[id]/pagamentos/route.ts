@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { buscarEtapasComValor, recalcularFinanceiroItens, roundMoney } from '@/lib/helpers/pagamentoFlow';
 
 interface Pagamento {
   id: number;
@@ -15,6 +16,21 @@ interface Atendimento {
   id: number;
   status: string;
   unidade_id: number;
+}
+
+interface AlocacaoPagamentoInput {
+  item_id: number;
+  etapa_modelo_id?: number | null;
+  valor: number;
+}
+
+interface ItemPagamentoRow {
+  id: number;
+  procedimento_id: number;
+  valor: number;
+  valor_final: number | null;
+  valor_pago: number;
+  etapas_valores: string | null;
 }
 
 async function verificarAtendimentoUnidade(atendimentoId: number, unidadeId: number) {
@@ -56,9 +72,7 @@ export const GET = withUnit(async (
   }
 });
 
-// POST /api/atendimentos/[id]/pagamentos - Registra novo pagamento
-// Modelo simplificado: registra valor + método para o atendimento inteiro.
-// Todos os itens são marcados como 'pago' automaticamente (quem chega aqui vai pagar tudo).
+// POST /api/atendimentos/[id]/pagamentos - Registra novo pagamento com alocação explícita.
 export const POST = withUnit(async (
   request: NextRequest,
   context: UnitAuthenticatedContext
@@ -67,10 +81,12 @@ export const POST = withUnit(async (
     const { id } = await context.params!;
     const atendimentoId = parseInt(id as string);
     const body = await request.json();
-    // etapas_pagas_por_item: Record<itemId, nomesDeEtapasPagas[]>
-    // Quando fornecido, atualiza etapa_label e valor do item para refletir apenas as sessões pagas
-    // sem criar agendamentos (isso ocorre apenas em "Enviar para Execução")
-    const { valor, metodo, observacoes, item_ids, etapas_pagas_por_item } = body;
+    const { valor, metodo, observacoes, alocacoes } = body as {
+      valor: number;
+      metodo: string;
+      observacoes?: string | null;
+      alocacoes?: AlocacaoPagamentoInput[];
+    };
 
     const check = await verificarAtendimentoUnidade(atendimentoId, context.unidadeId);
     if ('error' in check) return check.error;
@@ -100,6 +116,53 @@ export const POST = withUnit(async (
 
     const recebidoPorId = context.user.sub;
 
+    if (!Array.isArray(alocacoes) || alocacoes.length === 0) {
+      return NextResponse.json(
+        { error: 'Informe ao menos uma alocação de pagamento' },
+        { status: 400 }
+      );
+    }
+
+    const somaAlocacoes = roundMoney(alocacoes.reduce((sum, alocacao) => sum + Number(alocacao.valor || 0), 0));
+    if (Math.abs(somaAlocacoes - roundMoney(Number(valor))) > 0.01) {
+      return NextResponse.json(
+        { error: 'O valor do pagamento deve ser igual à soma das alocações' },
+        { status: 400 }
+      );
+    }
+
+    const itemIds = [...new Set(alocacoes.map(alocacao => Number(alocacao.item_id)).filter(Number.isFinite))];
+    const placeholders = itemIds.map(() => '?').join(',');
+    const itens = itemIds.length > 0
+      ? await query<ItemPagamentoRow>(
+          `SELECT id, procedimento_id, valor, valor_final, valor_pago, etapas_valores
+           FROM itens_atendimento
+           WHERE atendimento_id = ? AND id IN (${placeholders})`,
+          [atendimentoId, ...itemIds]
+        )
+      : [];
+    const itensMap = new Map(itens.map(item => [item.id, item]));
+
+    for (const alocacao of alocacoes) {
+      const valorAlocado = Number(alocacao.valor);
+      if (!Number.isFinite(valorAlocado) || valorAlocado <= 0) {
+        return NextResponse.json({ error: 'Valor de alocação inválido' }, { status: 400 });
+      }
+
+      const item = itensMap.get(Number(alocacao.item_id));
+      if (!item) {
+        return NextResponse.json({ error: 'Item de atendimento inválido na alocação' }, { status: 400 });
+      }
+
+      if (alocacao.etapa_modelo_id) {
+        const etapas = await buscarEtapasComValor(item);
+        const etapa = etapas.find(et => et.id === Number(alocacao.etapa_modelo_id));
+        if (!etapa) {
+          return NextResponse.json({ error: 'Sessão inválida na alocação' }, { status: 400 });
+        }
+      }
+    }
+
     // Insere o pagamento
     const result = await execute(
       `INSERT INTO pagamentos (atendimento_id, recebido_por_id, valor, metodo, observacoes)
@@ -109,99 +172,20 @@ export const POST = withUnit(async (
 
     const pagamentoId = result.lastInsertRowid;
 
-    // Pagamento parcial de sessões (ex: pagar só etapa 1 de um canal com 2 sessões).
-    // Para cada item em etapas_pagas_por_item:
-    //   - Combina sessões já pagas (etapa_label existente) com as novas sessões pagas
-    //   - Se TODAS as sessões estão pagas → marca como 'pago', limpa etapa_label
-    //   - Se ainda parcial → atualiza etapa_label, mantém 'pendente' (para poder pagar o restante depois)
-    // Esses itens são excluídos do UPDATE genérico abaixo.
-    const itemsHandledSeparately = new Set<number>();
-
-    if (etapas_pagas_por_item && typeof etapas_pagas_por_item === 'object') {
-      for (const [itemIdStr, nomesPagosNovos] of Object.entries(etapas_pagas_por_item as Record<string, string[]>)) {
-        const itemId = parseInt(itemIdStr);
-        itemsHandledSeparately.add(itemId);
-
-        const itemData = await queryOne<{ id: number; procedimento_id: number; etapa_label: string | null; etapas_valores: string | null }>(
-          'SELECT id, procedimento_id, etapa_label, etapas_valores FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
-          [itemId, atendimentoId]
-        );
-        if (!itemData) continue;
-
-        const todasEtapas = await query<{ id: number; nome: string; valor: number | null }>(
-          'SELECT id, nome, valor FROM procedimento_etapas_modelo WHERE procedimento_id = ? ORDER BY ordem ASC',
-          [itemData.procedimento_id]
-        );
-
-        // Aplica override per-item se houver: {"<etapa_modelo_id>": valor}.
-        // Quando existe, cada etapa tem valor garantido (não null).
-        let overrides: Record<string, number> = {};
-        if (itemData.etapas_valores) {
-          try {
-            overrides = JSON.parse(itemData.etapas_valores) as Record<string, number>;
-          } catch {
-            overrides = {};
-          }
-        }
-        const etapasComValor = todasEtapas.map(e => ({
-          id: e.id,
-          nome: e.nome,
-          valor: overrides[String(e.id)] ?? e.valor,
-        }));
-
-        // Combina sessões já pagas (de pagamentos anteriores) com as novas
-        const jaPageasNomes = itemData.etapa_label
-          ? itemData.etapa_label.split(', ').map(s => s.trim())
-          : [];
-        const todasPageasNomes = [...new Set([...jaPageasNomes, ...(nomesPagosNovos as string[])])];
-        const todosPago = todasPageasNomes.length >= etapasComValor.length;
-
-        if (todosPago) {
-          // Todas as sessões pagas → marca como pago, limpa etapa_label
-          await execute(
-            "UPDATE itens_atendimento SET status = 'pago', valor_pago = valor, etapa_label = NULL WHERE id = ?",
-            [itemId]
-          );
-        } else {
-          // Ainda parcial → atualiza etapa_label com todas as sessões pagas até agora
-          const label = todasPageasNomes.join(', ');
-          const etapasPageas = etapasComValor.filter(e => todasPageasNomes.includes(e.nome));
-          const todosTemValor = etapasPageas.every(e => e.valor != null);
-          if (todosTemValor) {
-            const valorPago = etapasPageas.reduce((sum, e) => sum + (e.valor ?? 0), 0);
-            await execute(
-              'UPDATE itens_atendimento SET etapa_label = ?, valor_pago = ? WHERE id = ?',
-              [label, valorPago, itemId]
-            );
-          } else {
-            await execute('UPDATE itens_atendimento SET etapa_label = ? WHERE id = ?', [label, itemId]);
-          }
-        }
-      }
-    }
-
-    // Marca itens como pagos: apenas os selecionados (se item_ids fornecido) ou todos os pendentes.
-    // Exclui itens tratados individualmente por etapas_pagas_por_item.
-    const itemIdsParaPagar = Array.isArray(item_ids) && item_ids.length > 0
-      ? (item_ids as number[]).filter(id => !itemsHandledSeparately.has(id))
-      : null;
-
-    if (itemIdsParaPagar && itemIdsParaPagar.length > 0) {
-      const placeholders = itemIdsParaPagar.map(() => '?').join(',');
+    for (const alocacao of alocacoes) {
       await execute(
-        `UPDATE itens_atendimento
-         SET valor_pago = valor, status = 'pago'
-         WHERE atendimento_id = ? AND status = 'pendente' AND id IN (${placeholders})`,
-        [atendimentoId, ...itemIdsParaPagar]
-      );
-    } else if (!item_ids || (Array.isArray(item_ids) && item_ids.length === 0)) {
-      await execute(
-        `UPDATE itens_atendimento
-         SET valor_pago = valor, status = 'pago'
-         WHERE atendimento_id = ? AND status = 'pendente'`,
-        [atendimentoId]
+        `INSERT INTO pagamentos_alocacoes (pagamento_id, item_atendimento_id, etapa_modelo_id, valor_alocado)
+         VALUES (?, ?, ?, ?)`,
+        [
+          pagamentoId,
+          alocacao.item_id,
+          alocacao.etapa_modelo_id ?? null,
+          roundMoney(Number(alocacao.valor)),
+        ]
       );
     }
+
+    await recalcularFinanceiroItens(itemIds);
 
     const novoPagamento = await queryOne<Pagamento>(
       'SELECT * FROM pagamentos WHERE id = ?',

@@ -4,7 +4,7 @@
  * Cobre todas as transições válidas e inválidas:
  *   triagem → avaliacao ✓
  *   avaliacao → aguardando_pagamento (requer ≥1 item)
- *   aguardando_pagamento → em_execucao (requer ≥1 item pago)
+ *   aguardando_pagamento → em_execucao (requer itens do dia financeiramente cobertos)
  *   em_execucao → aguardando_pagamento (volta)
  *   finalizado → nenhuma transição
  *   Transições inválidas (pular etapas, voltar ilegalmente)
@@ -94,12 +94,10 @@ describe('Máquina de estados — transições válidas', () => {
     expect(status).toBe(200);
   });
 
-  it('aguardando_pagamento → em_execucao (com pagamento ativo)', async () => {
+  it('aguardando_pagamento → em_execucao (com itens cobertos)', async () => {
     mockAtendimentoAndReturn(ATENDIMENTO_AGUARDANDO_PGTO);
-    // Tem pagamento ativo
-    mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 1 });
-    // Mock para o liberado_por_id (SELECT id FROM usuarios LIMIT 1)
-    mockQueryResponse('select id from usuarios limit', { id: 1 });
+    mockQueryResponse('count(*) as count from itens_atendimento where atendimento_id', { count: 1 });
+    mockQueryResponse('and valor_pago + 0.001 < coalesce(valor_final, valor)', { count: 0 });
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(updateAtendimento, '/api/atendimentos/3', {
@@ -295,11 +293,11 @@ describe('Máquina de estados — condições', () => {
     expect(data.error).toBe('É necessário adicionar pelo menos um procedimento');
   });
 
-  it('aguardando_pagamento → em_execucao SEM pagamento ativo → erro', async () => {
+  it('aguardando_pagamento → em_execucao SEM cobertura financeira suficiente → erro', async () => {
     mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
     mockQueryResponse('from atendimentos a', ATENDIMENTO_AGUARDANDO_PGTO);
-    // Sem pagamento ativo
-    mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 0 });
+    mockQueryResponse('count(*) as count from itens_atendimento where atendimento_id', { count: 1 });
+    mockQueryResponse('and valor_pago + 0.001 < coalesce(valor_final, valor)', { count: 1 });
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<{ error: string }>(updateAtendimento, '/api/atendimentos/3', {
@@ -308,7 +306,7 @@ describe('Máquina de estados — condições', () => {
     }, ctx);
 
     expect(status).toBe(400);
-    expect(data.error).toBe('É necessário registrar ao menos um pagamento para liberar o atendimento');
+    expect(data.error).toBe('Ainda existem procedimentos de hoje sem cobertura financeira suficiente');
   });
 });
 

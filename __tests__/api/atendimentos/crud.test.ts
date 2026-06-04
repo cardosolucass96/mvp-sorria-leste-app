@@ -306,8 +306,8 @@ describe('GET /api/atendimentos/[id]', () => {
     mockQueryResponse('from itens_atendimento i', [itemBase]);
     // Total valor
     mockQueryResponse('select sum(valor) as total from itens_atendimento', { total: 150 });
-    // Total pago (novo modelo: pagamentos não cancelados)
-    mockQueryResponse('coalesce(sum(valor), 0) as total from pagamentos', { total: 0 });
+    // Total pago = soma de valor_pago dos itens
+    mockQueryResponse('coalesce(sum(valor_pago), 0) as total from itens_atendimento', { total: 0 });
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<Record<string, unknown>>(getAtendimento, '/api/atendimentos/3', {}, ctx);
@@ -332,7 +332,7 @@ describe('GET /api/atendimentos/[id]', () => {
     mockQueryResponse('from atendimentos a', atendimentoDetalhe);
     mockQueryResponse('from itens_atendimento i', []);
     mockQueryResponse('select sum(valor) as total from itens_atendimento', { total: null });
-    mockQueryResponse('coalesce(sum(valor), 0) as total from pagamentos', { total: 0 });
+    mockQueryResponse('coalesce(sum(valor_pago), 0) as total from itens_atendimento', { total: 0 });
 
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<Record<string, unknown>>(getAtendimento, '/api/atendimentos/3', {}, ctx);
@@ -357,7 +357,7 @@ describe('GET /api/atendimentos/[id]', () => {
       { ...ITEM_RESTAURACAO_PAGO, procedimento_nome: 'Restauração', executor_nome: 'Dr. Carlos Executor', criado_por_nome: 'Dr. João Avaliador' },
     ]);
     mockQueryResponse('select sum(valor) as total from itens_atendimento', { total: 1200 });
-    mockQueryResponse('coalesce(sum(valor), 0) as total from pagamentos', { total: 800 });
+    mockQueryResponse('coalesce(sum(valor_pago), 0) as total from itens_atendimento', { total: 800 });
 
     const ctx = createRouteContext({ id: '4' });
     const { status, data } = await callRoute<Record<string, unknown>>(getAtendimento, '/api/atendimentos/4', {}, ctx);
@@ -365,5 +365,29 @@ describe('GET /api/atendimentos/[id]', () => {
     expect(status).toBe(200);
     expect(data.total).toBe(1200);
     expect(data.total_pago).toBe(800);
+  });
+
+  it('usa valor_pago dos itens mesmo sem pagamento registrado no atendimento', async () => {
+    mockQueryResponse('from atendimentos a', {
+      ...ATENDIMENTO_AGUARDANDO_PGTO,
+      cliente_nome: 'Roberto Souza',
+      cliente_cpf: '11144477735',
+      cliente_telefone: '21988776655',
+      cliente_email: 'roberto@email.com',
+      avaliador_nome: 'Dr. João Avaliador',
+      liberado_por_nome: null,
+    });
+    mockQueryResponse('from itens_atendimento i', [
+      { ...ITEM_RESTAURACAO_PAGO, atendimento_id: 3, procedimento_nome: 'Restauração', executor_nome: 'Dr. Carlos Executor', criado_por_nome: 'Dr. João Avaliador' },
+    ]);
+    mockQueryResponse('select sum(valor) as total from itens_atendimento', { total: 400 });
+    mockQueryResponse('coalesce(sum(valor_pago), 0) as total from itens_atendimento', { total: 400 });
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status, data } = await callRoute<Record<string, unknown>>(getAtendimento, '/api/atendimentos/3', {}, ctx);
+
+    expect(status).toBe(200);
+    expect(data.total).toBe(400);
+    expect(data.total_pago).toBe(400);
   });
 });

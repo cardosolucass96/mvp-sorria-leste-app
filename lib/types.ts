@@ -13,8 +13,20 @@ export type AtendimentoStatus =
 export type AtendimentoTipo = 'normal' | 'sessao' | 'orto';
 
 export type ItemStatus = 'pendente' | 'pago' | 'executando' | 'concluido';
+export type DestinoOperacionalStatus =
+  | 'indefinido'
+  | 'fazer_hoje'
+  | 'agendar'
+  | 'pago_sem_data'
+  | 'nao_pago_sem_data';
 
-export type MetodoPagamento = 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito';
+export type MetodoPagamento =
+  | 'dinheiro'
+  | 'pix'
+  | 'cartao_debito'
+  | 'cartao_credito'
+  | 'crediario'
+  | 'afins_sorria';
 
 export type AgendamentoStatus =
   | 'pendente'    // gerado, sem data definida
@@ -152,6 +164,11 @@ export interface ItemAtendimento {
   criado_por_id: number;
   valor: number;
   valor_original: number | null; // Valor de tabela/orçamento (snapshot); desconto = valor_original - valor
+  valor_final: number | null;
+  desconto_valor: number;
+  desconto_motivo: string | null;
+  desconto_aplicado_por_id: number | null;
+  desconto_aplicado_em: string | null;
   etapas_valores: string | null; // JSON override por etapa: {"<etapa_modelo_id>": valor}; soma = item.valor
   valor_pago: number;
   dentes: string | null; // JSON array com números dos dentes
@@ -176,6 +193,28 @@ export interface Pagamento {
   metodo: MetodoPagamento;
   observacoes: string | null;
   created_at: string;
+}
+
+export interface PagamentoAlocacao {
+  id: number;
+  pagamento_id: number;
+  item_atendimento_id: number | null;
+  agendamento_id: number | null;
+  etapa_modelo_id: number | null;
+  valor_alocado: number;
+  created_at: string;
+}
+
+export interface ItemAtendimentoDestino {
+  id: number;
+  atendimento_id: number;
+  item_atendimento_id: number;
+  etapa_modelo_id: number | null;
+  destino_status: DestinoOperacionalStatus;
+  data_agendada: string | null;
+  executor_id: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PagamentoCompleto extends Pagamento {

@@ -25,6 +25,8 @@ interface AgendamentoDoCliente {
   item_atendimento_origem_id: number | null;
   etapa_modelo_id: number | null;
   pago: number;
+  valor: number | null;
+  valor_pago: number;
   data_agendada: string | null;
   status: string;
   tipo: string;
@@ -152,7 +154,7 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
 
         if (!procedimento) continue;
 
-        let itemValor = procedimento.valor;
+        let itemValor = ag.valor ?? procedimento.valor;
         const etapaModeloId: number | null = ag.etapa_modelo_id ?? null;
         let etapaLabel: string | null = null;
 
@@ -169,8 +171,8 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
           }
         }
 
-        const valorPago = ag.pago ? itemValor : 0;
-        const statusItem = ag.pago ? 'pago' : 'pendente';
+        const valorPago = ag.valor_pago ?? (ag.pago ? itemValor : 0);
+        const statusItem = valorPago >= itemValor ? 'pago' : 'pendente';
 
         let criadoPorId = context.user.sub;
         if (ag.item_atendimento_origem_id) {
@@ -185,13 +187,14 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
 
         await execute(
           `INSERT INTO itens_atendimento
-            (atendimento_id, procedimento_id, valor, valor_original, valor_pago, status, executor_id, criado_por_id, origem_agendamento_id, etapa_modelo_id, etapa_label)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (atendimento_id, procedimento_id, valor, valor_original, valor_final, desconto_valor, valor_pago, status, executor_id, criado_por_id, origem_agendamento_id, etapa_modelo_id, etapa_label)
+           VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
           [
             novoAtendimentoId,
             ag.procedimento_id,
             itemValor,
             itemValor, // valor_original = snapshot do valor inicial
+            itemValor,
             valorPago,
             statusItem,
             ag.executor_id || null,
