@@ -13,6 +13,11 @@ module.exports = {
       tsconfig: 'tsconfig.json',
     }],
   },
+  modulePathIgnorePatterns: [
+    '<rootDir>/.next/',
+    '<rootDir>/.open-next/',
+    '<rootDir>/tmp/',
+  ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   verbose: true,
 };
