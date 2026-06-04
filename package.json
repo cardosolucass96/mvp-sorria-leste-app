@@ -18,6 +18,8 @@
     "d1:create": "wrangler d1 create sorria-leste-db",
     "d1:migrate": "wrangler d1 execute sorria-leste-db --file=lib/schema.sql",
     "d1:migrate:local": "wrangler d1 execute sorria-leste-db --local --file=lib/schema.sql",
+    "d1:migrate:pagamentos-legado": "wrangler d1 execute sorria-leste-db --file=lib/migrations/backfill_pagamentos_legado.sql",
+    "d1:migrate:pagamentos-legado:local": "wrangler d1 execute sorria-leste-db --local --file=lib/migrations/backfill_pagamentos_legado.sql",
     "d1:seed": "wrangler d1 execute sorria-leste-db --file=lib/seed.sql",
     "d1:seed:local": "wrangler d1 execute sorria-leste-db --local --file=lib/seed.sql",
     "d1:pull-prod": "bash scripts/pull-prod-db.sh"
