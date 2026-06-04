@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { FileText, Plus, Trash2 } from 'lucide-react';
+import { FileText, Plus, Trash2, Copy } from 'lucide-react';
 import { PageHeader, Button, Input, Select, Checkbox, Badge, Alert, Modal, LoadingState, Card, Table, ConfirmDialog } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda } from '@/lib/utils/formatters';
@@ -67,6 +67,7 @@ export default function ProcedimentosPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [isDuplicating, setIsDuplicating] = useState(false);
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -118,6 +119,7 @@ export default function ProcedimentosPage() {
   const abrirModalNovo = () => {
     setFormData(initialFormData);
     setEditingId(null);
+    setIsDuplicating(false);
     setError('');
     setIsModalOpen(true);
   };
@@ -160,9 +162,48 @@ export default function ProcedimentosPage() {
     }
   };
 
+  const duplicarProcedimento = async (proc: Procedimento) => {
+    setEditingId(null);
+    setIsDuplicating(true);
+    setError('');
+    setIsModalOpen(true);
+
+    try {
+      const res = await fetch(`/api/procedimentos/${proc.id}`);
+      const data = await res.json();
+      setFormData({
+        nome: `${proc.nome} (Cópia)`,
+        valor: proc.valor.toString(),
+        comissao_venda: proc.comissao_venda.toString(),
+        comissao_execucao: proc.comissao_execucao.toString(),
+        por_dente: proc.por_dente === 1,
+        tem_etapas: proc.tem_etapas === 1,
+        categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
+        etapas: (data.etapas ?? []).map((e: { nome: string; valor: number | null; comissao_venda: number; comissao_execucao: number }) => ({
+          nome: e.nome,
+          valor: e.valor != null ? String(e.valor) : '',
+          comissao_venda: String(e.comissao_venda),
+          comissao_execucao: String(e.comissao_execucao),
+        })),
+      });
+    } catch {
+      setFormData({
+        nome: `${proc.nome} (Cópia)`,
+        valor: proc.valor.toString(),
+        comissao_venda: proc.comissao_venda.toString(),
+        comissao_execucao: proc.comissao_execucao.toString(),
+        por_dente: proc.por_dente === 1,
+        tem_etapas: proc.tem_etapas === 1,
+        categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
+        etapas: [],
+      });
+    }
+  };
+
   const fecharModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
+    setIsDuplicating(false);
     setFormData(initialFormData);
     setError('');
   };
@@ -361,6 +402,10 @@ export default function ProcedimentosPage() {
                 <Button variant="ghost" size="sm" onClick={() => abrirModalEditar(proc)} className="text-info-600 hover:text-info-800">
                   Editar
                 </Button>
+                <Button variant="ghost" size="sm" onClick={() => duplicarProcedimento(proc)} className="text-neutral-600 hover:text-neutral-800">
+                  <Copy className="w-3.5 h-3.5 mr-1" />
+                  Duplicar
+                </Button>
                 {proc.ativo ? (
                   <Button variant="ghost" size="sm" onClick={() => handleDesativar(proc.id)} className="text-error-600 hover:text-error-800">
                     Desativar
@@ -399,7 +444,7 @@ export default function ProcedimentosPage() {
       <Modal
         isOpen={isModalOpen}
         onClose={fecharModal}
-        title={editingId ? 'Editar Procedimento' : 'Novo Procedimento'}
+        title={editingId ? 'Editar Procedimento' : isDuplicating ? 'Duplicar Procedimento' : 'Novo Procedimento'}
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
