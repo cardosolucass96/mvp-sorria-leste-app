@@ -247,10 +247,18 @@ describe('POST /api/followup', () => {
     expect(data.error).toBe('Responsável deve ser um atendente ativo da unidade atual');
   });
 
-  it('bloqueia admin em mutações', async () => {
-    verifyToken.mockResolvedValueOnce(makePayload('admin'));
+  it('permite admin criar tarefa para um atendente da unidade', async () => {
+    verifyToken.mockResolvedValueOnce(makePayload('admin', { sub: 9 }));
+    mockQueryResponse('select id from clientes where id', { id: 1 });
+    mockQueryResponse('select count(*) as n', { n: 1 });
+    setLastInsertId(22);
+    mockQueryResponse('from followup_tarefas f', makeTask({
+      id: 22,
+      criado_por_id: 9,
+      criado_por_nome: 'admin Teste',
+    }));
 
-    const { status } = await callRoute(createFollowup, '/api/followup', {
+    const { status, data } = await callRoute<ReturnType<typeof makeTask>>(createFollowup, '/api/followup', {
       method: 'POST',
       body: {
         cliente_id: 1,
@@ -261,7 +269,11 @@ describe('POST /api/followup', () => {
       },
     });
 
-    expect(status).toBe(403);
+    expect(status).toBe(201);
+    expect(data.id).toBe(22);
+
+    const insertQuery = getExecutedQueries().find((entry) => entry.sql.includes('INSERT INTO followup_tarefas'));
+    expect(insertQuery?.params?.[3]).toBe(9);
   });
 });
 

@@ -140,7 +140,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
 });
 
 // POST /api/followup - Cria tarefa de followup
-export const POST = withUnitRole(['atendente'], async (
+export const POST = withUnitRole(['admin', 'atendente'], async (
   request: NextRequest,
   context: UnitAuthenticatedContext
 ) => {

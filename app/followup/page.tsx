@@ -116,6 +116,7 @@ export default function FollowupPage() {
   const unitFetch = useUnitFetch();
 
   const canAccess = hasRole(['admin', 'atendente']);
+  const canCreate = canAccess;
   const isReadOnlyAdmin = hasRole('admin');
   const canMutate = hasRole('atendente') && !isReadOnlyAdmin;
 
@@ -575,7 +576,7 @@ export default function FollowupPage() {
                 </span>
               </button>
             </div>
-            {canMutate && (
+            {canCreate && (
               <Button icon={<Plus className="w-4 h-4" />} onClick={abrirNovaTarefa}>
                 Nova tarefa
               </Button>
@@ -689,8 +690,8 @@ export default function FollowupPage() {
               ? 'Selecione outro dia ou ajuste os filtros para ver tarefas.'
               : 'Crie a primeira tarefa de followup para começar a acompanhar a recepção.'
           }
-          actionLabel={canMutate ? 'Nova tarefa' : undefined}
-          onAction={canMutate ? abrirNovaTarefa : undefined}
+          actionLabel={canCreate ? 'Nova tarefa' : undefined}
+          onAction={canCreate ? abrirNovaTarefa : undefined}
         />
       ) : (
         <div className="space-y-8">

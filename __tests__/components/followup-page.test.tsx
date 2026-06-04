@@ -182,7 +182,7 @@ describe('FollowupPage', () => {
     expect(screen.getByText('Tarefa concluída')).toBeInTheDocument();
   });
 
-  test('admin vê a página em modo leitura, sem CTAs de mutação', async () => {
+  test('admin pode criar tarefa, mas continua sem CTAs de edição da tarefa', async () => {
     mockUseAuth.mockReturnValue({
       user: { id: 1, role: 'admin', roles: ['admin'] },
       isLoading: false,
@@ -208,7 +208,7 @@ describe('FollowupPage', () => {
     render(<FollowupPage />);
 
     expect(await screen.findByText('Tarefa aberta')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Nova tarefa/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Nova tarefa/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Editar/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Concluir/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Excluir/i })).not.toBeInTheDocument();
