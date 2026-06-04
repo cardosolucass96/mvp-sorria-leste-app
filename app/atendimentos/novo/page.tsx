@@ -31,6 +31,7 @@ interface Usuario {
   id: number;
   nome: string;
   role: string;
+  ativo?: number;
 }
 
 interface ProcedimentoLite {
@@ -125,7 +126,7 @@ function NovoAtendimentoForm() {
         }
 
         const usuariosData: Usuario[] = await resUsuarios.json();
-        setAvaliadores(usuariosData.filter((u) => u.role === 'avaliador' || u.role === 'admin'));
+        setAvaliadores(usuariosData.filter((u) => (u.role === 'avaliador' || u.role === 'admin') && u.ativo !== 0));
 
         const cats: CategoriaComRoles[] = await resCategorias.json();
         setCategorias(cats);
@@ -252,11 +253,11 @@ function NovoAtendimentoForm() {
     e.preventDefault();
     if (!clienteId) return;
     if (categorias.length === 0) {
-      setError('Nenhuma categoria ativa disponível para criar o atendimento');
+      setError('Nenhuma fila ativa disponível para criar o atendimento');
       return;
     }
     if (!categoriaId) {
-      setError('Selecione uma categoria');
+      setError('Selecione uma fila');
       return;
     }
     setSaving(true);
@@ -305,7 +306,7 @@ function NovoAtendimentoForm() {
       <PageHeader
         title="Novo Atendimento"
         icon={<ClipboardList className="w-7 h-7" />}
-        description="Iniciar atendimento para um cliente"
+        description="Cadastre um novo atendimento na fila de execução"
         breadcrumb={[
           { label: 'Atendimentos', href: '/atendimentos' },
           { label: 'Novo Atendimento' },
@@ -370,16 +371,16 @@ function NovoAtendimentoForm() {
         {/* 2 — Categoria (fila) */}
         {categorias.length > 0 && (
           <Card>
-            <h2 className="text-lg font-semibold mb-3">2. Categoria</h2>
-            <p className="text-sm text-muted mb-3">Define em qual fila de execução o atendimento entrará.</p>
+            <h2 className="text-lg font-semibold mb-3">2. Fila</h2>
+            <p className="text-sm text-muted mb-3">Escolha a fila onde o procedimento será executado.</p>
             <Select
-              label="Categoria"
+              label="Fila"
               name="categoria_id"
               value={categoriaId}
               onChange={setCategoriaId}
               options={categorias.map(c => ({
                 value: String(c.id),
-                label: c.pula_avaliacao ? `${c.nome} (pula avaliação)` : c.nome,
+                 label: c.nome,
               }))}
               placeholder="-- Selecionar --"
             />
@@ -396,8 +397,8 @@ function NovoAtendimentoForm() {
                 tipoAtendimento === 'normal' ? 'border-primary-500 bg-primary-50' : 'border-neutral-200 hover:border-neutral-300'
               }`}>
               <Search className="w-5 h-5 mb-1 text-primary-500" aria-hidden="true" />
-              <div className="font-semibold text-sm">Normal</div>
-              <p className="text-xs text-muted mt-1">Triagem → Avaliação → Pagamento → Execução</p>
+              <div className="font-semibold text-sm">Avaliação sem agendamento</div>
+              <p className="text-xs text-muted mt-1">Cliente chegou sem agendamento</p>
             </button>
             <button type="button" onClick={() => {
               setTipoAtendimento('sessao');
@@ -407,8 +408,8 @@ function NovoAtendimentoForm() {
                 tipoAtendimento === 'sessao' ? 'border-warning-500 bg-warning-50' : 'border-neutral-200 hover:border-neutral-300'
               }`}>
               <Calendar className="w-5 h-5 mb-1 text-warning-500" aria-hidden="true" />
-              <div className="font-semibold text-sm">Sessão Agendada</div>
-              <p className="text-xs text-muted mt-1">Cliente chegou para sessão já marcada</p>
+              <div className="font-semibold text-sm">Já agendado</div>
+              <p className="text-xs text-muted mt-1">Cliente tem sessão agendada e veio fazer</p>
             </button>
           </div>
         </Card>
@@ -418,7 +419,7 @@ function NovoAtendimentoForm() {
         {pulaAvaliacao ? (
           <Card>
             <h2 className="text-lg font-semibold mb-3">3. Procedimento e Executor</h2>
-            <p className="text-sm text-muted mb-3">Esta categoria pula avaliação — o atendimento vai direto para pagamento.</p>
+            <p className="text-sm text-muted mb-3">Esta fila vai direto para pagamento, sem necessidade de avaliação.</p>
             <div className="space-y-3">
               <Select
                 label="Procedimento"
@@ -455,16 +456,16 @@ function NovoAtendimentoForm() {
         ) : tipoAtendimento === 'normal' ? (
           <Card>
             <h2 className="text-lg font-semibold mb-1">4. Avaliador</h2>
-            <p className="text-sm text-muted mb-3">Opcional — pode ser definido depois</p>
+            <p className="text-sm text-muted mb-3">Pode ser definido depois na fila de avaliação</p>
             <Select label="Avaliador" name="avaliador" value={avaliadorId} onChange={setAvaliadorId}
               options={avaliadores.map((a) => ({ value: String(a.id), label: a.nome }))}
               placeholder="-- Definir depois --" />
           </Card>
         ) : (
           <Card className="border-l-4 border-l-warning-500">
-            <h2 className="text-lg font-semibold mb-3">4. Sessão Agendada</h2>
+            <h2 className="text-lg font-semibold mb-3">4. Agendamento</h2>
             {!clienteSelecionado ? (
-              <p className="text-sm text-muted">Selecione um cliente acima para ver os agendamentos pendentes.</p>
+              <p className="text-sm text-muted">Selecione o cliente acima para ver os agendamentos pendentes.</p>
             ) : loadingAgendamentos ? (
               <div className="py-4 text-center text-sm text-muted">Buscando agendamentos...</div>
             ) : agendamentos.length === 0 ? (
@@ -473,7 +474,7 @@ function NovoAtendimentoForm() {
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-muted mb-2">Selecione o agendamento do cliente:</p>
+                <p className="text-sm text-muted mb-2">Selecione qual sessão o cliente veio fazer:</p>
                 <div className="border rounded-lg divide-y max-h-60 overflow-y-auto">
                   {agendamentos.map((ag) => (
                     <button key={ag.id} type="button"

@@ -474,7 +474,7 @@ export default function ProcedimentosPage() {
 
           {categorias.length > 0 && (
             <Select
-              label="Categoria (fila)"
+              label="Fila"
               name="categoria_id"
               value={formData.categoria_id}
               onChange={(v) => setFormData({ ...formData, categoria_id: v })}

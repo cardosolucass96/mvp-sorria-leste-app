@@ -40,7 +40,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { href: '/meus-procedimentos', label: 'Meus Procedimentos', icon: ClipboardList, roles: ['avaliador', 'executor', 'ortodontista'] },
   { href: '/pagamentos', label: 'Pagamentos', icon: CreditCard, roles: ['admin', 'atendente'] },
   { href: '/procedimentos', label: 'Procedimentos', icon: FileText, roles: ['admin'] },
-  { href: '/categorias', label: 'Categorias', icon: Tags, roles: ['admin'] },
+  { href: '/categorias', label: 'Filas', icon: Tags, roles: ['admin'] },
   { href: '/usuarios', label: 'Usuários', icon: User, roles: ['admin'] },
   { href: '/unidades', label: 'Unidades', icon: Building2, roles: ['admin'] },
   { href: '/minhas-comissoes', label: 'Minhas Comissões', icon: Banknote, roles: ['avaliador'] },

@@ -56,7 +56,7 @@ function slugify(nome: string): string {
 }
 
 export default function CategoriasPage() {
-  usePageTitle('Categorias');
+  usePageTitle('Filas');
   const [categorias, setCategorias] = useState<CategoriaComRoles[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -81,7 +81,7 @@ export default function CategoriasPage() {
       const data = await res.json();
       setCategorias(data);
     } catch {
-      setError('Erro ao carregar categorias');
+      setError('Erro ao carregar filas');
     } finally {
       setIsLoading(false);
     }
@@ -177,19 +177,19 @@ export default function CategoriasPage() {
         setError(data.error || 'Erro ao salvar');
         return;
       }
-      setSuccess(editingId ? 'Categoria atualizada!' : 'Categoria criada!');
+      setSuccess(editingId ? 'Fila atualizada!' : 'Fila criada!');
       handleCancel();
       loadCategorias();
     } catch {
-      setError('Erro ao salvar categoria');
+      setError('Erro ao salvar fila');
     }
   };
 
   const handleDelete = (c: CategoriaComRoles) => {
     setConfirmDialog({
       isOpen: true,
-      title: 'Desativar Categoria',
-      message: `Desativar a categoria "${c.nome}"? Ela deixará de aparecer no menu e nos cadastros.`,
+      title: 'Desativar Fila',
+      message: `Desativar a fila "${c.nome}"? Ela deixará de aparecer no menu e nos cadastros.`,
       confirmLabel: 'Desativar',
       type: 'warning',
       onConfirm: async () => {
@@ -201,10 +201,10 @@ export default function CategoriasPage() {
             setError(data.error || 'Erro ao desativar');
             return;
           }
-          setSuccess('Categoria desativada!');
+          setSuccess('Fila desativada!');
           loadCategorias();
         } catch {
-          setError('Erro ao desativar categoria');
+          setError('Erro ao desativar fila');
         }
       },
     });
@@ -222,10 +222,10 @@ export default function CategoriasPage() {
         setError(data.error || 'Erro ao reativar');
         return;
       }
-      setSuccess('Categoria reativada!');
+      setSuccess('Fila reativada!');
       loadCategorias();
     } catch {
-      setError('Erro ao reativar categoria');
+      setError('Erro ao reativar fila');
     }
   };
 
@@ -236,10 +236,10 @@ export default function CategoriasPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Categorias"
+        title="Filas"
         icon={<Tags className="w-7 h-7" />}
-        description="Filas de atendimento (ex: Geral, Ortodontia). Cada categoria define quais roles atendem a fila."
-        actions={<Button onClick={handleNew}>+ Nova Categoria</Button>}
+        description="Filas de atendimento (ex: Geral, Ortodontia). Cada fila define quais roles atendem."
+        actions={<Button onClick={handleNew}>+ Nova Fila</Button>}
       />
 
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
@@ -248,7 +248,7 @@ export default function CategoriasPage() {
       {showForm && (
         <Card>
           <h2 className="text-lg font-semibold mb-4">
-            {editingId ? 'Editar Categoria' : 'Nova Categoria'}
+            {editingId ? 'Editar Fila' : 'Nova Fila'}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -409,8 +409,8 @@ export default function CategoriasPage() {
         ] as TableColumn<CategoriaComRoles>[]}
         data={categorias}
         keyExtractor={(c) => c.id}
-        emptyMessage="Nenhuma categoria cadastrada"
-        caption="Categorias de atendimento"
+        emptyMessage="Nenhuma fila cadastrada"
+        caption="Filas de atendimento"
       />
     </div>
   );
