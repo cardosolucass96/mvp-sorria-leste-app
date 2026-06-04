@@ -37,8 +37,11 @@ export default function Sidebar() {
     return hasRole(item.roles);
   });
 
-  // Injeta items de fila dinâmicos logo após "Agenda"
+  // Injeta items de fila dinâmicos logo após "Followup" quando existir;
+  // senão, logo após "Agenda".
+  const followupIdx = visibleStaticItems.findIndex(i => i.href === '/followup');
   const agendaIdx = visibleStaticItems.findIndex(i => i.href === '/agenda');
+  const injectionIdx = followupIdx >= 0 ? followupIdx : agendaIdx;
   const filaItems: MenuItem[] = categoriasFila.map(c => ({
     href: `/fila/${c.slug}`,
     label: `Fila ${c.nome}`,
@@ -46,11 +49,11 @@ export default function Sidebar() {
   }));
 
   const visibleMenuItems: MenuItem[] =
-    agendaIdx >= 0
+    injectionIdx >= 0
       ? [
-          ...visibleStaticItems.slice(0, agendaIdx + 1),
+          ...visibleStaticItems.slice(0, injectionIdx + 1),
           ...filaItems,
-          ...visibleStaticItems.slice(agendaIdx + 1),
+          ...visibleStaticItems.slice(injectionIdx + 1),
         ]
       : [...visibleStaticItems, ...filaItems];
 

@@ -11,6 +11,7 @@ import {
   Users,
   ClipboardList,
   Search,
+  MessageCircle,
   CreditCard,
   FileText,
   User,
@@ -33,6 +34,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { href: '/clientes', label: 'Clientes', icon: Users, roles: ['admin', 'atendente'] },
   { href: '/atendimentos', label: 'Atendimentos', icon: ClipboardList, roles: ['admin', 'atendente'] },
   { href: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'atendente', 'avaliador', 'executor', 'ortodontista'] },
+  { href: '/followup', label: 'Followup', icon: MessageCircle, roles: ['admin', 'atendente'] },
   { href: '/avaliacao', label: 'Fila Avaliação', icon: Search, roles: ['admin', 'avaliador'] },
   // Filas de execução são injetadas dinamicamente pelo Sidebar a partir de /api/categorias
   { href: '/meus-procedimentos', label: 'Meus Procedimentos', icon: ClipboardList, roles: ['avaliador', 'executor', 'ortodontista'] },

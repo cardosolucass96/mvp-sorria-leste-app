@@ -61,7 +61,7 @@ describe('GET /api/usuarios', () => {
 
     expect(status).toBe(200);
     // Route now appends unidade_ids from usuario_unidades table
-    const expected = usuariosSemSenha.map(u => ({ ...u, unidade_ids: [] }));
+    const expected = usuariosSemSenha.map(u => ({ ...u, unidade_ids: [], roles: [u.role] }));
     expect(data).toEqual(expected);
   });
 
@@ -85,6 +85,45 @@ describe('GET /api/usuarios', () => {
     const selectQuery = queries[0];
     expect(selectQuery.sql).not.toContain('senha');
     expect(selectQuery.sql).not.toContain('SELECT *');
+  });
+
+  it('combina filtros de role e unidade_id no mesmo request', async () => {
+    mockQueryResponse(
+      'from usuarios u',
+      [{ id: 2, nome: 'Maria Atendente', email: 'maria@test.com', role: 'atendente', ativo: 1, created_at: '2025-03-20' }]
+    );
+    mockQueryResponse('select usuario_id, unidade_id from usuario_unidades', [
+      { usuario_id: 2, unidade_id: 2 },
+    ]);
+    mockQueryResponse('select usuario_id, role from usuario_roles', [
+      { usuario_id: 2, role: 'atendente' },
+    ]);
+
+    const { status, data } = await callRoute<Record<string, unknown>[]>(listUsuarios, '/api/usuarios', {
+      searchParams: { role: 'atendente', unidade_id: '2' },
+    });
+
+    expect(status).toBe(200);
+    expect(data).toEqual([
+      {
+        id: 2,
+        nome: 'Maria Atendente',
+        email: 'maria@test.com',
+        role: 'atendente',
+        ativo: 1,
+        created_at: '2025-03-20',
+        unidade_ids: [2],
+        roles: ['atendente'],
+      },
+    ]);
+
+    const selectQuery = getExecutedQueries().find((entry) => entry.sql.includes('FROM usuarios u'));
+    expect(selectQuery?.sql).toContain('JOIN usuario_roles ur ON ur.usuario_id = u.id');
+    expect(selectQuery?.sql).toContain('INNER JOIN usuario_unidades uu ON uu.usuario_id = u.id');
+    expect(selectQuery?.sql).toContain('ur.role = ?');
+    expect(selectQuery?.sql).toContain('uu.unidade_id = ?');
+    expect(selectQuery?.sql).toContain('u.ativo = 1');
+    expect(selectQuery?.params).toEqual(['atendente', 2]);
   });
 });
 
@@ -206,7 +245,7 @@ describe('GET /api/usuarios/[id]', () => {
 
     expect(status).toBe(200);
     // Route now appends unidade_ids from usuario_unidades table
-    expect(data).toEqual({ ...USUARIO_ADMIN, unidade_ids: [] });
+    expect(data).toEqual({ ...USUARIO_ADMIN, unidade_ids: [], roles: ['admin'] });
   });
 
   it('retorna 404 se usuário não existe', async () => {

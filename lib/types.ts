@@ -23,6 +23,15 @@ export type AgendamentoStatus =
   | 'faltou'      // não compareceu
   | 'cancelado';
 
+export type FollowupTipo =
+  | 'orcamento'
+  | 'sem_posicao'
+  | 'retorno'
+  | 'cobranca'
+  | 'outro';
+
+export type FollowupStatus = 'aberta' | 'concluida';
+
 export type MotivoSaida = 'sem_tratamento' | 'tratamento_completo' | 'continuacao';
 
 export type OrigemCliente = 
@@ -214,6 +223,34 @@ export interface AgendamentoCompleto extends Agendamento {
   executor_nome: string | null;
   dias_desde_criacao: number;
   unidade_nome?: string;
+}
+
+export interface FollowupTarefa {
+  id: number;
+  cliente_id: number;
+  unidade_id: number;
+  responsavel_usuario_id: number;
+  criado_por_id: number;
+  concluida_por_id: number | null;
+  excluida_por_id: number | null;
+  tipo: FollowupTipo;
+  titulo: string;
+  descricao: string | null;
+  status: FollowupStatus;
+  vencimento_em: string;
+  nota_conclusao: string | null;
+  concluida_em: string | null;
+  excluida_em: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FollowupTarefaCompleta extends FollowupTarefa {
+  cliente_nome: string;
+  cliente_telefone: string | null;
+  responsavel_usuario_nome: string;
+  criado_por_nome: string;
+  concluida_por_nome: string | null;
 }
 
 export interface SaldoCliente {

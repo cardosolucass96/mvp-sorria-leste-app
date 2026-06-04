@@ -33,3 +33,11 @@ export {
 export type { MenuItem } from './navigation';
 
 export { AGENDAMENTO_STATUS_CONFIG } from './agendamentos';
+
+export {
+  FOLLOWUP_STATUS_LABELS,
+  FOLLOWUP_TIPO_CONFIG,
+  FOLLOWUP_TIPO_OPTIONS,
+  FOLLOWUP_URGENCIA_CONFIG,
+  FOLLOWUP_URGENCIA_ORDER,
+} from './followup';

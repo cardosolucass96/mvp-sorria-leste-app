@@ -46,3 +46,6 @@ export type { ProntuarioDrawerProps } from './ProntuarioDrawer';
 
 export { default as AgendaCalendario } from './AgendaCalendario';
 export type { AgendaCalendarioProps } from './AgendaCalendario';
+
+export { default as FollowupCalendario } from './FollowupCalendario';
+export type { FollowupCalendarioProps } from './FollowupCalendario';

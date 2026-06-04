@@ -1,0 +1,242 @@
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import '@testing-library/jest-dom';
+
+import FollowupPage from '@/app/followup/page';
+
+const mockPush = jest.fn();
+const mockReplace = jest.fn();
+const mockUnitFetch = jest.fn();
+const mockToast = {
+  success: jest.fn(),
+  error: jest.fn(),
+  warning: jest.fn(),
+  info: jest.fn(),
+};
+const mockUseAuth = jest.fn();
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
+    replace: mockReplace,
+  }),
+}));
+
+jest.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => mockUseAuth(),
+}));
+
+jest.mock('@/lib/hooks/useUnitFetch', () => ({
+  useUnitFetch: () => mockUnitFetch,
+}));
+
+jest.mock('@/components/ui/Toast', () => ({
+  useToast: () => ({
+    toast: mockToast,
+    dismiss: jest.fn(),
+    toasts: [],
+  }),
+}));
+
+jest.mock('@/components/domain', () => ({
+  FollowupCalendario: ({ selectedDay }: { selectedDay: Date | null }) => (
+    <div data-testid="followup-calendario">
+      {selectedDay ? 'calendario-ativo' : 'calendario-sem-dia'}
+    </div>
+  ),
+}));
+
+function pad(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+function formatSqliteDate(date: Date): string {
+  return [
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
+  ].join(' ');
+}
+
+function addMinutes(date: Date, minutes: number): Date {
+  const next = new Date(date);
+  next.setMinutes(next.getMinutes() + minutes);
+  return next;
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function makeTask(overrides: Record<string, unknown> = {}) {
+  const now = new Date();
+  return {
+    id: 10,
+    cliente_id: 1,
+    unidade_id: 1,
+    responsavel_usuario_id: 2,
+    criado_por_id: 2,
+    concluida_por_id: null,
+    excluida_por_id: null,
+    tipo: 'retorno',
+    titulo: 'Ligar para cliente',
+    descricao: 'Cliente pediu retorno à tarde',
+    status: 'aberta',
+    vencimento_em: formatSqliteDate(addMinutes(now, 120)),
+    nota_conclusao: null,
+    concluida_em: null,
+    excluida_em: null,
+    created_at: formatSqliteDate(addDays(now, -1)),
+    updated_at: formatSqliteDate(addDays(now, -1)),
+    cliente_nome: 'Maria Silva',
+    cliente_telefone: '85999990000',
+    responsavel_usuario_nome: 'Recepção 1',
+    criado_por_nome: 'Recepção 1',
+    concluida_por_nome: null,
+    ...overrides,
+  };
+}
+
+function mockJsonResponse(data: unknown, init: { ok?: boolean; status?: number } = {}) {
+  return Promise.resolve({
+    ok: init.ok ?? true,
+    status: init.status ?? 200,
+    json: async () => data,
+  });
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  localStorage.clear();
+
+  mockUseAuth.mockReturnValue({
+    user: { id: 2, role: 'atendente', roles: ['atendente'] },
+    isLoading: false,
+    currentUnidade: 1,
+    hasRole: (roles: string | string[]) => {
+      const values = Array.isArray(roles) ? roles : [roles];
+      return values.includes('atendente');
+    },
+  });
+
+  global.fetch = jest.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('/api/usuarios')) {
+      return mockJsonResponse([{ id: 2, nome: 'Recepção 1' }]);
+    }
+    return mockJsonResponse({ clientes: [] });
+  }) as jest.Mock;
+});
+
+afterAll(() => {
+  jest.restoreAllMocks();
+});
+
+describe('FollowupPage', () => {
+  test('agrupa tarefas em atrasadas, hoje, próximos 7 dias, depois e concluídas', async () => {
+    const now = new Date();
+    const items = [
+      makeTask({ id: 1, titulo: 'Tarefa atrasada', tipo: 'cobranca', vencimento_em: formatSqliteDate(addMinutes(now, -90)) }),
+      makeTask({ id: 2, titulo: 'Contato de hoje', tipo: 'retorno', vencimento_em: formatSqliteDate(addMinutes(now, 120)) }),
+      makeTask({ id: 3, titulo: 'Contato da semana', tipo: 'orcamento', vencimento_em: formatSqliteDate(addDays(now, 3)) }),
+      makeTask({ id: 4, titulo: 'Contato futuro', tipo: 'outro', vencimento_em: formatSqliteDate(addDays(now, 12)) }),
+      makeTask({
+        id: 5,
+        titulo: 'Tarefa concluída',
+        status: 'concluida',
+        nota_conclusao: 'Contato feito',
+        concluida_em: formatSqliteDate(addMinutes(now, -20)),
+        concluida_por_id: 2,
+        concluida_por_nome: 'Recepção 1',
+        vencimento_em: formatSqliteDate(addDays(now, -1)),
+      }),
+    ];
+
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse({
+        items,
+        summary: {
+          abertas: 4,
+          atrasadas: 1,
+          vencem_hoje: 1,
+          concluidas_hoje: 1,
+        },
+      })
+    );
+
+    render(<FollowupPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Atrasadas' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Hoje' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Próximos 7 dias' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Depois' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Concluídas' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Nova tarefa/i })).toBeInTheDocument();
+
+    expect(screen.getByText('Tarefa atrasada')).toBeInTheDocument();
+    expect(screen.getByText('Contato de hoje')).toBeInTheDocument();
+    expect(screen.getByText('Contato da semana')).toBeInTheDocument();
+    expect(screen.getByText('Contato futuro')).toBeInTheDocument();
+    expect(screen.getByText('Tarefa concluída')).toBeInTheDocument();
+  });
+
+  test('admin vê a página em modo leitura, sem CTAs de mutação', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 1, role: 'admin', roles: ['admin'] },
+      isLoading: false,
+      currentUnidade: 1,
+      hasRole: (roles: string | string[]) => {
+        const values = Array.isArray(roles) ? roles : [roles];
+        return values.includes('admin');
+      },
+    });
+
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse({
+        items: [makeTask({ id: 1, titulo: 'Tarefa aberta' })],
+        summary: {
+          abertas: 1,
+          atrasadas: 0,
+          vencem_hoje: 1,
+          concluidas_hoje: 0,
+        },
+      })
+    );
+
+    render(<FollowupPage />);
+
+    expect(await screen.findByText('Tarefa aberta')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Nova tarefa/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Editar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Concluir/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Excluir/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Abrir cliente/i })).toBeInTheDocument();
+  });
+
+  test('alterna para calendário e persiste o modo em localStorage', async () => {
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse({
+        items: [makeTask({ id: 1, titulo: 'Calendário' })],
+        summary: {
+          abertas: 1,
+          atrasadas: 0,
+          vencem_hoje: 1,
+          concluidas_hoje: 0,
+        },
+      })
+    );
+
+    const user = userEvent.setup();
+    render(<FollowupPage />);
+
+    const calendarButton = await screen.findByRole('button', { name: /Calendário/i });
+    await user.click(calendarButton);
+
+    await waitFor(() => {
+      expect(localStorage.getItem('followup-view-mode')).toBe('calendario');
+    });
+    expect(screen.getByTestId('followup-calendario')).toBeInTheDocument();
+  });
+});
