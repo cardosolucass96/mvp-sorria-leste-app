@@ -48,7 +48,6 @@ Acesse `http://localhost:3000`.
 | executor@sorria.com | Sorria@123 | executor |
 
 ## Comandos Principais
-
 ```bash
 npm run dev              # Dev server
 npm test                 # Testes
