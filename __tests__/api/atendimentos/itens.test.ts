@@ -347,6 +347,23 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     expect(data.error).toBe('Usuário selecionado não é executor');
   });
 
+  it('aceita usuário com role efetiva de executor mesmo que a role primária seja outra', async () => {
+    setLastInsertId(18);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
+    mockQueryResponse('select id, role from usuarios where id', { id: 6, role: 'avaliador' });
+    mockQueryResponse('select role from usuario_roles where usuario_id', [{ role: 'executor' }]);
+    mockQueryResponse('from itens_atendimento i', novoItem);
+
+    const ctx = createRouteContext({ id: '2' });
+    const { status } = await callRoute(addItem, '/api/atendimentos/2/itens', {
+      method: 'POST',
+      body: { procedimento_id: 1, executor_id: 6 },
+    }, ctx);
+
+    expect(status).toBe(201);
+  });
+
   it('aceita admin como executor', async () => {
     setLastInsertId(17);
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);

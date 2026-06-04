@@ -37,6 +37,10 @@ type VerificarResult =
   | { kind: 'error'; response: NextResponse }
   | { kind: 'ok'; atendimento: Atendimento };
 
+type ValidarExecutorResult =
+  | { kind: 'error'; response: NextResponse }
+  | { kind: 'ok' };
+
 async function verificarAtendimentoUnidade(atendimentoId: number, unidadeId: number): Promise<VerificarResult> {
   const at = await queryOne<Atendimento>(
     'SELECT id, status, unidade_id, categoria_id FROM atendimentos WHERE id = ?',
@@ -45,6 +49,80 @@ async function verificarAtendimentoUnidade(atendimentoId: number, unidadeId: num
   if (!at) return { kind: 'error', response: NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 }) };
   if (at.unidade_id !== unidadeId) return { kind: 'error', response: NextResponse.json({ error: 'Atendimento não pertence a esta unidade' }, { status: 403 }) };
   return { kind: 'ok', atendimento: at };
+}
+
+async function validarExecutorSelecionado(
+  executorId: number,
+  categoriaId: number | null
+): Promise<ValidarExecutorResult> {
+  const executor = await queryOne<{ id: number; role: string }>(
+    'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
+    [executorId]
+  );
+
+  if (!executor) {
+    return {
+      kind: 'error',
+      response: NextResponse.json(
+        { error: 'Executor não encontrado' },
+        { status: 404 }
+      ),
+    };
+  }
+
+  let roles = [executor.role];
+  try {
+    const rolesRows = await query<{ role: string }>(
+      'SELECT role FROM usuario_roles WHERE usuario_id = ?',
+      [executorId]
+    );
+    if (rolesRows.length > 0) {
+      roles = rolesRows.map((row) => row.role);
+    }
+  } catch {
+    // Tabela usuario_roles ainda não existe — usar role primária.
+  }
+
+  if (roles.includes('admin')) {
+    return { kind: 'ok' };
+  }
+
+  if (categoriaId) {
+    try {
+      const categoriaRoles = await query<{ role: string }>(
+        'SELECT role FROM categoria_roles WHERE categoria_id = ?',
+        [categoriaId]
+      );
+      if (categoriaRoles.length > 0) {
+        const allowedRoles = categoriaRoles.map((row) => row.role);
+        if (roles.some((role) => allowedRoles.includes(role))) {
+          return { kind: 'ok' };
+        }
+
+        return {
+          kind: 'error',
+          response: NextResponse.json(
+            { error: 'Executor não tem permissão para esta categoria' },
+            { status: 400 }
+          ),
+        };
+      }
+    } catch {
+      // Tabela categoria_roles ainda não existe — cai no fallback legado abaixo.
+    }
+  }
+
+  if (roles.includes('executor')) {
+    return { kind: 'ok' };
+  }
+
+  return {
+    kind: 'error',
+    response: NextResponse.json(
+      { error: 'Usuário selecionado não é executor' },
+      { status: 400 }
+    ),
+  };
 }
 
 // GET /api/atendimentos/[id]/itens - Lista itens do atendimento
@@ -146,24 +224,8 @@ export const POST = withUnit(async (
 
     // Verifica executor se fornecido
     if (executor_id) {
-      const executor = await queryOne<{ id: number; role: string }>(
-        "SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1",
-        [executor_id]
-      );
-      
-      if (!executor) {
-        return NextResponse.json(
-          { error: 'Executor não encontrado' },
-          { status: 404 }
-        );
-      }
-      
-      if (executor.role !== 'executor' && executor.role !== 'admin') {
-        return NextResponse.json(
-          { error: 'Usuário selecionado não é executor' },
-          { status: 400 }
-        );
-      }
+      const validacaoExecutor = await validarExecutorSelecionado(executor_id, atendimento.categoria_id);
+      if (validacaoExecutor.kind === 'error') return validacaoExecutor.response;
     }
     
     // Usa valor do procedimento se não fornecido
