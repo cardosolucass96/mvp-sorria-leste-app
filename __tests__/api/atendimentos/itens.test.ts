@@ -154,10 +154,9 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
     expect(insertQuery).toBeDefined();
-    // Params: ..., valor, valor_original, dentes, quantidade, observacoes, status, adicionado_em_execucao
-    // status = params[9], adicionado_em_execucao = params[10]
-    expect(insertQuery!.params[9]).toBe('pago');
-    expect(insertQuery!.params[10]).toBe(1);
+    // Params: ..., valor, valor_original, valor_final, dentes, quantidade, observacoes, status, adicionado_em_execucao
+    expect(insertQuery!.params[10]).toBe('pago');
+    expect(insertQuery!.params[11]).toBe(1);
   });
 
   it('rejeita adicionar em aguardando_pagamento', async () => {
@@ -339,9 +338,9 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
-    // Params: atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, dentes, quantidade, ...
-    expect(insertQuery!.params[6]).toBe('["11","21"]'); // dentes
-    expect(insertQuery!.params[7]).toBe(2); // quantidade
+    // Params: atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, valor_final, dentes, quantidade, ...
+    expect(insertQuery!.params[7]).toBe('["11","21"]'); // dentes
+    expect(insertQuery!.params[8]).toBe(2); // quantidade
   });
 
   it('quantidade default é 1', async () => {
@@ -358,8 +357,8 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
-    // Params: atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, dentes, quantidade, ...
-    expect(insertQuery!.params[7]).toBe(1);
+    // Params: atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, valor_final, dentes, quantidade, ...
+    expect(insertQuery!.params[8]).toBe(1);
   });
 
   it('rejeita executor que não existe', async () => {
@@ -593,6 +592,35 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
     expect(update!.sql).toContain('concluido_at = CURRENT_TIMESTAMP');
   });
 
+  it('ao voltar automaticamente para aguardando_pagamento limpa contexto de liberação da execução', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('select * from itens_atendimento where id', ITEM_CANAL_EXECUTANDO);
+    mockQueryResponse('count(*) as total', { total: 2, concluidos: 2, pendentes_pagamento: 1 });
+    mockQueryResponse('from itens_atendimento i', { ...ITEM_CANAL_EXECUTANDO, procedimento_nome: 'Canal', executor_nome: 'Dr. Carlos' });
+
+    const ctx = createRouteContext({ id: '4', itemId: '3' });
+    const { status, data } = await callRoute<{ atendimento_voltou_para_pagamento: boolean }>(
+      updateItem,
+      '/api/atendimentos/4/itens/3',
+      {
+        method: 'PUT',
+        body: { status: 'concluido', usuario_id: 4 },
+      },
+      ctx
+    );
+
+    expect(status).toBe(200);
+    expect(data.atendimento_voltou_para_pagamento).toBe(true);
+
+    const queries = getExecutedQueries();
+    const updateAtendimento = queries.find(q =>
+      q.sql.includes("UPDATE atendimentos") && q.sql.includes("status = 'aguardando_pagamento'")
+    );
+    expect(updateAtendimento).toBeDefined();
+    expect(updateAtendimento!.sql).toContain('liberado_por_id = NULL');
+    expect(updateAtendimento!.sql).toContain('liberado_em = NULL');
+  });
+
   it('bloqueia executor não designado de alterar status para executando', async () => {
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     const item = { ...ITEM_RESTAURACAO_PAGO, executor_id: 4 };
@@ -816,8 +844,8 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
     const queries = getExecutedQueries();
     const update = queries.find(q => q.sql.includes('UPDATE itens_atendimento') && q.sql.includes('valor_original = ?'));
     expect(update).toBeDefined();
-    // Params: [novoValor, valorOriginalBackfill, itemId]
+    // Params: [valor, valor_final, desconto_valor, desconto_motivo, desconto_aplicado_por_id, desconto_aplicado_em, valor_original, itemId]
     expect(update!.params[0]).toBe(100); // valor novo
-    expect(update!.params[1]).toBe(150); // valor_original = valor atual antes da edição
+    expect(update!.params[6]).toBe(150); // valor_original = valor atual antes da edição
   });
 });

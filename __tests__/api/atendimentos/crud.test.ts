@@ -19,8 +19,6 @@ import {
   ATENDIMENTO_AVALIACAO,
   ATENDIMENTO_AGUARDANDO_PGTO,
   ATENDIMENTO_EM_EXECUCAO,
-  CLIENTE_BASICO,
-  USUARIO_AVALIADOR,
   ITEM_LIMPEZA_PENDENTE,
   ITEM_RESTAURACAO_PAGO,
 } from '../../helpers/seed';
@@ -42,7 +40,7 @@ jest.mock('@/lib/auth/jwt', () => ({
 }));
 
 import { GET as listAtendimentos, POST as createAtendimento } from '@/app/api/atendimentos/route';
-import { GET as getAtendimento } from '@/app/api/atendimentos/[id]/route';
+import { GET as getAtendimento, DELETE as archiveAtendimento } from '@/app/api/atendimentos/[id]/route';
 
 beforeEach(() => {
   resetMockDb();
@@ -297,15 +295,13 @@ describe('GET /api/atendimentos/[id]', () => {
   };
 
   const itemBase = { ...ITEM_LIMPEZA_PENDENTE, procedimento_nome: 'Limpeza Dental', executor_nome: 'Dr. Carlos Executor', criado_por_nome: 'Dr. João Avaliador' };
-  const itensComJoin = [{ ...itemBase, etapas: [], progresso_etapas: null }];
-
   it('retorna atendimento com itens e totais', async () => {
     // Atendimento
     mockQueryResponse('from atendimentos a', atendimentoDetalhe);
     // Itens
     mockQueryResponse('from itens_atendimento i', [itemBase]);
     // Total valor
-    mockQueryResponse('select sum(valor) as total from itens_atendimento', { total: 150 });
+    mockQueryResponse('select sum(coalesce(valor_final, valor)) as total from itens_atendimento', { total: 150 });
     // Total pago = soma de valor_pago dos itens
     mockQueryResponse('coalesce(sum(valor_pago), 0) as total from itens_atendimento', { total: 0 });
 
@@ -315,7 +311,19 @@ describe('GET /api/atendimentos/[id]', () => {
     expect(status).toBe(200);
     expect(data.id).toBe(3);
     expect(data.cliente_nome).toBe('Roberto Souza');
-    expect(data.itens).toEqual(itensComJoin);
+    expect(data.itens).toEqual([
+      expect.objectContaining({
+        ...itemBase,
+        etapas: [],
+        progresso_etapas: null,
+        valor_final: 150,
+        saldo: 150,
+        financeiro_status: 'nao_pago',
+        destino_status: null,
+        destino_data_agendada: null,
+        destino_executor_id: null,
+      }),
+    ]);
     expect(data.total).toBe(150);
     expect(data.total_pago).toBe(0);
   });
@@ -331,7 +339,7 @@ describe('GET /api/atendimentos/[id]', () => {
   it('retorna totais como 0 quando sem itens', async () => {
     mockQueryResponse('from atendimentos a', atendimentoDetalhe);
     mockQueryResponse('from itens_atendimento i', []);
-    mockQueryResponse('select sum(valor) as total from itens_atendimento', { total: null });
+    mockQueryResponse('select sum(coalesce(valor_final, valor)) as total from itens_atendimento', { total: null });
     mockQueryResponse('coalesce(sum(valor_pago), 0) as total from itens_atendimento', { total: 0 });
 
     const ctx = createRouteContext({ id: '3' });
@@ -356,7 +364,7 @@ describe('GET /api/atendimentos/[id]', () => {
     mockQueryResponse('from itens_atendimento i', [
       { ...ITEM_RESTAURACAO_PAGO, procedimento_nome: 'Restauração', executor_nome: 'Dr. Carlos Executor', criado_por_nome: 'Dr. João Avaliador' },
     ]);
-    mockQueryResponse('select sum(valor) as total from itens_atendimento', { total: 1200 });
+    mockQueryResponse('select sum(coalesce(valor_final, valor)) as total from itens_atendimento', { total: 1200 });
     mockQueryResponse('coalesce(sum(valor_pago), 0) as total from itens_atendimento', { total: 800 });
 
     const ctx = createRouteContext({ id: '4' });
@@ -380,7 +388,7 @@ describe('GET /api/atendimentos/[id]', () => {
     mockQueryResponse('from itens_atendimento i', [
       { ...ITEM_RESTAURACAO_PAGO, atendimento_id: 3, procedimento_nome: 'Restauração', executor_nome: 'Dr. Carlos Executor', criado_por_nome: 'Dr. João Avaliador' },
     ]);
-    mockQueryResponse('select sum(valor) as total from itens_atendimento', { total: 400 });
+    mockQueryResponse('select sum(coalesce(valor_final, valor)) as total from itens_atendimento', { total: 400 });
     mockQueryResponse('coalesce(sum(valor_pago), 0) as total from itens_atendimento', { total: 400 });
 
     const ctx = createRouteContext({ id: '3' });
@@ -389,5 +397,55 @@ describe('GET /api/atendimentos/[id]', () => {
     expect(status).toBe(200);
     expect(data.total).toBe(400);
     expect(data.total_pago).toBe(400);
+  });
+});
+
+// =============================================================================
+// DELETE /api/atendimentos/[id]  (arquivar/desconsiderar)
+// =============================================================================
+
+describe('DELETE /api/atendimentos/[id]', () => {
+  it('arquiva atendimento ativo em vez de apagar fisicamente', async () => {
+    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+
+    const ctx = createRouteContext({ id: '2' });
+    const { status, data } = await callRoute<Record<string, unknown>>(archiveAtendimento, '/api/atendimentos/2', {
+      method: 'DELETE',
+    }, ctx);
+
+    expect(status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.archived).toBe(true);
+
+    const queries = getExecutedQueries();
+    const updateQuery = queries.find(q => q.sql.includes('UPDATE atendimentos'));
+    expect(updateQuery).toBeDefined();
+    expect(updateQuery!.sql).toContain("status = 'encerrado'");
+    expect(updateQuery!.sql).toContain("motivo_saida = COALESCE(motivo_saida, 'sem_tratamento')");
+    expect(updateQuery!.sql).toContain("observacoes_encerramento = COALESCE");
+    expect(queries.some(q => q.sql.includes('DELETE FROM atendimentos'))).toBe(false);
+  });
+
+  it('permite arquivar mesmo com pagamentos já registrados', async () => {
+    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status } = await callRoute(archiveAtendimento, '/api/atendimentos/3', {
+      method: 'DELETE',
+    }, ctx);
+
+    expect(status).toBe(200);
+  });
+
+  it('rejeita quando o atendimento já está encerrado', async () => {
+    mockQueryResponse('select * from atendimentos where id', { ...ATENDIMENTO_EM_EXECUCAO, status: 'encerrado' });
+
+    const ctx = createRouteContext({ id: '4' });
+    const { status, data } = await callRoute<{ error: string }>(archiveAtendimento, '/api/atendimentos/4', {
+      method: 'DELETE',
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Atendimento já está encerrado/arquivado');
   });
 });

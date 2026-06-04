@@ -1,27 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, use, useCallback } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatarMoeda, formatarDataHora, tempoDecorrido, nomeProcedimentoItem, formatarDenteUnicoComFaces } from '@/lib/utils/formatters';
-import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PROXIMOS_STATUS } from '@/lib/constants/status';
-import type { AtendimentoStatus, AtendimentoTipo, ItemStatus } from '@/lib/types';
+import { STATUS_CONFIG, PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
+import type { AtendimentoStatus, AtendimentoTipo } from '@/lib/types';
 import { StatusBadge, StatusPipeline } from '@/components/domain';
 import { ClipboardList, ChevronDown, ChevronRight, X, Trash2, CalendarPlus, Info } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Button, Card, EmptyState, ConfirmDialog, Modal, Select, Input, Textarea, useToast } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
-
-interface EtapaModelo {
-  id: number;
-  nome: string;
-  valor: number | null;
-  comissao_venda: number;
-  comissao_execucao: number;
-  ordem: number;
-}
 
 interface Procedimento {
   id: number;
@@ -218,11 +209,7 @@ export default function AtendimentoDetalhePage({
     });
   };
 
-  useEffect(() => {
-    carregarAtendimento();
-  }, [id]);
-
-  const carregarAtendimento = async () => {
+  const carregarAtendimento = useCallback(async () => {
     try {
       const res = await unitFetch(`/api/atendimentos/${id}`);
       if (!res.ok) {
@@ -236,7 +223,11 @@ export default function AtendimentoDetalhePage({
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, unitFetch]);
+
+  useEffect(() => {
+    carregarAtendimento();
+  }, [carregarAtendimento]);
 
   const handleMudarStatus = async (novoStatus: string) => {
     if (!atendimento) return;
@@ -264,22 +255,22 @@ export default function AtendimentoDetalhePage({
     }
   };
 
-  const handleExcluir = () => {
+  const handleArquivar = () => {
     if (!atendimento) return;
     openConfirm({
-      title: 'Excluir Atendimento',
-      message: `Excluir o atendimento #${atendimento.id} de ${atendimento.cliente_nome}? Esta ação não pode ser desfeita.`,
-      confirmLabel: 'Excluir',
+      title: 'Arquivar Atendimento',
+      message: `Arquivar o atendimento #${atendimento.id} de ${atendimento.cliente_nome}? O histórico será preservado e ele sairá do fluxo ativo.`,
+      confirmLabel: 'Arquivar',
       type: 'danger',
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         try {
           const res = await unitFetch(`/api/atendimentos/${id}`, { method: 'DELETE' });
           const data = await res.json();
-          if (!res.ok) { setError(data.error || 'Erro ao excluir'); return; }
+          if (!res.ok) { setError(data.error || 'Erro ao arquivar'); return; }
           router.push('/atendimentos');
         } catch {
-          setError('Erro ao excluir atendimento');
+          setError('Erro ao arquivar atendimento');
         }
       },
     });
@@ -435,12 +426,12 @@ export default function AtendimentoDetalhePage({
       if (todosPagos && dadosAtend.status === 'aguardando_pagamento') {
         openConfirm({
           title: 'Todos os procedimentos pagos',
-          message: 'Todos os procedimentos estão quitados. Deseja avançar o atendimento para execução agora?',
-          confirmLabel: 'Avançar para Execução',
+          message: 'Todos os procedimentos estão quitados. Deseja abrir a etapa de destino para definir o que será feito hoje, o que ficará agendado e então liberar a execução?',
+          confirmLabel: 'Definir destinos',
           type: 'info',
           onConfirm: async () => {
             setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-            await handleMudarStatus('em_execucao');
+            router.push(`/atendimentos/${id}/pagamento`);
           },
         });
       }
@@ -579,6 +570,7 @@ export default function AtendimentoDetalhePage({
 
   const statusConfig = STATUS_CONFIG[atendimento.status as AtendimentoStatus];
   const proximoStatus = PROXIMOS_STATUS[atendimento.status as AtendimentoStatus];
+  const statusAnterior = STATUS_ANTERIOR[atendimento.status as AtendimentoStatus];
 
   // Agrupar itens por group_id
   type GrupoOuItem =
@@ -645,6 +637,11 @@ export default function AtendimentoDetalhePage({
                 </Button>
               </Link>
             )}
+            {statusAnterior && (
+              <Button variant="secondary" onClick={() => handleMudarStatus(statusAnterior)} disabled={mudandoStatus}>
+                {mudandoStatus ? 'Processando...' : `Voltar para ${STATUS_CONFIG[statusAnterior].label}`}
+              </Button>
+            )}
             {proximoStatus && !['em_execucao', 'aguardando_pagamento', 'finalizado', 'encerrado'].includes(atendimento.status) && (
               <Button onClick={() => handleMudarStatus(proximoStatus)} disabled={mudandoStatus}>
                 {mudandoStatus ? 'Processando...' : `Avançar para ${STATUS_CONFIG[proximoStatus].label}`}
@@ -657,9 +654,9 @@ export default function AtendimentoDetalhePage({
                 </Button>
               </Link>
             )}
-            {!['finalizado', 'encerrado'].includes(atendimento.status) && hasRole(['atendente', 'admin']) && (
-              <Button variant="danger" onClick={handleExcluir}>
-                Excluir
+            {atendimento.status !== 'encerrado' && hasRole(['atendente', 'admin']) && (
+              <Button variant="danger" onClick={handleArquivar}>
+                Arquivar
               </Button>
             )}
           </div>
@@ -745,7 +742,7 @@ export default function AtendimentoDetalhePage({
               <p className="text-sm text-muted">Criado em</p>
               <p className="font-medium">{formatarDataHora(atendimento.created_at)}</p>
             </div>
-            {atendimento.liberado_em && (
+            {atendimento.liberado_em && ['em_execucao', 'finalizado'].includes(atendimento.status) && (
               <div>
                 <p className="text-sm text-muted">Liberado para execução</p>
                 <p className="font-medium">{formatarDataHora(atendimento.liberado_em)}</p>
@@ -775,13 +772,13 @@ export default function AtendimentoDetalhePage({
                 <span className="font-medium">{tempoDecorrido(atendimento.created_at, atendimento.finalizado_at)}</span>
               </div>
             )}
-            {atendimento.liberado_em && !atendimento.finalizado_at && (
+            {atendimento.liberado_em && atendimento.status === 'em_execucao' && !atendimento.finalizado_at && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted">Em execução há:</span>
                 <span className="font-medium text-info-600">{tempoDecorrido(atendimento.liberado_em)}</span>
               </div>
             )}
-            {atendimento.liberado_em && atendimento.finalizado_at && (
+            {atendimento.liberado_em && atendimento.finalizado_at && atendimento.status === 'finalizado' && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted">Tempo em execução:</span>
                 <span className="font-medium">{tempoDecorrido(atendimento.liberado_em, atendimento.finalizado_at)}</span>

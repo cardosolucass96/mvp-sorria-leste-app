@@ -481,31 +481,22 @@ Remove parcela não paga.
 
 ### `POST /api/atendimentos/[id]/finalizar`
 
-Finaliza atendimento e calcula comissões.
+Finaliza manualmente um atendimento **apenas** para o caso de saída sem procedimentos executados.
 
 **Pré-condições**:
 - Status deve ser `em_execucao`
-- Todos os itens devem estar `concluido`
-- Todos os itens devem estar integralmente pagos (`valor_pago ≥ valor`)
+- `motivo_saida` deve ser `sem_tratamento`
+- Para fluxos normais, a finalização acontece automaticamente pela conclusão dos itens
 
 **Resposta (200)**:
 ```json
 {
   "success": true,
-  "message": "Atendimento finalizado com sucesso",
-  "comissoes": {
-    "venda": 150.00,
-    "execucao": 200.00,
-    "total": 350.00,
-    "detalhes": [
-      { "tipo": "venda", "usuario_id": 1, "valor": 150.00 },
-      { "tipo": "execucao", "usuario_id": 2, "valor": 200.00 }
-    ]
-  }
+  "message": "Atendimento finalizado com sucesso"
 }
 ```
 
-**Erros**: `400` (não em em_execucao, sem itens, itens não concluídos com `pendentes` count, itens não pagos com `valorFaltante`), `404`, `500`
+**Erros**: `400` (não em `em_execucao`, `motivo_saida` diferente de `sem_tratamento`), `404`, `500`
 
 ---
 
@@ -849,9 +840,9 @@ Serve arquivos do Cloudflare R2.
 |---------------------------------------|---------------------------------------------------------------|
 | `triagem` → `avaliacao`               | Nenhuma                                                       |
 | `avaliacao` → `aguardando_pagamento`  | ≥ 1 item cadastrado                                           |
-| `aguardando_pagamento` → `em_execucao`| ≥ 1 item com status `pago`. Define `liberado_por_id` via JWT. |
-| `em_execucao` → `finalizado`          | Via `/finalizar`: todos itens `concluido` e pagos             |
-| `em_execucao` → `aguardando_pagamento`| Automática ao adicionar novo item em `em_execucao`            |
+| `aguardando_pagamento` → `em_execucao`| Após definir o que será feito hoje, os itens restantes no atendimento precisam estar financeiramente cobertos. Define `liberado_por_id` via JWT. |
+| `em_execucao` → `aguardando_pagamento`| Manual (rollback) ou automática quando todos os itens forem concluídos mas ainda existirem itens `adicionado_em_execucao` sem pagamento completo. Ao voltar, itens `executando` retornam para `pago`. |
+| `em_execucao` → `finalizado`          | Automática pela conclusão dos itens, ou via `/finalizar` apenas para `motivo_saida=sem_tratamento` |
 
 ### Item
 
@@ -871,7 +862,7 @@ Serve arquivos do Cloudflare R2.
 
 ## 20. Fluxo de Comissões
 
-Comissões são calculadas automaticamente ao **finalizar** um atendimento (`POST /api/atendimentos/[id]/finalizar`).
+Comissões são calculadas automaticamente quando um **item é concluído** no fluxo de execução.
 
 Para cada **item do atendimento**:
 

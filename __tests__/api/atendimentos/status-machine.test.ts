@@ -124,6 +124,43 @@ describe('Máquina de estados — transições válidas', () => {
     }, ctx);
 
     expect(status).toBe(200);
+
+    const queries = getExecutedQueries();
+    const updateAtendimentoQuery = queries.find(q =>
+      q.sql.includes('UPDATE atendimentos') && q.params.includes('aguardando_pagamento')
+    );
+    expect(updateAtendimentoQuery).toBeDefined();
+    expect(updateAtendimentoQuery!.sql).toContain('liberado_por_id = ?');
+    expect(updateAtendimentoQuery!.sql).toContain('liberado_em = ?');
+
+    const normalizacaoItens = queries.find(q =>
+      q.sql.includes("UPDATE itens_atendimento") && q.sql.includes("SET status = 'pago'")
+    );
+    expect(normalizacaoItens).toBeDefined();
+  });
+
+  it('avaliacao → triagem (volta permitida)', async () => {
+    mockAtendimentoAndReturn(ATENDIMENTO_AVALIACAO);
+
+    const ctx = createRouteContext({ id: '2' });
+    const { status } = await callRoute(updateAtendimento, '/api/atendimentos/2', {
+      method: 'PUT',
+      body: { status: 'triagem' },
+    }, ctx);
+
+    expect(status).toBe(200);
+  });
+
+  it('aguardando_pagamento → avaliacao (volta permitida)', async () => {
+    mockAtendimentoAndReturn(ATENDIMENTO_AGUARDANDO_PGTO);
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status } = await callRoute(updateAtendimento, '/api/atendimentos/3', {
+      method: 'PUT',
+      body: { status: 'avaliacao' },
+    }, ctx);
+
+    expect(status).toBe(200);
   });
 });
 
@@ -182,25 +219,25 @@ describe('Máquina de estados — transições inválidas', () => {
     expect(status).toBe(400);
   });
 
-  it('avaliacao → triagem (voltar)', async () => {
+  it('avaliacao → em_execucao (pular pagamento e execução)', async () => {
     mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
 
     const ctx = createRouteContext({ id: '2' });
     const { status } = await callRoute(updateAtendimento, '/api/atendimentos/2', {
       method: 'PUT',
-      body: { status: 'triagem' },
+      body: { status: 'em_execucao' },
     }, ctx);
 
     expect(status).toBe(400);
   });
 
-  it('aguardando_pagamento → avaliacao (voltar indevido)', async () => {
+  it('aguardando_pagamento → triagem (volta muito longe)', async () => {
     mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(updateAtendimento, '/api/atendimentos/3', {
       method: 'PUT',
-      body: { status: 'avaliacao' },
+      body: { status: 'triagem' },
     }, ctx);
 
     expect(status).toBe(400);

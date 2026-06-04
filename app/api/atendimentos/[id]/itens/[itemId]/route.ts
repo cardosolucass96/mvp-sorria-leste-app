@@ -310,7 +310,10 @@ export const PUT = withUnit(async (
         if (contagem.pendentes_pagamento > 0) {
           // Há procedimentos adicionados em execução que ainda precisam ser cobrados
           const res = await execute(
-            `UPDATE atendimentos SET status = 'aguardando_pagamento'
+            `UPDATE atendimentos
+             SET status = 'aguardando_pagamento',
+                 liberado_por_id = NULL,
+                 liberado_em = NULL
              WHERE id = ? AND status = 'em_execucao'`,
             [parseInt(id)]
           );

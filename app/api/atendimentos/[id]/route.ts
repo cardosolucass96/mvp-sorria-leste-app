@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
+import { PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 
 interface Atendimento {
   id: number;
@@ -313,6 +314,14 @@ export const PUT = withUnit(async (request: NextRequest, context: UnitAuthentica
         updateParams.push(context.user.sub);
         updates.push('liberado_em = datetime(\'now\', \'localtime\')');
       }
+
+      // Ao voltar de execução para pagamento, limpa o contexto de liberação anterior.
+      if (status === 'aguardando_pagamento' && atendimento.status === 'em_execucao') {
+        updates.push('liberado_por_id = ?');
+        updateParams.push(null);
+        updates.push('liberado_em = ?');
+        updateParams.push(null);
+      }
       
       // Se finalizando, marca a data e motivo de saída (se fornecido)
       if (status === 'finalizado') {
@@ -354,6 +363,17 @@ export const PUT = withUnit(async (request: NextRequest, context: UnitAuthentica
       `UPDATE atendimentos SET ${updates.join(', ')} WHERE id = ?`,
       updateParams
     );
+
+    if (status === 'aguardando_pagamento' && atendimento.status === 'em_execucao') {
+      // Procedimentos "em andamento" voltam para "pago" quando o atendimento sai da execução.
+      // Itens já concluídos permanecem concluídos para preservar o histórico clínico.
+      await execute(
+        `UPDATE itens_atendimento
+         SET status = 'pago'
+         WHERE atendimento_id = ? AND status = 'executando'`,
+        [parseInt(id)]
+      );
+    }
     
     // Retorna atendimento atualizado
     const atualizado = await queryOne<AtendimentoComCliente>(
@@ -382,7 +402,7 @@ export const PUT = withUnit(async (request: NextRequest, context: UnitAuthentica
   }
 });
 
-// DELETE /api/atendimentos/[id] - Exclui atendimento
+// DELETE /api/atendimentos/[id] - Arquiva/desconsidera atendimento
 export const DELETE = withUnit(async (_request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const params = await context.params!;
@@ -398,59 +418,30 @@ export const DELETE = withUnit(async (_request: NextRequest, context: UnitAuthen
       return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 });
     }
 
-    if (['finalizado', 'encerrado'].includes(atendimento.status)) {
+    if (atendimento.status === 'encerrado') {
       return NextResponse.json(
-        { error: 'Atendimentos finalizados não podem ser excluídos' },
+        { error: 'Atendimento já está encerrado/arquivado' },
         { status: 400 }
       );
     }
 
-    const temPagamento = await queryOne<CountResult>(
-      'SELECT COUNT(*) as count FROM pagamentos WHERE atendimento_id = ?',
-      [atendimentoId]
-    );
-
-    if (temPagamento && temPagamento.count > 0) {
-      return NextResponse.json(
-        { error: 'Atendimento com pagamentos registrados não pode ser excluído' },
-        { status: 400 }
-      );
-    }
-
-    // Cascade manual (FK sem ON DELETE CASCADE no SQLite)
-    const itens = await query<{ id: number }>(
-      'SELECT id FROM itens_atendimento WHERE atendimento_id = ?',
-      [atendimentoId]
-    );
-
-    for (const item of itens) {
-      await execute('DELETE FROM prontuarios WHERE item_atendimento_id = ?', [item.id]);
-      await execute('DELETE FROM notas_execucao WHERE item_atendimento_id = ?', [item.id]);
-      await execute('DELETE FROM anexos_execucao WHERE item_atendimento_id = ?', [item.id]);
-      await execute('DELETE FROM comissoes WHERE item_atendimento_id = ?', [item.id]);
-    }
-
-    await execute('DELETE FROM itens_atendimento WHERE atendimento_id = ?', [atendimentoId]);
-
-    // Cascade: delete agendamentos originated from this atendimento
-    await execute('DELETE FROM agendamentos WHERE atendimento_origem_id = ?', [atendimentoId]);
-
-    // Revert agendamentos that point to this atendimento as session (don't delete, preserve history)
     await execute(
-      `UPDATE agendamentos SET
-        atendimento_sessao_id = NULL,
-        status = 'agendado',
-        updated_at = datetime('now','localtime')
-      WHERE atendimento_sessao_id = ?`,
+      `UPDATE atendimentos
+       SET status = 'encerrado',
+           motivo_saida = COALESCE(motivo_saida, 'sem_tratamento'),
+           observacoes_encerramento = COALESCE(
+             NULLIF(observacoes_encerramento, ''),
+             'Atendimento desconsiderado/arquivado manualmente.'
+           ),
+           finalizado_at = COALESCE(finalizado_at, datetime('now', 'localtime'))
+       WHERE id = ?`,
       [atendimentoId]
     );
 
-    await execute('DELETE FROM atendimentos WHERE id = ?', [atendimentoId]);
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, archived: true });
   } catch (error) {
-    console.error('Erro ao excluir atendimento:', error);
-    return NextResponse.json({ error: 'Erro ao excluir atendimento' }, { status: 500 });
+    console.error('Erro ao arquivar atendimento:', error);
+    return NextResponse.json({ error: 'Erro ao arquivar atendimento' }, { status: 500 });
   }
 });
 
@@ -462,18 +453,16 @@ async function validarTransicao(
 ): Promise<{ valido: boolean; mensagem: string }> {
   const statusAtual = atendimento.status;
   
-  // Transições permitidas (finalizado só via /finalizar endpoint)
-  const transicoesPermitidas: Record<string, string[]> = {
-    triagem: ['avaliacao'],
-    avaliacao: ['aguardando_pagamento'],
-    aguardando_pagamento: ['em_execucao'],
-    em_execucao: ['aguardando_pagamento'],
-    finalizado: ['encerrado'],
-    encerrado: [],
-  };
+  const proximoStatus = PROXIMOS_STATUS[statusAtual as keyof typeof PROXIMOS_STATUS];
+  const statusAnterior = STATUS_ANTERIOR[statusAtual as keyof typeof STATUS_ANTERIOR];
+  const transicoesPermitidas = [
+    proximoStatus,
+    statusAnterior,
+    statusAtual === 'finalizado' ? 'encerrado' : null,
+  ].filter((value): value is string => Boolean(value));
   
   // Verifica se a transição é permitida
-  if (!transicoesPermitidas[statusAtual]?.includes(novoStatus)) {
+  if (!transicoesPermitidas.includes(novoStatus)) {
     return {
       valido: false,
       mensagem: `Não é possível mudar de "${statusAtual}" para "${novoStatus}"`,

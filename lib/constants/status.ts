@@ -85,6 +85,16 @@ export const PROXIMOS_STATUS: Record<AtendimentoStatus, AtendimentoStatus | null
   encerrado: null,
 };
 
+/** Mapa de retorno de status (1 etapa por vez nos fluxos ativos) */
+export const STATUS_ANTERIOR: Record<AtendimentoStatus, AtendimentoStatus | null> = {
+  triagem: null,
+  avaliacao: 'triagem',
+  aguardando_pagamento: 'avaliacao',
+  em_execucao: 'aguardando_pagamento',
+  finalizado: null,
+  encerrado: null,
+};
+
 // ─── Status de Item ─────────────────────────────────────────────
 
 export interface ItemStatusConfig {
