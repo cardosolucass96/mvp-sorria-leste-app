@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Checkbox from '@/components/ui/Checkbox';
 
 export type FaceNome = 'V' | 'L' | 'M' | 'D' | 'O';
 
@@ -24,6 +25,15 @@ const DENTES_PERMANENTES: Record<string, string[]> = {
   'Quadrante Inferior Direito (4)': ['48', '47', '46', '45', '44', '43', '42', '41'],
 };
 
+const DENTES_DECIDUOS: Record<string, string[]> = {
+  'Quadrante Superior Direito Decíduo (5)': ['55', '54', '53', '52', '51'],
+  'Quadrante Superior Esquerdo Decíduo (6)': ['61', '62', '63', '64', '65'],
+  'Quadrante Inferior Esquerdo Decíduo (7)': ['75', '74', '73', '72', '71'],
+  'Quadrante Inferior Direito Decíduo (8)': ['85', '84', '83', '82', '81'],
+};
+
+const TODOS_DENTES_DECIDUOS = Object.values(DENTES_DECIDUOS).flat();
+
 interface SeletorDentesProps {
   valor: DenteFaceInput[];
   onChange: (valor: DenteFaceInput[]) => void;
@@ -34,8 +44,17 @@ interface SeletorDentesProps {
 
 export default function SeletorDentes({ valor, onChange, disabled = false, mostrarFaces = false }: SeletorDentesProps) {
   const [expandido, setExpandido] = useState(false);
+  const [mostrarDeciduos, setMostrarDeciduos] = useState(
+    valor.some((item) => TODOS_DENTES_DECIDUOS.includes(item.dente))
+  );
 
   const dentesSelecionados = valor.map(d => d.dente);
+
+  useEffect(() => {
+    if (valor.some((item) => TODOS_DENTES_DECIDUOS.includes(item.dente))) {
+      setMostrarDeciduos(true);
+    }
+  }, [valor]);
 
   const toggleDente = (dente: string) => {
     if (disabled) return;
@@ -75,6 +94,62 @@ export default function SeletorDentes({ valor, onChange, disabled = false, mostr
     onChange([]);
   };
 
+  const toggleMostrarDeciduos = (checked: boolean) => {
+    if (disabled) return;
+    setMostrarDeciduos(checked);
+    if (!checked) {
+      onChange(valor.filter((item) => !TODOS_DENTES_DECIDUOS.includes(item.dente)));
+    }
+  };
+
+  const renderGrupoDentes = (grupos: Record<string, string[]>) => (
+    Object.entries(grupos).map(([quadrante, dentes]) => {
+      const todosSelecionados = dentes.every(d => dentesSelecionados.includes(d));
+      const algunsSelecionados =
+        dentes.some(d => dentesSelecionados.includes(d)) && !todosSelecionados;
+      return (
+        <div key={quadrante} className="space-y-2">
+          <button
+            type="button"
+            onClick={() => selecionarQuadrante(dentes)}
+            disabled={disabled}
+            className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1"
+          >
+            <input
+              type="checkbox"
+              checked={todosSelecionados}
+              ref={input => { if (input) input.indeterminate = algunsSelecionados; }}
+              onChange={() => {}}
+              className="rounded text-primary"
+            />
+            {quadrante}
+          </button>
+          <div className={`grid gap-1.5 ${dentes.length === 5 ? 'grid-cols-5 max-w-[21rem]' : 'grid-cols-8'}`}>
+            {dentes.map(dente => {
+              const selecionado = dentesSelecionados.includes(dente);
+              return (
+                <button
+                  key={dente}
+                  type="button"
+                  onClick={() => toggleDente(dente)}
+                  disabled={disabled}
+                  className={`px-2 py-1.5 text-xs font-medium rounded transition-all
+                    ${selecionado
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'bg-background text-foreground border border-input hover:border-primary/40 hover:bg-muted'
+                    }
+                    ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  {dente}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    })
+  );
+
   return (
     <div className="space-y-3">
       {/* Seletor de dentes */}
@@ -107,51 +182,23 @@ export default function SeletorDentes({ valor, onChange, disabled = false, mostr
 
         {expandido && (
           <div className="border border-border rounded-lg p-4 bg-muted space-y-3">
-            {Object.entries(DENTES_PERMANENTES).map(([quadrante, dentes]) => {
-              const todosSelecionados = dentes.every(d => dentesSelecionados.includes(d));
-              const algunsSelecionados =
-                dentes.some(d => dentesSelecionados.includes(d)) && !todosSelecionados;
-              return (
-                <div key={quadrante} className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => selecionarQuadrante(dentes)}
-                    disabled={disabled}
-                    className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={todosSelecionados}
-                      ref={input => { if (input) input.indeterminate = algunsSelecionados; }}
-                      onChange={() => {}}
-                      className="rounded text-primary"
-                    />
-                    {quadrante}
-                  </button>
-                  <div className="grid grid-cols-8 gap-1.5">
-                    {dentes.map(dente => {
-                      const selecionado = dentesSelecionados.includes(dente);
-                      return (
-                        <button
-                          key={dente}
-                          type="button"
-                          onClick={() => toggleDente(dente)}
-                          disabled={disabled}
-                          className={`px-2 py-1.5 text-xs font-medium rounded transition-all
-                            ${selecionado
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-background text-foreground border border-input hover:border-primary/40 hover:bg-muted'
-                            }
-                            ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                        >
-                          {dente}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
+            {renderGrupoDentes(DENTES_PERMANENTES)}
+
+            <div className="pt-2 border-t border-border">
+              <Checkbox
+                label="Mostrar dentes decíduos (de leite)"
+                checked={mostrarDeciduos}
+                onChange={toggleMostrarDeciduos}
+                disabled={disabled}
+                hint="Exibe os quadrantes 5 a 8 para seleção de dentes infantis"
+              />
+            </div>
+
+            {mostrarDeciduos && (
+              <div className="space-y-3">
+                {renderGrupoDentes(DENTES_DECIDUOS)}
+              </div>
+            )}
           </div>
         )}
       </div>
