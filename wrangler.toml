@@ -1,6 +1,7 @@
 #:schema node_modules/wrangler/config-schema.json
 
 name = "sorria-leste-app"
+account_id = "d603948925acaef083c8eafe1a05c2c4"
 main = ".open-next/worker.js"
 compatibility_date = "2024-12-30"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
