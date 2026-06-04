@@ -9,6 +9,7 @@ import { Alert, LoadingState, PageHeader, Card, Button, Input, Select, SearchInp
 import { ClienteForm, ClienteFormData } from '@/components/domain';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { formatarDataAgendada } from '@/lib/utils/formatters';
+import { apiFetch } from '@/lib/utils/apiFetch';
 import type { CategoriaComRoles } from '@/lib/types';
 
 interface Agendamento {
@@ -112,17 +113,29 @@ function NovoAtendimentoForm() {
     const carregarDados = async () => {
       try {
         const [resUsuarios, resCategorias] = await Promise.all([
-          fetch('/api/usuarios'),
-          fetch('/api/categorias?ativo=1'),
+          apiFetch('/api/usuarios'),
+          apiFetch('/api/categorias?ativo=1'),
         ]);
+
+        if (!resUsuarios.ok) {
+          throw new Error('Não foi possível carregar os avaliadores');
+        }
+        if (!resCategorias.ok) {
+          throw new Error('Não foi possível carregar as categorias');
+        }
+
         const usuariosData: Usuario[] = await resUsuarios.json();
         setAvaliadores(usuariosData.filter((u) => u.role === 'avaliador' || u.role === 'admin'));
-        if (resCategorias.ok) {
-          const cats: CategoriaComRoles[] = await resCategorias.json();
-          setCategorias(cats);
-          const geral = cats.find(c => c.slug === 'geral');
-          if (geral) setCategoriaId(String(geral.id));
+
+        const cats: CategoriaComRoles[] = await resCategorias.json();
+        setCategorias(cats);
+
+        const categoriaPadrao = cats.find(c => c.slug === 'geral') ?? cats[0] ?? null;
+        if (categoriaPadrao) {
+          setCategoriaId(String(categoriaPadrao.id));
         }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar dados do formulário');
       } finally {
         setLoadingDados(false);
       }
@@ -238,6 +251,14 @@ function NovoAtendimentoForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clienteId) return;
+    if (categorias.length === 0) {
+      setError('Nenhuma categoria ativa disponível para criar o atendimento');
+      return;
+    }
+    if (!categoriaId) {
+      setError('Selecione uma categoria');
+      return;
+    }
     setSaving(true);
     setError('');
 
