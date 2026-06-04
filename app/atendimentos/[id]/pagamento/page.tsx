@@ -125,11 +125,6 @@ export default function PagamentoPage({
   const [destinos, setDestinos] = useState<Record<string, { status: DestinoStatus; data: string; executorId: string }>>({});
   const [descontoEditando, setDescontoEditando] = useState<Record<number, { valor: string; motivo: string }>>({});
 
-  useEffect(() => {
-    void carregarDados();
-    void carregarExecutores();
-  }, [carregarDados, id]);
-
   const carregarExecutores = async () => {
     try {
       const res = await fetch('/api/usuarios');
@@ -205,6 +200,11 @@ export default function PagamentoPage({
       setLoading(false);
     }
   }, [id, unitFetch]);
+
+  useEffect(() => {
+    void carregarDados();
+    void carregarExecutores();
+  }, [carregarDados, id]);
 
   const linhas = useMemo<LinhaCobranca[]>(() => {
     if (!atendimento) return [];
