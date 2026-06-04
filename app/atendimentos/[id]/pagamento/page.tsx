@@ -12,6 +12,10 @@ import { Input, Select, Card, Button } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import type { Usuario } from '@/lib/types';
+import {
+  montarSelecaoPagamentoPayload,
+  type AcaoItemPagamento,
+} from '@/lib/utils/pagamentoSelecao';
 
 interface Etapa {
   id: number;
@@ -89,8 +93,6 @@ function nomeProcedimento(item: ItemAtendimento): string {
   return nome;
 }
 
-type AcaoItem = 'hoje' | 'agendar' | 'pendente';
-
 export default function PagamentoPage({
   params,
 }: {
@@ -126,10 +128,10 @@ export default function PagamentoPage({
   // Ação por procedimento (coluna direita)
   // Itens sem etapas modelo → acaoItens keyed by item.id
   // Itens com etapas modelo → acaoEtapas keyed by virtual etapa.id (item_id * 100000 + etapa_modelo_id)
-  const [acaoItens, setAcaoItens] = useState<Record<number, AcaoItem>>({});
+  const [acaoItens, setAcaoItens] = useState<Record<number, AcaoItemPagamento>>({});
   const [datasAgendamento, setDatasAgendamento] = useState<Record<number, string>>({});
   const [executoresAgendamento, setExecutoresAgendamento] = useState<Record<number, string>>({});
-  const [acaoEtapas, setAcaoEtapas] = useState<Record<number, AcaoItem>>({});
+  const [acaoEtapas, setAcaoEtapas] = useState<Record<number, AcaoItemPagamento>>({});
   const [datasEtapasAgendamento, setDatasEtapasAgendamento] = useState<Record<number, string>>({});
   const [executoresEtapasAgendamento, setExecutoresEtapasAgendamento] = useState<Record<number, string>>({});
   const [executores, setExecutores] = useState<Usuario[]>([]);
@@ -385,65 +387,15 @@ export default function PagamentoPage({
     setEnviando(true);
     setError('');
     try {
-      const itensHoje: number[] = [];
-      const itensAgendar: { item_id: number; data_agendada: string | null; executor_id?: number | null }[] = [];
-      const etapasAgendar: { etapa_id: number; item_id: number; tipo: 'modelo'; data_agendada?: string | null; pago_override?: 0 | 1; executor_id?: number | null }[] = [];
-
-      for (const item of atendimento.itens) {
-        const modeloEtapas = (item.etapas ?? []);
-        if (modeloEtapas.length > 0) {
-          // Sessões com pagamento parcial: etapa_label indica quais foram pagas neste item.
-          // Sessões fora do etapa_label (não pagas) são auto-diferidas com pago=0.
-          // null = todas pagas; set = apenas as listadas estão pagas
-          const sessoesPagas = item.etapa_label
-            ? new Set(item.etapa_label.split(', ').map(s => s.trim()))
-            : (item.status === 'pago' ? null : new Set<string>());
-
-          for (const etapa of modeloEtapas) {
-            const acao = acaoEtapas[etapa.id] ?? 'pendente';
-            const sessaoPaga = sessoesPagas === null ? true : sessoesPagas.has(etapa.nome ?? '');
-            if (acao === 'agendar') {
-              const execRaw = executoresEtapasAgendamento[etapa.id];
-              etapasAgendar.push({
-                etapa_id: etapa.id,
-                item_id: item.id,
-                tipo: 'modelo',
-                data_agendada: datasEtapasAgendamento[etapa.id] || null,
-                pago_override: sessaoPaga ? 1 : 0,
-                executor_id: execRaw ? parseInt(execRaw) : null,
-              });
-            } else if (!sessaoPaga && acao !== 'hoje') {
-              // Sessão não paga deixada como pendente → auto-difere sem data
-              etapasAgendar.push({
-                etapa_id: etapa.id,
-                item_id: item.id,
-                tipo: 'modelo',
-                data_agendada: null,
-                pago_override: 0,
-              });
-            }
-          }
-          // Item fica no atendimento se ao menos 1 sessão paga é 'hoje' ou 'pendente'
-          const temHoje = modeloEtapas.some(e => (acaoEtapas[e.id] ?? 'pendente') === 'hoje');
-          const temPendentePago = modeloEtapas.some(e => {
-            const acao = acaoEtapas[e.id] ?? 'pendente';
-            const sessaoPaga = sessoesPagas === null ? true : sessoesPagas.has(e.nome ?? '');
-            return acao === 'pendente' && sessaoPaga;
-          });
-          if (temHoje || temPendentePago) itensHoje.push(item.id);
-        } else {
-          const acao = acaoItens[item.id] ?? 'pendente';
-          if (acao === 'hoje') itensHoje.push(item.id);
-          if (acao === 'agendar') {
-            const execRaw = executoresAgendamento[item.id];
-            itensAgendar.push({
-              item_id: item.id,
-              data_agendada: datasAgendamento[item.id] || null,
-              executor_id: execRaw ? parseInt(execRaw) : null,
-            });
-          }
-        }
-      }
+      const { itensHoje, itensAgendar, etapasAgendar } = montarSelecaoPagamentoPayload(
+        atendimento.itens,
+        acaoItens,
+        acaoEtapas,
+        datasAgendamento,
+        datasEtapasAgendamento,
+        executoresAgendamento,
+        executoresEtapasAgendamento
+      );
 
       if (itensAgendar.length > 0 || etapasAgendar.length > 0) {
         const res = await unitFetch(`/api/atendimentos/${id}/selecionar-hoje`, {
