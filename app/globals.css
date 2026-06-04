@@ -387,3 +387,9 @@ body {
     @apply font-sans;
   }
 }
+
+@layer utilities {
+  .text-muted {
+    color: var(--muted-foreground);
+  }
+}

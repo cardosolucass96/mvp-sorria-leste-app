@@ -1,8 +1,9 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { useAuth } from '@/contexts/AuthContext';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
@@ -17,6 +18,13 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
+  const { resolvedTheme, setTheme } = useTheme();
+
+  useEffect(() => {
+    if (resolvedTheme === 'dark') {
+      setTheme('light');
+    }
+  }, [resolvedTheme, setTheme]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
