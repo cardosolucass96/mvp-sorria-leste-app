@@ -92,6 +92,48 @@ describe('GET /api/atendimentos/[id]/pagamentos', () => {
     expect(status).toBe(200);
     expect(data).toEqual([]);
   });
+
+  it('retorna histórico agrupado quando grouped=1', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('left join pagamentos_grupos', [
+      {
+        ...PAGAMENTO_PIX,
+        id: 11,
+        pagamento_grupo_id: 77,
+        recebido_por_nome: 'Maria Atendente',
+        grupo_valor_total: 100,
+        grupo_observacoes: 'Cobrança dividida',
+        grupo_cancelado: 0,
+        grupo_motivo_cancelamento: null,
+        grupo_created_at: '2025-01-01 10:00:00',
+      },
+      {
+        ...PAGAMENTO_PIX,
+        id: 12,
+        pagamento_grupo_id: 77,
+        metodo: 'cartao_credito',
+        valor: 50,
+        recebido_por_nome: 'Maria Atendente',
+        grupo_valor_total: 100,
+        grupo_observacoes: 'Cobrança dividida',
+        grupo_cancelado: 0,
+        grupo_motivo_cancelamento: null,
+        grupo_created_at: '2025-01-01 10:00:00',
+      },
+    ]);
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status, data } = await callRoute<Array<{ formas: Array<{ metodo: string }> }>>(
+      listPagamentos,
+      '/api/atendimentos/3/pagamentos',
+      { searchParams: { grouped: '1' } },
+      ctx
+    );
+
+    expect(status).toBe(200);
+    expect(data).toHaveLength(1);
+    expect(data[0].formas.map((forma) => forma.metodo)).toEqual(['pix', 'cartao_credito']);
+  });
 });
 
 // =============================================================================
@@ -299,8 +341,8 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
     }, ctx);
 
     const queries = getExecutedQueries();
-    const insertQ = queries.find(q => q.sql.includes('INSERT INTO pagamentos'));
-    expect(insertQ!.params[4]).toBe('Pagamento parcial');
+    const insertQ = queries.find(q => q.sql.includes('INSERT INTO pagamentos ('));
+    expect(insertQ!.params[5]).toBe('Pagamento parcial');
   });
 
   it('retorna 404 se atendimento não existe', async () => {
@@ -325,8 +367,54 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
     }, ctx);
 
     const queries = getExecutedQueries();
-    const insertQ = queries.find(q => q.sql.includes('INSERT INTO pagamentos'));
+    const insertQ = queries.find(q => q.sql.includes('INSERT INTO pagamentos ('));
     // recebido_por_id vem do context.user.sub (JWT mock retorna sub=1)
-    expect(insertQ!.params[1]).toBe(1);
+    expect(insertQ!.params[2]).toBe(1);
+  });
+
+  it('cria grupo de cobrança com múltiplas formas', async () => {
+    setLastInsertId(9);
+    mockPagamentoPadrao();
+    mockQueryResponse('from pagamentos where id', { ...PAGAMENTO_PIX, id: 9, pagamento_grupo_id: 88 });
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
+      method: 'POST',
+      body: {
+        valor_total: 400,
+        observacoes: 'PIX + cartão',
+        formas: [
+          { metodo: 'pix', valor: 150 },
+          { metodo: 'cartao_credito', valor: 250 },
+        ],
+        alocacoes: [{ item_id: 101, valor: 400 }],
+      },
+    }, ctx);
+
+    expect(status).toBe(201);
+
+    const queries = getExecutedQueries();
+    expect(queries.some((query) => query.sql.includes('INSERT INTO pagamentos_grupos'))).toBe(true);
+    expect(queries.filter((query) => query.sql.includes('INSERT INTO pagamentos (')).length).toBe(2);
+  });
+
+  it('rejeita cobrança composta quando a soma das formas não bate com o total', async () => {
+    mockPagamentoPadrao();
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status, data } = await callRoute<{ error: string }>(createPagamento, '/api/atendimentos/3/pagamentos', {
+      method: 'POST',
+      body: {
+        valor_total: 400,
+        formas: [
+          { metodo: 'pix', valor: 100 },
+          { metodo: 'cartao_credito', valor: 200 },
+        ],
+        alocacoes: [{ item_id: 101, valor: 400 }],
+      },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('A soma das formas de pagamento deve ser igual ao total selecionado');
   });
 });

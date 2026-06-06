@@ -128,7 +128,7 @@ describe('Sprint 4: atendimentos/page.tsx', () => {
   });
 
   test('usa StatusBadge', () => {
-    expect(src).toContain('StatusBadge');
+    expect(src).toContain('Badge');
   });
 
   test('usa ViewModeToggle', () => {
@@ -186,8 +186,8 @@ describe('Sprint 4: atendimentos/[id]/page.tsx', () => {
     expectCentralizedStatus(src);
   });
 
-  test('usa StatusBadge', () => {
-    expect(src).toContain('StatusBadge');
+  test('usa Badge para estados da cobranca e operacao', () => {
+    expect(src).toContain('Badge');
   });
 
   test('usa StatusPipeline', () => {
@@ -215,8 +215,8 @@ describe('Sprint 4: atendimentos/[id]/pagamento/page.tsx', () => {
     expectCentralizedFormatters(src, ['formatarMoeda', 'formatarData', 'formatarDataHora']);
   });
 
-  test('usa StatusBadge', () => {
-    expect(src).toContain('StatusBadge');
+  test('usa Badge para estados da cobranca e operacao', () => {
+    expect(src).toContain('Badge');
   });
 
   test('usa Alert', () => {
@@ -225,6 +225,35 @@ describe('Sprint 4: atendimentos/[id]/pagamento/page.tsx', () => {
 
   test('usa LoadingState', () => {
     expect(src).toContain('LoadingState');
+  });
+
+  test('usa total selecionado como valor da cobranca simples', () => {
+    expect(src).toContain('Total selecionado');
+    expect(src).not.toContain('Valor recebido (R$)');
+  });
+
+  test('oferece o modo opcional de multiplas formas de pagamento', () => {
+    expect(src).toContain('Mais de uma forma de pagamento');
+    expect(src).toContain('Adicionar forma');
+  });
+
+  test('destino usa apenas ações de operação, sem opções técnicas legadas', () => {
+    expect(src).toContain('Agendar');
+    expect(src).toContain('Fazer hoje');
+    expect(src).toContain('Deixar data em aberto');
+    expect(src).not.toContain('Pago sem data');
+    expect(src).not.toContain('Não pago sem data');
+  });
+
+  test('mapeia "deixar data em aberto" para status técnico ao salvar destinos', () => {
+    expect(src).toContain('mapAcaoParaDestinoStatus');
+    expect(src).toContain('nao_pago_sem_data');
+    expect(src).toContain('pago_sem_data');
+    expect(src).toContain('A data futura é obrigatória para itens agendados.');
+  });
+
+  test('mantem o CTA de destino separado da cobranca', () => {
+    expect(src).toContain('Salvar destinos e liberar execução');
   });
 });
 

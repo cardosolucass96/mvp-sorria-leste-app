@@ -22,7 +22,7 @@ export interface D1PreparedStatement {
 export interface D1Result<T = unknown> {
   results: T[];
   success: boolean;
-  meta: {
+  meta?: {
     duration: number;
     changes: number;
     last_row_id: number;
@@ -132,6 +132,48 @@ export interface RunResult {
   lastInsertRowid: number;
 }
 
+function getArrayResults<T>(result: unknown): T[] {
+  if (!result) return [];
+  const raw = result as { results?: unknown; rows?: unknown };
+  if (Array.isArray(raw)) {
+    return raw as T[];
+  }
+
+  if (Array.isArray(raw.results)) {
+    return raw.results as T[];
+  }
+
+  if (Array.isArray(raw.rows)) {
+    return raw.rows as T[];
+  }
+
+  return [];
+}
+
+function getFirstResult<T>(result: unknown): T | null {
+  const rows = getArrayResults<T>(result);
+  return rows[0] ?? null;
+}
+
+function extractRunResult(result: unknown): RunResult {
+  const raw = result as {
+    meta?: { changes?: number; last_row_id?: number };
+    changes?: number;
+    last_row_id?: number;
+    lastInsertRowid?: number;
+  };
+
+  return {
+    changes: Number(raw?.meta?.changes ?? raw?.changes ?? 0),
+    lastInsertRowid: Number(
+      raw?.meta?.last_row_id
+      ?? raw?.last_row_id
+      ?? raw?.lastInsertRowid
+      ?? 0
+    ),
+  };
+}
+
 // ========================================
 // FUNÇÕES DE QUERY ASSÍNCRONAS PARA D1
 // ========================================
@@ -142,7 +184,7 @@ export async function query<T = unknown>(sql: string, params: unknown[] = []): P
   const stmt = db.prepare(sql);
   const boundStmt = params.length > 0 ? stmt.bind(...params) : stmt;
   const result = await boundStmt.all<T>();
-  return result.results;
+  return getArrayResults<T>(result);
 }
 
 // Helper para executar query que retorna um único resultado
@@ -150,7 +192,11 @@ export async function queryOne<T = unknown>(sql: string, params: unknown[] = [])
   const db = getDb();
   const stmt = db.prepare(sql);
   const boundStmt = params.length > 0 ? stmt.bind(...params) : stmt;
-  return await boundStmt.first<T>();
+  const first = await boundStmt.first<T>();
+  if (first !== null && first !== undefined) return first;
+
+  const result = await boundStmt.all<T>();
+  return getFirstResult<T>(result);
 }
 
 // Helper para executar insert/update/delete
@@ -159,10 +205,7 @@ export async function execute(sql: string, params: unknown[] = []): Promise<RunR
   const stmt = db.prepare(sql);
   const boundStmt = params.length > 0 ? stmt.bind(...params) : stmt;
   const result = await boundStmt.run();
-  return {
-    changes: result.meta.changes,
-    lastInsertRowid: result.meta.last_row_id,
-  };
+  return extractRunResult(result);
 }
 
 // Helper para executar múltiplos statements em batch

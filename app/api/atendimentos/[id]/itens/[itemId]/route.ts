@@ -259,6 +259,57 @@ export const PUT = withUnit(async (
         updates.push('valor_original = ?');
         updateParams.push(item.valor);
       }
+
+      const modelos = await query<{ id: number; valor: number | null }>(
+        `SELECT id, valor FROM procedimento_etapas_modelo WHERE procedimento_id = ? ORDER BY ordem ASC`,
+        [item.procedimento_id]
+      );
+
+      if (modelos.length > 0) {
+        let overrides: Record<string, number> = {};
+        if (item.etapas_valores) {
+          try {
+            overrides = JSON.parse(item.etapas_valores) as Record<string, number>;
+          } catch {
+            overrides = {};
+          }
+        }
+
+        const valoresAtuais = modelos.map((modelo) => ({
+          id: modelo.id,
+          valor: Number(overrides[String(modelo.id)] ?? modelo.valor ?? 0),
+        }));
+
+        const somaAtual = valoresAtuais.reduce((sum, etapa) => sum + etapa.valor, 0);
+        const totalDesejado = Number(valorNum.toFixed(2));
+        const novosValores: Record<string, number> = {};
+
+        if (somaAtual <= 0) {
+          const valorUnitario = Number((totalDesejado / valoresAtuais.length).toFixed(2));
+          let acumulado = 0;
+
+          valoresAtuais.forEach((etapa, index) => {
+            const valorEtapa = index === valoresAtuais.length - 1
+              ? Number((totalDesejado - acumulado).toFixed(2))
+              : valorUnitario;
+            novosValores[String(etapa.id)] = valorEtapa;
+            acumulado += valorEtapa;
+          });
+        } else {
+          let acumulado = 0;
+
+          valoresAtuais.forEach((etapa, index) => {
+            const valorEtapa = index === valoresAtuais.length - 1
+              ? Number((totalDesejado - acumulado).toFixed(2))
+              : Number(((etapa.valor / somaAtual) * totalDesejado).toFixed(2));
+            novosValores[String(etapa.id)] = valorEtapa;
+            acumulado += valorEtapa;
+          });
+        }
+
+        updates.push('etapas_valores = ?');
+        updateParams.push(JSON.stringify(novosValores));
+      }
     }
     
     if (status !== undefined) {

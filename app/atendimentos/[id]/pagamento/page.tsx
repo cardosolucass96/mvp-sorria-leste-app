@@ -5,14 +5,30 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { formatarDataHora, formatarMoeda, nomeProcedimentoItem } from '@/lib/utils/formatters';
+import { cn } from '@/lib/utils';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import type { Usuario } from '@/lib/types';
 import Alert from '@/components/ui/Alert';
 import LoadingState from '@/components/ui/LoadingState';
-import { Button, Card, Input } from '@/components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Divider,
+  Input,
+  Select,
+  Textarea,
+} from '@/components/ui';
 
 type MetodoPagamento = 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito' | 'crediario' | 'afins_sorria';
 type DestinoStatus = 'fazer_hoje' | 'agendar' | 'pago_sem_data' | 'nao_pago_sem_data';
+type DestinoAcao = 'fazer_hoje' | 'agendar' | 'deixar_data_em_aberto';
 
 interface Etapa {
   id: number;
@@ -50,6 +66,7 @@ interface ItemAtendimento {
 
 interface Pagamento {
   id: number;
+  pagamento_grupo_id: number | null;
   valor: number;
   metodo: string;
   observacoes: string | null;
@@ -57,6 +74,25 @@ interface Pagamento {
   cancelado: number;
   motivo_cancelamento: string | null;
   created_at: string;
+}
+
+interface PagamentoGrupo {
+  id: string;
+  pagamento_grupo_id: number | null;
+  pagamento_representante_id: number;
+  valor_total: number;
+  observacoes: string | null;
+  recebido_por_nome?: string | null;
+  cancelado: number;
+  motivo_cancelamento: string | null;
+  created_at: string;
+  formas: Pagamento[];
+}
+
+interface FormaPagamentoState {
+  id: string;
+  metodo: MetodoPagamento;
+  valor: string;
 }
 
 interface Atendimento {
@@ -73,12 +109,13 @@ interface LinhaCobranca {
   key: string;
   itemId: number;
   etapaModeloId: number | null;
+  groupLabel: string;
   label: string;
   valor: number;
   valorPago: number;
   saldo: number;
   financeiroStatus: 'nao_pago' | 'parcial' | 'pago';
-  destinoStatus: DestinoStatus;
+  destinoStatus: DestinoAcao;
   dataAgendada: string;
   executorId: string;
 }
@@ -92,12 +129,105 @@ const METODOS_PAGAMENTO: Array<{ value: MetodoPagamento; label: string }> = [
   { value: 'afins_sorria', label: 'Afins Sorria' },
 ];
 
+const DESTINO_OPTIONS = [
+  { value: 'agendar', label: 'Agendar' },
+  { value: 'deixar_data_em_aberto', label: 'Deixar data em aberto' },
+  { value: 'fazer_hoje', label: 'Fazer hoje' },
+] as const;
+
 function linhaKey(itemId: number, etapaModeloId: number | null) {
   return `${itemId}:${etapaModeloId ?? 'item'}`;
 }
 
 function getEtapaModeloId(etapaVirtualId: number, itemId: number) {
   return etapaVirtualId - itemId * 100000;
+}
+
+function parseValor(value: string) {
+  return Number(value.replace(',', '.'));
+}
+
+function criarFormaPagamento(idSuffix: number): FormaPagamentoState {
+  return {
+    id: `forma-${idSuffix}`,
+    metodo: 'pix',
+    valor: '',
+  };
+}
+
+function getMetodoLabel(metodo: string) {
+  return METODOS_PAGAMENTO.find((item) => item.value === metodo)?.label ?? metodo;
+}
+
+function getFinanceiroBadge(status: LinhaCobranca['financeiroStatus'], saldo: number) {
+  if (saldo <= 0 || status === 'pago') {
+    return { color: 'green' as const, label: 'Pago' };
+  }
+  if (status === 'parcial') {
+    return { color: 'amber' as const, label: 'Parcial' };
+  }
+  return { color: 'gray' as const, label: 'Pendente' };
+}
+
+function getOperacaoBadge(status: ItemAtendimento['status']) {
+  if (status === 'pendente' || status === 'pago') {
+    return null;
+  }
+
+  if (status === 'concluido') {
+    return { color: 'blue' as const, label: 'Concluído' };
+  }
+
+  if (status === 'executando') {
+    return { color: 'purple' as const, label: 'Em execução' };
+  }
+
+  return null;
+}
+
+function getResumoFinanceiroPartes(pago: number, pendente: number, pendenteLabel = 'Pendente') {
+  const partes: string[] = [];
+  if (pago > 0) {
+    partes.push(`Pago ${formatarMoeda(pago)}`);
+  }
+  if (pendente > 0) {
+    partes.push(`${pendenteLabel} ${formatarMoeda(pendente)}`);
+  }
+  return partes;
+}
+
+function getDestinoOptionsByLinha(linha: LinhaCobranca) {
+  if (linha.saldo > 0) {
+    return DESTINO_OPTIONS
+      .filter((option) => option.value !== 'fazer_hoje')
+      .map((option) => ({ value: option.value, label: option.label }));
+  }
+
+  return DESTINO_OPTIONS.map((option) => ({ value: option.value, label: option.label }));
+}
+
+function mapDestinoStatusParaAcao(destinoStatus: string | null | undefined, financeiroStatus: LinhaCobranca['financeiroStatus'], saldo: number): DestinoAcao {
+  if (destinoStatus === 'fazer_hoje' || destinoStatus === 'agendar') return destinoStatus;
+  if (destinoStatus === 'pago_sem_data' || destinoStatus === 'nao_pago_sem_data') {
+    return 'deixar_data_em_aberto';
+  }
+  return saldo > 0 || financeiroStatus === 'nao_pago' || financeiroStatus === 'parcial' ? 'agendar' : 'fazer_hoje';
+}
+
+function getDestinoStatusSeguro(linha: LinhaCobranca, status: DestinoAcao): DestinoAcao {
+  const options = getDestinoOptionsByLinha(linha);
+  if (options.some((option) => option.value === status)) {
+    return status;
+  }
+  return linha.saldo > 0 ? 'agendar' : 'fazer_hoje';
+}
+
+function mapAcaoParaDestinoStatus(linha: LinhaCobranca, acao: DestinoAcao): DestinoStatus {
+  if (acao === 'deixar_data_em_aberto') {
+    return linha.saldo > 0 ? 'nao_pago_sem_data' : 'pago_sem_data';
+  }
+  if (acao === 'agendar') return 'agendar';
+  return 'fazer_hoje';
 }
 
 export default function PagamentoPage({
@@ -111,7 +241,7 @@ export default function PagamentoPage({
   const unitFetch = useUnitFetch();
 
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
-  const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
+  const [pagamentos, setPagamentos] = useState<PagamentoGrupo[]>([]);
   const [executores, setExecutores] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -121,9 +251,19 @@ export default function PagamentoPage({
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
   const [metodoPagamento, setMetodoPagamento] = useState<MetodoPagamento>('pix');
   const [observacoesPagamento, setObservacoesPagamento] = useState('');
-  const [selecoesPagamento, setSelecoesPagamento] = useState<Record<string, { selected: boolean; amount: string }>>({});
-  const [destinos, setDestinos] = useState<Record<string, { status: DestinoStatus; data: string; executorId: string }>>({});
+  const [multiplasFormas, setMultiplasFormas] = useState(false);
+  const [formasPagamento, setFormasPagamento] = useState<FormaPagamentoState[]>([
+    { id: 'forma-1', metodo: 'pix', valor: '' },
+    { id: 'forma-2', metodo: 'cartao_credito', valor: '' },
+  ]);
+  const [selecoesPagamento, setSelecoesPagamento] = useState<Record<string, { selected: boolean }>>({});
+  const [destinos, setDestinos] = useState<Record<string, { status: DestinoAcao; data: string; executorId: string }>>({});
   const [descontoEditando, setDescontoEditando] = useState<Record<number, { valor: string; motivo: string }>>({});
+  const [descontosAbertos, setDescontosAbertos] = useState<Record<number, boolean>>({});
+  const [valorSessaoEditando, setValorSessaoEditando] = useState<Record<string, string>>({});
+  const [salvandoSessaoId, setSalvandoSessaoId] = useState<string | null>(null);
+  const [errosSessao, setErrosSessao] = useState<Record<string, string>>({});
+  const [historicoAberto, setHistoricoAberto] = useState(false);
 
   const carregarExecutores = async () => {
     try {
@@ -141,21 +281,22 @@ export default function PagamentoPage({
       setLoading(true);
       const [resAtendimento, resPagamentos] = await Promise.all([
         unitFetch(`/api/atendimentos/${id}`),
-        unitFetch(`/api/atendimentos/${id}/pagamentos`),
+        unitFetch(`/api/atendimentos/${id}/pagamentos?grouped=1`),
       ]);
       if (!resAtendimento.ok) throw new Error('Atendimento não encontrado');
       const atendimentoData: Atendimento = await resAtendimento.json();
-      const pagamentosData: Pagamento[] = await resPagamentos.json();
+      const pagamentosData: PagamentoGrupo[] = await resPagamentos.json();
       setAtendimento(atendimentoData);
-      setPagamentos(pagamentosData);
+      setPagamentos(Array.isArray(pagamentosData) ? pagamentosData : []);
 
-      const novasSelecoes: Record<string, { selected: boolean; amount: string }> = {};
-      const novosDestinos: Record<string, { status: DestinoStatus; data: string; executorId: string }> = {};
+      const novasSelecoes: Record<string, { selected: boolean }> = {};
+      const novosDestinos: Record<string, { status: DestinoAcao; data: string; executorId: string }> = {};
       const novosDescontos: Record<number, { valor: string; motivo: string }> = {};
 
       for (const item of atendimentoData.itens) {
+        const baseline = item.valor_original ?? item.valor_final ?? item.valor;
         novosDescontos[item.id] = {
-          valor: String((item.valor_final ?? item.valor).toFixed(2)),
+          valor: String((item.desconto_valor ?? Math.max(0, baseline - (item.valor_final ?? item.valor))).toFixed(2)),
           motivo: item.desconto_motivo ?? '',
         };
 
@@ -166,10 +307,13 @@ export default function PagamentoPage({
             const saldo = etapa.saldo ?? Math.max(0, (etapa.valor ?? 0) - (etapa.valor_pago ?? 0));
             novasSelecoes[key] = {
               selected: saldo > 0,
-              amount: saldo > 0 ? saldo.toFixed(2) : '',
             };
             novosDestinos[key] = {
-              status: (etapa.destino_status as DestinoStatus | null) ?? ((etapa.financeiro_status === 'pago' || saldo === 0) ? 'fazer_hoje' : 'nao_pago_sem_data'),
+              status: mapDestinoStatusParaAcao(
+                etapa.destino_status,
+                etapa.financeiro_status ?? 'nao_pago',
+                saldo
+              ),
               data: etapa.data_agendada ?? '',
               executorId: etapa.executor_destino_id ? String(etapa.executor_destino_id) : (item.executor_id ? String(item.executor_id) : ''),
             };
@@ -181,10 +325,13 @@ export default function PagamentoPage({
         const saldo = item.saldo ?? Math.max(0, (item.valor_final ?? item.valor) - item.valor_pago);
         novasSelecoes[key] = {
           selected: saldo > 0,
-          amount: saldo > 0 ? saldo.toFixed(2) : '',
         };
         novosDestinos[key] = {
-          status: (item.destino_status as DestinoStatus | null) ?? ((item.financeiro_status === 'pago' || saldo === 0) ? 'fazer_hoje' : 'nao_pago_sem_data'),
+          status: mapDestinoStatusParaAcao(
+            item.destino_status,
+            item.financeiro_status ?? 'nao_pago',
+            saldo
+          ),
           data: item.destino_data_agendada ?? '',
           executorId: item.destino_executor_id ? String(item.destino_executor_id) : (item.executor_id ? String(item.executor_id) : ''),
         };
@@ -193,6 +340,8 @@ export default function PagamentoPage({
       setSelecoesPagamento(novasSelecoes);
       setDestinos(novosDestinos);
       setDescontoEditando(novosDescontos);
+      setValorSessaoEditando({});
+      setErrosSessao({});
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Erro ao carregar pagamento');
@@ -214,16 +363,18 @@ export default function PagamentoPage({
         for (const etapa of item.etapas ?? []) {
           const etapaModeloId = getEtapaModeloId(etapa.id, item.id);
           const key = linhaKey(item.id, etapaModeloId);
+          const saldo = etapa.saldo ?? Math.max(0, (etapa.valor ?? 0) - (etapa.valor_pago ?? 0));
           resultado.push({
             key,
             itemId: item.id,
             etapaModeloId,
-            label: `${nomeProcedimentoItem(item)} — ${etapa.nome}`,
+            groupLabel: nomeProcedimentoItem(item),
+            label: etapa.nome ?? 'Sessão',
             valor: etapa.valor ?? 0,
             valorPago: etapa.valor_pago ?? 0,
-            saldo: etapa.saldo ?? Math.max(0, (etapa.valor ?? 0) - (etapa.valor_pago ?? 0)),
+            saldo,
             financeiroStatus: etapa.financeiro_status ?? 'nao_pago',
-            destinoStatus: destinos[key]?.status ?? 'nao_pago_sem_data',
+            destinoStatus: destinos[key]?.status ?? (saldo > 0 ? 'agendar' : 'fazer_hoje'),
             dataAgendada: destinos[key]?.data ?? '',
             executorId: destinos[key]?.executorId ?? '',
           });
@@ -232,16 +383,18 @@ export default function PagamentoPage({
       }
 
       const key = linhaKey(item.id, null);
+      const saldo = item.saldo ?? Math.max(0, (item.valor_final ?? item.valor) - item.valor_pago);
       resultado.push({
         key,
         itemId: item.id,
         etapaModeloId: null,
+        groupLabel: nomeProcedimentoItem(item),
         label: nomeProcedimentoItem(item),
         valor: item.valor_final ?? item.valor,
         valorPago: item.valor_pago,
-        saldo: item.saldo ?? Math.max(0, (item.valor_final ?? item.valor) - item.valor_pago),
+        saldo,
         financeiroStatus: item.financeiro_status ?? 'nao_pago',
-        destinoStatus: destinos[key]?.status ?? 'nao_pago_sem_data',
+        destinoStatus: destinos[key]?.status ?? (saldo > 0 ? 'agendar' : 'fazer_hoje'),
         dataAgendada: destinos[key]?.data ?? '',
         executorId: destinos[key]?.executorId ?? '',
       });
@@ -254,17 +407,107 @@ export default function PagamentoPage({
       if (!selecionado.selected) return sum;
       const linha = linhas.find((item) => item.key === key);
       if (!linha) return sum;
-      const valor = Number(selecionado.amount.replace(',', '.'));
-      if (!Number.isFinite(valor)) return sum;
-      return sum + valor;
+      return sum + linha.saldo;
     }, 0);
   }, [linhas, selecoesPagamento]);
 
+  const totalFormasPagamento = useMemo(() => {
+    return formasPagamento.reduce((sum, forma) => {
+      const valor = parseValor(forma.valor || '0');
+      return Number.isFinite(valor) ? sum + valor : sum;
+    }, 0);
+  }, [formasPagamento]);
+
+  const formasPreenchidas = useMemo(() => {
+    return formasPagamento.filter((forma) => parseValor(forma.valor || '0') > 0);
+  }, [formasPagamento]);
+
+  const linhasMap = useMemo(() => {
+    return new Map(linhas.map((linha) => [linha.key, linha]));
+  }, [linhas]);
+
+  const linhasPorItem = useMemo(() => {
+    const mapa = new Map<number, LinhaCobranca[]>();
+    for (const linha of linhas) {
+      const atual = mapa.get(linha.itemId) ?? [];
+      atual.push(linha);
+      mapa.set(linha.itemId, atual);
+    }
+    return mapa;
+  }, [linhas]);
+
+  const linhasSelecionadasCount = useMemo(() => {
+    return Object.values(selecoesPagamento).filter((selecao) => selecao.selected).length;
+  }, [selecoesPagamento]);
+
+  const procedimentosSelecionadosCount = useMemo(() => {
+    const itemIdsSelecionados = new Set<number>();
+
+    for (const [key, selecao] of Object.entries(selecoesPagamento)) {
+      if (!selecao.selected) continue;
+      const linha = linhasMap.get(key);
+      if (!linha) continue;
+      itemIdsSelecionados.add(linha.itemId);
+    }
+
+    return itemIdsSelecionados.size;
+  }, [linhasMap, selecoesPagamento]);
+
+  const selecionouApenasSessoes = useMemo(() => {
+    const linhasSelecionadas = Object.entries(selecoesPagamento)
+      .filter(([, selecao]) => selecao.selected)
+      .map(([key]) => linhasMap.get(key))
+      .filter((linha): linha is LinhaCobranca => Boolean(linha));
+
+    return linhasSelecionadas.length > 0 && linhasSelecionadas.every((linha) => linha.etapaModeloId !== null);
+  }, [linhasMap, selecoesPagamento]);
+
+  const itensPagamentoPendentes = useMemo(() => {
+    if (!atendimento) return [];
+    return atendimento.itens.filter((item) => {
+      const itemLinhas = linhasPorItem.get(item.id) ?? [];
+      return itemLinhas.some((linha) => linha.saldo > 0);
+    });
+  }, [atendimento, linhasPorItem]);
+
+  const resumoDestinos = useMemo(() => {
+    return linhas.reduce((acc, linha) => {
+      const status = getDestinoStatusSeguro(
+        linha,
+        destinos[linha.key]?.status ?? (linha.saldo > 0 ? 'agendar' : 'fazer_hoje')
+      );
+      acc[status] += 1;
+      return acc;
+    }, {
+      fazer_hoje: 0,
+      agendar: 0,
+      deixar_data_em_aberto: 0,
+    });
+  }, [destinos, linhas]);
+
+  const executoresOptions = useMemo(() => {
+    return executores.map((executor) => ({
+      value: String(executor.id),
+      label: executor.nome,
+    }));
+  }, [executores]);
+
   const handleSalvarDesconto = async (itemId: number) => {
     const dados = descontoEditando[itemId];
-    const valor = Number(dados.valor.replace(',', '.'));
-    if (!Number.isFinite(valor) || valor < 0) {
-      setError('Valor de desconto inválido');
+    const desconto = parseValor(dados.valor);
+    if (!Number.isFinite(desconto) || desconto < 0) {
+      setError('Desconto inválido');
+      return;
+    }
+
+    const item = atendimento?.itens.find((atual) => atual.id === itemId);
+    if (!item) return;
+
+    const baseline = item.valor_original ?? item.valor_final ?? item.valor;
+    const valorFinal = Number((baseline - desconto).toFixed(2));
+
+    if (valorFinal < 0) {
+      setError('O desconto não pode deixar o valor final negativo.');
       return;
     }
 
@@ -272,7 +515,7 @@ export default function PagamentoPage({
       const res = await unitFetch(`/api/atendimentos/${id}/itens/${itemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ valor_final: valor, desconto_motivo: dados.motivo || null }),
+        body: JSON.stringify({ valor_final: valorFinal, desconto_motivo: dados.motivo || null }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -284,22 +527,100 @@ export default function PagamentoPage({
     }
   };
 
+  const abrirEdicaoSessao = (linha: LinhaCobranca) => {
+    setValorSessaoEditando((prev) => ({
+      ...prev,
+      [linha.key]: Number(linha.valor).toFixed(2),
+    }));
+    setErrosSessao((prev) => {
+      const next = { ...prev };
+      delete next[linha.key];
+      return next;
+    });
+  };
+
+  const cancelarEdicaoSessao = (linhaKey: string) => {
+    setValorSessaoEditando((prev) => {
+      const next = { ...prev };
+      delete next[linhaKey];
+      return next;
+    });
+    setErrosSessao((prev) => {
+      const next = { ...prev };
+      delete next[linhaKey];
+      return next;
+    });
+  };
+
+  const handleSalvarValorSessao = async (linha: LinhaCobranca) => {
+    if (!atendimento) return;
+    const valorTexto = valorSessaoEditando[linha.key];
+    if (valorTexto === undefined) return;
+
+    const valor = parseValor(valorTexto);
+    if (!Number.isFinite(valor) || valor < 0) {
+      setErrosSessao((prev) => ({ ...prev, [linha.key]: 'Valor da sessão inválido' }));
+      return;
+    }
+
+    if (linha.etapaModeloId === null) {
+      setErrosSessao((prev) => ({ ...prev, [linha.key]: 'Sessão sem etapa não pode ser editada aqui' }));
+      return;
+    }
+
+    setSalvandoSessaoId(linha.key);
+    setError('');
+    try {
+      const res = await unitFetch(`/api/atendimentos/${id}/itens/${linha.itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          etapa_modelo_id: linha.etapaModeloId,
+          etapa_valor: Number(valor.toFixed(2)),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Erro ao salvar valor da sessão');
+      }
+      cancelarEdicaoSessao(linha.key);
+      await carregarDados();
+    } catch (err) {
+      setErrosSessao((prev) => ({
+        ...prev,
+        [linha.key]: err instanceof Error ? err.message : 'Erro ao salvar valor da sessão',
+      }));
+    } finally {
+      setSalvandoSessaoId(null);
+    }
+  };
+
+  const handleAdicionarForma = () => {
+    setFormasPagamento((prev) => [...prev, criarFormaPagamento(prev.length + 1)]);
+  };
+
+  const handleRemoverForma = (formaId: string) => {
+    setFormasPagamento((prev) => {
+      if (prev.length <= 2) return prev;
+      return prev.filter((forma) => forma.id !== formaId);
+    });
+  };
+
   const handleRegistrarPagamento = async (event: React.FormEvent) => {
     event.preventDefault();
-    const alocacoes = Object.entries(selecoesPagamento)
-      .filter(([, selecao]) => selecao.selected)
-      .map(([key, selecao]) => {
-        const linha = linhas.find((item) => item.key === key);
-        if (!linha) return null;
-        const valor = Number(selecao.amount.replace(',', '.'));
-        if (!Number.isFinite(valor) || valor <= 0) return null;
-        return {
-          item_id: linha.itemId,
-          etapa_modelo_id: linha.etapaModeloId,
-          valor,
-        };
-      })
-      .filter(Boolean);
+    const alocacoes: Array<{ item_id: number; etapa_modelo_id: number | null; valor: number }> = [];
+
+    for (const [key, selecao] of Object.entries(selecoesPagamento)) {
+      if (!selecao.selected) continue;
+      const linha = linhasMap.get(key);
+      if (!linha) continue;
+
+      alocacoes.push({
+        item_id: linha.itemId,
+        etapa_modelo_id: linha.etapaModeloId,
+        valor: linha.saldo,
+      });
+    }
 
     if (alocacoes.length === 0) {
       setError('Selecione ao menos um item ou sessão para cobrar');
@@ -309,21 +630,67 @@ export default function PagamentoPage({
     setRegistrando(true);
     setError('');
     try {
-      const res = await unitFetch(`/api/atendimentos/${id}/pagamentos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          valor: Number(totalSelecionado.toFixed(2)),
+      let payload: Record<string, unknown>;
+
+      if (multiplasFormas) {
+        if (formasPreenchidas.length === 0) {
+          setError('Informe ao menos uma forma de pagamento.');
+          setRegistrando(false);
+          return;
+        }
+
+        if (formasPreenchidas.some((forma) => !Number.isFinite(parseValor(forma.valor)) || parseValor(forma.valor) <= 0)) {
+          setError('Todas as formas de pagamento precisam ter valor maior que zero.');
+          setRegistrando(false);
+          return;
+        }
+
+        if (Math.abs(totalFormasPagamento - totalSelecionado) > 0.01) {
+          setError('A soma das formas de pagamento precisa ser igual ao total selecionado.');
+          setRegistrando(false);
+          return;
+        }
+
+        payload = {
+          valor_total: Number(totalSelecionado.toFixed(2)),
+          observacoes: observacoesPagamento || null,
+          alocacoes,
+          formas: formasPreenchidas.map((forma) => ({
+            metodo: forma.metodo,
+            valor: Number(parseValor(forma.valor).toFixed(2)),
+          })),
+        };
+      } else {
+        const valorInformado = Number(totalSelecionado.toFixed(2));
+        if (!Number.isFinite(valorInformado) || valorInformado <= 0) {
+          setError('Selecione ao menos um valor para cobrar.');
+          setRegistrando(false);
+          return;
+        }
+
+        payload = {
+          valor: valorInformado,
           metodo: metodoPagamento,
           observacoes: observacoesPagamento || null,
           alocacoes,
-        }),
+        };
+      }
+
+      const res = await unitFetch(`/api/atendimentos/${id}/pagamentos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Erro ao registrar pagamento');
       }
       setObservacoesPagamento('');
+      setMultiplasFormas(false);
+      setFormasPagamento([
+        { id: 'forma-1', metodo: 'pix', valor: '' },
+        { id: 'forma-2', metodo: 'cartao_credito', valor: '' },
+      ]);
       await carregarDados();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao registrar pagamento');
@@ -334,10 +701,21 @@ export default function PagamentoPage({
 
   const handleSalvarDestinos = async () => {
     if (!atendimento) return;
+    for (const linha of linhas) {
+      const statusAcao = getDestinoStatusSeguro(linha, destinos[linha.key]?.status ?? (linha.saldo > 0 ? 'agendar' : 'fazer_hoje'));
+      if (statusAcao === 'agendar' && !destinos[linha.key]?.data?.trim()) {
+        setError('A data futura é obrigatória para itens agendados.');
+        return;
+      }
+    }
+
     const payload = linhas.map((linha) => ({
       item_id: linha.itemId,
       etapa_modelo_id: linha.etapaModeloId,
-      destino_status: destinos[linha.key]?.status ?? 'nao_pago_sem_data',
+      destino_status: mapAcaoParaDestinoStatus(
+        linha,
+        getDestinoStatusSeguro(linha, destinos[linha.key]?.status ?? (linha.saldo > 0 ? 'agendar' : 'fazer_hoje'))
+      ),
       data_agendada: destinos[linha.key]?.data || null,
       executor_id: destinos[linha.key]?.executorId ? Number(destinos[linha.key].executorId) : null,
     }));
@@ -407,12 +785,8 @@ export default function PagamentoPage({
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6">
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">Atendimento #{atendimento.id}</p>
-          <h1 className="text-3xl font-semibold">{atendimento.cliente_nome}</h1>
-        </div>
         <Link href={`/atendimentos/${id}`} className="text-sm text-primary hover:text-primary-700">
           Voltar ao atendimento
         </Link>
@@ -420,299 +794,711 @@ export default function PagamentoPage({
 
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="space-y-5">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Etapa 1</p>
-            <h2 className="text-2xl font-semibold">Registrar cobrança</h2>
+      <Card noPadding>
+        <CardContent className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
+          <div className="flex flex-col gap-1">
+            <p className="text-sm text-muted-foreground">Atendimento #{atendimento.id}</p>
+            <h1 className="text-3xl font-semibold">{atendimento.cliente_nome}</h1>
             <p className="text-sm text-muted-foreground">
-              Selecione exatamente o que está sendo cobrado agora. O destino clínico vem na etapa seguinte.
+              Agrupe a cobrança por procedimento e defina o destino operacional antes de liberar a execução.
             </p>
           </div>
-
-          <div className="space-y-4">
-            {atendimento.itens.map((item) => (
-              <div key={item.id} className="rounded-xl border border-border p-4 space-y-3">
-                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="font-medium">{nomeProcedimentoItem(item)}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Tabela {formatarMoeda(item.valor_original ?? item.valor_final ?? item.valor)}
-                      {' · '}
-                      Final {formatarMoeda(item.valor_final ?? item.valor)}
-                      {' · '}
-                      Pago {formatarMoeda(item.valor_pago)}
-                    </p>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Saldo {formatarMoeda(item.saldo ?? Math.max(0, (item.valor_final ?? item.valor) - item.valor_pago))}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-[1fr_180px_1fr_120px]">
-                  <Input
-                    label="Valor final"
-                    name={`desconto-valor-${item.id}`}
-                    value={descontoEditando[item.id]?.valor ?? ''}
-                    onChange={(value) => setDescontoEditando((prev) => ({
-                      ...prev,
-                      [item.id]: { ...prev[item.id], valor: value },
-                    }))}
-                  />
-                  <div className="flex items-end">
-                    <Button
-                      variant="secondary"
-                      className="w-full"
-                      onClick={() => void handleSalvarDesconto(item.id)}
-                    >
-                      Salvar desconto
-                    </Button>
-                  </div>
-                  <Input
-                    label="Motivo do desconto"
-                    name={`desconto-motivo-${item.id}`}
-                    value={descontoEditando[item.id]?.motivo ?? ''}
-                    onChange={(value) => setDescontoEditando((prev) => ({
-                      ...prev,
-                      [item.id]: { ...prev[item.id], motivo: value },
-                    }))}
-                  />
-                  <div className="flex items-end text-sm text-muted-foreground">
-                    {item.desconto_valor > 0 ? `Desconto ${formatarMoeda(item.desconto_valor)}` : 'Sem desconto'}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  {((item.etapas ?? []).length > 0 ? item.etapas ?? [] : [null]).map((etapa, index) => {
-                    const etapaModeloId = etapa ? getEtapaModeloId(etapa.id, item.id) : null;
-                    const key = linhaKey(item.id, etapaModeloId);
-                    const linha = linhas.find((current) => current.key === key);
-                    if (!linha) return null;
-                    return (
-                      <div key={key} className="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-[1fr_100px_140px_120px]">
-                        <label className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={selecoesPagamento[key]?.selected ?? false}
-                            onChange={(event) => setSelecoesPagamento((prev) => ({
-                              ...prev,
-                              [key]: {
-                                ...prev[key],
-                                selected: event.target.checked,
-                              },
-                            }))}
-                            className="mt-1"
-                          />
-                          <div>
-                            <p className="font-medium">{etapa ? etapa.nome : nomeProcedimentoItem(item)}</p>
-                            <p className="text-sm text-muted-foreground">
-                              Valor {formatarMoeda(linha.valor)} · Pago {formatarMoeda(linha.valorPago)} · Saldo {formatarMoeda(linha.saldo)}
-                            </p>
-                          </div>
-                        </label>
-                        <div className="text-sm text-muted-foreground flex items-center">
-                          {linha.financeiroStatus === 'pago' ? 'Pago' : linha.financeiroStatus === 'parcial' ? 'Parcial' : 'Não pago'}
-                        </div>
-                        <Input
-                          name={`cobrar-${key}`}
-                          label={index === 0 ? 'Cobrar agora' : 'Cobrar agora'}
-                          value={selecoesPagamento[key]?.amount ?? ''}
-                          onChange={(value) => setSelecoesPagamento((prev) => ({
-                            ...prev,
-                            [key]: {
-                              ...prev[key],
-                              amount: value,
-                            },
-                          }))}
-                          disabled={!(selecoesPagamento[key]?.selected ?? false)}
-                        />
-                        <div className="text-right text-sm text-muted-foreground flex items-center justify-end">
-                          {formatarMoeda(Number(selecoesPagamento[key]?.amount || 0))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <form onSubmit={handleRegistrarPagamento} className="rounded-xl border border-border p-4 space-y-4">
-            <div className="grid gap-4 md:grid-cols-[180px_1fr]">
-              <label className="space-y-1 text-sm">
-                <span className="font-medium">Forma de pagamento</span>
-                <select
-                  value={metodoPagamento}
-                  onChange={(event) => setMetodoPagamento(event.target.value as MetodoPagamento)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2"
-                >
-                  {METODOS_PAGAMENTO.map((metodo) => (
-                    <option key={metodo.value} value={metodo.value}>{metodo.label}</option>
-                  ))}
-                </select>
-              </label>
-              <Input
-                label="Observações"
-                name="observacoes_pagamento"
-                value={observacoesPagamento}
-                onChange={setObservacoesPagamento}
-              />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-border bg-muted/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Total</p>
+              <p className="mt-1 text-lg font-semibold">{formatarMoeda(atendimento.total)}</p>
             </div>
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Total desta cobrança: {formatarMoeda(totalSelecionado)}</p>
-              <Button type="submit" loading={registrando}>Registrar cobrança</Button>
+            <div className="rounded-xl border border-border bg-success-500/10 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Pago</p>
+              <p className="mt-1 text-lg font-semibold text-success-600">{formatarMoeda(atendimento.total_pago)}</p>
             </div>
-          </form>
-        </Card>
-
-        <div className="space-y-6">
-          <Card className="space-y-4">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Resumo</p>
-              <h2 className="text-2xl font-semibold">Financeiro</h2>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between"><span>Total</span><strong>{formatarMoeda(atendimento.total)}</strong></div>
-              <div className="flex items-center justify-between"><span>Pago</span><strong className="text-success-600">{formatarMoeda(atendimento.total_pago)}</strong></div>
-              <div className="flex items-center justify-between"><span>Pendente</span><strong className="text-error-600">{formatarMoeda(Math.max(0, atendimento.total - atendimento.total_pago))}</strong></div>
-            </div>
-          </Card>
-
-          <Card className="space-y-4">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Etapa 2</p>
-              <h2 className="text-2xl font-semibold">Destino operacional</h2>
-              <p className="text-sm text-muted-foreground">
-                Decida o que será feito hoje e o que vira agenda ou fila futura.
+            <div className="rounded-xl border border-border bg-warning-500/10 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Pendente</p>
+              <p className="mt-1 text-lg font-semibold text-warning-600">
+                {formatarMoeda(Math.max(0, atendimento.total - atendimento.total_pago))}
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
 
-            <div className="space-y-3">
-              {linhas.map((linha) => (
-                <div key={linha.key} className="rounded-lg border border-border p-3 space-y-3">
-                  <div>
-                    <p className="font-medium">{linha.label}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatarMoeda(linha.valor)} · pago {formatarMoeda(linha.valorPago)} · saldo {formatarMoeda(linha.saldo)}
-                    </p>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card noPadding className="overflow-hidden">
+          <CardHeader>
+            <CardTitle>Pagamento</CardTitle>
+            <CardDescription>
+              Selecione o que entra nesta cobrança. O total soma automaticamente e o método vale para todos os itens confirmados agora.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="flex flex-col gap-4 pt-6">
+            {itensPagamentoPendentes.length === 0 && (
+              <div className="rounded-xl border border-border bg-success-500/10 p-6 text-sm text-success-600">
+                Nenhum procedimento com pagamento pendente nesta etapa.
+              </div>
+            )}
+
+            {itensPagamentoPendentes.map((item) => (
+              <div
+                key={item.id}
+                className={cn(
+                  'rounded-xl border border-border bg-background',
+                  (linhasPorItem.get(item.id) ?? []).some((linha) => linha.saldo > 0 && selecoesPagamento[linha.key]?.selected) &&
+                    'border-primary/35 bg-primary/5'
+                )}
+              >
+                {(() => {
+                  const itemLinhas = linhasPorItem.get(item.id) ?? [];
+                  const linhasPendentes = itemLinhas.filter((linha) => linha.saldo > 0);
+                  const linhaUnica = linhasPendentes.length === 1 ? linhasPendentes[0] : null;
+                  const linhaUnicaSelecionada = linhaUnica ? (selecoesPagamento[linhaUnica.key]?.selected ?? false) : false;
+                  const itemSaldo = linhasPendentes.reduce((sum, linha) => sum + linha.saldo, 0);
+                  const linhasSelecionadas = linhasPendentes.filter((linha) => selecoesPagamento[linha.key]?.selected);
+                  const valorSelecionadoItem = linhasPendentes.reduce((sum, linha) => {
+                    const selecao = selecoesPagamento[linha.key];
+                    if (!selecao?.selected) return sum;
+                    return sum + linha.saldo;
+                  }, 0);
+                  const linhasQuitadas = itemLinhas.filter((linha) => linha.saldo <= 0).length;
+                  const quantidadeVisualLinhas = item.etapas?.length ?? itemLinhas.length;
+                  const itemBadge = getFinanceiroBadge(item.financeiro_status ?? 'nao_pago', itemSaldo);
+                  const operacaoBadge = getOperacaoBadge(item.status);
+                  const descontoDigitado = parseValor(descontoEditando[item.id]?.valor ?? '0');
+                  const descontoPreview = Number.isFinite(descontoDigitado) ? descontoDigitado : 0;
+                  const mostrarCheckboxCabecalho = !(item.etapas?.length === 1);
+                  const resumoCabecalho = item.valor_final != null && item.valor_final !== item.valor
+                    ? [`Final ${formatarMoeda(item.valor_final)}`]
+                    : [];
+
+                  return (
+                    <div className="flex flex-col gap-4 p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {linhaUnica ? (
+                              mostrarCheckboxCabecalho ? (
+                                <Checkbox
+                                  label={nomeProcedimentoItem(item)}
+                                  name={`selecionar-header-${linhaUnica.key}`}
+                                  checked={linhaUnicaSelecionada}
+                                  onChange={(checked) => setSelecoesPagamento((prev) => ({
+                                    ...prev,
+                                    [linhaUnica.key]: {
+                                      selected: checked,
+                                    },
+                                  }))}
+                                  hint={linhaUnica.valorPago > 0 ? `Pago ${formatarMoeda(linhaUnica.valorPago)}` : undefined}
+                                />
+                              ) : (
+                                <p className="font-semibold">{nomeProcedimentoItem(item)}</p>
+                              )
+                            ) : (
+                              <p className="font-semibold">{nomeProcedimentoItem(item)}</p>
+                            )}
+                            <Badge color={itemBadge.color} size="sm">{itemBadge.label}</Badge>
+                            {operacaoBadge && (
+                              <Badge color={operacaoBadge.color} size="sm">{operacaoBadge.label}</Badge>
+                            )}
+                            {item.desconto_valor > 0 && (
+                              <Badge color="orange" size="sm">Desconto {formatarMoeda(item.desconto_valor)}</Badge>
+                            )}
+                            {itemLinhas.length > 1 && linhasQuitadas > 0 && (
+                              <Badge color="gray" size="sm">
+                                {item.etapas?.length
+                                  ? `${linhasQuitadas}/${quantidadeVisualLinhas} sessões cobertas`
+                                  : `${linhasQuitadas}/${quantidadeVisualLinhas} linhas já cobertas`}
+                              </Badge>
+                            )}
+                            {itemLinhas.length > 1 && linhasQuitadas === 0 && (
+                              <Badge color="gray" size="sm">
+                                {item.etapas?.length ? `${quantidadeVisualLinhas} sessões` : `${quantidadeVisualLinhas} linhas`}
+                              </Badge>
+                            )}
+                          </div>
+                          {resumoCabecalho.length > 0 && (
+                            <p className="text-sm text-muted-foreground">{resumoCabecalho.join(' · ')}</p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1 text-right">
+                          <div className="flex items-center gap-2 justify-end flex-nowrap">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="xs"
+                              className="h-7 flex-shrink-0 px-2 py-1"
+                              onClick={() => setDescontosAbertos((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                            >
+                              Desconto
+                            </Button>
+                            <p
+                              className={cn(
+                                'text-xl font-semibold',
+                                linhaUnica && !linhaUnicaSelecionada ? 'text-muted-foreground' : 'text-foreground'
+                              )}
+                            >
+                              {formatarMoeda(valorSelecionadoItem > 0 ? valorSelecionadoItem : itemSaldo)}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            {item.desconto_valor > 0 && !descontosAbertos[item.id] && (
+                              <p className="text-sm text-muted-foreground">
+                                Desconto aplicado: {formatarMoeda(item.desconto_valor)}
+                              </p>
+                            )}
+                            {linhasPendentes.length > 1 && (
+                              <p className="text-sm text-muted-foreground">
+                                {item.etapas?.length
+                                  ? `${linhasSelecionadas.length}/${linhasPendentes.length} sessao(oes) selecionada(s)`
+                                  : `${linhasSelecionadas.length}/${linhasPendentes.length} linha(s) selecionada(s)`}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {descontosAbertos[item.id] && (
+                        <div className="grid gap-3 rounded-xl border border-border bg-background p-4 md:grid-cols-[1fr_1fr_180px]">
+                          <Input
+                            label="Desconto (R$)"
+                            name={`desconto-valor-${item.id}`}
+                            value={descontoEditando[item.id]?.valor ?? ''}
+                            onChange={(value) => setDescontoEditando((prev) => ({
+                              ...prev,
+                              [item.id]: { ...prev[item.id], valor: value },
+                            }))}
+                            hint={`Valor final: ${formatarMoeda(Math.max(0, (item.valor_original ?? item.valor_final ?? item.valor) - descontoPreview))}`}
+                          />
+                          <Input
+                            label="Motivo do desconto"
+                            name={`desconto-motivo-${item.id}`}
+                            value={descontoEditando[item.id]?.motivo ?? ''}
+                            onChange={(value) => setDescontoEditando((prev) => ({
+                              ...prev,
+                              [item.id]: { ...prev[item.id], motivo: value },
+                            }))}
+                          />
+                          <div className="flex items-end">
+                            <Button
+                              variant="secondary"
+                              className="w-full"
+                              onClick={() => void handleSalvarDesconto(item.id)}
+                            >
+                              Salvar desconto
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {item.etapas?.length ? (
+                        <div className="flex flex-col gap-2">
+                          {linhasPendentes.map((linha) => {
+                            const selecionado = selecoesPagamento[linha.key]?.selected ?? false;
+                            const financeiroBadge = getFinanceiroBadge(linha.financeiroStatus, linha.saldo);
+                            const resumoLinha = linha.valorPago > 0 ? [`Pago ${formatarMoeda(linha.valorPago)}`] : [];
+                            const editandoSessao = valorSessaoEditando[linha.key] !== undefined;
+
+                            return (
+                              <div
+                                key={linha.key}
+                                className={cn(
+                                  'rounded-xl border p-3',
+                                  selecionado && 'border-primary/30 bg-background'
+                                )}
+                              >
+                                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                                    <Checkbox
+                                      label={linhasPendentes.length > 1 ? linha.label : 'Selecionar'}
+                                      name={`selecionar-${linha.key}`}
+                                      checked={selecionado}
+                                      onChange={(checked) => setSelecoesPagamento((prev) => ({
+                                      ...prev,
+                                      [linha.key]: {
+                                        selected: checked,
+                                      },
+                                        }))}
+                                      hint={[...resumoLinha].filter(Boolean).join(' · ')}
+                                    />
+
+                                    {!linhaUnica && (
+                                      <div className="pt-1">
+                                        <Badge color={financeiroBadge.color} size="sm">{financeiroBadge.label}</Badge>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2 md:justify-end">
+                                    {editandoSessao ? (
+                                      <div className="flex w-full flex-col gap-2 md:w-auto">
+                                        <Input
+                                          label="Valor da sessão"
+                                          name={`valor-sessao-${linha.key}`}
+                                          value={valorSessaoEditando[linha.key] ?? ''}
+                                          onChange={(value) => setValorSessaoEditando((prev) => ({
+                                            ...prev,
+                                            [linha.key]: value,
+                                          }))}
+                                          disabled={salvandoSessaoId === linha.key}
+                                        />
+                                        {errosSessao[linha.key] && (
+                                          <p className="text-xs text-error-600">{errosSessao[linha.key]}</p>
+                                        )}
+                                        <div className="flex gap-2">
+                                          <Button
+                                            type="button"
+                                            variant="secondary"
+                                            className="min-w-[80px] flex-1 md:max-w-[120px]"
+                                            onClick={() => void handleSalvarValorSessao(linha)}
+                                            loading={salvandoSessaoId === linha.key}
+                                          >
+                                            Salvar
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant="secondary"
+                                            className="min-w-[80px] flex-1 md:max-w-[120px]"
+                                            onClick={() => cancelarEdicaoSessao(linha.key)}
+                                            disabled={salvandoSessaoId === linha.key}
+                                          >
+                                            Fechar
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="xs"
+                                          className="h-auto px-2 py-1"
+                                          onClick={() => abrirEdicaoSessao(linha)}
+                                          title="Clique para editar valor da sessão"
+                                        >
+                                          Editar
+                                        </Button>
+                                        <p className={cn(
+                                          'text-lg font-semibold',
+                                          selecionado ? 'text-foreground' : 'text-muted-foreground'
+                                        )}>
+                                          {formatarMoeda(linha.saldo)}
+                                        </p>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })()}
+              </div>
+            ))}
+          </CardContent>
+
+          <Divider className="my-0" />
+
+          <CardFooter className="flex-col items-stretch gap-4 p-6 pt-6">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                {procedimentosSelecionadosCount} procedimento(s) selecionado(s)
+                {linhasSelecionadasCount !== procedimentosSelecionadosCount
+                  ? ` · ${linhasSelecionadasCount} ${selecionouApenasSessoes ? 'sessões' : 'linhas'}`
+                  : ''}
+              </span>
+              <span className="text-2xl font-bold text-foreground">{formatarMoeda(totalSelecionado)}</span>
+            </div>
+
+            <form onSubmit={handleRegistrarPagamento} className="flex flex-col gap-4">
+              {!multiplasFormas ? (
+                <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+                  <Select
+                    label="Forma de pagamento"
+                    name="metodo_pagamento"
+                    options={METODOS_PAGAMENTO}
+                    value={metodoPagamento}
+                    onChange={(value) => setMetodoPagamento(value as MetodoPagamento)}
+                  />
+                  <Input
+                    label="Observações"
+                    name="observacoes_pagamento"
+                    value={observacoesPagamento}
+                    onChange={setObservacoesPagamento}
+                    placeholder="Ex: entrada do tratamento"
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium">Mais de uma forma de pagamento</p>
+                      <p className="text-sm text-muted-foreground">
+                        Divida o total selecionado em quantas formas precisar. A soma precisa fechar exatamente.
+                      </p>
+                    </div>
+                    <Button type="button" variant="secondary" onClick={handleAdicionarForma}>
+                      Adicionar forma
+                    </Button>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <label className="space-y-1 text-sm">
-                      <span className="font-medium">Destino</span>
-                      <select
-                        value={destinos[linha.key]?.status ?? 'nao_pago_sem_data'}
-                        onChange={(event) => setDestinos((prev) => ({
-                          ...prev,
-                          [linha.key]: {
-                            ...prev[linha.key],
-                            status: event.target.value as DestinoStatus,
-                          },
-                        }))}
-                        className="w-full rounded-lg border border-input bg-background px-3 py-2"
-                      >
-                        <option value="fazer_hoje">Fazer hoje</option>
-                        <option value="agendar">Agendar</option>
-                        <option value="pago_sem_data">Pago sem data</option>
-                        <option value="nao_pago_sem_data">Não pago sem data</option>
-                      </select>
-                    </label>
-                    <Input
-                      label="Data futura"
-                      name={`data-${linha.key}`}
-                      type="date"
-                      value={destinos[linha.key]?.data ?? ''}
-                      onChange={(value) => setDestinos((prev) => ({
-                        ...prev,
-                        [linha.key]: {
-                          ...prev[linha.key],
-                          data: value,
-                        },
-                      }))}
+
+                  <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+                    {formasPagamento.map((forma, index) => (
+                      <div key={forma.id} className="grid gap-3 rounded-xl border border-border bg-background p-3 md:col-span-2 md:grid-cols-[minmax(0,1fr)_180px_120px]">
+                        <Select
+                          label={`Forma ${index + 1}`}
+                          name={`forma-metodo-${forma.id}`}
+                          options={METODOS_PAGAMENTO}
+                          value={forma.metodo}
+                          onChange={(value) => setFormasPagamento((prev) => prev.map((atual) => (
+                            atual.id === forma.id ? { ...atual, metodo: value as MetodoPagamento } : atual
+                          )))}
+                        />
+                        <Input
+                          label="Valor"
+                          name={`forma-valor-${forma.id}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={forma.valor}
+                          onChange={(value) => setFormasPagamento((prev) => prev.map((atual) => (
+                            atual.id === forma.id ? { ...atual, valor: value } : atual
+                          )))}
+                          placeholder="0,00"
+                        />
+                        <div className="flex items-end">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="w-full"
+                            onClick={() => handleRemoverForma(forma.id)}
+                            disabled={formasPagamento.length <= 2}
+                          >
+                            Remover
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_280px]">
+                    <Textarea
+                      label="Observações da cobrança"
+                      name="observacoes_pagamento_composto"
+                      value={observacoesPagamento}
+                      onChange={setObservacoesPagamento}
+                      placeholder="Ex: parte no PIX, parte no cartão"
+                      rows={3}
                     />
-                    <label className="space-y-1 text-sm">
-                      <span className="font-medium">Executor</span>
-                      <select
-                        value={destinos[linha.key]?.executorId ?? ''}
-                        onChange={(event) => setDestinos((prev) => ({
-                          ...prev,
-                          [linha.key]: {
-                            ...prev[linha.key],
-                            executorId: event.target.value,
-                          },
-                        }))}
-                        className="w-full rounded-lg border border-input bg-background px-3 py-2"
-                      >
-                        <option value="">Sem executor</option>
-                        {executores.map((executor) => (
-                          <option key={executor.id} value={executor.id}>{executor.nome}</option>
-                        ))}
-                      </select>
-                    </label>
+                    <div className="rounded-xl border border-border bg-background p-4">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Fechamento</p>
+                      <div className="mt-3 space-y-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Total selecionado</span>
+                          <span className="font-semibold">{formatarMoeda(totalSelecionado)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Soma das formas</span>
+                          <span className={cn('font-semibold', Math.abs(totalFormasPagamento - totalSelecionado) <= 0.01 ? 'text-success-600' : 'text-warning-600')}>
+                            {formatarMoeda(totalFormasPagamento)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              ))}
+              )}
+
+              <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+                <p className="text-sm text-muted-foreground">
+                  Precisa dividir em mais de uma forma?
+                </p>
+                <button
+                  type="button"
+                  className="text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                  onClick={() => setMultiplasFormas((prev) => !prev)}
+                >
+                  {multiplasFormas ? 'Usar uma forma só' : 'Abrir divisão'}
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {multiplasFormas
+                    ? 'A confirmação só libera quando a soma das formas bater exatamente com o total selecionado.'
+                    : 'O método escolhido vale para todos os itens desta cobrança.'}
+                </p>
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  loading={registrando}
+                  disabled={
+                    totalSelecionado <= 0 ||
+                    (multiplasFormas && Math.abs(totalFormasPagamento - totalSelecionado) > 0.01)
+                  }
+                >
+                  Confirmar pagamento
+                </Button>
+              </div>
+            </form>
+          </CardFooter>
+        </Card>
+
+        <Card noPadding className="overflow-hidden">
+          <CardHeader>
+            <CardTitle>Destino</CardTitle>
+            <CardDescription>
+              Defina o destino de cada item.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="flex flex-col gap-4 pt-6">
+            {atendimento.itens.map((item) => (
+              <div key={`destino-${item.id}`} className="rounded-xl border border-border bg-background">
+                {(() => {
+                  const itemLinhas = linhasPorItem.get(item.id) ?? [];
+                  const saldoItem = itemLinhas.reduce((sum, linha) => sum + linha.saldo, 0);
+                  const quantidadeVisualLinhas = item.etapas?.length ?? itemLinhas.length;
+                  const linhaUnica = itemLinhas.length === 1;
+                  const financeiroItemBadge = getFinanceiroBadge(item.financeiro_status ?? 'nao_pago', saldoItem);
+                  const operacaoItemBadge = getOperacaoBadge(item.status);
+                  const resumoFinanceiroItem = getResumoFinanceiroPartes(item.valor_pago, saldoItem);
+
+                  return (
+                    <div className="flex flex-col gap-4 p-4">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold">{nomeProcedimentoItem(item)}</p>
+                          <Badge color={financeiroItemBadge.color} size="sm">{financeiroItemBadge.label}</Badge>
+                          {operacaoItemBadge && (
+                            <Badge color={operacaoItemBadge.color} size="sm">{operacaoItemBadge.label}</Badge>
+                          )}
+                          {itemLinhas.length > 1 && (
+                            <Badge color="gray" size="sm">
+                              {item.etapas?.length ? `${quantidadeVisualLinhas} sessões` : `${quantidadeVisualLinhas} linhas`}
+                            </Badge>
+                          )}
+                        </div>
+                        {resumoFinanceiroItem.length > 0 && (
+                          <p className="text-sm text-muted-foreground">
+                            {resumoFinanceiroItem.join(' · ')}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-3">
+                        {itemLinhas.map((linha) => {
+                          const statusSeguro = getDestinoStatusSeguro(linha, destinos[linha.key]?.status ?? (linha.saldo > 0 ? 'agendar' : 'fazer_hoje'));
+                          const mostrarData = statusSeguro === 'agendar';
+                          const mostrarExecutor = ['fazer_hoje', 'agendar'].includes(statusSeguro);
+                          const financeiroBadge = getFinanceiroBadge(linha.financeiroStatus, linha.saldo);
+                          const executorValue = destinos[linha.key]?.executorId ?? '';
+
+                          return (
+                            <div key={linha.key} className="rounded-xl border border-border p-3">
+                              <div className="flex flex-col gap-3">
+                                    {!linhaUnica && (
+                                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                        <div className="flex flex-col gap-1">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <Badge color={financeiroBadge.color} size="sm">{financeiroBadge.label}</Badge>
+                                            <p className="font-medium">{linha.label}</p>
+                                          </div>
+                                          <p className="text-sm text-muted-foreground">
+                                            {formatarMoeda(linha.valor)}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                <div className={cn(
+                                  'grid gap-3',
+                                  mostrarData && mostrarExecutor
+                                    ? 'md:grid-cols-3'
+                                    : mostrarData || mostrarExecutor
+                                      ? 'md:grid-cols-2'
+                                      : 'md:grid-cols-1'
+                                )}>
+                                      <Select
+                                        label="Destino"
+                                        name={`destino-${linha.key}`}
+                                        options={getDestinoOptionsByLinha(linha)}
+                                        value={statusSeguro}
+                                        onChange={(value) => setDestinos((prev) => ({
+                                          ...prev,
+                                          [linha.key]: {
+                                            ...prev[linha.key],
+                                        status: value as DestinoAcao,
+                                      },
+                                    }))}
+                                  />
+
+                                  {mostrarData && (
+                                    <Input
+                                      label="Data futura"
+                                      name={`data-${linha.key}`}
+                                      type="date"
+                                      value={destinos[linha.key]?.data ?? ''}
+                                      onChange={(value) => setDestinos((prev) => ({
+                                        ...prev,
+                                        [linha.key]: {
+                                          ...prev[linha.key],
+                                          data: value,
+                                        },
+                                      }))}
+                                    />
+                                  )}
+
+                                  {mostrarExecutor && (
+                                    <Select
+                                      label="Executor"
+                                      name={`executor-${linha.key}`}
+                                      options={executoresOptions}
+                                      value={executorValue}
+                                      onChange={(value) => setDestinos((prev) => ({
+                                        ...prev,
+                                        [linha.key]: {
+                                          ...prev[linha.key],
+                                          executorId: value,
+                                        },
+                                      }))}
+                                      placeholder="Sem executor"
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ))}
+          </CardContent>
+
+          <Divider className="my-0" />
+
+          <CardFooter className="flex-col items-stretch gap-4 p-6 pt-6">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm">
+              <p className="text-muted-foreground">Fazer hoje</p>
+              <p className="mt-1 font-semibold">{resumoDestinos.fazer_hoje}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm">
+              <p className="text-muted-foreground">Agendar</p>
+              <p className="mt-1 font-semibold">{resumoDestinos.agendar}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm">
+                <p className="text-muted-foreground">Sem data</p>
+                <p className="mt-1 font-semibold">{resumoDestinos.deixar_data_em_aberto}</p>
+              </div>
             </div>
 
             <Button className="w-full" onClick={() => void handleSalvarDestinos()} loading={salvandoDestinos}>
               Salvar destinos e liberar execução
             </Button>
-          </Card>
-
-          <Card className="space-y-4">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Histórico</p>
-              <h2 className="text-2xl font-semibold">Pagamentos</h2>
-            </div>
-            <div className="space-y-3">
-              {pagamentos.length === 0 && <p className="text-sm text-muted-foreground">Nenhum pagamento registrado.</p>}
-              {pagamentos.map((pagamento) => (
-                <div key={pagamento.id} className="rounded-lg border border-border p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{formatarMoeda(pagamento.valor)} · {pagamento.metodo}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatarDataHora(pagamento.created_at)}
-                        {pagamento.recebido_por_nome ? ` · ${pagamento.recebido_por_nome}` : ''}
-                      </p>
-                    </div>
-                    <span className={pagamento.cancelado ? 'text-error-600 text-sm' : 'text-success-600 text-sm'}>
-                      {pagamento.cancelado ? 'Cancelado' : 'Ativo'}
-                    </span>
-                  </div>
-                  {pagamento.observacoes && <p className="text-sm text-muted-foreground">{pagamento.observacoes}</p>}
-                  {!pagamento.cancelado && (
-                    cancelandoId === pagamento.id ? (
-                      <div className="space-y-2">
-                        <Input
-                          label="Motivo do cancelamento"
-                          name={`motivo-cancelamento-${pagamento.id}`}
-                          value={motivoCancelamento}
-                          onChange={setMotivoCancelamento}
-                        />
-                        <div className="flex gap-2">
-                          <Button variant="danger" onClick={() => void handleCancelarPagamento(pagamento.id)}>
-                            Confirmar cancelamento
-                          </Button>
-                          <Button variant="secondary" onClick={() => { setCancelandoId(null); setMotivoCancelamento(''); }}>
-                            Fechar
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <Button variant="secondary" onClick={() => setCancelandoId(pagamento.id)}>
-                        Cancelar pagamento
-                      </Button>
-                    )
-                  )}
-                  {pagamento.cancelado && pagamento.motivo_cancelamento && (
-                    <p className="text-sm text-muted-foreground">Motivo: {pagamento.motivo_cancelamento}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
+          </CardFooter>
+        </Card>
       </div>
+
+      <Card noPadding>
+        <CardHeader>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-4 text-left"
+            onClick={() => setHistoricoAberto((prev) => !prev)}
+          >
+            <div className="flex flex-col gap-1">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Histórico</p>
+              <CardTitle>Pagamentos registrados</CardTitle>
+              <CardDescription>
+                Abra para revisar as cobranças já feitas e, se necessário, cancelar o grupo inteiro.
+              </CardDescription>
+            </div>
+            <span className="text-sm font-medium text-primary">
+              {historicoAberto ? 'Ocultar' : 'Mostrar'}
+            </span>
+          </button>
+        </CardHeader>
+
+        {historicoAberto && (
+          <CardContent className="flex flex-col gap-3 pt-0">
+            {pagamentos.length === 0 && <p className="text-sm text-muted-foreground">Nenhum pagamento registrado.</p>}
+            {pagamentos.map((pagamento) => (
+              <div key={pagamento.id} className="flex flex-col gap-3 rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium">{formatarMoeda(pagamento.valor_total)}</p>
+                      <Badge color={pagamento.cancelado ? 'red' : 'green'} size="sm">
+                        {pagamento.cancelado ? 'Cancelado' : pagamento.formas.length > 1 ? 'Cobrança composta' : getMetodoLabel(pagamento.formas[0]?.metodo ?? '')}
+                      </Badge>
+                      {pagamento.formas.length > 1 && (
+                        <Badge color="gray" size="sm">{pagamento.formas.length} formas</Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {formatarDataHora(pagamento.created_at)}
+                      {pagamento.recebido_por_nome ? ` · ${pagamento.recebido_por_nome}` : ''}
+                    </p>
+                  </div>
+                  <Badge color={pagamento.cancelado ? 'red' : 'green'} size="sm">
+                    {pagamento.cancelado ? 'Inativo' : 'Ativo'}
+                  </Badge>
+                </div>
+
+                {pagamento.formas.length > 0 && (
+                  <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-3">
+                    {pagamento.formas.map((forma) => (
+                      <div key={forma.id} className="flex items-center justify-between gap-3 text-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge color={forma.cancelado ? 'red' : 'gray'} size="sm">
+                            {getMetodoLabel(forma.metodo)}
+                          </Badge>
+                          <span className="text-muted-foreground">{formatarDataHora(forma.created_at)}</span>
+                        </div>
+                        <span className="font-medium">{formatarMoeda(forma.valor)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {pagamento.observacoes && <p className="text-sm text-muted-foreground">{pagamento.observacoes}</p>}
+                {!pagamento.cancelado && (
+                  cancelandoId === pagamento.pagamento_representante_id ? (
+                    <div className="space-y-2">
+                      <Input
+                        label="Motivo do cancelamento do grupo"
+                        name={`motivo-cancelamento-${pagamento.pagamento_representante_id}`}
+                        value={motivoCancelamento}
+                        onChange={setMotivoCancelamento}
+                      />
+                      <div className="flex gap-2">
+                        <Button variant="danger" onClick={() => void handleCancelarPagamento(pagamento.pagamento_representante_id)}>
+                          Confirmar cancelamento
+                        </Button>
+                        <Button variant="secondary" onClick={() => { setCancelandoId(null); setMotivoCancelamento(''); }}>
+                          Fechar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button variant="secondary" onClick={() => setCancelandoId(pagamento.pagamento_representante_id)}>
+                      Cancelar cobrança
+                    </Button>
+                  )
+                )}
+                {Boolean(pagamento.cancelado) && pagamento.motivo_cancelamento && (
+                  <p className="text-sm text-muted-foreground">Motivo: {pagamento.motivo_cancelamento}</p>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        )}
+      </Card>
     </div>
   );
 }

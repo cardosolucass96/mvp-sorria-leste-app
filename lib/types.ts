@@ -188,10 +188,13 @@ export interface ItemAtendimento {
 export interface Pagamento {
   id: number;
   atendimento_id: number;
+  pagamento_grupo_id: number | null;
   recebido_por_id: number;
   valor: number;
   metodo: MetodoPagamento;
   observacoes: string | null;
+  cancelado?: number;
+  motivo_cancelamento?: string | null;
   created_at: string;
 }
 
@@ -219,6 +222,22 @@ export interface ItemAtendimentoDestino {
 
 export interface PagamentoCompleto extends Pagamento {
   recebido_por_nome: string;
+}
+
+export interface PagamentoFormaInput {
+  metodo: MetodoPagamento;
+  valor: number;
+}
+
+export interface PagamentoGrupo {
+  id: number;
+  atendimento_id: number;
+  recebido_por_id: number;
+  valor_total: number;
+  observacoes: string | null;
+  cancelado: number;
+  motivo_cancelamento: string | null;
+  created_at: string;
 }
 
 // Tipos com joins para exibição

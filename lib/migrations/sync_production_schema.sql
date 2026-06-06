@@ -85,3 +85,22 @@ PRAGMA foreign_keys=ON;
 
 -- 6. pagamentos: remover coluna legado 'parcelas'
 ALTER TABLE pagamentos DROP COLUMN parcelas;
+
+-- 7. pagamentos compostos: grupos de cobrança e vínculo por forma
+CREATE TABLE IF NOT EXISTS pagamentos_grupos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  atendimento_id INTEGER NOT NULL,
+  recebido_por_id INTEGER NOT NULL,
+  valor_total REAL NOT NULL,
+  observacoes TEXT,
+  cancelado INTEGER NOT NULL DEFAULT 0,
+  motivo_cancelamento TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
+  FOREIGN KEY (recebido_por_id) REFERENCES usuarios(id)
+);
+
+ALTER TABLE pagamentos ADD COLUMN pagamento_grupo_id INTEGER REFERENCES pagamentos_grupos(id);
+
+CREATE INDEX IF NOT EXISTS idx_pagamentos_grupos_atendimento ON pagamentos_grupos(atendimento_id);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_pagamento_grupo ON pagamentos(pagamento_grupo_id);
