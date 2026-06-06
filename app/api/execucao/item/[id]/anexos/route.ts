@@ -74,6 +74,7 @@ export async function POST(
     const file = formData.get('arquivo') as File;
     const usuario_id = formData.get('usuario_id') as string;
     const descricao = formData.get('descricao') as string;
+    const titulo = formData.get('titulo') as string;
 
     if (!file) {
       return NextResponse.json(
@@ -127,6 +128,10 @@ export async function POST(
       },
     });
 
+    const tituloFinal = titulo?.trim()
+      ? titulo.trim().slice(0, 200)
+      : file.name;
+
     // Registrar no banco (caminho = chave R2)
     const result = await execute(
       `INSERT INTO anexos_execucao 
@@ -135,7 +140,7 @@ export async function POST(
       [
         parseInt(id),
         parseInt(usuario_id),
-        file.name,
+        tituloFinal,
         file.type,
         r2Key,
         file.size,

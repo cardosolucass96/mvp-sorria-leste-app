@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, useRef, use } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 import { formatarMoeda, formatarDenteUnicoComFaces } from '@/lib/utils/formatters';
-import { Search, Trash2, Pencil, Plus, CheckCircle2 } from 'lucide-react';
+import { Search, Trash2, Pencil, Plus, CheckCircle2, Paperclip, FileText } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Card, Button, Select, Input, EmptyState, ConfirmDialog } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 interface EtapaModelo {
   id: number;
@@ -54,6 +55,17 @@ interface ItemAtendimento {
   observacoes: string | null;
 }
 
+interface Anexo {
+  id: number;
+  nome_arquivo: string;
+  tipo_arquivo: string;
+  caminho: string;
+  tamanho: number;
+  descricao: string | null;
+  usuario_nome: string;
+  created_at: string;
+}
+
 interface Atendimento {
   id: number;
   cliente_id: number;
@@ -82,6 +94,11 @@ export default function AvaliacaoDetalhePage({
   const [executores, setExecutores] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [anexosPorItem, setAnexosPorItem] = useState<Record<number, Anexo[]>>({});
+  const [anexosLoading, setAnexosLoading] = useState<Record<number, boolean>>({});
+  const [enviandoAnexos, setEnviandoAnexos] = useState<Record<number, boolean>>({});
+  const [dragOverItem, setDragOverItem] = useState<Record<number, boolean>>({});
+  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   // Form para novo procedimento
   const [procedimentoId, setProcedimentoId] = useState('');
@@ -112,6 +129,102 @@ export default function AvaliacaoDetalhePage({
     carregarDados();
   }, [id]);
 
+  const carregarAnexosItem = async (itemId: number) => {
+    setAnexosLoading((prev) => ({ ...prev, [itemId]: true }));
+    try {
+      const res = await unitFetch(`/api/execucao/item/${itemId}/anexos`);
+      if (!res.ok) {
+        setAnexosPorItem((prev) => ({ ...prev, [itemId]: [] }));
+        return;
+      }
+      const data = await res.json();
+      setAnexosPorItem((prev) => ({ ...prev, [itemId]: data }));
+    } catch {
+      setAnexosPorItem((prev) => ({ ...prev, [itemId]: [] }));
+    } finally {
+      setAnexosLoading((prev) => ({ ...prev, [itemId]: false }));
+    }
+  };
+
+  const carregarAnexosDosItens = async (itens: ItemAtendimento[]) => {
+    setAnexosPorItem({});
+    setAnexosLoading({});
+    await Promise.all(itens.map((item) => carregarAnexosItem(item.id)));
+  };
+
+  const enviarAnexoArquivo = async (itemId: number, file: File) => {
+    if (!user) return;
+    setEnviandoAnexos((prev) => ({ ...prev, [itemId]: true }));
+    try {
+      const formData = new FormData();
+      formData.append('arquivo', file);
+      formData.append('usuario_id', user.id.toString());
+
+      const res = await unitFetch(`/api/execucao/item/${itemId}/anexos`, { method: 'POST', body: formData });
+      if (res.ok) {
+        await carregarAnexosItem(itemId);
+        toast.success('Anexo enviado com sucesso');
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Erro ao enviar anexo');
+      }
+    } catch {
+      toast.error('Erro ao enviar anexo');
+    } finally {
+      setEnviandoAnexos((prev) => ({ ...prev, [itemId]: false }));
+    }
+  };
+
+  const handleSelecionarArquivo = async (itemId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await enviarAnexoArquivo(itemId, file);
+
+    const input = fileInputRefs.current[itemId];
+    if (input) input.value = '';
+  };
+
+  const handleDropArquivo = async (itemId: number, e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOverItem((prev) => ({ ...prev, [itemId]: false }));
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    await enviarAnexoArquivo(itemId, file);
+  };
+
+  const handleDragOverArquivo = (itemId: number, e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOverItem((prev) => ({ ...prev, [itemId]: true }));
+  };
+
+  const handleDragLeaveArquivo = (itemId: number, e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOverItem((prev) => ({ ...prev, [itemId]: false }));
+  };
+
+  const handleRemoverAnexo = (itemId: number, anexoId: number) => {
+    openConfirm({
+      title: 'Remover Anexo',
+      message: 'Remover este anexo do prontuário?',
+      confirmLabel: 'Remover',
+      type: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const res = await unitFetch(`/api/execucao/item/${itemId}/anexos?anexo_id=${anexoId}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const data = await res.json();
+            toast.error(data.error || 'Erro ao remover anexo');
+            return;
+          }
+          await carregarAnexosItem(itemId);
+        } catch {
+          toast.error('Erro ao remover anexo');
+        }
+      },
+    });
+  };
+
   const carregarDados = async () => {
     try {
       const [resAtend, resProc] = await Promise.all([
@@ -138,6 +251,8 @@ export default function AvaliacaoDetalhePage({
           return roles.includes('executor') || roles.includes('ortodontista');
         })
       );
+
+      await carregarAnexosDosItens(atendData.itens || []);
     } catch (err) {
       setError('Erro ao carregar dados');
       console.error(err);
@@ -372,7 +487,7 @@ export default function AvaliacaoDetalhePage({
         </h2>
 
         <form onSubmit={handleAdicionarProcedimento} className="space-y-4">
-          <Select
+          <SearchableSelect
             label="Procedimento *"
             name="procedimento"
             value={procedimentoId}
@@ -399,6 +514,8 @@ export default function AvaliacaoDetalhePage({
               label: `${proc.nome} — ${formatarMoeda(proc.valor)}${proc.por_dente ? ' (por dente)' : ''}${proc.tem_etapas ? ' · multi-sessão' : ''}`,
             }))}
             placeholder="Selecione..."
+            searchPlaceholder="Buscar procedimento..."
+            emptyMessage="Nenhum procedimento encontrado"
             required
           />
 
@@ -630,6 +747,91 @@ export default function AvaliacaoDetalhePage({
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
+                </div>
+                {/* Anexos */}
+                <div className="px-4 py-3 border-t border-border bg-surface-muted/40 space-y-3">
+                  <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
+                    <Paperclip className="w-4 h-4" /> Anexos e Imagens
+                  </h3>
+                  <div
+                    className={`p-4 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center gap-2 transition-colors ${
+                      dragOverItem[item.id]
+                        ? 'border-primary-400 bg-primary-500/10'
+                        : 'border-neutral-300 bg-transparent'
+                    }`}
+                    onDragOver={(e) => handleDragOverArquivo(item.id, e)}
+                    onDragLeave={(e) => handleDragLeaveArquivo(item.id, e)}
+                    onDrop={(e) => handleDropArquivo(item.id, e)}
+                  >
+                    <p className="text-sm text-muted-foreground">
+                      Arraste a foto/arquivo aqui ou
+                    </p>
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      onClick={() => fileInputRefs.current[item.id]?.click()}
+                      disabled={!!enviandoAnexos[item.id]}
+                    >
+                      Selecionar arquivo
+                    </Button>
+                    <input
+                      ref={(node) => {
+                        fileInputRefs.current[item.id] = node;
+                      }}
+                      type="file"
+                      accept="image/*,video/*,.pdf,.doc,.docx"
+                      onChange={(e) => handleSelecionarArquivo(item.id, e)}
+                      disabled={!!enviandoAnexos[item.id]}
+                      className="hidden"
+                    />
+                    {enviandoAnexos[item.id] && (
+                      <p className="text-sm text-primary-600">Enviando...</p>
+                    )}
+                  </div>
+                  {anexosLoading[item.id] ? (
+                    <p className="text-sm text-muted-foreground">Carregando anexos...</p>
+                  ) : (anexosPorItem[item.id]?.length ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {anexosPorItem[item.id]?.map((anexo) => {
+                        const url = `/api/arquivos/${anexo.caminho}`;
+                        const isImg = anexo.tipo_arquivo.startsWith('image/');
+                        return (
+                          <div key={anexo.id} className="border rounded-lg overflow-hidden">
+                            {isImg ? (
+                              <a href={url} target="_blank" rel="noopener noreferrer">
+                                <img src={url} alt={anexo.nome_arquivo} className="w-full h-32 object-cover hover:opacity-90" />
+                              </a>
+                            ) : (
+                              <a
+                                href={`${url}?download=true`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center h-32 bg-surface-muted hover:bg-neutral-200"
+                              >
+                                <FileText className="w-8 h-8 text-neutral-400" />
+                              </a>
+                            )}
+                            <div className="p-2">
+                              <p className="font-medium text-xs truncate">{anexo.nome_arquivo}</p>
+                              <p className="text-xs text-muted-foreground">{anexo.usuario_nome}</p>
+                              <p className="text-xs text-muted-foreground">{(anexo.tamanho / 1024 / 1024).toFixed(2)} MB</p>
+                              {anexo.descricao && (
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{anexo.descricao}</p>
+                              )}
+                              <button
+                                onClick={() => handleRemoverAnexo(item.id, anexo.id)}
+                                className="mt-1 text-xs text-error-600 hover:text-error-800"
+                              >
+                                Remover
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhum anexo</p>
+                  ))}
                 </div>
               </div>
             );
