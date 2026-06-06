@@ -74,12 +74,32 @@ interface SumResult {
   total: number | null;
 }
 
+interface SQLiteColumn {
+  name: string;
+}
+
 interface DestinoRow {
   item_atendimento_id: number;
   etapa_modelo_id: number | null;
   destino_status: string;
   data_agendada: string | null;
   executor_id: number | null;
+}
+
+let observacoesEncerramentoGarantida = false;
+
+async function garantirColunaObservacoesEncerramento() {
+  if (observacoesEncerramentoGarantida) return;
+
+  const colunas = await query<SQLiteColumn>('PRAGMA table_info(atendimentos)');
+  const temColuna = colunas.some((coluna) => coluna.name === 'observacoes_encerramento');
+
+  if (!temColuna) {
+    await execute('ALTER TABLE atendimentos ADD COLUMN observacoes_encerramento TEXT');
+    console.warn('[MIGRATION] Coluna atendimentos.observacoes_encerramento foi adicionada automaticamente.');
+  }
+
+  observacoesEncerramentoGarantida = true;
 }
 
 // GET /api/atendimentos/[id] - Busca atendimento por ID com detalhes
@@ -334,6 +354,8 @@ export const PUT = withUnit(async (request: NextRequest, context: UnitAuthentica
 
       // Encerramento pelo atendente: salva observações
       if (status === 'encerrado') {
+        await garantirColunaObservacoesEncerramento();
+
         if (motivo_saida) {
           updates.push('motivo_saida = ?');
           updateParams.push(motivo_saida);
@@ -424,6 +446,8 @@ export const DELETE = withUnit(async (_request: NextRequest, context: UnitAuthen
         { status: 400 }
       );
     }
+
+    await garantirColunaObservacoesEncerramento();
 
     await execute(
       `UPDATE atendimentos
