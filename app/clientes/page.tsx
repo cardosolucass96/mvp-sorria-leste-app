@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Cliente } from '@/lib/types';
 import { formatarCPF, formatarTelefone } from '@/lib/utils/formatters';
 import { Users } from 'lucide-react';
@@ -14,7 +14,9 @@ export default function ClientesPage() {
   usePageTitle('Clientes');
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [busca, setBusca] = useState('');
+  const searchParams = useSearchParams();
+  const buscaInicial = searchParams.get('busca') ?? '';
+  const [busca, setBusca] = useState(buscaInicial);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [page, setPage] = useState(1);
@@ -56,8 +58,11 @@ export default function ClientesPage() {
   };
 
   useEffect(() => {
-    loadClientes();
-  }, []);
+    const buscaDaRota = searchParams.get('busca') ?? '';
+    setBusca(buscaDaRota);
+    setPage(1);
+    loadClientes(buscaDaRota, 1);
+  }, [searchParams]);
 
   // Limpar mensagens após 3 segundos
   useEffect(() => {
