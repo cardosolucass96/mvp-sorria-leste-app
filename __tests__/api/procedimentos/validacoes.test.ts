@@ -99,7 +99,7 @@ describe('POST /api/procedimentos — validações', () => {
   it('aceita valor = 0', async () => {
     setLastInsertId(20);
     mockQueryResponse('select * from procedimentos where id', {
-      id: 20, nome: 'Free', valor: 0, comissao_venda: 0,
+      id: 20, nome: 'Free', valor: 0, comissao_venda: 4, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 0, ativo: 1, created_at: '2025-03-20',
     });
 
@@ -114,7 +114,7 @@ describe('POST /api/procedimentos — validações', () => {
   it('aceita valor decimal (ex: 199.99)', async () => {
     setLastInsertId(21);
     mockQueryResponse('select * from procedimentos where id', {
-      id: 21, nome: 'Decimal', valor: 199.99, comissao_venda: 0,
+      id: 21, nome: 'Decimal', valor: 199.99, comissao_venda: 4, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 0, ativo: 1, created_at: '2025-03-20',
     });
 
@@ -151,7 +151,7 @@ describe('POST /api/procedimentos — validações', () => {
   it('aceita comissao_venda = 0 (limite inferior)', async () => {
     setLastInsertId(22);
     mockQueryResponse('select * from procedimentos where id', {
-      id: 22, nome: 'CVenda0', valor: 100, comissao_venda: 0,
+      id: 22, nome: 'CVenda0', valor: 100, comissao_venda: 0, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 0, ativo: 1, created_at: '2025-03-20',
     });
 
@@ -166,7 +166,7 @@ describe('POST /api/procedimentos — validações', () => {
   it('aceita comissao_venda = 100 (limite superior)', async () => {
     setLastInsertId(23);
     mockQueryResponse('select * from procedimentos where id', {
-      id: 23, nome: 'CVenda100', valor: 100, comissao_venda: 100,
+      id: 23, nome: 'CVenda100', valor: 100, comissao_venda: 100, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 0, ativo: 1, created_at: '2025-03-20',
     });
 
@@ -181,13 +181,50 @@ describe('POST /api/procedimentos — validações', () => {
   it('aceita comissao_venda decimal (ex: 12.5)', async () => {
     setLastInsertId(24);
     mockQueryResponse('select * from procedimentos where id', {
-      id: 24, nome: 'CVendaDec', valor: 100, comissao_venda: 12.5,
+      id: 24, nome: 'CVendaDec', valor: 100, comissao_venda: 12.5, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 0, ativo: 1, created_at: '2025-03-20',
     });
 
     const { status } = await callRoute(createProcedimento, '/api/procedimentos', {
       method: 'POST',
       body: { nome: 'CVendaDec', valor: 100, comissao_venda: 12.5 },
+    });
+
+    expect(status).toBe(201);
+  });
+
+  // --- Comissão de Acréscimo ---
+
+  it('rejeita comissao_acrescimo > 100', async () => {
+    const { status, data } = await callRoute<{ error: string }>(createProcedimento, '/api/procedimentos', {
+      method: 'POST',
+      body: { nome: 'Teste', valor: 100, comissao_acrescimo: 101 },
+    });
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Comissão de acréscimo deve estar entre 0 e 100');
+  });
+
+  it('rejeita comissao_acrescimo < 0', async () => {
+    const { status, data } = await callRoute<{ error: string }>(createProcedimento, '/api/procedimentos', {
+      method: 'POST',
+      body: { nome: 'Teste', valor: 100, comissao_acrescimo: -1 },
+    });
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Comissão de acréscimo deve estar entre 0 e 100');
+  });
+
+  it('aceita comissao_acrescimo = 100', async () => {
+    setLastInsertId(27);
+    mockQueryResponse('select * from procedimentos where id', {
+      id: 27, nome: 'CAcrescimo100', valor: 100, comissao_venda: 4, comissao_acrescimo: 100,
+      comissao_execucao: 0, por_dente: 0, ativo: 1, created_at: '2025-03-20',
+    });
+
+    const { status } = await callRoute(createProcedimento, '/api/procedimentos', {
+      method: 'POST',
+      body: { nome: 'CAcrescimo100', valor: 100, comissao_acrescimo: 100 },
     });
 
     expect(status).toBe(201);
@@ -218,7 +255,7 @@ describe('POST /api/procedimentos — validações', () => {
   it('aceita comissao_execucao = 100', async () => {
     setLastInsertId(25);
     mockQueryResponse('select * from procedimentos where id', {
-      id: 25, nome: 'CExec100', valor: 100, comissao_venda: 0,
+      id: 25, nome: 'CExec100', valor: 100, comissao_venda: 4, comissao_acrescimo: 10,
       comissao_execucao: 100, por_dente: 0, ativo: 1, created_at: '2025-03-20',
     });
 
@@ -232,10 +269,10 @@ describe('POST /api/procedimentos — validações', () => {
 
   // --- Comissão não obrigatória ---
 
-  it('comissões não enviadas → usam default 0 (sem erro)', async () => {
+  it('comissões não enviadas → usam defaults da avaliação/acréscimo (sem erro)', async () => {
     setLastInsertId(26);
     mockQueryResponse('select * from procedimentos where id', {
-      id: 26, nome: 'SemComissao', valor: 100, comissao_venda: 0,
+      id: 26, nome: 'SemComissao', valor: 100, comissao_venda: 4, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 0, ativo: 1, created_at: '2025-03-20',
     });
 
@@ -343,6 +380,32 @@ describe('PUT /api/procedimentos/[id] — validações', () => {
     expect(data.error).toBe('Comissão de venda deve estar entre 0 e 100');
   });
 
+  it('rejeita comissao_acrescimo > 100 no update', async () => {
+    mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateProcedimento, '/api/procedimentos/1', {
+      method: 'PUT',
+      body: { comissao_acrescimo: 101 },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Comissão de acréscimo deve estar entre 0 e 100');
+  });
+
+  it('rejeita comissao_acrescimo < 0 no update', async () => {
+    mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateProcedimento, '/api/procedimentos/1', {
+      method: 'PUT',
+      body: { comissao_acrescimo: -0.5 },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Comissão de acréscimo deve estar entre 0 e 100');
+  });
+
   it('rejeita comissao_execucao > 100 no update', async () => {
     mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
 
@@ -388,7 +451,7 @@ describe('PUT /api/procedimentos/[id] — validações', () => {
     const ctx = createRouteContext({ id: '1' });
     const { status } = await callRoute(updateProcedimento, '/api/procedimentos/1', {
       method: 'PUT',
-      body: { comissao_venda: 0, comissao_execucao: 100 },
+      body: { comissao_venda: 0, comissao_acrescimo: 100, comissao_execucao: 100 },
     }, ctx);
 
     expect(status).toBe(200);

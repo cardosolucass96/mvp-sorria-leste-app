@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query, execute, batch } from '@/lib/db';
+import { garantirSchemaProcedimentosComissaoAcrescimo } from '@/lib/helpers/garantirComissaoSchema';
 
 interface Procedimento {
   id: number;
   nome: string;
   valor: number;
   comissao_venda: number;
+  comissao_acrescimo: number;
   comissao_execucao: number;
   por_dente: number;
   tem_face: number;
@@ -20,6 +22,7 @@ interface EtapaModelo {
   nome: string;
   valor: number | null;
   comissao_venda: number;
+  comissao_acrescimo: number;
   comissao_execucao: number;
   ordem: number;
 }
@@ -30,6 +33,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await garantirSchemaProcedimentosComissaoAcrescimo();
+
     const { id } = await params;
 
     const procedimento = await queryOne<Procedimento>(
@@ -59,10 +64,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await garantirSchemaProcedimentosComissaoAcrescimo();
+
     const { id } = await params;
     const procId = parseInt(id);
     const body = await request.json();
-    const { nome, valor, comissao_venda, comissao_execucao, ativo, por_dente, tem_face, tem_etapas, etapas, categoria_id } = body;
+    const { nome, valor, comissao_venda, comissao_acrescimo, comissao_execucao, ativo, por_dente, tem_face, tem_etapas, etapas, categoria_id } = body;
 
     const existe = await queryOne<Procedimento>(
       'SELECT * FROM procedimentos WHERE id = ?',
@@ -82,6 +89,9 @@ export async function PUT(
     if (comissao_venda !== undefined && (comissao_venda < 0 || comissao_venda > 100)) {
       return NextResponse.json({ error: 'Comissão de venda deve estar entre 0 e 100' }, { status: 400 });
     }
+    if (comissao_acrescimo !== undefined && (comissao_acrescimo < 0 || comissao_acrescimo > 100)) {
+      return NextResponse.json({ error: 'Comissão de acréscimo deve estar entre 0 e 100' }, { status: 400 });
+    }
     if (comissao_execucao !== undefined && (comissao_execucao < 0 || comissao_execucao > 100)) {
       return NextResponse.json({ error: 'Comissão de execução deve estar entre 0 e 100' }, { status: 400 });
     }
@@ -97,6 +107,7 @@ export async function PUT(
     if (nome !== undefined) { updates.push('nome = ?'); updateParams.push(nome.trim()); }
     if (valor !== undefined) { updates.push('valor = ?'); updateParams.push(valor); }
     if (comissao_venda !== undefined) { updates.push('comissao_venda = ?'); updateParams.push(comissao_venda); }
+    if (comissao_acrescimo !== undefined) { updates.push('comissao_acrescimo = ?'); updateParams.push(comissao_acrescimo); }
     if (comissao_execucao !== undefined) { updates.push('comissao_execucao = ?'); updateParams.push(comissao_execucao); }
     if (ativo !== undefined) { updates.push('ativo = ?'); updateParams.push(ativo ? 1 : 0); }
     if (por_dente !== undefined) { updates.push('por_dente = ?'); updateParams.push(por_dente ? 1 : 0); }
@@ -126,9 +137,9 @@ export async function PUT(
       if (Array.isArray(etapas) && etapas.length > 0) {
         await batch(
           etapas.map((e: EtapaModelo, idx: number) => ({
-            sql: `INSERT INTO procedimento_etapas_modelo (procedimento_id, nome, valor, comissao_venda, comissao_execucao, ordem)
-                  VALUES (?, ?, ?, ?, ?, ?)`,
-            params: [procId, e.nome, e.valor ?? null, e.comissao_venda ?? 0, e.comissao_execucao ?? 0, idx],
+            sql: `INSERT INTO procedimento_etapas_modelo (procedimento_id, nome, valor, comissao_venda, comissao_acrescimo, comissao_execucao, ordem)
+                  VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            params: [procId, e.nome, e.valor ?? null, e.comissao_venda ?? 4, e.comissao_acrescimo ?? 10, e.comissao_execucao ?? 0, idx],
           }))
         );
       }
@@ -157,6 +168,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await garantirSchemaProcedimentosComissaoAcrescimo();
+
     const { id } = await params;
 
     const existe = await queryOne<Procedimento>(

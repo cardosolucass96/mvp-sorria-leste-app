@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute, batch } from '@/lib/db';
+import { garantirSchemaProcedimentosComissaoAcrescimo } from '@/lib/helpers/garantirComissaoSchema';
 
 interface Procedimento {
   id: number;
   nome: string;
   valor: number;
   comissao_venda: number;
+  comissao_acrescimo: number;
   comissao_execucao: number;
   por_dente: number;
   tem_face: number;
@@ -18,6 +20,7 @@ interface EtapaModelo {
   nome: string;
   valor: number | null;
   comissao_venda: number;
+  comissao_acrescimo: number;
   comissao_execucao: number;
   ordem: number;
 }
@@ -25,6 +28,8 @@ interface EtapaModelo {
 // GET /api/procedimentos - Lista todos os procedimentos
 export async function GET(request: NextRequest) {
   try {
+    await garantirSchemaProcedimentosComissaoAcrescimo();
+
     const { searchParams } = new URL(request.url);
     const busca = searchParams.get('busca') || '';
     const incluirInativos = searchParams.get('inativos') === 'true';
@@ -60,8 +65,10 @@ export async function GET(request: NextRequest) {
 // POST /api/procedimentos - Cria novo procedimento
 export async function POST(request: NextRequest) {
   try {
+    await garantirSchemaProcedimentosComissaoAcrescimo();
+
     const body = await request.json();
-    const { nome, valor, comissao_venda, comissao_execucao, por_dente, tem_face, tem_etapas, etapas, categoria_id } = body;
+    const { nome, valor, comissao_venda, comissao_acrescimo, comissao_execucao, por_dente, tem_face, tem_etapas, etapas, categoria_id } = body;
 
     if (!nome || nome.trim() === '') {
       return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
@@ -75,6 +82,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Comissão de venda deve estar entre 0 e 100' }, { status: 400 });
     }
 
+    if (comissao_acrescimo !== undefined && (comissao_acrescimo < 0 || comissao_acrescimo > 100)) {
+      return NextResponse.json({ error: 'Comissão de acréscimo deve estar entre 0 e 100' }, { status: 400 });
+    }
+
     if (comissao_execucao !== undefined && (comissao_execucao < 0 || comissao_execucao > 100)) {
       return NextResponse.json({ error: 'Comissão de execução deve estar entre 0 e 100' }, { status: 400 });
     }
@@ -83,12 +94,13 @@ export async function POST(request: NextRequest) {
     const temFaceFlag = porDenteFlag ? (tem_face ? 1 : 0) : 0;
 
     const result = await execute(
-      `INSERT INTO procedimentos (nome, valor, comissao_venda, comissao_execucao, por_dente, tem_face, tem_etapas, categoria_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO procedimentos (nome, valor, comissao_venda, comissao_acrescimo, comissao_execucao, por_dente, tem_face, tem_etapas, categoria_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         nome.trim(),
         valor,
-        comissao_venda ?? 0,
+        comissao_venda ?? 4,
+        comissao_acrescimo ?? 10,
         comissao_execucao ?? 0,
         porDenteFlag,
         temFaceFlag,
@@ -103,9 +115,9 @@ export async function POST(request: NextRequest) {
     if (tem_etapas && Array.isArray(etapas) && etapas.length > 0) {
       await batch(
         etapas.map((e: EtapaModelo, idx: number) => ({
-          sql: `INSERT INTO procedimento_etapas_modelo (procedimento_id, nome, valor, comissao_venda, comissao_execucao, ordem)
-                VALUES (?, ?, ?, ?, ?, ?)`,
-          params: [procedimentoId, e.nome, e.valor ?? null, e.comissao_venda ?? 0, e.comissao_execucao ?? 0, idx],
+          sql: `INSERT INTO procedimento_etapas_modelo (procedimento_id, nome, valor, comissao_venda, comissao_acrescimo, comissao_execucao, ordem)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          params: [procedimentoId, e.nome, e.valor ?? null, e.comissao_venda ?? 4, e.comissao_acrescimo ?? 10, e.comissao_execucao ?? 0, idx],
         }))
       );
     }

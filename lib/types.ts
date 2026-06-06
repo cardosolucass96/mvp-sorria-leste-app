@@ -45,6 +45,7 @@ export type FollowupTipo =
 export type FollowupStatus = 'aberta' | 'concluida';
 
 export type MotivoSaida = 'sem_tratamento' | 'tratamento_completo' | 'continuacao';
+export type ComissaoOrigem = 'avaliacao' | 'acrescimo' | 'execucao';
 
 export type OrigemCliente = 
   | 'fachada'
@@ -114,6 +115,7 @@ export interface Procedimento {
   descricao: string | null;
   valor: number;
   comissao_venda: number;
+  comissao_acrescimo: number;
   comissao_execucao: number;
   por_dente: number; // 0 ou 1 - indica se o valor é cobrado por dente
   tem_etapas: number; // 0 ou 1 - indica se o procedimento tem etapas/sessões distintas

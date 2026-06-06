@@ -13,6 +13,8 @@ import usePageTitle from '@/lib/utils/usePageTitle';
 interface ResumoComissao {
   usuario_id: number;
   usuario_nome: string;
+  total_avaliacao: number;
+  total_acrescimo: number;
   total_venda: number;
   total_execucao: number;
   total_geral: number;
@@ -24,7 +26,8 @@ interface Comissao {
   atendimento_id: number;
   usuario_id: number;
   usuario_nome: string;
-  tipo: string;
+  tipo: 'venda' | 'execucao';
+  origem: 'avaliacao' | 'acrescimo' | 'execucao';
   percentual: number;
   valor_base: number;
   valor_comissao: number;
@@ -36,11 +39,19 @@ interface Comissao {
 interface ComissoesData {
   comissoes: Comissao[];
   totais: {
+    avaliacao: number;
+    acrescimo: number;
     venda: number;
     execucao: number;
     geral: number;
   };
 }
+
+const ORIGEM_BADGE: Record<Comissao['origem'], { label: string; color: 'green' | 'amber' | 'blue' }> = {
+  avaliacao: { label: 'Avaliação', color: 'green' },
+  acrescimo: { label: 'Acréscimo', color: 'amber' },
+  execucao: { label: 'Execução', color: 'blue' },
+};
 
 export default function ComissoesPage() {
   usePageTitle('Comissões');
@@ -100,7 +111,8 @@ export default function ComissoesPage() {
 
   const resumoColumns: TableColumn<ResumoComissao>[] = [
     { key: 'usuario_nome', label: 'Usuário' },
-    { key: 'total_venda', label: 'Comissão Venda', align: 'right', render: (r) => <span className="text-success-600">{formatarMoeda(r.total_venda)}</span> },
+    { key: 'total_avaliacao', label: 'Comissão Avaliação', align: 'right', render: (r) => <span className="text-success-600">{formatarMoeda(r.total_avaliacao)}</span> },
+    { key: 'total_acrescimo', label: 'Comissão Acréscimo', align: 'right', render: (r) => <span className="text-warning-600">{formatarMoeda(r.total_acrescimo)}</span> },
     { key: 'total_execucao', label: 'Comissão Execução', align: 'right', render: (r) => <span className="text-info-600">{formatarMoeda(r.total_execucao)}</span> },
     { key: 'total_geral', label: 'Total', align: 'right', render: (r) => <span className="font-bold">{formatarMoeda(r.total_geral)}</span> },
     { key: 'quantidade', label: 'Qtd. Procedimentos', align: 'center' },
@@ -124,6 +136,14 @@ export default function ComissoesPage() {
       render: (c) => (
         <Badge color={c.tipo === 'venda' ? 'green' : 'blue'} size="sm">
           {c.tipo === 'venda' ? 'Venda' : 'Execução'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'origem', label: 'Origem', align: 'center',
+      render: (c) => (
+        <Badge color={ORIGEM_BADGE[c.origem].color} size="sm">
+          {ORIGEM_BADGE[c.origem].label}
         </Badge>
       ),
     },
@@ -172,8 +192,9 @@ export default function ComissoesPage() {
       {/* View Detalhes */}
       {viewMode === 'detalhes' && detalhes && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <StatCard icon={<DollarSign className="w-6 h-6" />} label="Comissão de Venda" value={formatarMoeda(detalhes.totais.venda)} color="border-success-500" />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <StatCard icon={<DollarSign className="w-6 h-6" />} label="Comissão de Avaliação" value={formatarMoeda(detalhes.totais.avaliacao)} color="border-success-500" />
+            <StatCard icon={<Banknote className="w-6 h-6" />} label="Comissão de Acréscimo" value={formatarMoeda(detalhes.totais.acrescimo)} color="border-warning-500" />
             <StatCard icon={<Wrench className="w-6 h-6" />} label="Comissão de Execução" value={formatarMoeda(detalhes.totais.execucao)} color="border-info-500" />
             <StatCard icon={<Banknote className="w-6 h-6" />} label="Total Geral" value={formatarMoeda(detalhes.totais.geral)} color="border-evaluation-500" />
           </div>

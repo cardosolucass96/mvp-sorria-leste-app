@@ -14,6 +14,7 @@ interface EtapaModelo {
   nome: string;
   valor: string;
   comissao_venda: string;
+  comissao_acrescimo: string;
   comissao_execucao: string;
 }
 
@@ -22,6 +23,7 @@ interface Procedimento {
   nome: string;
   valor: number;
   comissao_venda: number;
+  comissao_acrescimo: number;
   comissao_execucao: number;
   por_dente: number;
   tem_face: number;
@@ -35,6 +37,7 @@ interface FormData {
   nome: string;
   valor: string;
   comissao_venda: string;
+  comissao_acrescimo: string;
   comissao_execucao: string;
   por_dente: boolean;
   tem_face: boolean;
@@ -43,12 +46,13 @@ interface FormData {
   etapas: EtapaModelo[];
 }
 
-const ETAPA_VAZIA: EtapaModelo = { nome: '', valor: '', comissao_venda: '', comissao_execucao: '' };
+const ETAPA_VAZIA: EtapaModelo = { nome: '', valor: '', comissao_venda: '4', comissao_acrescimo: '10', comissao_execucao: '' };
 
 const initialFormData: FormData = {
   nome: '',
   valor: '',
-  comissao_venda: '',
+  comissao_venda: '4',
+  comissao_acrescimo: '10',
   comissao_execucao: '',
   por_dente: false,
   tem_face: false,
@@ -140,15 +144,17 @@ export default function ProcedimentosPage() {
         nome: proc.nome,
         valor: proc.valor.toString(),
         comissao_venda: proc.comissao_venda.toString(),
+        comissao_acrescimo: proc.comissao_acrescimo.toString(),
         comissao_execucao: proc.comissao_execucao.toString(),
         por_dente: proc.por_dente === 1,
         tem_face: proc.tem_face === 1,
         tem_etapas: proc.tem_etapas === 1,
         categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
-        etapas: (data.etapas ?? []).map((e: { nome: string; valor: number | null; comissao_venda: number; comissao_execucao: number }) => ({
+        etapas: (data.etapas ?? []).map((e: { nome: string; valor: number | null; comissao_venda: number; comissao_acrescimo: number; comissao_execucao: number }) => ({
           nome: e.nome,
           valor: e.valor != null ? String(e.valor) : '',
           comissao_venda: String(e.comissao_venda),
+          comissao_acrescimo: String(e.comissao_acrescimo),
           comissao_execucao: String(e.comissao_execucao),
         })),
       });
@@ -157,6 +163,7 @@ export default function ProcedimentosPage() {
         nome: proc.nome,
         valor: proc.valor.toString(),
         comissao_venda: proc.comissao_venda.toString(),
+        comissao_acrescimo: proc.comissao_acrescimo.toString(),
         comissao_execucao: proc.comissao_execucao.toString(),
         por_dente: proc.por_dente === 1,
         tem_face: proc.tem_face === 1,
@@ -180,15 +187,17 @@ export default function ProcedimentosPage() {
         nome: `${proc.nome} (Cópia)`,
         valor: proc.valor.toString(),
         comissao_venda: proc.comissao_venda.toString(),
+        comissao_acrescimo: proc.comissao_acrescimo.toString(),
         comissao_execucao: proc.comissao_execucao.toString(),
         por_dente: proc.por_dente === 1,
         tem_face: proc.tem_face === 1,
         tem_etapas: proc.tem_etapas === 1,
         categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
-        etapas: (data.etapas ?? []).map((e: { nome: string; valor: number | null; comissao_venda: number; comissao_execucao: number }) => ({
+        etapas: (data.etapas ?? []).map((e: { nome: string; valor: number | null; comissao_venda: number; comissao_acrescimo: number; comissao_execucao: number }) => ({
           nome: e.nome,
           valor: e.valor != null ? String(e.valor) : '',
           comissao_venda: String(e.comissao_venda),
+          comissao_acrescimo: String(e.comissao_acrescimo),
           comissao_execucao: String(e.comissao_execucao),
         })),
       });
@@ -197,6 +206,7 @@ export default function ProcedimentosPage() {
         nome: `${proc.nome} (Cópia)`,
         valor: proc.valor.toString(),
         comissao_venda: proc.comissao_venda.toString(),
+        comissao_acrescimo: proc.comissao_acrescimo.toString(),
         comissao_execucao: proc.comissao_execucao.toString(),
         por_dente: proc.por_dente === 1,
         tem_face: proc.tem_face === 1,
@@ -251,7 +261,8 @@ export default function ProcedimentosPage() {
       const payload = {
         nome: formData.nome,
         valor: parseFloat(formData.valor) || 0,
-        comissao_venda: parseFloat(formData.comissao_venda) || 0,
+        comissao_venda: parseFloat(formData.comissao_venda || '4') || 0,
+        comissao_acrescimo: parseFloat(formData.comissao_acrescimo || '10') || 0,
         comissao_execucao: parseFloat(formData.comissao_execucao) || 0,
         por_dente: formData.por_dente,
         tem_face: formData.por_dente && formData.tem_face,
@@ -261,7 +272,8 @@ export default function ProcedimentosPage() {
           ? formData.etapas.map((e, idx) => ({
               nome: e.nome.trim(),
               valor: e.valor ? parseFloat(e.valor) : null,
-              comissao_venda: parseFloat(e.comissao_venda) || 0,
+              comissao_venda: parseFloat(e.comissao_venda || '4') || 0,
+              comissao_acrescimo: parseFloat(e.comissao_acrescimo || '10') || 0,
               comissao_execucao: parseFloat(e.comissao_execucao) || 0,
               ordem: idx,
             }))
@@ -391,9 +403,15 @@ export default function ProcedimentosPage() {
           ...(podeVerComissoes ? [
             {
               key: 'comissao_venda',
-              label: 'Comissão Venda',
+              label: 'Comissão Avaliação',
               align: 'right' as const,
               render: (proc: Procedimento) => <span className="text-neutral-600">{proc.comissao_venda}%</span>,
+            },
+            {
+              key: 'comissao_acrescimo',
+              label: 'Comissão Acréscimo',
+              align: 'right' as const,
+              render: (proc: Procedimento) => <span className="text-neutral-600">{proc.comissao_acrescimo}%</span>,
             },
             {
               key: 'comissao_execucao',
@@ -503,14 +521,23 @@ export default function ProcedimentosPage() {
           )}
 
           {podeVerComissoes && !formData.tem_etapas && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <Input
-                label="Comissão Venda (%)"
+                label="Comissão Avaliação (%)"
                 name="comissao_venda"
                 type="number"
                 value={formData.comissao_venda}
                 onChange={(v) => setFormData({ ...formData, comissao_venda: v })}
-                placeholder="0"
+                placeholder="4"
+                disabled={saving}
+              />
+              <Input
+                label="Comissão Acréscimo (%)"
+                name="comissao_acrescimo"
+                type="number"
+                value={formData.comissao_acrescimo}
+                onChange={(v) => setFormData({ ...formData, comissao_acrescimo: v })}
+                placeholder="10"
                 disabled={saving}
               />
               <Input
@@ -593,7 +620,7 @@ export default function ProcedimentosPage() {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                      <div className={`grid gap-2 pl-8 ${podeVerComissoes ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                      <div className={`grid gap-2 pl-8 ${podeVerComissoes ? 'grid-cols-4' : 'grid-cols-1'}`}>
                         <div>
                           <label className="block text-xs text-muted mb-1">Valor (R$) <span className="text-neutral-400">opcional</span></label>
                           <input
@@ -610,7 +637,7 @@ export default function ProcedimentosPage() {
                         {podeVerComissoes && (
                           <>
                             <div>
-                              <label className="block text-xs text-muted mb-1">Comissão Venda (%)</label>
+                              <label className="block text-xs text-muted mb-1">Comissão Avaliação (%)</label>
                               <input
                                 type="number"
                                 step="0.1"
@@ -618,7 +645,21 @@ export default function ProcedimentosPage() {
                                 max="100"
                                 value={etapa.comissao_venda}
                                 onChange={(e) => atualizarEtapa(idx, 'comissao_venda', e.target.value)}
-                                placeholder="0"
+                                placeholder="4"
+                                className="input text-sm w-full"
+                                disabled={saving}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-muted mb-1">Comissão Acréscimo (%)</label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                value={etapa.comissao_acrescimo}
+                                onChange={(e) => atualizarEtapa(idx, 'comissao_acrescimo', e.target.value)}
+                                placeholder="10"
                                 className="input text-sm w-full"
                                 disabled={saving}
                               />

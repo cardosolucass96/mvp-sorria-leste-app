@@ -607,7 +607,7 @@ describe('Segurança — Validação de Input', () => {
 
     test('POST /api/procedimentos usa ? placeholders para todos os campos', async () => {
       mockQueryResponse('select * from procedimentos where id', {
-        id: 1, nome: 'Limpeza', valor: 100, comissao_venda: 10,
+        id: 1, nome: 'Limpeza', valor: 100, comissao_venda: 10, comissao_acrescimo: 10,
         comissao_execucao: 15, por_dente: 0, ativo: 1,
       });
 
@@ -617,6 +617,7 @@ describe('Segurança — Validação de Input', () => {
           nome: 'Limpeza',
           valor: 100,
           comissao_venda: 10,
+          comissao_acrescimo: 10,
           comissao_execucao: 15,
           por_dente: false,
         },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { garantirSchemaComissoesOrigem } from '@/lib/helpers/garantirComissaoSchema';
 
 interface Comissao {
   id: number;
@@ -9,6 +10,7 @@ interface Comissao {
   usuario_id: number;
   usuario_nome: string;
   tipo: string;
+  origem: 'avaliacao' | 'acrescimo' | 'execucao';
   percentual: number;
   valor_base: number;
   valor_comissao: number;
@@ -20,6 +22,8 @@ interface Comissao {
 interface ResumoComissao {
   usuario_id: number;
   usuario_nome: string;
+  total_avaliacao: number;
+  total_acrescimo: number;
   total_venda: number;
   total_execucao: number;
   total_geral: number;
@@ -34,11 +38,14 @@ interface ResumoComissao {
 // - resumo: se "true", retorna resumo por usuário
 export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
+    await garantirSchemaComissoesOrigem();
+
     const { searchParams } = new URL(request.url);
     const usuarioId = searchParams.get('usuario_id');
     const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
     const resumo = searchParams.get('resumo') === 'true';
+    const origemExpr = "COALESCE(c.origem, CASE WHEN c.tipo = 'execucao' THEN 'execucao' ELSE 'avaliacao' END)";
 
     // Se pediu resumo, retorna agregado por usuário
     if (resumo) {
@@ -46,6 +53,8 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         SELECT
           c.usuario_id,
           u.nome as usuario_nome,
+          SUM(CASE WHEN c.tipo = 'venda' AND ${origemExpr} = 'avaliacao' THEN c.valor_comissao ELSE 0 END) as total_avaliacao,
+          SUM(CASE WHEN c.tipo = 'venda' AND ${origemExpr} = 'acrescimo' THEN c.valor_comissao ELSE 0 END) as total_acrescimo,
           SUM(CASE WHEN c.tipo = 'venda' THEN c.valor_comissao ELSE 0 END) as total_venda,
           SUM(CASE WHEN c.tipo = 'execucao' THEN c.valor_comissao ELSE 0 END) as total_execucao,
           SUM(c.valor_comissao) as total_geral,
@@ -87,6 +96,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         c.usuario_id,
         u.nome as usuario_nome,
         c.tipo,
+        ${origemExpr} as origem,
         c.percentual,
         c.valor_base,
         c.valor_comissao,
@@ -123,10 +133,16 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const comissoes = await query<Comissao>(sql, params);
 
     // Calcular totais
-    const totalVenda = comissoes
-      .filter(c => c.tipo === 'venda')
+    const totalAvaliacao = comissoes
+      .filter(c => c.origem === 'avaliacao')
       .reduce((sum, c) => sum + c.valor_comissao, 0);
-    
+
+    const totalAcrescimo = comissoes
+      .filter(c => c.origem === 'acrescimo')
+      .reduce((sum, c) => sum + c.valor_comissao, 0);
+
+    const totalVenda = totalAvaliacao + totalAcrescimo;
+
     const totalExecucao = comissoes
       .filter(c => c.tipo === 'execucao')
       .reduce((sum, c) => sum + c.valor_comissao, 0);
@@ -134,6 +150,8 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     return NextResponse.json({
       comissoes,
       totais: {
+        avaliacao: totalAvaliacao,
+        acrescimo: totalAcrescimo,
         venda: totalVenda,
         execucao: totalExecucao,
         geral: totalVenda + totalExecucao

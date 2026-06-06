@@ -69,7 +69,8 @@ CREATE TABLE IF NOT EXISTS procedimentos (
   nome TEXT NOT NULL,
   descricao TEXT,
   valor REAL NOT NULL DEFAULT 0,
-  comissao_venda REAL NOT NULL DEFAULT 0,  -- % comissão do avaliador
+  comissao_venda REAL NOT NULL DEFAULT 4,  -- % comissão da avaliação
+  comissao_acrescimo REAL NOT NULL DEFAULT 10, -- % comissão quando item é adicionado durante a execução
   comissao_execucao REAL NOT NULL DEFAULT 0, -- % comissão do executor
   por_dente INTEGER NOT NULL DEFAULT 0, -- 1 se o valor é cobrado por dente
   tem_etapas INTEGER NOT NULL DEFAULT 0, -- 1 se o procedimento tem etapas/sessões distintas
@@ -85,7 +86,8 @@ CREATE TABLE IF NOT EXISTS procedimento_etapas_modelo (
   procedimento_id INTEGER NOT NULL,
   nome TEXT NOT NULL,
   valor REAL,                           -- null = proporcional ao valor total do procedimento
-  comissao_venda REAL NOT NULL DEFAULT 0,
+  comissao_venda REAL NOT NULL DEFAULT 4,
+  comissao_acrescimo REAL NOT NULL DEFAULT 10,
   comissao_execucao REAL NOT NULL DEFAULT 0,
   ordem INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id)
@@ -227,6 +229,7 @@ CREATE TABLE IF NOT EXISTS comissoes (
   item_atendimento_id INTEGER NOT NULL,
   usuario_id INTEGER NOT NULL, -- Quem recebe a comissão
   tipo TEXT NOT NULL CHECK (tipo IN ('venda', 'execucao')), -- Tipo de comissão
+  origem TEXT NOT NULL DEFAULT 'avaliacao' CHECK (origem IN ('avaliacao', 'acrescimo', 'execucao')), -- Contexto da comissão
   percentual REAL NOT NULL, -- % da comissão aplicada
   valor_base REAL NOT NULL, -- Valor do procedimento
   valor_comissao REAL NOT NULL, -- Valor calculado da comissão

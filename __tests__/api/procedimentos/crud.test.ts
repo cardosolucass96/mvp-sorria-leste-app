@@ -160,7 +160,8 @@ describe('POST /api/procedimentos', () => {
       nome: 'Clareamento',
       descricao: null,
       valor: 500,
-      comissao_venda: 0,
+      comissao_venda: 4,
+      comissao_acrescimo: 10,
       comissao_execucao: 0,
       por_dente: 0,
       tem_face: 0,
@@ -187,6 +188,7 @@ describe('POST /api/procedimentos', () => {
       descricao: null,
       valor: 1200,
       comissao_venda: 15,
+      comissao_acrescimo: 10,
       comissao_execucao: 30,
       por_dente: 1,
       tem_face: 1,
@@ -200,6 +202,7 @@ describe('POST /api/procedimentos', () => {
         nome: 'Coroa',
         valor: 1200,
         comissao_venda: 15,
+        comissao_acrescimo: 10,
         comissao_execucao: 30,
         por_dente: true,
         tem_face: true,
@@ -213,7 +216,7 @@ describe('POST /api/procedimentos', () => {
   it('trim no nome', async () => {
     setLastInsertId(12);
     mockQueryResponse('select * from procedimentos where id', [{
-      id: 12, nome: 'Trimmed', valor: 100, comissao_venda: 0,
+      id: 12, nome: 'Trimmed', valor: 100, comissao_venda: 4, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 0, tem_face: 0, ativo: 1, created_at: '2025-03-20',
     }]);
 
@@ -227,10 +230,10 @@ describe('POST /api/procedimentos', () => {
     expect(insertQuery!.params[0]).toBe('Trimmed');
   });
 
-  it('comissão default é 0 quando não enviada', async () => {
+  it('comissões default são 4 e 10 quando não enviadas', async () => {
     setLastInsertId(13);
     mockQueryResponse('select * from procedimentos where id', [{
-      id: 13, nome: 'Default', valor: 100, comissao_venda: 0,
+      id: 13, nome: 'Default', valor: 100, comissao_venda: 4, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 0, tem_face: 0, ativo: 1, created_at: '2025-03-20',
     }]);
 
@@ -241,14 +244,15 @@ describe('POST /api/procedimentos', () => {
 
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO procedimentos'));
-    expect(insertQuery!.params[2]).toBe(0); // comissao_venda
-    expect(insertQuery!.params[3]).toBe(0); // comissao_execucao
+    expect(insertQuery!.params[2]).toBe(4); // comissao_venda
+    expect(insertQuery!.params[3]).toBe(10); // comissao_acrescimo
+    expect(insertQuery!.params[4]).toBe(0); // comissao_execucao
   });
 
   it('por_dente boolean → inteiro (true → 1, false/undefined → 0)', async () => {
     setLastInsertId(14);
     mockQueryResponse('select * from procedimentos where id', [{
-      id: 14, nome: 'PorDente', valor: 200, comissao_venda: 0,
+      id: 14, nome: 'PorDente', valor: 200, comissao_venda: 4, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 1, tem_face: 0, ativo: 1, created_at: '2025-03-20',
     }]);
 
@@ -259,14 +263,14 @@ describe('POST /api/procedimentos', () => {
 
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO procedimentos'));
-    expect(insertQuery!.params[4]).toBe(1); // por_dente
-    expect(insertQuery!.params[5]).toBe(0); // tem_face
+    expect(insertQuery!.params[5]).toBe(1); // por_dente
+    expect(insertQuery!.params[6]).toBe(0); // tem_face
 
     // Reset para testar false
     resetMockDb();
     setLastInsertId(15);
     mockQueryResponse('select * from procedimentos where id', [{
-      id: 15, nome: 'NaoPorDente', valor: 200, comissao_venda: 0,
+      id: 15, nome: 'NaoPorDente', valor: 200, comissao_venda: 4, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 0, tem_face: 0, ativo: 1, created_at: '2025-03-20',
     }]);
 
@@ -277,14 +281,14 @@ describe('POST /api/procedimentos', () => {
 
     const queries2 = getExecutedQueries();
     const insertQuery2 = queries2.find(q => q.sql.includes('INSERT INTO procedimentos'));
-    expect(insertQuery2!.params[4]).toBe(0);
     expect(insertQuery2!.params[5]).toBe(0);
+    expect(insertQuery2!.params[6]).toBe(0);
   });
 
   it('salva tem_face quando procedimento é por_dente', async () => {
     setLastInsertId(18);
     mockQueryResponse('select * from procedimentos where id', [{
-      id: 18, nome: 'Face', valor: 210, comissao_venda: 0,
+      id: 18, nome: 'Face', valor: 210, comissao_venda: 4, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 1, tem_face: 1, ativo: 1, created_at: '2025-03-20',
     }]);
 
@@ -295,14 +299,14 @@ describe('POST /api/procedimentos', () => {
 
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO procedimentos'));
-    expect(insertQuery!.params[4]).toBe(1);
     expect(insertQuery!.params[5]).toBe(1);
+    expect(insertQuery!.params[6]).toBe(1);
   });
 
   it('permite valor = 0', async () => {
     setLastInsertId(16);
     mockQueryResponse('select * from procedimentos where id', [{
-      id: 16, nome: 'Gratis', valor: 0, comissao_venda: 0,
+      id: 16, nome: 'Gratis', valor: 0, comissao_venda: 4, comissao_acrescimo: 10,
       comissao_execucao: 0, por_dente: 0, ativo: 1, created_at: '2025-03-20',
     }]);
 
@@ -317,7 +321,7 @@ describe('POST /api/procedimentos', () => {
   it('permite comissão = 0 e comissão = 100 (limites)', async () => {
     setLastInsertId(17);
     mockQueryResponse('select * from procedimentos where id', [{
-      id: 17, nome: 'Limites', valor: 100, comissao_venda: 0,
+      id: 17, nome: 'Limites', valor: 100, comissao_venda: 0, comissao_acrescimo: 10,
       comissao_execucao: 100, por_dente: 0, ativo: 1, created_at: '2025-03-20',
     }]);
 
@@ -418,14 +422,16 @@ describe('PUT /api/procedimentos/[id]', () => {
     const ctx = createRouteContext({ id: '1' });
     await callRoute(updateProcedimento, '/api/procedimentos/1', {
       method: 'PUT',
-      body: { comissao_venda: 20, comissao_execucao: 35 },
+      body: { comissao_venda: 20, comissao_acrescimo: 12, comissao_execucao: 35 },
     }, ctx);
 
     const queries = getExecutedQueries();
     const updateQuery = queries.find(q => q.sql.includes('UPDATE procedimentos'));
     expect(updateQuery!.sql).toContain('comissao_venda = ?');
+    expect(updateQuery!.sql).toContain('comissao_acrescimo = ?');
     expect(updateQuery!.sql).toContain('comissao_execucao = ?');
     expect(updateQuery!.params).toContain(20);
+    expect(updateQuery!.params).toContain(12);
     expect(updateQuery!.params).toContain(35);
   });
 
@@ -540,6 +546,7 @@ describe('PUT /api/procedimentos/[id]', () => {
         nome: 'Restauração Premium',
         valor: 350,
         comissao_venda: 20,
+        comissao_acrescimo: 12,
         comissao_execucao: 40,
         por_dente: false,
       },
@@ -551,6 +558,7 @@ describe('PUT /api/procedimentos/[id]', () => {
     expect(updateQuery!.sql).toContain('nome = ?');
     expect(updateQuery!.sql).toContain('valor = ?');
     expect(updateQuery!.sql).toContain('comissao_venda = ?');
+    expect(updateQuery!.sql).toContain('comissao_acrescimo = ?');
     expect(updateQuery!.sql).toContain('comissao_execucao = ?');
     expect(updateQuery!.sql).toContain('por_dente = ?');
   });

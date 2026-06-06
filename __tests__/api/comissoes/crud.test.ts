@@ -58,6 +58,7 @@ const comissaoVenda1 = {
   usuario_id: 3,
   usuario_nome: 'Ana Secretária',
   tipo: 'venda',
+  origem: 'avaliacao',
   percentual: 15,
   valor_base: 400,
   valor_comissao: 60,
@@ -73,6 +74,7 @@ const comissaoExecucao1 = {
   usuario_id: 4,
   usuario_nome: 'Dr. Pedro Dentista',
   tipo: 'execucao',
+  origem: 'execucao',
   percentual: 25,
   valor_base: 400,
   valor_comissao: 100,
@@ -88,6 +90,7 @@ const comissaoVenda2 = {
   usuario_id: 3,
   usuario_nome: 'Ana Secretária',
   tipo: 'venda',
+  origem: 'acrescimo',
   percentual: 10,
   valor_base: 800,
   valor_comissao: 80,
@@ -103,6 +106,7 @@ const comissaoExecucao2 = {
   usuario_id: 4,
   usuario_nome: 'Dr. Pedro Dentista',
   tipo: 'execucao',
+  origem: 'execucao',
   percentual: 30,
   valor_base: 800,
   valor_comissao: 240,
@@ -123,11 +127,13 @@ describe('GET /api/comissoes — listagem detalhada', () => {
 
     const { status, data } = await callRoute<{
       comissoes: typeof todasComissoes;
-      totais: { venda: number; execucao: number; geral: number };
+      totais: { avaliacao: number; acrescimo: number; venda: number; execucao: number; geral: number };
     }>(getComissoes, '/api/comissoes');
 
     expect(status).toBe(200);
     expect(data.comissoes).toHaveLength(4);
+    expect(data.totais.avaliacao).toBe(60);
+    expect(data.totais.acrescimo).toBe(80);
     expect(data.totais.venda).toBe(60 + 80); // 140
     expect(data.totais.execucao).toBe(100 + 240); // 340
     expect(data.totais.geral).toBe(140 + 340); // 480
@@ -138,11 +144,13 @@ describe('GET /api/comissoes — listagem detalhada', () => {
 
     const { status, data } = await callRoute<{
       comissoes: unknown[];
-      totais: { venda: number; execucao: number; geral: number };
+      totais: { avaliacao: number; acrescimo: number; venda: number; execucao: number; geral: number };
     }>(getComissoes, '/api/comissoes');
 
     expect(status).toBe(200);
     expect(data.comissoes).toHaveLength(0);
+    expect(data.totais.avaliacao).toBe(0);
+    expect(data.totais.acrescimo).toBe(0);
     expect(data.totais.venda).toBe(0);
     expect(data.totais.execucao).toBe(0);
     expect(data.totais.geral).toBe(0);
@@ -182,9 +190,11 @@ describe('GET /api/comissoes — listagem detalhada', () => {
     mockQueryResponse('FROM comissoes c', [comissaoVenda1, comissaoVenda2]);
 
     const { data } = await callRoute<{
-      totais: { venda: number; execucao: number; geral: number };
+      totais: { avaliacao: number; acrescimo: number; venda: number; execucao: number; geral: number };
     }>(getComissoes, '/api/comissoes');
 
+    expect(data.totais.avaliacao).toBe(60);
+    expect(data.totais.acrescimo).toBe(80);
     expect(data.totais.venda).toBe(140); // 60 + 80
     expect(data.totais.execucao).toBe(0);
     expect(data.totais.geral).toBe(140);
@@ -194,9 +204,11 @@ describe('GET /api/comissoes — listagem detalhada', () => {
     mockQueryResponse('FROM comissoes c', [comissaoExecucao1, comissaoExecucao2]);
 
     const { data } = await callRoute<{
-      totais: { venda: number; execucao: number; geral: number };
+      totais: { avaliacao: number; acrescimo: number; venda: number; execucao: number; geral: number };
     }>(getComissoes, '/api/comissoes');
 
+    expect(data.totais.avaliacao).toBe(0);
+    expect(data.totais.acrescimo).toBe(0);
     expect(data.totais.venda).toBe(0);
     expect(data.totais.execucao).toBe(340); // 100 + 240
     expect(data.totais.geral).toBe(340);
@@ -228,12 +240,14 @@ describe('GET /api/comissoes — filtro por usuario_id', () => {
 
     const { data } = await callRoute<{
       comissoes: unknown[];
-      totais: { venda: number; execucao: number; geral: number };
+      totais: { avaliacao: number; acrescimo: number; venda: number; execucao: number; geral: number };
     }>(getComissoes, '/api/comissoes', {
       searchParams: { usuario_id: '3' },
     });
 
     expect(data.comissoes).toHaveLength(2);
+    expect(data.totais.avaliacao).toBe(60);
+    expect(data.totais.acrescimo).toBe(80);
     expect(data.totais.venda).toBe(140);
     expect(data.totais.execucao).toBe(0);
     expect(data.totais.geral).toBe(140);
@@ -322,6 +336,8 @@ describe('GET /api/comissoes — modo resumo', () => {
   const resumoAna = {
     usuario_id: 3,
     usuario_nome: 'Ana Secretária',
+    total_avaliacao: 60,
+    total_acrescimo: 80,
     total_venda: 140,
     total_execucao: 0,
     total_geral: 140,
@@ -331,6 +347,8 @@ describe('GET /api/comissoes — modo resumo', () => {
   const resumoPedro = {
     usuario_id: 4,
     usuario_nome: 'Dr. Pedro Dentista',
+    total_avaliacao: 0,
+    total_acrescimo: 0,
     total_venda: 0,
     total_execucao: 340,
     total_geral: 340,
@@ -342,7 +360,7 @@ describe('GET /api/comissoes — modo resumo', () => {
 
     const { status, data } = await callRoute<Array<{
       usuario_id: number; usuario_nome: string;
-      total_venda: number; total_execucao: number; total_geral: number;
+      total_avaliacao: number; total_acrescimo: number; total_venda: number; total_execucao: number; total_geral: number;
       quantidade: number;
     }>>(getComissoes, '/api/comissoes', {
       searchParams: { resumo: 'true' },
@@ -417,7 +435,7 @@ describe('GET /api/comissoes — modo resumo', () => {
 
     const { data } = await callRoute<Array<{
       usuario_id: number; usuario_nome: string;
-      total_venda: number; total_execucao: number; total_geral: number;
+      total_avaliacao: number; total_acrescimo: number; total_venda: number; total_execucao: number; total_geral: number;
       quantidade: number;
     }>>(getComissoes, '/api/comissoes', {
       searchParams: { resumo: 'true' },
@@ -426,6 +444,8 @@ describe('GET /api/comissoes — modo resumo', () => {
     const pedro = data[0];
     expect(pedro.usuario_id).toBe(4);
     expect(pedro.usuario_nome).toBe('Dr. Pedro Dentista');
+    expect(pedro.total_avaliacao).toBe(0);
+    expect(pedro.total_acrescimo).toBe(0);
     expect(pedro.total_venda).toBe(0);
     expect(pedro.total_execucao).toBe(340);
     expect(pedro.total_geral).toBe(340);

@@ -17,6 +17,7 @@ export interface ProcedimentoFormData {
   nome: string;
   valor: string;
   comissao_venda: string;
+  comissao_acrescimo: string;
   comissao_execucao: string;
   por_dente: boolean;
   tem_face: boolean;
@@ -36,7 +37,8 @@ export interface ProcedimentoFormProps {
 const emptyForm: ProcedimentoFormData = {
   nome: '',
   valor: '',
-  comissao_venda: '',
+  comissao_venda: '4',
+  comissao_acrescimo: '10',
   comissao_execucao: '',
   por_dente: false,
   tem_face: false,
@@ -125,14 +127,27 @@ export default function ProcedimentoForm({
         />
 
         {showComissoes && (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Input
-              label="Comissão Venda (%)"
+              label="Comissão Avaliação (%)"
               name="comissao_venda"
               type="number"
               value={formData.comissao_venda}
               onChange={handleChange('comissao_venda')}
-              placeholder="0"
+              placeholder="4"
+              disabled={loading}
+              min={0}
+              max={100}
+              step="0.1"
+            />
+
+            <Input
+              label="Comissão Acréscimo (%)"
+              name="comissao_acrescimo"
+              type="number"
+              value={formData.comissao_acrescimo}
+              onChange={handleChange('comissao_acrescimo')}
+              placeholder="10"
               disabled={loading}
               min={0}
               max={100}

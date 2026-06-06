@@ -71,6 +71,7 @@ const PROC_ORTO = {
   nome: 'Manutenção Ortodôntica',
   valor: 350,
   comissao_venda: 5,
+  comissao_acrescimo: 10,
   comissao_execucao: 30,
   por_dente: 0,
   ativo: 1,
