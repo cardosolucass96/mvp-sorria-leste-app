@@ -354,15 +354,20 @@ export const PUT = withUnit(async (request: NextRequest, context: UnitAuthentica
 
       // Encerramento pelo atendente: salva observações
       if (status === 'encerrado') {
-        await garantirColunaObservacoesEncerramento();
-
         if (motivo_saida) {
           updates.push('motivo_saida = ?');
           updateParams.push(motivo_saida);
         }
-        if (observacoes_encerramento !== undefined) {
+
+        const observacoesNormalizadas =
+          typeof observacoes_encerramento === 'string'
+            ? observacoes_encerramento.trim()
+            : observacoes_encerramento;
+
+        if (observacoesNormalizadas) {
+          await garantirColunaObservacoesEncerramento();
           updates.push('observacoes_encerramento = ?');
-          updateParams.push(observacoes_encerramento);
+          updateParams.push(observacoesNormalizadas);
         }
       }
     }
