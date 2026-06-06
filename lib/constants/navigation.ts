@@ -19,6 +19,7 @@ import {
   Calendar,
   Building2,
   Tags,
+  MonitorPlay,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -34,6 +35,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { href: '/clientes', label: 'Clientes', icon: Users, roles: ['admin', 'atendente'] },
   { href: '/atendimentos', label: 'Atendimentos', icon: ClipboardList, roles: ['admin', 'atendente'] },
   { href: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'atendente', 'avaliador', 'executor', 'ortodontista'] },
+  { href: '/painel-tv', label: 'Painel TV', icon: MonitorPlay, roles: ['admin', 'atendente'] },
   { href: '/followup', label: 'Followup', icon: MessageCircle, roles: ['admin', 'atendente'] },
   { href: '/avaliacao', label: 'Fila Avaliação', icon: Search, roles: ['admin', 'avaliador'] },
   // Filas de execução são injetadas dinamicamente pelo Sidebar a partir de /api/categorias

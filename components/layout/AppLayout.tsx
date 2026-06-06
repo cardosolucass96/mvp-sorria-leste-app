@@ -22,6 +22,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
 
   const isPublicRoute = publicRoutes.includes(pathname);
+  const isTvRoute = pathname.startsWith('/painel-tv');
 
   useEffect(() => {
     if (!isLoading && !user && !isPublicRoute) {
@@ -46,6 +47,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   if (!user) {
     return null;
+  }
+
+  if (isTvRoute) {
+    return (
+      <main className="min-h-screen" role="main">
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
+      </main>
+    );
   }
 
   return (
