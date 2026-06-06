@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef, use } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { AnexosGallery, type AnexoData } from '@/components/domain';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 import { formatarMoeda, formatarDenteUnicoComFaces } from '@/lib/utils/formatters';
 import { Search, Trash2, Pencil, Plus, CheckCircle2, Paperclip, FileText } from 'lucide-react';
@@ -66,6 +67,16 @@ interface Anexo {
   created_at: string;
 }
 
+interface AnexoClienteApi {
+  id: number;
+  nome_arquivo: string;
+  tipo_arquivo: string;
+  caminho: string;
+  tamanho: number;
+  created_at: string;
+  descricao?: string | null;
+}
+
 interface Atendimento {
   id: number;
   cliente_id: number;
@@ -94,11 +105,11 @@ export default function AvaliacaoDetalhePage({
   const [executores, setExecutores] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [anexosCliente, setAnexosCliente] = useState<AnexoData[]>([]);
+  const [anexosClienteLoading, setAnexosClienteLoading] = useState(false);
+  const [anexosClienteUploading, setAnexosClienteUploading] = useState(false);
   const [anexosPorItem, setAnexosPorItem] = useState<Record<number, Anexo[]>>({});
   const [anexosLoading, setAnexosLoading] = useState<Record<number, boolean>>({});
-  const [enviandoAnexos, setEnviandoAnexos] = useState<Record<number, boolean>>({});
-  const [dragOverItem, setDragOverItem] = useState<Record<number, boolean>>({});
-  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   // Form para novo procedimento
   const [procedimentoId, setProcedimentoId] = useState('');
@@ -152,54 +163,32 @@ export default function AvaliacaoDetalhePage({
     await Promise.all(itens.map((item) => carregarAnexosItem(item.id)));
   };
 
-  const enviarAnexoArquivo = async (itemId: number, file: File) => {
-    if (!user) return;
-    setEnviandoAnexos((prev) => ({ ...prev, [itemId]: true }));
+  const carregarAnexosCliente = async (clienteId: number) => {
+    setAnexosClienteLoading(true);
     try {
-      const formData = new FormData();
-      formData.append('arquivo', file);
-      formData.append('usuario_id', user.id.toString());
-
-      const res = await unitFetch(`/api/execucao/item/${itemId}/anexos`, { method: 'POST', body: formData });
-      if (res.ok) {
-        await carregarAnexosItem(itemId);
-        toast.success('Anexo enviado com sucesso');
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Erro ao enviar anexo');
+      const res = await fetch(`/api/clientes/${clienteId}/anexos`);
+      if (!res.ok) {
+        setAnexosCliente([]);
+        return;
       }
+
+      const data = await res.json() as AnexoClienteApi[];
+      setAnexosCliente(
+        data.map((anexo) => ({
+          id: anexo.id,
+          nome: anexo.nome_arquivo,
+          url: `/api/arquivos/${anexo.caminho}`,
+          tipo: anexo.tipo_arquivo,
+          tamanho: anexo.tamanho,
+          created_at: anexo.created_at,
+          descricao: anexo.descricao || null,
+        }))
+      );
     } catch {
-      toast.error('Erro ao enviar anexo');
+      setAnexosCliente([]);
     } finally {
-      setEnviandoAnexos((prev) => ({ ...prev, [itemId]: false }));
+      setAnexosClienteLoading(false);
     }
-  };
-
-  const handleSelecionarArquivo = async (itemId: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await enviarAnexoArquivo(itemId, file);
-
-    const input = fileInputRefs.current[itemId];
-    if (input) input.value = '';
-  };
-
-  const handleDropArquivo = async (itemId: number, e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOverItem((prev) => ({ ...prev, [itemId]: false }));
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    await enviarAnexoArquivo(itemId, file);
-  };
-
-  const handleDragOverArquivo = (itemId: number, e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOverItem((prev) => ({ ...prev, [itemId]: true }));
-  };
-
-  const handleDragLeaveArquivo = (itemId: number, e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOverItem((prev) => ({ ...prev, [itemId]: false }));
   };
 
   const handleRemoverAnexo = (itemId: number, anexoId: number) => {
@@ -223,6 +212,82 @@ export default function AvaliacaoDetalhePage({
         }
       },
     });
+  };
+
+  const handleUploadAnexoCliente = async ({ file }: { file: File; titulo?: string; descricao?: string }) => {
+    if (!user || !atendimento) return;
+
+    setAnexosClienteUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('arquivo', file);
+      formData.append('usuario_id', user.id.toString());
+
+      const res = await fetch(`/api/clientes/${atendimento.cliente_id}/anexos`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Erro ao enviar anexo');
+        return;
+      }
+
+      await carregarAnexosCliente(atendimento.cliente_id);
+      toast.success('Foto adicionada com sucesso');
+    } catch {
+      toast.error('Erro ao enviar anexo');
+    } finally {
+      setAnexosClienteUploading(false);
+    }
+  };
+
+  const handleDeleteAnexoCliente = async (anexo: AnexoData) => {
+    if (!atendimento) return;
+
+    try {
+      const res = await fetch(`/api/clientes/${atendimento.cliente_id}/anexos?anexo_id=${anexo.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Erro ao remover anexo');
+        return;
+      }
+
+      await carregarAnexosCliente(atendimento.cliente_id);
+      toast.success('Anexo removido com sucesso');
+    } catch {
+      toast.error('Erro ao remover anexo');
+    }
+  };
+
+  const handleUpdateAnexoCliente = async (
+    anexo: AnexoData,
+    { titulo, descricao }: { titulo?: string; descricao?: string }
+  ) => {
+    if (!atendimento) return;
+
+    const res = await fetch(`/api/clientes/${atendimento.cliente_id}/anexos`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        anexo_id: anexo.id,
+        titulo,
+        descricao,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      toast.error(data.error || 'Erro ao atualizar anexo');
+      return;
+    }
+
+    await carregarAnexosCliente(atendimento.cliente_id);
+    toast.success('Anexo atualizado com sucesso');
   };
 
   const carregarDados = async () => {
@@ -253,6 +318,7 @@ export default function AvaliacaoDetalhePage({
       );
 
       await carregarAnexosDosItens(atendData.itens || []);
+      await carregarAnexosCliente(atendData.cliente_id);
     } catch (err) {
       setError('Erro ao carregar dados');
       console.error(err);
@@ -594,6 +660,23 @@ export default function AvaliacaoDetalhePage({
           )}
 
           <div>
+            <div className="mb-2 flex items-center gap-2">
+              <Paperclip className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-foreground">Fotos e anexos da avaliação</h3>
+            </div>
+            <AnexosGallery
+              anexos={anexosCliente}
+              onUpload={handleUploadAnexoCliente}
+              onDelete={handleDeleteAnexoCliente}
+              onUpdate={handleUpdateAnexoCliente}
+              loading={anexosClienteLoading}
+              uploading={anexosClienteUploading}
+              maxSizeMB={10}
+              acceptTypes="image/*,.pdf,.doc,.docx,.mp4,.webm,.mov"
+            />
+          </div>
+
+          <div>
             <label className="block text-sm font-medium text-foreground mb-1">
               Obs / Laudo <span className="text-muted-foreground font-normal">(opcional)</span>
             </label>
@@ -618,6 +701,7 @@ export default function AvaliacaoDetalhePage({
             Adicionar
           </Button>
         </form>
+
       </Card>
 
       {/* ── Lista de Procedimentos ── */}
@@ -753,41 +837,6 @@ export default function AvaliacaoDetalhePage({
                   <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
                     <Paperclip className="w-4 h-4" /> Anexos e Imagens
                   </h3>
-                  <div
-                    className={`p-4 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center gap-2 transition-colors ${
-                      dragOverItem[item.id]
-                        ? 'border-primary-400 bg-primary-500/10'
-                        : 'border-neutral-300 bg-transparent'
-                    }`}
-                    onDragOver={(e) => handleDragOverArquivo(item.id, e)}
-                    onDragLeave={(e) => handleDragLeaveArquivo(item.id, e)}
-                    onDrop={(e) => handleDropArquivo(item.id, e)}
-                  >
-                    <p className="text-sm text-muted-foreground">
-                      Arraste a foto/arquivo aqui ou
-                    </p>
-                    <Button
-                      variant="secondary"
-                      type="button"
-                      onClick={() => fileInputRefs.current[item.id]?.click()}
-                      disabled={!!enviandoAnexos[item.id]}
-                    >
-                      Selecionar arquivo
-                    </Button>
-                    <input
-                      ref={(node) => {
-                        fileInputRefs.current[item.id] = node;
-                      }}
-                      type="file"
-                      accept="image/*,video/*,.pdf,.doc,.docx"
-                      onChange={(e) => handleSelecionarArquivo(item.id, e)}
-                      disabled={!!enviandoAnexos[item.id]}
-                      className="hidden"
-                    />
-                    {enviandoAnexos[item.id] && (
-                      <p className="text-sm text-primary-600">Enviando...</p>
-                    )}
-                  </div>
                   {anexosLoading[item.id] ? (
                     <p className="text-sm text-muted-foreground">Carregando anexos...</p>
                   ) : (anexosPorItem[item.id]?.length ? (
