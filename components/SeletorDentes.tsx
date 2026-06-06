@@ -51,7 +51,7 @@ export default function SeletorDentes({
   mostrarFaces = false,
   expandidoInicial = false,
 }: SeletorDentesProps) {
-  const [expandido, setExpandido] = useState(expandirInicial);
+  const [expandido, setExpandido] = useState(expandidoInicial);
   const [mostrarDeciduos, setMostrarDeciduos] = useState(
     valor.some((item) => TODOS_DENTES_DECIDUOS.includes(item.dente))
   );
