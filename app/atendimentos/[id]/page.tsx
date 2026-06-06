@@ -172,7 +172,10 @@ export default function AtendimentoDetalhePage({
       const url = catId ? `/api/usuarios?categoria_id=${catId}` : '/api/usuarios';
       const res = await fetch(url);
       const data: Usuario[] = await res.json();
-      setExecutores(catId ? data : data.filter(u => u.role === 'executor' || u.role === 'admin'));
+      setExecutores((catId ? data : data).filter((u: Usuario & { roles?: string[] }) => {
+        const roles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
+        return roles.includes('executor') || roles.includes('ortodontista');
+      }));
     } catch {}
   };
 
@@ -289,7 +292,10 @@ export default function AtendimentoDetalhePage({
       ]);
       setProcedimentos(await resProc.json());
       const usersData: Usuario[] = await resUsers.json();
-      setExecutores(catId ? usersData : usersData.filter(u => u.role === 'executor' || u.role === 'admin'));
+      setExecutores((catId ? usersData : usersData).filter((u: Usuario & { roles?: string[] }) => {
+        const roles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
+        return roles.includes('executor') || roles.includes('ortodontista');
+      }));
     } finally {
       setLoadingDadosProc(false);
     }
@@ -464,7 +470,10 @@ export default function AtendimentoDetalhePage({
         ]);
         setProcedimentos(await resProc.json());
         const usersData: Usuario[] = await resUsers.json();
-        setExecutores(catId ? usersData : usersData.filter(u => u.role === 'executor' || u.role === 'admin'));
+        setExecutores((catId ? usersData : usersData).filter((u: Usuario & { roles?: string[] }) => {
+          const roles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
+          return roles.includes('executor') || roles.includes('ortodontista');
+        }));
       } finally {
         setLoadingDadosProc(false);
       }

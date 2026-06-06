@@ -126,7 +126,12 @@ function NovoAtendimentoForm() {
         }
 
         const usuariosData: Usuario[] = await resUsuarios.json();
-        setAvaliadores(usuariosData.filter((u) => (u.role === 'avaliador' || u.role === 'admin') && u.ativo !== 0));
+        setAvaliadores(
+          usuariosData.filter((u: Usuario & { roles?: string[] }) => {
+            const roles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
+            return roles.includes('avaliador') && u.ativo !== 0;
+          })
+        );
 
         const cats: CategoriaComRoles[] = await resCategorias.json();
         setCategorias(cats);
@@ -163,7 +168,12 @@ function NovoAtendimentoForm() {
       setProcedimentosCategoria(procsData.filter(p => p.categoria_id === parseInt(categoriaId)));
       if (resExecs.ok) {
         const execsData: Usuario[] = await resExecs.json();
-        setExecutoresCategoria(execsData);
+        setExecutoresCategoria(
+          execsData.filter((u: Usuario & { roles?: string[] }) => {
+            const roles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
+            return roles.includes('executor') || roles.includes('ortodontista');
+          })
+        );
       }
     })();
   }, [categoriaId, pulaAvaliacao]);

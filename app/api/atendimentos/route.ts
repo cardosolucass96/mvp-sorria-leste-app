@@ -29,6 +29,59 @@ interface SumResult {
   total: number;
 }
 
+async function carregarRolesUsuarioAtivo(usuarioId: number): Promise<string[] | null> {
+  const usuario = await queryOne<{ id: number; role: string }>(
+    'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
+    [usuarioId]
+  );
+
+  if (!usuario) return null;
+
+  let roles = [usuario.role];
+  try {
+    const rolesRows = await query<{ role: string }>(
+      'SELECT role FROM usuario_roles WHERE usuario_id = ?',
+      [usuarioId]
+    );
+    if (rolesRows.length > 0) {
+      roles = Array.from(new Set([usuario.role, ...rolesRows.map((row) => row.role)]));
+    }
+  } catch {
+    // Tabela usuario_roles ainda não existe — usa role primária.
+  }
+
+  return roles.filter((role) => role !== 'admin');
+}
+
+async function validarUsuarioPorRoles(
+  usuarioId: number,
+  rolesFallback: string[],
+  categoriaId: number | null = null
+): Promise<'not_found' | 'ok' | 'invalid'> {
+  const roles = await carregarRolesUsuarioAtivo(usuarioId);
+  if (!roles) return 'not_found';
+
+  if (categoriaId) {
+    try {
+      const categoriaRoles = await query<{ role: string }>(
+        'SELECT role FROM categoria_roles WHERE categoria_id = ?',
+        [categoriaId]
+      );
+      const allowedRoles = categoriaRoles
+        .map((row) => row.role)
+        .filter((role) => role !== 'admin');
+
+      if (allowedRoles.length > 0) {
+        return roles.some((role) => allowedRoles.includes(role)) ? 'ok' : 'invalid';
+      }
+    } catch {
+      // Tabela categoria_roles ainda não existe — usa fallback.
+    }
+  }
+
+  return roles.some((role) => rolesFallback.includes(role)) ? 'ok' : 'invalid';
+}
+
 // GET /api/atendimentos - Lista atendimentos da unidade atual
 export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
@@ -164,19 +217,16 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     // Verifica avaliador se fornecido (fluxo normal)
     if (avaliador_id && !tipo_orto) {
-      const avaliador = await queryOne<{ id: number; role: string }>(
-        'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
-        [avaliador_id]
-      );
-      
-      if (!avaliador) {
+      const avaliadorValido = await validarUsuarioPorRoles(avaliador_id, ['avaliador']);
+
+      if (avaliadorValido === 'not_found') {
         return NextResponse.json(
           { error: 'Avaliador não encontrado' },
           { status: 404 }
         );
       }
-      
-      if (avaliador.role !== 'avaliador' && avaliador.role !== 'admin') {
+
+      if (avaliadorValido !== 'ok') {
         return NextResponse.json(
           { error: 'Usuário selecionado não é avaliador' },
           { status: 400 }
@@ -195,12 +245,14 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
       // executor_id é opcional — se não informado, fica disponível para alguém assumir
       if (executor_id) {
-        const executor = await queryOne<{ id: number; role: string }>(
-          'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
-          [executor_id]
-        );
-        if (!executor) {
+        const executorValido = await validarUsuarioPorRoles(executor_id, ['executor', 'ortodontista'], categoriaIdFinal);
+
+        if (executorValido === 'not_found') {
           return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
+        }
+
+        if (executorValido !== 'ok') {
+          return NextResponse.json({ error: 'Usuário selecionado não é executor' }, { status: 400 });
         }
       }
 

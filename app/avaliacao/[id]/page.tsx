@@ -16,6 +16,7 @@ interface EtapaModelo {
   nome: string;
   valor: number | null;
   comissao_venda: number;
+  comissao_acrescimo: number;
   comissao_execucao: number;
   ordem: number;
 }
@@ -132,9 +133,10 @@ export default function AvaliacaoDetalhePage({
       const resUsers = await fetch(usuariosUrl);
       const usersData = await resUsers.json();
       setExecutores(
-        atendData.categoria_id
-          ? usersData
-          : usersData.filter((u: Usuario) => u.role === 'executor' || u.role === 'admin')
+        usersData.filter((u: Usuario & { roles?: string[] }) => {
+          const roles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
+          return roles.includes('executor') || roles.includes('ortodontista');
+        })
       );
     } catch (err) {
       setError('Erro ao carregar dados');

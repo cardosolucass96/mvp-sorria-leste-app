@@ -83,10 +83,7 @@ async function validarExecutorSelecionado(
   } catch {
     // Tabela usuario_roles ainda não existe — usar role primária.
   }
-
-  if (roles.includes('admin')) {
-    return { kind: 'ok' };
-  }
+  const rolesEfetivas = roles.filter((role) => role !== 'admin');
 
   if (categoriaId) {
     try {
@@ -95,8 +92,10 @@ async function validarExecutorSelecionado(
         [categoriaId]
       );
       if (categoriaRoles.length > 0) {
-        const allowedRoles = categoriaRoles.map((row) => row.role);
-        if (roles.some((role) => allowedRoles.includes(role))) {
+        const allowedRoles = categoriaRoles
+          .map((row) => row.role)
+          .filter((role) => role !== 'admin');
+        if (rolesEfetivas.some((role) => allowedRoles.includes(role))) {
           return { kind: 'ok' };
         }
 
@@ -113,7 +112,7 @@ async function validarExecutorSelecionado(
     }
   }
 
-  if (roles.includes('executor')) {
+  if (rolesEfetivas.includes('executor') || rolesEfetivas.includes('ortodontista')) {
     return { kind: 'ok' };
   }
 
