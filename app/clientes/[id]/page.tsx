@@ -972,6 +972,11 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <CalendarDays className="w-5 h-5" /> Agendamentos
             </h2>
+            <Link href={`/agenda?cliente_id=${id}`}>
+              <Button variant="secondary">
+                <Plus className="w-4 h-4 mr-1.5" /> Nova Agenda
+              </Button>
+            </Link>
           </div>
           {!agendamentos.length ? (
             <p className="text-center py-8 text-muted">Nenhum agendamento registrado</p>
@@ -1035,6 +1040,11 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <MessageCircle className="w-5 h-5" /> Followups
             </h2>
+            <Link href={`/followup?cliente_id=${id}`}>
+              <Button variant="secondary">
+                <Plus className="w-4 h-4 mr-1.5" /> Nova Follow
+              </Button>
+            </Link>
           </div>
           {!followups.length ? (
             <p className="text-center py-8 text-muted">Nenhum followup registrado</p>
