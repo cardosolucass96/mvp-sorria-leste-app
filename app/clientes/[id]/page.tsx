@@ -3,11 +3,11 @@
 import { useState, useEffect, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
 import { AgendamentoCompleto, Cliente, FollowupTarefaCompleta, VinculoCliente } from '@/lib/types';
-import { User, ClipboardList, Activity, CreditCard, Clock, FileText, Users, Plus, Trash2, Search, CalendarDays, MessageCircle } from 'lucide-react';
+import { User, ClipboardList, Activity, CreditCard, Clock, FileText, Users, Plus, Trash2, Search, CalendarDays, MessageCircle, Paperclip } from 'lucide-react';
 import { PageHeader, Card, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal } from '@/components/ui';
-import { StatusBadge } from '@/components/domain';
-import { ClienteForm, ClienteFormData } from '@/components/domain';
+import { StatusBadge, ClienteForm, ClienteFormData, AnexosGallery } from '@/components/domain';
 import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarTelefone, formatarDentes, parseDentesLabels } from '@/lib/utils/formatters';
 import { getOrigemLabel } from '@/lib/constants/origens';
 import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
@@ -118,9 +118,46 @@ interface FichaData {
   movimentacoes: Movimentacao[];
 }
 
+interface AnexoClienteApi {
+  id: number;
+  nome_arquivo: string;
+  tipo_arquivo: string;
+  caminho: string;
+  tamanho: number;
+  created_at: string;
+  usuario_nome?: string | null;
+}
+
+interface AnexoExecucaoApi {
+  id: number;
+  item_atendimento_id: number;
+  nome_arquivo: string;
+  tipo_arquivo: string;
+  caminho: string;
+  tamanho: number;
+  created_at: string;
+  usuario_nome?: string | null;
+}
+
+interface AnexoClienteItem {
+  id: number;
+  nome: string;
+  url: string;
+  tipo: string;
+  tamanho: number;
+  created_at: string;
+  origem: 'cliente' | 'prontuario';
+  itemAtendimentoId?: number;
+  atendimentoId?: number;
+  procedimentoNome?: string;
+  etapaLabel?: string | null;
+  usuarioNome?: string | null;
+}
+
 export default function ClienteDetalhePage({ params }: { params: Promise<{ id: string }> }) {
   usePageTitle('Ficha do Cliente');
   const { id } = use(params);
+  const { user } = useAuth();
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [ficha, setFicha] = useState<FichaData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -140,6 +177,10 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const [vinculoClienteSelecionado, setVinculoClienteSelecionado] = useState<Cliente | null>(null);
   const [vinculoObservacao, setVinculoObservacao] = useState('');
   const [vinculoSaving, setVinculoSaving] = useState(false);
+  const [anexosCliente, setAnexosCliente] = useState<AnexoClienteItem[]>([]);
+  const [anexosProntuario, setAnexosProntuario] = useState<AnexoClienteItem[]>([]);
+  const [anexosLoading, setAnexosLoading] = useState(false);
+  const [anexosUploading, setAnexosUploading] = useState(false);
 
   // Saldo
   const [saldo, setSaldo] = useState({ saldo: 0, saldo_calculado: 0 });
@@ -180,10 +221,77 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     }
   }, [id]);
 
+  const carregarAnexos = useCallback(async (prontuarios: ItemProntuario[] = []) => {
+    setAnexosLoading(true);
+    setAnexosCliente([]);
+    setAnexosProntuario([]);
+    try {
+      const prontuariosMap = new Map<number, ItemProntuario>(
+        prontuarios.map((item) => [item.item_id, item])
+      );
+      const [resCliente, ...resExec] = await Promise.all([
+        fetch(`/api/clientes/${id}/anexos`),
+        ...Array.from(prontuariosMap.keys()).map((itemId) => fetch(`/api/execucao/item/${itemId}/anexos`)),
+      ]);
+
+      if (resCliente.ok) {
+        const anexosClienteRaw = await resCliente.json() as AnexoClienteApi[];
+          setAnexosCliente(anexosClienteRaw.map(a => ({
+          id: a.id,
+          nome: a.nome_arquivo,
+          url: `/api/arquivos/${a.caminho}`,
+          tipo: a.tipo_arquivo,
+          tamanho: a.tamanho,
+          created_at: a.created_at,
+          origem: 'cliente',
+          usuarioNome: a.usuario_nome || null,
+        })));
+      }
+
+      if (resExec.length > 0) {
+        const anexosExec = await Promise.all(
+          resExec.map(async (res) => {
+            if (!res.ok) return [];
+            const itens = await res.json() as AnexoExecucaoApi[];
+            return itens.map((anexo) => {
+              const prontuario = prontuariosMap.get(anexo.item_atendimento_id);
+              return {
+                id: anexo.id,
+                nome: anexo.nome_arquivo,
+                url: `/api/arquivos/${anexo.caminho}`,
+                tipo: anexo.tipo_arquivo,
+                tamanho: anexo.tamanho,
+                created_at: anexo.created_at,
+                origem: 'prontuario' as const,
+                itemAtendimentoId: anexo.item_atendimento_id,
+                atendimentoId: prontuario?.atendimento_id,
+                procedimentoNome: prontuario?.procedimento_nome,
+                etapaLabel: prontuario?.etapa_label ?? null,
+                usuarioNome: anexo.usuario_nome || null,
+              };
+            });
+          })
+        );
+
+        const todosProntuario = anexosExec
+          .flat()
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setAnexosProntuario(todosProntuario);
+      }
+    } catch {
+      setError('Erro ao carregar anexos');
+    } finally {
+      setAnexosLoading(false);
+    }
+  }, [id]);
+
   const carregarFicha = useCallback(async () => {
     const res = await fetch(`/api/clientes/${id}/ficha`);
-    if (res.ok) setFicha(await res.json());
-  }, [id]);
+    if (!res.ok) return;
+    const data = await res.json() as FichaData;
+    setFicha(data);
+    await carregarAnexos(data.prontuarios);
+  }, [id, carregarAnexos]);
 
   const carregarAgendamentos = useCallback(async () => {
     const res = await fetch(`/api/agendamentos?cliente_id=${id}&order_by=data_agendada&order_dir=asc`);
@@ -207,7 +315,11 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         ]);
         if (!resCliente.ok) { router.push('/clientes'); return; }
         setCliente(await resCliente.json());
-        if (resFicha.ok) setFicha(await resFicha.json());
+        if (resFicha.ok) {
+          const fichaData = await resFicha.json() as FichaData;
+          setFicha(fichaData);
+          await carregarAnexos(fichaData.prontuarios);
+        }
         await Promise.all([loadVinculos(), carregarSaldo(), carregarAgendamentos(), carregarFollowups()]);
       } catch {
         setError('Erro ao carregar cliente');
@@ -216,7 +328,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       }
     };
     load();
-  }, [id, router, loadVinculos, carregarSaldo, carregarAgendamentos, carregarFollowups]);
+  }, [id, router, loadVinculos, carregarSaldo, carregarAgendamentos, carregarFollowups, carregarAnexos]);
 
   useEffect(() => {
     if (!vinculoBusca.trim()) { setVinculoBuscaResultados([]); return; }
@@ -313,6 +425,59 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       },
     });
   };
+
+  const handleUploadAnexo = async (file: File) => {
+    if (!user) {
+      setError('Sessão expirada. Faça login novamente para anexar arquivos.');
+      return;
+    }
+    setAnexosUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('arquivo', file);
+      formData.append('usuario_id', user.id.toString());
+
+      const res = await fetch(`/api/clientes/${id}/anexos`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'Erro ao enviar anexo');
+      } else {
+        await carregarAnexos(ficha?.prontuarios ?? []);
+        setSuccess('Anexo enviado com sucesso!');
+      }
+    } catch {
+      setError('Erro ao enviar anexo');
+    } finally {
+      setAnexosUploading(false);
+    }
+  };
+
+  const handleDeleteAnexo = async (anexoData: AnexoClienteItem | { id: number; origem?: string }) => {
+    const anexo = anexoData as AnexoClienteItem;
+    if (anexo.origem !== 'cliente') {
+      setError('Anexos de prontuário não podem ser removidos nesta aba.');
+      return;
+    }
+    const res = await fetch(`/api/clientes/${id}/anexos?anexo_id=${anexo.id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error || 'Erro ao remover anexo');
+      return;
+    }
+    await carregarAnexos(ficha?.prontuarios ?? []);
+  };
+
+  const formatarTamanhoArquivo = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const isImagem = (tipo: string) => tipo.startsWith('image/');
 
   if (isLoading) return <LoadingState mode="spinner" text="Carregando..." />;
   if (!cliente) return (
@@ -435,6 +600,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     { key: 'agendamentos', label: 'Agendamentos', count: agendamentos.length || undefined },
     { key: 'followups', label: 'Followups', count: followups.length || undefined },
     { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
+    { key: 'anexos', label: 'Anexos', count: anexosCliente.length + anexosProntuario.length },
     { key: 'historico', label: 'Histórico', count: ficha?.historico.length },
     { key: 'vinculados', label: 'Vinculados', count: vinculos.length || undefined },
   ];
@@ -955,6 +1121,91 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               );
             })
           )}
+        </div>
+      )}
+
+      {/* ABA: ANEXOS */}
+      {abaAtiva === 'anexos' && (
+        <div className="space-y-4">
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Paperclip className="w-5 h-5" /> Anexos do Cliente
+              </h2>
+              <span className="text-sm text-muted">
+                {anexosCliente.length} arquivo(s)
+              </span>
+            </div>
+            <AnexosGallery
+              anexos={anexosCliente}
+              onUpload={handleUploadAnexo}
+              onDelete={handleDeleteAnexo}
+              loading={anexosLoading}
+              uploading={anexosUploading}
+              maxSizeMB={10}
+              acceptTypes="image/*,.pdf,.doc,.docx,.mp4,.webm,.mov"
+            />
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="w-5 h-5" /> Fotos e Arquivos dos Prontuários
+              </h2>
+              <span className="text-sm text-muted">
+                {anexosProntuario.length} arquivo(s)
+              </span>
+            </div>
+
+            {anexosLoading ? (
+              <LoadingState mode="spinner" text="Carregando anexos..." />
+            ) : anexosProntuario.length === 0 ? (
+              <p className="text-center py-8 text-muted">Nenhum arquivo encontrado nos prontuários.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {anexosProntuario.map((anexo) => (
+                  <div key={`${anexo.origem}-${anexo.itemAtendimentoId}-${anexo.id}`} className="rounded-lg border border-border overflow-hidden">
+                    {isImagem(anexo.tipo) ? (
+                      <a href={anexo.url} target="_blank" rel="noopener noreferrer">
+                        <img
+                          src={anexo.url}
+                          alt={anexo.nome}
+                          className="w-full h-32 object-cover hover:opacity-90"
+                        />
+                      </a>
+                    ) : (
+                      <a href={anexo.url} target="_blank" rel="noopener noreferrer">
+                        <div className="w-full h-32 flex items-center justify-center bg-muted">
+                          <span className="text-3xl">📄</span>
+                        </div>
+                      </a>
+                    )}
+
+                    <div className="p-2 space-y-1">
+                      <p className="text-xs font-medium text-foreground truncate">{anexo.nome}</p>
+                      <p className="text-xs text-muted">
+                        {anexo.procedimentoNome ? (
+                          <span>{anexo.procedimentoNome}
+                            {anexo.etapaLabel ? ` — ${anexo.etapaLabel}` : ''}</span>
+                        ) : (
+                          'Registro de prontuário'
+                        )}
+                      </p>
+                      {anexo.atendimentoId && (
+                        <p className="text-xs text-muted">
+                          Atend. #{anexo.atendimentoId}
+                        </p>
+                      )}
+                      {anexo.usuarioNome && (
+                        <p className="text-xs text-muted">Enviado por {anexo.usuarioNome}</p>
+                      )}
+                      <p className="text-xs text-muted">{formatarTamanhoArquivo(anexo.tamanho)} · {formatarDataHora(anexo.created_at)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
       )}
 
