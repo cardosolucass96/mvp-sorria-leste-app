@@ -897,7 +897,7 @@ export default function AvaliacaoDetalhePage({
 
       {/* ── Finalizar Avaliação ── */}
       {atendimento.itens.length > 0 && (
-        <div className="sticky bottom-20 md:bottom-0 z-10">
+        <div className="mt-4 md:mt-6">
           <Button
             onClick={handleFinalizarAvaliacao}
             disabled={finalizando}
