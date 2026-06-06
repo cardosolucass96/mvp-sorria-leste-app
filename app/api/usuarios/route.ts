@@ -16,25 +16,45 @@ export async function GET(request: NextRequest) {
     let usuarios: (Usuario & { unidade_ids?: number[]; roles?: string[] })[];
 
     if (categoriaId || role || unidadeId) {
-      const joins = new Set<string>();
       const conditions: string[] = [];
       const params: Array<string | number> = [];
 
-      if (categoriaId || role) {
-        joins.add('JOIN usuario_roles ur ON ur.usuario_id = u.id');
-      }
       if (categoriaId) {
-        joins.add('JOIN categoria_roles cr ON cr.role = ur.role');
-        conditions.push('cr.categoria_id = ?');
+        conditions.push(`EXISTS (
+          SELECT 1
+            FROM categoria_roles cr
+           WHERE cr.categoria_id = ?
+             AND (
+               cr.role = u.role
+               OR EXISTS (
+                 SELECT 1
+                   FROM usuario_roles ur
+                  WHERE ur.usuario_id = u.id
+                    AND ur.role = cr.role
+               )
+             )
+        )`);
         params.push(parseInt(categoriaId));
       }
       if (role) {
-        conditions.push('ur.role = ?');
-        params.push(role);
+        conditions.push(`(
+          u.role = ?
+          OR EXISTS (
+            SELECT 1
+              FROM usuario_roles ur
+             WHERE ur.usuario_id = u.id
+               AND ur.role = ?
+          )
+        )`);
+        params.push(role, role);
       }
       if (unidadeId) {
-        joins.add('INNER JOIN usuario_unidades uu ON uu.usuario_id = u.id');
-        conditions.push('uu.unidade_id = ?');
+        conditions.push(`EXISTS (
+          SELECT 1
+            FROM usuario_unidades uu
+           WHERE uu.usuario_id = u.id
+             AND uu.unidade_id = ?
+        )`);
         params.push(parseInt(unidadeId));
       }
       if (categoriaId || role) {
@@ -44,7 +64,6 @@ export async function GET(request: NextRequest) {
       usuarios = await query<Usuario>(
         `SELECT DISTINCT u.id, u.nome, u.email, u.role, u.ativo, u.created_at
            FROM usuarios u
-           ${Array.from(joins).join('\n')}
            ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
           ORDER BY u.nome`,
         params

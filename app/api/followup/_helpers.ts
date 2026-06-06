@@ -74,12 +74,23 @@ export async function isValidResponsavelAtendente(
   const row = await queryOne<{ n: number }>(
     `SELECT COUNT(*) AS n
        FROM usuarios u
-       JOIN usuario_roles ur ON ur.usuario_id = u.id
-       JOIN usuario_unidades uu ON uu.usuario_id = u.id
       WHERE u.id = ?
         AND u.ativo = 1
-        AND ur.role = 'atendente'
-        AND uu.unidade_id = ?`,
+        AND (
+          u.role = 'atendente'
+          OR EXISTS (
+            SELECT 1
+              FROM usuario_roles ur
+             WHERE ur.usuario_id = u.id
+               AND ur.role = 'atendente'
+          )
+        )
+        AND EXISTS (
+          SELECT 1
+            FROM usuario_unidades uu
+           WHERE uu.usuario_id = u.id
+             AND uu.unidade_id = ?
+        )`,
     [responsavelUsuarioId, unidadeId]
   );
   return !!row && row.n > 0;
