@@ -40,10 +40,18 @@ interface SeletorDentesProps {
   disabled?: boolean;
   /** Quando false (default), oculta a seleção de faces por dente — usado para procedimentos por_dente que não usam faces (ex: canal). */
   mostrarFaces?: boolean;
+  /** Abre o seletor de dentes automaticamente ao montar. */
+  expandidoInicial?: boolean;
 }
 
-export default function SeletorDentes({ valor, onChange, disabled = false, mostrarFaces = false }: SeletorDentesProps) {
-  const [expandido, setExpandido] = useState(false);
+export default function SeletorDentes({
+  valor,
+  onChange,
+  disabled = false,
+  mostrarFaces = false,
+  expandidoInicial = false,
+}: SeletorDentesProps) {
+  const [expandido, setExpandido] = useState(expandirInicial);
   const [mostrarDeciduos, setMostrarDeciduos] = useState(
     valor.some((item) => TODOS_DENTES_DECIDUOS.includes(item.dente))
   );

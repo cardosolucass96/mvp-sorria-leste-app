@@ -625,6 +625,7 @@ export default function AvaliacaoDetalhePage({
                 onChange={setDentesFaces}
                 disabled={adicionando}
                 mostrarFaces={procedimentoSelecionado?.tem_face === 1}
+                expandidoInicial
               />
               {dentesFaces.length > 0 && (
                 <p className="text-sm text-primary mt-2">
