@@ -5,7 +5,8 @@
 
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import type { ChangeEvent, DragEvent } from 'react';
 import { cn } from '@/lib/utils';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -19,12 +20,20 @@ export interface AnexoData {
   tipo: string;
   tamanho: number;
   created_at: string;
+  descricao?: string | null;
+}
+
+export interface AnexoUploadData {
+  file: File;
+  titulo?: string;
+  descricao?: string;
 }
 
 export interface AnexosGalleryProps {
   anexos: AnexoData[];
-  onUpload: (file: File) => Promise<void>;
+  onUpload: (upload: AnexoUploadData) => Promise<void>;
   onDelete: (anexo: AnexoData) => Promise<void>;
+  onUpdate?: (anexo: AnexoData, data: { titulo?: string; descricao?: string }) => Promise<void>;
   loading?: boolean;
   uploading?: boolean;
   maxSizeMB?: number;
@@ -46,6 +55,7 @@ export default function AnexosGallery({
   anexos,
   onUpload,
   onDelete,
+  onUpdate,
   loading = false,
   uploading = false,
   maxSizeMB = 5,
@@ -56,9 +66,17 @@ export default function AnexosGallery({
   const [previewAnexo, setPreviewAnexo] = useState<AnexoData | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AnexoData | null>(null);
   const [uploadError, setUploadError] = useState('');
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [editTitulo, setEditTitulo] = useState('');
+  const [editDescricao, setEditDescricao] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  useEffect(() => {
+    setEditTitulo(previewAnexo?.nome ?? '');
+    setEditDescricao(previewAnexo?.descricao ?? '');
+  }, [previewAnexo]);
+
+  const handleUploadFile = async (file: File) => {
     if (!file) return;
 
     setUploadError('');
@@ -68,12 +86,35 @@ export default function AnexosGallery({
       return;
     }
 
-    await onUpload(file);
+    await onUpload({
+      file,
+    });
 
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    await handleUploadFile(file);
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    await handleUploadFile(file);
   };
 
   const handleConfirmDelete = async () => {
@@ -82,18 +123,61 @@ export default function AnexosGallery({
     setDeleteTarget(null);
   };
 
+  const handleSaveEdit = async () => {
+    if (!previewAnexo || !onUpdate) return;
+    setIsSavingEdit(true);
+    try {
+      const titulo = editTitulo.trim();
+      const descricao = editDescricao.trim();
+      await onUpdate(previewAnexo, {
+        titulo: titulo || undefined,
+        descricao: descricao || undefined,
+      });
+      setPreviewAnexo({
+        ...previewAnexo,
+        nome: titulo || previewAnexo.nome,
+        descricao: descricao || null,
+      });
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   return (
     <div className={cn("space-y-4", className)}>
       {/* Upload */}
-      <div className="flex items-center gap-3">
-        <Button
-          variant="secondary"
+      <div className="space-y-2">
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => fileInputRef.current?.click()}
-          loading={uploading}
-          disabled={loading}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={cn(
+            "rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors cursor-pointer",
+            isDragOver
+              ? "border-primary-500 bg-primary-500/10"
+              : "border-border bg-muted/30 hover:bg-muted/50",
+            (loading || uploading) && "pointer-events-none opacity-60"
+          )}
         >
-          📎 Adicionar Anexo
-        </Button>
+          <div className="space-y-2">
+            <p className="text-base font-medium text-foreground">Solte um arquivo aqui</p>
+            <p className="text-sm text-muted-foreground">
+              Ou clique para selecionar uma foto, documento ou v&iacute;deo
+            </p>
+            {uploading && (
+              <p className="text-sm font-medium text-primary-600">Enviando arquivo...</p>
+            )}
+          </div>
+        </div>
         <input
           ref={fileInputRef}
           type="file"
@@ -136,6 +220,11 @@ export default function AnexosGallery({
               <div className="p-2">
                 <p className="text-xs font-medium text-foreground truncate">{anexo.nome}</p>
                 <p className="text-xs text-muted-foreground">{formatFileSize(anexo.tamanho)}</p>
+                {anexo.descricao && (
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    {anexo.descricao}
+                  </p>
+                )}
               </div>
 
               {/* Delete button overlay */}
@@ -159,30 +248,70 @@ export default function AnexosGallery({
         <Modal
           isOpen={!!previewAnexo}
           onClose={() => setPreviewAnexo(null)}
-          title={previewAnexo.nome}
+          title={editTitulo.trim() || previewAnexo.nome}
           size="lg"
         >
-          {isImage(previewAnexo.tipo) ? (
-            <img
-              src={previewAnexo.url}
-              alt={previewAnexo.nome}
-              className="w-full rounded-lg"
-            />
-          ) : (
-            <div className="text-center py-8">
-              <span className="text-5xl mb-4 block">📄</span>
-              <p className="text-muted-foreground">{previewAnexo.nome}</p>
-              <p className="text-sm text-muted-foreground">{formatFileSize(previewAnexo.tamanho)}</p>
-              <a
-                href={previewAnexo.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-block text-info-600 hover:text-info-600 dark:text-info-400 font-medium"
-              >
-                Abrir arquivo →
-              </a>
-            </div>
-          )}
+          <div className="space-y-4">
+            {isImage(previewAnexo.tipo) ? (
+              <img
+                src={previewAnexo.url}
+                alt={previewAnexo.nome}
+                className="w-full rounded-lg"
+              />
+            ) : (
+              <div className="text-center py-8">
+                <span className="text-5xl mb-4 block">📄</span>
+                <p className="text-muted-foreground">{previewAnexo.nome}</p>
+                <p className="text-sm text-muted-foreground">{formatFileSize(previewAnexo.tamanho)}</p>
+                <a
+                  href={previewAnexo.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-block text-info-600 hover:text-info-600 dark:text-info-400 font-medium"
+                >
+                  Abrir arquivo →
+                </a>
+              </div>
+            )}
+
+            {onUpdate && (
+              <div className="space-y-3 border-t border-border pt-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Titulo
+                  </label>
+                  <input
+                    type="text"
+                    value={editTitulo}
+                    onChange={(e) => setEditTitulo(e.target.value)}
+                    className="input w-full"
+                    placeholder="Nome do anexo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Descricao
+                  </label>
+                  <textarea
+                    value={editDescricao}
+                    onChange={(e) => setEditDescricao(e.target.value)}
+                    rows={3}
+                    className="input w-full resize-none"
+                    placeholder="Descreva este anexo"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSaveEdit}
+                    loading={isSavingEdit}
+                    disabled={isSavingEdit}
+                  >
+                    Salvar alteracoes
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </Modal>
       )}
 

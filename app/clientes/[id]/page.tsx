@@ -126,6 +126,7 @@ interface AnexoClienteApi {
   tamanho: number;
   created_at: string;
   usuario_nome?: string | null;
+  descricao?: string | null;
 }
 
 interface AnexoExecucaoApi {
@@ -137,6 +138,7 @@ interface AnexoExecucaoApi {
   tamanho: number;
   created_at: string;
   usuario_nome?: string | null;
+  descricao?: string | null;
 }
 
 interface AnexoClienteItem {
@@ -152,6 +154,7 @@ interface AnexoClienteItem {
   procedimentoNome?: string;
   etapaLabel?: string | null;
   usuarioNome?: string | null;
+  descricao?: string | null;
 }
 
 export default function ClienteDetalhePage({ params }: { params: Promise<{ id: string }> }) {
@@ -234,7 +237,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         ...Array.from(prontuariosMap.keys()).map((itemId) => fetch(`/api/execucao/item/${itemId}/anexos`)),
       ]);
 
-      if (resCliente.ok) {
+          if (resCliente.ok) {
         const anexosClienteRaw = await resCliente.json() as AnexoClienteApi[];
           setAnexosCliente(anexosClienteRaw.map(a => ({
           id: a.id,
@@ -245,6 +248,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           created_at: a.created_at,
           origem: 'cliente',
           usuarioNome: a.usuario_nome || null,
+          descricao: a.descricao || null,
         })));
       }
 
@@ -268,6 +272,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 procedimentoNome: prontuario?.procedimento_nome,
                 etapaLabel: prontuario?.etapa_label ?? null,
                 usuarioNome: anexo.usuario_nome || null,
+                descricao: anexo.descricao || null,
               };
             });
           })
@@ -426,7 +431,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     });
   };
 
-  const handleUploadAnexo = async (file: File) => {
+  const handleUploadAnexo = async ({ file, titulo, descricao }: { file: File; titulo?: string; descricao?: string }) => {
     if (!user) {
       setError('Sessão expirada. Faça login novamente para anexar arquivos.');
       return;
@@ -436,6 +441,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       const formData = new FormData();
       formData.append('arquivo', file);
       formData.append('usuario_id', user.id.toString());
+      if (titulo) formData.append('titulo', titulo);
+      if (descricao) formData.append('descricao', descricao);
 
       const res = await fetch(`/api/clientes/${id}/anexos`, {
         method: 'POST',
@@ -469,6 +476,36 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       return;
     }
     await carregarAnexos(ficha?.prontuarios ?? []);
+  };
+
+  const handleUpdateAnexo = async (
+    anexo: { id: number },
+    { titulo, descricao }: { titulo?: string; descricao?: string }
+  ) => {
+    const anexoCliente = anexosCliente.find((item) => item.id === anexo.id);
+    if (!anexoCliente) {
+      setError('Anexo do cliente não encontrado.');
+      return;
+    }
+
+    const res = await fetch(`/api/clientes/${id}/anexos`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        anexo_id: anexo.id,
+        titulo,
+        descricao,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error || 'Erro ao atualizar anexo');
+      return;
+    }
+
+    await carregarAnexos(ficha?.prontuarios ?? []);
+    setSuccess('Anexo atualizado com sucesso!');
   };
 
   const formatarTamanhoArquivo = (bytes: number) => {
@@ -1140,6 +1177,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               anexos={anexosCliente}
               onUpload={handleUploadAnexo}
               onDelete={handleDeleteAnexo}
+              onUpdate={handleUpdateAnexo}
               loading={anexosLoading}
               uploading={anexosUploading}
               maxSizeMB={10}
@@ -1198,6 +1236,9 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                       )}
                       {anexo.usuarioNome && (
                         <p className="text-xs text-muted">Enviado por {anexo.usuarioNome}</p>
+                      )}
+                      {anexo.descricao && (
+                        <p className="text-xs text-muted line-clamp-2">{anexo.descricao}</p>
                       )}
                       <p className="text-xs text-muted">{formatarTamanhoArquivo(anexo.tamanho)} · {formatarDataHora(anexo.created_at)}</p>
                     </div>

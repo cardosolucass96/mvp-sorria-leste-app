@@ -82,6 +82,7 @@ export async function POST(
     const file = formData.get('arquivo') as File | null;
     const usuarioIdRaw = formData.get('usuario_id') as string | null;
     const descricao = (formData.get('descricao') as string | null)?.trim() || null;
+    const titulo = (formData.get('titulo') as string | null)?.trim() || file?.name;
 
     if (!file) {
       return NextResponse.json({ error: 'Arquivo é obrigatório' }, { status: 400 });
@@ -142,7 +143,7 @@ export async function POST(
       `INSERT INTO anexos_cliente
         (cliente_id, usuario_id, nome_arquivo, tipo_arquivo, caminho, tamanho, descricao)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [clienteId, usuarioId, file.name, file.type, r2Key, file.size, descricao]
+      [clienteId, usuarioId, titulo, file.type, r2Key, file.size, descricao]
     );
 
     return NextResponse.json(
@@ -157,6 +158,58 @@ export async function POST(
     console.error('Erro ao fazer upload do anexo do cliente:', error);
     return NextResponse.json(
       { error: 'Erro ao fazer upload do arquivo' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT /api/clientes/[id]/anexos — atualiza titulo/descricao do anexo
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const clienteId = parseInt(id, 10);
+    if (isNaN(clienteId)) {
+      return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const anexoId = parseInt(String(body.anexo_id), 10);
+    const titulo = typeof body.titulo === 'string' ? body.titulo.trim() : '';
+    const descricao = typeof body.descricao === 'string' ? body.descricao.trim() : '';
+
+    if (isNaN(anexoId)) {
+      return NextResponse.json({ error: 'anexo_id inválido' }, { status: 400 });
+    }
+
+    const anexo = await queryOne<{ id: number; cliente_id: number; nome_arquivo: string }>(
+      'SELECT id, cliente_id, nome_arquivo FROM anexos_cliente WHERE id = ?',
+      [anexoId]
+    );
+
+    if (!anexo) {
+      return NextResponse.json({ error: 'Anexo não encontrado' }, { status: 404 });
+    }
+
+    if (anexo.cliente_id !== clienteId) {
+      return NextResponse.json(
+        { error: 'Anexo não pertence a este cliente' },
+        { status: 403 }
+      );
+    }
+
+    await execute(
+      'UPDATE anexos_cliente SET nome_arquivo = ?, descricao = ? WHERE id = ?',
+      [titulo || anexo.nome_arquivo, descricao || null, anexoId]
+    );
+
+    return NextResponse.json({ message: 'Anexo atualizado com sucesso' });
+  } catch (error) {
+    console.error('Erro ao atualizar anexo do cliente:', error);
+    return NextResponse.json(
+      { error: 'Erro ao atualizar anexo' },
       { status: 500 }
     );
   }
