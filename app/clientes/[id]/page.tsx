@@ -3,13 +3,15 @@
 import { useState, useEffect, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Cliente, VinculoCliente } from '@/lib/types';
-import { User, ClipboardList, Activity, CreditCard, Clock, FileText, Users, Plus, Trash2, Search } from 'lucide-react';
+import { AgendamentoCompleto, Cliente, FollowupTarefaCompleta, VinculoCliente } from '@/lib/types';
+import { User, ClipboardList, Activity, CreditCard, Clock, FileText, Users, Plus, Trash2, Search, CalendarDays, MessageCircle } from 'lucide-react';
 import { PageHeader, Card, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 import { ClienteForm, ClienteFormData } from '@/components/domain';
 import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarTelefone, formatarDentes, parseDentesLabels } from '@/lib/utils/formatters';
 import { getOrigemLabel } from '@/lib/constants/origens';
+import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
+import { FOLLOWUP_STATUS_LABELS, FOLLOWUP_TIPO_CONFIG } from '@/lib/constants/followup';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 const METODOS_LABEL: Record<string, string> = {
@@ -130,6 +132,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const [modalProcedimento, setModalProcedimento] = useState<ItemProcedimento | null>(null);
   const [modalPagamento, setModalPagamento] = useState<Pagamento | null>(null);
   const [vinculos, setVinculos] = useState<VinculoCliente[]>([]);
+  const [agendamentos, setAgendamentos] = useState<AgendamentoCompleto[]>([]);
+  const [followups, setFollowups] = useState<FollowupTarefaCompleta[]>([]);
   const [modalAddVinculo, setModalAddVinculo] = useState(false);
   const [vinculoBusca, setVinculoBusca] = useState('');
   const [vinculoBuscaResultados, setVinculoBuscaResultados] = useState<Cliente[]>([]);
@@ -181,6 +185,19 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     if (res.ok) setFicha(await res.json());
   }, [id]);
 
+  const carregarAgendamentos = useCallback(async () => {
+    const res = await fetch(`/api/agendamentos?cliente_id=${id}&order_by=data_agendada&order_dir=asc`);
+    if (res.ok) setAgendamentos(await res.json());
+  }, [id]);
+
+  const carregarFollowups = useCallback(async () => {
+    const res = await fetch(`/api/followup?cliente_id=${id}`);
+    if (res.ok) {
+      const data = await res.json();
+      setFollowups(data.items ?? []);
+    }
+  }, [id]);
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -191,7 +208,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         if (!resCliente.ok) { router.push('/clientes'); return; }
         setCliente(await resCliente.json());
         if (resFicha.ok) setFicha(await resFicha.json());
-        await Promise.all([loadVinculos(), carregarSaldo()]);
+        await Promise.all([loadVinculos(), carregarSaldo(), carregarAgendamentos(), carregarFollowups()]);
       } catch {
         setError('Erro ao carregar cliente');
       } finally {
@@ -199,7 +216,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       }
     };
     load();
-  }, [id, router, loadVinculos, carregarSaldo]);
+  }, [id, router, loadVinculos, carregarSaldo, carregarAgendamentos, carregarFollowups]);
 
   useEffect(() => {
     if (!vinculoBusca.trim()) { setVinculoBuscaResultados([]); return; }
@@ -415,6 +432,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     { key: 'atendimentos', label: 'Atendimentos', count: ficha?.atendimentos.length },
     { key: 'procedimentos', label: 'Procedimentos', count: ficha?.procedimentos.length },
     { key: 'pagamentos', label: 'Pagamentos', count: ficha?.pagamentos.filter(p => !p.cancelado).length },
+    { key: 'agendamentos', label: 'Agendamentos', count: agendamentos.length || undefined },
+    { key: 'followups', label: 'Followups', count: followups.length || undefined },
     { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
     { key: 'historico', label: 'Histórico', count: ficha?.historico.length },
     { key: 'vinculados', label: 'Vinculados', count: vinculos.length || undefined },
@@ -741,6 +760,120 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             </Card>
           )}
         </div>
+      )}
+
+      {/* ABA: AGENDAMENTOS */}
+      {abaAtiva === 'agendamentos' && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <CalendarDays className="w-5 h-5" /> Agendamentos
+            </h2>
+          </div>
+          {!agendamentos.length ? (
+            <p className="text-center py-8 text-muted">Nenhum agendamento registrado</p>
+          ) : (
+            <table className="min-w-full divide-y divide-neutral-200">
+              <thead className="bg-surface-secondary">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Procedimento</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Executor</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Atendimento</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-200">
+                {agendamentos.map((agendamento) => {
+                  const statusConfig = AGENDAMENTO_STATUS_CONFIG[agendamento.status];
+                  return (
+                    <tr key={agendamento.id} className="hover:bg-surface-secondary">
+                      <td className="px-4 py-3 text-sm">
+                        {agendamento.data_agendada ? formatarDataHora(agendamento.data_agendada) : 'Sem data'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium">
+                          {agendamento.etapa_modelo_nome
+                            ? `${agendamento.procedimento_nome} — ${agendamento.etapa_modelo_nome}`
+                            : agendamento.procedimento_nome}
+                        </div>
+                        {agendamento.observacoes && (
+                          <p className="text-xs text-muted mt-1 line-clamp-2">{agendamento.observacoes}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm">{agendamento.executor_nome || '-'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusConfig.bgCor} ${statusConfig.cor}`}>
+                          {statusConfig.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {agendamento.atendimento_origem_id ? (
+                          <Link href={`/atendimentos/${agendamento.atendimento_origem_id}`} className="text-info-600 hover:text-info-800">
+                            #{agendamento.atendimento_origem_id}
+                          </Link>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      )}
+
+      {/* ABA: FOLLOWUPS */}
+      {abaAtiva === 'followups' && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <MessageCircle className="w-5 h-5" /> Followups
+            </h2>
+          </div>
+          {!followups.length ? (
+            <p className="text-center py-8 text-muted">Nenhum followup registrado</p>
+          ) : (
+            <div className="space-y-3">
+              {followups.map((followup) => {
+                const tipoConfig = FOLLOWUP_TIPO_CONFIG[followup.tipo];
+                return (
+                  <div key={followup.id} className="rounded-lg border border-neutral-200 p-4 hover:bg-surface-secondary">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{followup.titulo}</span>
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${tipoConfig.borderColor} border`}>
+                            {tipoConfig.label}
+                          </span>
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${followup.status === 'concluida' ? 'bg-success-100 text-success-700' : 'bg-warning-100 text-warning-700'}`}>
+                            {FOLLOWUP_STATUS_LABELS[followup.status]}
+                          </span>
+                        </div>
+                        {followup.descricao && (
+                          <p className="mt-2 text-sm text-muted whitespace-pre-wrap">{followup.descricao}</p>
+                        )}
+                        <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
+                          <span>Vencimento: {formatarDataHora(followup.vencimento_em)}</span>
+                          <span>Responsável: {followup.responsavel_usuario_nome}</span>
+                          <span>Criado por: {followup.criado_por_nome}</span>
+                          {followup.concluida_em && <span>Concluído em: {formatarDataHora(followup.concluida_em)}</span>}
+                        </div>
+                        {followup.nota_conclusao && (
+                          <p className="mt-3 rounded-md bg-neutral-50 px-3 py-2 text-sm text-foreground">
+                            {followup.nota_conclusao}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
       )}
 
       {/* ABA: PRONTUÁRIO */}
