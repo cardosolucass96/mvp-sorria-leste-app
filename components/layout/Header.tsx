@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useSyncExternalStore } from 'react';
+import { FormEvent, useState, useSyncExternalStore } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import {
@@ -15,11 +15,13 @@ import {
   Moon,
   LogOut,
   User,
+  Search,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { VIEW_MODE_LABELS } from '@/lib/constants/navigation';
 import { ROLE_LABELS } from '@/lib/constants/roles';
 import TrocarSenhaModal from '@/components/domain/TrocarSenhaModal';
+import { SearchInput } from '@/components/ui';
 import UnitSelector from './UnitSelector';
 import {
   DropdownMenu,
@@ -61,6 +63,8 @@ export default function Header() {
   const sidebarContext = useSidebar();
   const mounted = useSyncExternalStore(subscribe, () => true, () => false);
   const [showSenhaModal, setShowSenhaModal] = useState(false);
+  const [mostrarBuscaClientes, setMostrarBuscaClientes] = useState(false);
+  const [termoBuscaClientes, setTermoBuscaClientes] = useState('');
 
   const isDarkMode = mounted && resolvedTheme === 'dark';
   const themeActionLabel = isDarkMode ? 'Modo claro' : 'Modo escuro';
@@ -72,6 +76,18 @@ export default function Header() {
   const handleLogout = () => {
     logout();
     router.push('/login');
+  };
+
+  const handleBuscarClientes = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const buscaNormalizada = termoBuscaClientes.trim();
+    const destino = buscaNormalizada
+      ? `/clientes?busca=${encodeURIComponent(buscaNormalizada)}`
+      : '/clientes';
+
+    router.push(destino);
+    setMostrarBuscaClientes(false);
+    setTermoBuscaClientes('');
   };
 
   return (
@@ -100,6 +116,34 @@ export default function Header() {
           {user && (
             <>
               <UnitSelector />
+              <DropdownMenu open={mostrarBuscaClientes} onOpenChange={setMostrarBuscaClientes}>
+                <DropdownMenuTrigger
+                  className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                  title="Pesquisar clientes"
+                  aria-label="Pesquisar clientes"
+                >
+                  <Search className="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={8} className="w-[320px] p-3">
+                  <form onSubmit={handleBuscarClientes} className="space-y-2">
+                    <p className="text-sm font-medium text-foreground">Pesquisar clientes</p>
+                    <SearchInput
+                      value={termoBuscaClientes}
+                      onChange={setTermoBuscaClientes}
+                      onSearch={() => {}}
+                      placeholder="Buscar por nome, CPF, telefone ou email..."
+                    />
+                    <button
+                      type="submit"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                      disabled={!termoBuscaClientes.trim()}
+                    >
+                      <Search className="size-4" />
+                      Buscar
+                    </button>
+                  </form>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Theme toggle */}
               <button
