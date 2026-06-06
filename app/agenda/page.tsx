@@ -21,6 +21,7 @@ import usePageTitle from '@/lib/utils/usePageTitle';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useAuth } from '@/contexts/AuthContext';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 interface Agendamento {
   id: number;
@@ -1255,13 +1256,18 @@ export default function AgendaPage() {
             </div>
 
             {novoTipo === 'procedimento' && (
-              <Select
+              <SearchableSelect
                 label="Procedimento"
                 name="procedimento_id"
                 value={novoProcId}
                 onChange={setNovoProcId}
-                options={novoProcedimentos.map(p => ({ value: String(p.id), label: p.nome }))}
+                options={novoProcedimentos.map((procedimento) => ({
+                  value: String(procedimento.id),
+                  label: procedimento.nome,
+                }))}
                 placeholder="Selecione..."
+                searchPlaceholder="Buscar procedimento..."
+                emptyMessage="Nenhum procedimento encontrado"
               />
             )}
 

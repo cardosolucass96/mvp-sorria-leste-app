@@ -13,6 +13,7 @@ import { Alert, LoadingState, PageHeader, Button, Card, EmptyState, ConfirmDialo
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 interface Procedimento {
   id: number;
@@ -1051,23 +1052,30 @@ export default function AtendimentoDetalhePage({
         isOpen={modalProcedimento}
         onClose={fecharModalProcedimento}
         title="Adicionar Procedimento"
-        size="md"
+        size="lg"
+        className="sm:h-[80vh]"
       >
         {loadingDadosProc ? (
           <LoadingState text="Carregando..." />
         ) : (
           <form onSubmit={handleAdicionarProcedimento} className="space-y-4">
             {errorModal && <Alert type="error">{errorModal}</Alert>}
-            <Select
+            <SearchableSelect
               label="Procedimento *"
               name="procedimento"
               value={procId}
-              onChange={(value) => { setProcId(value); setValorCustom(''); setDentesFaces([]); }}
-              options={procedimentos.map(p => ({
+              onChange={(value) => {
+                setProcId(value);
+                setValorCustom('');
+                setDentesFaces([]);
+              }}
+              options={procedimentos.map((p) => ({
                 value: String(p.id),
                 label: `${p.nome} — ${formatarMoeda(p.valor)}${p.por_dente ? ' (por dente)' : ''}`,
               }))}
               placeholder="Selecione..."
+              searchPlaceholder="Buscar procedimento..."
+              emptyMessage="Nenhum procedimento encontrado"
               required
             />
             {(() => {
@@ -1157,13 +1165,15 @@ export default function AtendimentoDetalhePage({
         ) : (
           <form onSubmit={handleSalvarAgendamento} className="space-y-4">
             {agError && <Alert type="error">{agError}</Alert>}
-            <Select
+            <SearchableSelect
               label="Procedimento *"
               name="agProcedimento"
               value={agProcId}
               onChange={setAgProcId}
               options={procedimentos.map(p => ({ value: String(p.id), label: p.nome }))}
               placeholder="Selecione..."
+              searchPlaceholder="Buscar procedimento..."
+              emptyMessage="Nenhum procedimento encontrado"
               required
             />
             <Select

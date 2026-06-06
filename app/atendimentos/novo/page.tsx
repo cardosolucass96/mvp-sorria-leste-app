@@ -11,6 +11,7 @@ import usePageTitle from '@/lib/utils/usePageTitle';
 import { formatarDataAgendada } from '@/lib/utils/formatters';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import type { CategoriaComRoles } from '@/lib/types';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 interface Agendamento {
   id: number;
@@ -431,16 +432,21 @@ function NovoAtendimentoForm() {
             <h2 className="text-lg font-semibold mb-3">3. Procedimento e Executor</h2>
             <p className="text-sm text-muted mb-3">Esta fila vai direto para pagamento, sem necessidade de avaliação.</p>
             <div className="space-y-3">
-              <Select
+              <SearchableSelect
                 label="Procedimento"
                 name="procedimento_id"
                 value={procedimentoId}
-                onChange={setProcedimentoId}
+                onChange={(value) => {
+                  setProcedimentoId(value);
+                  setValorProcedimento('');
+                }}
                 options={procedimentosCategoria.map(p => ({
                   value: String(p.id),
                   label: p.nome,
                 }))}
                 placeholder="-- Selecionar --"
+                searchPlaceholder="Buscar procedimento..."
+                emptyMessage="Nenhum procedimento encontrado"
                 required
               />
               {procedimentoId && (

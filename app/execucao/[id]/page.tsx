@@ -13,6 +13,7 @@ import {
 import { Alert, LoadingState, Modal, PageHeader, Card, Button, EmptyState, ConfirmDialog } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -823,13 +824,25 @@ export default function ExecucaoProcedimentoPage() {
 
       {/* ── Modal: Adicionar procedimento ── */}
       <Modal isOpen={showNovoProcedimento} onClose={() => { setShowNovoProcedimento(false); setNovoProcId(''); }}
+        size="lg"
+        className="sm:h-[80vh]"
         title="Adicionar Procedimento">
         <p className="text-sm text-neutral-600 mb-4">Para: <strong>{item.cliente_nome}</strong></p>
-        <select value={novoProcId} onChange={e => setNovoProcId(e.target.value)}
-          className="w-full border border-neutral-300 rounded px-3 py-2 mb-4">
-          <option value="">Selecione...</option>
-          {procedimentos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-        </select>
+        <SearchableSelect
+          label="Procedimento *"
+          name="novo_procedimento_id"
+          value={novoProcId}
+          onChange={setNovoProcId}
+          options={procedimentos.map((procedimento) => ({
+            value: String(procedimento.id),
+            label: procedimento.nome,
+          }))}
+          placeholder="Selecione..."
+          searchPlaceholder="Buscar procedimento..."
+          emptyMessage="Nenhum procedimento encontrado"
+          className="mb-4"
+          required
+        />
         <Alert type="warning">Ao adicionar, o atendimento voltará para Aguardando Pagamento.</Alert>
         <div className="flex gap-2 mt-4">
           <Button onClick={adicionarProcedimento} className="flex-1">Adicionar</Button>
