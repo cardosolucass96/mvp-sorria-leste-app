@@ -76,7 +76,7 @@ export default function AnexosGallery({
     setEditDescricao(previewAnexo?.descricao ?? '');
   }, [previewAnexo]);
 
-  const handleUploadFile = async (file: File) => {
+  const handleUploadFile = async (file?: File) => {
     if (!file) return;
 
     setUploadError('');
