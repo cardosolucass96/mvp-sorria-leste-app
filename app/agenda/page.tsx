@@ -894,7 +894,7 @@ export default function AgendaPage() {
               active={viewMode}
               onChange={(key) => setViewMode(key as 'lista' | 'calendario')}
             />
-            <Button onClick={abrirNovoAgendamento}>
+            <Button onClick={() => { void abrirNovoAgendamento(); }}>
               <Plus className="w-4 h-4 mr-1" />
               <span className="hidden sm:inline">Novo Agendamento</span>
             </Button>
