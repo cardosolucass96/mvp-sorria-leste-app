@@ -262,8 +262,9 @@ export interface Agendamento {
   atendimento_origem_id: number;
   item_atendimento_origem_id: number | null;
   atendimento_sessao_id: number | null;
-  procedimento_id: number;
+  procedimento_id: number | null;
   executor_id: number | null;
+  tipo?: 'avaliacao' | 'procedimento';
   status: AgendamentoStatus;
   data_agendada: string | null;
   observacoes: string | null;
@@ -271,6 +272,8 @@ export interface Agendamento {
   reagendado_de_id: number | null;
   etapa_modelo_id: number | null;
   unidade_id: number;
+  legado_fonte?: string | null;
+  legado_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -301,6 +304,8 @@ export interface FollowupTarefa {
   nota_conclusao: string | null;
   concluida_em: string | null;
   excluida_em: string | null;
+  legado_fonte?: string | null;
+  legado_id?: string | null;
   created_at: string;
   updated_at: string;
 }

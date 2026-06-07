@@ -315,6 +315,8 @@ CREATE TABLE IF NOT EXISTS agendamentos (
   valor REAL,
   valor_pago REAL NOT NULL DEFAULT 0,
   unidade_id INTEGER,
+  legado_fonte TEXT,
+  legado_id TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
@@ -327,6 +329,9 @@ CREATE TABLE IF NOT EXISTS agendamentos (
   FOREIGN KEY (etapa_modelo_id) REFERENCES procedimento_etapas_modelo(id),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agendamentos_legado_unique
+  ON agendamentos(legado_fonte, legado_id)
+  WHERE legado_fonte IS NOT NULL AND legado_id IS NOT NULL;
 
 -- Follow-up operacional da recepção
 CREATE TABLE IF NOT EXISTS followup_tarefas (
@@ -346,6 +351,8 @@ CREATE TABLE IF NOT EXISTS followup_tarefas (
   nota_conclusao TEXT,
   concluida_em TEXT,
   excluida_em TEXT,
+  legado_fonte TEXT,
+  legado_id TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
@@ -444,6 +451,9 @@ CREATE INDEX IF NOT EXISTS idx_followup_unidade_status_vencimento
 CREATE INDEX IF NOT EXISTS idx_followup_cliente ON followup_tarefas(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_followup_responsavel ON followup_tarefas(responsavel_usuario_id);
 CREATE INDEX IF NOT EXISTS idx_followup_excluida_em ON followup_tarefas(excluida_em);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_followup_legado_unique
+  ON followup_tarefas(legado_fonte, legado_id)
+  WHERE legado_fonte IS NOT NULL AND legado_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_movimentacoes_cliente ON movimentacoes_saldo(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_movimentacoes_tipo ON movimentacoes_saldo(tipo);
 CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes_saldo(created_at);

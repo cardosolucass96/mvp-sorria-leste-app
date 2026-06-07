@@ -48,3 +48,8 @@ next-env.d.ts
 backup-prod-*.sql
 data.db
 tmp/
+artifacts/
+exportados-simplifica/
+lib/*.report.json
+lib/*.preview.sql
+lib/*.import-all.sql
