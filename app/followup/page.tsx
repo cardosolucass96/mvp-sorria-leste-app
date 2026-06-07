@@ -622,7 +622,7 @@ export default function FollowupPage() {
               </button>
             </div>
             {canCreate && (
-              <Button icon={<Plus className="w-4 h-4" />} onClick={abrirNovaTarefa}>
+              <Button icon={<Plus className="w-4 h-4" />} onClick={() => { void abrirNovaTarefa(); }}>
                 Nova tarefa
               </Button>
             )}
