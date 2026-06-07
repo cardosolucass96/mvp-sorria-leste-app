@@ -12,6 +12,7 @@ import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarTel
 import { getOrigemLabel } from '@/lib/constants/origens';
 import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
 import { FOLLOWUP_STATUS_LABELS, FOLLOWUP_TIPO_CONFIG } from '@/lib/constants/followup';
+import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 const METODOS_LABEL: Record<string, string> = {
@@ -161,6 +162,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   usePageTitle('Ficha do Cliente');
   const { id } = use(params);
   const { user } = useAuth();
+  const unitFetch = useUnitFetch();
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [ficha, setFicha] = useState<FichaData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -299,17 +301,17 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   }, [id, carregarAnexos]);
 
   const carregarAgendamentos = useCallback(async () => {
-    const res = await fetch(`/api/agendamentos?cliente_id=${id}&status=pendente,agendado,faltou,realizado,cancelado&order_by=data_agendada&order_dir=asc`);
+    const res = await unitFetch(`/api/agendamentos?cliente_id=${id}&status=pendente,agendado,faltou,realizado,cancelado&order_by=data_agendada&order_dir=asc`);
     if (res.ok) setAgendamentos(await res.json());
-  }, [id]);
+  }, [id, unitFetch]);
 
   const carregarFollowups = useCallback(async () => {
-    const res = await fetch(`/api/followup?cliente_id=${id}&status=aberta,concluida`);
+    const res = await unitFetch(`/api/followup?cliente_id=${id}&status=aberta,concluida`);
     if (res.ok) {
       const data = await res.json();
       setFollowups(data.items ?? []);
     }
-  }, [id]);
+  }, [id, unitFetch]);
 
   useEffect(() => {
     const load = async () => {
