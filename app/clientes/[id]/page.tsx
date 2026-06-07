@@ -299,12 +299,12 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   }, [id, carregarAnexos]);
 
   const carregarAgendamentos = useCallback(async () => {
-    const res = await fetch(`/api/agendamentos?cliente_id=${id}&order_by=data_agendada&order_dir=asc`);
+    const res = await fetch(`/api/agendamentos?cliente_id=${id}&status=pendente,agendado,faltou,realizado,cancelado&order_by=data_agendada&order_dir=asc`);
     if (res.ok) setAgendamentos(await res.json());
   }, [id]);
 
   const carregarFollowups = useCallback(async () => {
-    const res = await fetch(`/api/followup?cliente_id=${id}`);
+    const res = await fetch(`/api/followup?cliente_id=${id}&status=aberta,concluida`);
     if (res.ok) {
       const data = await res.json();
       setFollowups(data.items ?? []);
@@ -634,12 +634,12 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     { key: 'atendimentos', label: 'Atendimentos', count: ficha?.atendimentos.length },
     { key: 'procedimentos', label: 'Procedimentos', count: ficha?.procedimentos.length },
     { key: 'pagamentos', label: 'Pagamentos', count: ficha?.pagamentos.filter(p => !p.cancelado).length },
-    { key: 'agendamentos', label: 'Agendamentos', count: agendamentos.length || undefined },
-    { key: 'followups', label: 'Followups', count: followups.length || undefined },
+    { key: 'agendamentos', label: 'Agendamentos', count: agendamentos.length },
+    { key: 'followups', label: 'Followups', count: followups.length },
     { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
     { key: 'anexos', label: 'Anexos', count: anexosCliente.length + anexosProntuario.length },
     { key: 'historico', label: 'Histórico', count: ficha?.historico.length },
-    { key: 'vinculados', label: 'Vinculados', count: vinculos.length || undefined },
+    { key: 'vinculados', label: 'Vinculados', count: vinculos.length },
   ];
 
   return (
@@ -972,11 +972,12 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <CalendarDays className="w-5 h-5" /> Agendamentos
             </h2>
-            <Link href={`/agenda?cliente_id=${id}`}>
-              <Button variant="secondary">
-                <Plus className="w-4 h-4 mr-1.5" /> Nova Agenda
-              </Button>
-            </Link>
+            <Button
+              onClick={() => router.push(`/agenda?open=1&cliente_id=${id}`)}
+              variant="secondary"
+            >
+              <Plus className="w-4 h-4 mr-1.5" /> Novo Agendamento
+            </Button>
           </div>
           {!agendamentos.length ? (
             <p className="text-center py-8 text-muted">Nenhum agendamento registrado</p>
@@ -1040,11 +1041,12 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <MessageCircle className="w-5 h-5" /> Followups
             </h2>
-            <Link href={`/followup?cliente_id=${id}`}>
-              <Button variant="secondary">
-                <Plus className="w-4 h-4 mr-1.5" /> Nova Follow
-              </Button>
-            </Link>
+            <Button
+              onClick={() => router.push(`/followup?open=1&cliente_id=${id}`)}
+              variant="secondary"
+            >
+              <Plus className="w-4 h-4 mr-1.5" /> Nova Followup
+            </Button>
           </div>
           {!followups.length ? (
             <p className="text-center py-8 text-muted">Nenhum followup registrado</p>

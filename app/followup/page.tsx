@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   CalendarDays,
   CheckCircle2,
@@ -111,6 +111,9 @@ function sortByDueDate(a: FollowupTarefaCompleta, b: FollowupTarefaCompleta) {
 export default function FollowupPage() {
   usePageTitle('Followup');
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const openFollowup = searchParams.get('open');
+  const openFollowupClienteId = searchParams.get('cliente_id');
   const { toast } = useToast();
   const { user, isLoading, hasRole, currentUnidade } = useAuth();
   const unitFetch = useUnitFetch();
@@ -357,13 +360,55 @@ export default function FollowupPage() {
     setVencimentoAte('');
   }
 
-  function abrirNovaTarefa() {
+  const abrirNovaTarefa = useCallback(async (clienteId?: number) => {
     setEditingTask(null);
     setTaskForm(initialFormState);
     setTaskFormError('');
     setClienteResultados([]);
     setTaskModalOpen(true);
-  }
+
+    if (!clienteId) return;
+
+    try {
+      const res = await fetch(`/api/clientes/${clienteId}`);
+      if (!res.ok) {
+        setTaskFormError('Cliente não encontrado para pré-seleção.');
+        return;
+      }
+
+      const cliente = await res.json();
+      setTaskForm((prev) => ({
+        ...prev,
+        cliente: {
+          id: cliente.id,
+          nome: cliente.nome,
+          telefone: cliente.telefone || null,
+          cpf: cliente.cpf || null,
+        },
+        clienteBusca: cliente.nome,
+      }));
+    } catch {
+      setTaskFormError('Não foi possível carregar o cliente para pré-seleção.');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!canCreate) return;
+    if (openFollowup !== '1') return;
+
+    const clienteId = Number(openFollowupClienteId);
+    if (!Number.isInteger(clienteId) || clienteId <= 0) {
+      void abrirNovaTarefa();
+    } else {
+      void abrirNovaTarefa(clienteId);
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('open');
+    nextParams.delete('cliente_id');
+    const nextSearch = nextParams.toString();
+    router.replace(`/followup${nextSearch ? `?${nextSearch}` : ''}`);
+  }, [canCreate, openFollowup, openFollowupClienteId, abrirNovaTarefa, router]);
 
   function abrirEdicao(task: FollowupTarefaCompleta) {
     setEditingTask(task);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, UserCheck, UserX, MessageCircle, CalendarClock, X, RefreshCw, Plus, FileText, List, CalendarDays } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingState from '@/components/ui/LoadingState';
@@ -102,6 +102,9 @@ function formatDate(d: Date) {
 export default function AgendaPage() {
   usePageTitle('Agenda');
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const openAgenda = searchParams.get('open');
+  const openAgendaClienteId = searchParams.get('cliente_id');
   const { toast } = useToast();
   const { user, hasRole } = useAuth();
   const unitFetch = useUnitFetch();
@@ -252,18 +255,35 @@ export default function AgendaPage() {
     carregarAgendamentos();
   }, [carregarAgendamentos]);
 
-  const carregarExecutores = async () => {
+  useEffect(() => {
+    if (openAgenda !== '1') return;
+
+    const clienteId = Number(openAgendaClienteId);
+    if (!Number.isInteger(clienteId) || clienteId <= 0) {
+      void abrirNovoAgendamento();
+    } else {
+      void abrirNovoAgendamento(clienteId);
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('open');
+    nextParams.delete('cliente_id');
+    const nextSearch = nextParams.toString();
+    router.replace(`/agenda${nextSearch ? `?${nextSearch}` : ''}`);
+  }, [openAgenda, openAgendaClienteId, router]);
+
+  const carregarExecutores = useCallback(async () => {
     if (executores.length > 0) return;
     try {
       const res = await apiFetch('/api/usuarios');
       const data: Usuario[] = await res.json();
       setExecutores(data.filter(u => u.role === 'executor' || u.role === 'admin'));
     } catch {}
-  };
+  }, [executores.length]);
 
   // ─── Novo agendamento ─────────────────────────────────────────
 
-  const abrirNovoAgendamento = async () => {
+  const abrirNovoAgendamento = useCallback(async (clienteId?: number) => {
     setNovoDialog(true);
     setNovoError('');
     setNovoClienteSelecionado(null);
@@ -281,8 +301,29 @@ export default function AgendaPage() {
         setNovoProcedimentos(await res.json());
       } catch {}
     }
+
+    if (clienteId) {
+      try {
+        const res = await apiFetch(`/api/clientes/${clienteId}`);
+        if (res.ok) {
+          const cliente = await res.json();
+          setNovoClienteSelecionado({
+            id: cliente.id,
+            nome: cliente.nome,
+            telefone: cliente.telefone || null,
+            cpf: cliente.cpf || null,
+          });
+          setNovoBuscaCliente('');
+          setNovoClientes([]);
+        } else {
+          setNovoError('Cliente não encontrado para pré-seleção.');
+        }
+      } catch {
+        setNovoError('Não foi possível carregar o cliente para pré-seleção.');
+      }
+    }
     carregarExecutores();
-  };
+  }, [novoProcedimentos.length, carregarExecutores]);
 
   const buscarClientes = async (termo: string) => {
     setNovoBuscaCliente(termo);
