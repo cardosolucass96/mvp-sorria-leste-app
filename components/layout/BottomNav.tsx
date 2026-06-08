@@ -4,8 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { useAuth, type ViewMode } from '@/contexts/AuthContext';
-import { MENU_ITEMS, type MenuItem } from '@/lib/constants/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { MENU_ITEMS } from '@/lib/constants/navigation';
 import {
   Home,
   ClipboardList,
@@ -123,7 +123,7 @@ export default function BottomNav() {
             <button
               onClick={() => setMoreOpen(true)}
               className={cn(
-                'flex flex-col items-center justify-center gap-0.5 flex-1 h-full px-1 transition-colors',
+                'flex flex-col items-center justify-center gap-0.5 flex-1 h-full px-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset',
                 moreOpen ? 'text-primary' : 'text-muted-foreground'
               )}
               aria-label="Mais opções"
@@ -137,7 +137,7 @@ export default function BottomNav() {
 
       {/* Sheet with remaining items */}
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent side="bottom" showCloseButton={false} className="rounded-t-2xl">
+        <SheetContent side="bottom" showCloseButton={false} className="rounded-t-2xl bg-popover">
           <SheetHeader>
             <SheetTitle>Menu</SheetTitle>
           </SheetHeader>

@@ -61,14 +61,10 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
             aria-invalid={!!error}
             aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
             className={cn(
-              "w-full px-3 py-2 pr-10 border rounded-lg text-sm",
-              "bg-background appearance-none cursor-pointer",
-              "transition-colors duration-200",
-              "focus:outline-none focus:ring-2 focus:border-transparent",
-              "disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed",
+              "field-control min-w-0 appearance-none cursor-pointer px-3 py-2 pr-10 text-sm",
               error
-                ? "border-error-300 focus:ring-error-400 text-error-900"
-                : "border-input focus:ring-ring"
+                ? "border-error-300 text-foreground focus-visible:ring-error-400/40"
+                : "text-foreground"
             )}
           >
             <option value="">{placeholder}</option>

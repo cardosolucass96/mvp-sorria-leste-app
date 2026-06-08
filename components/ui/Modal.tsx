@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/_shadcn/dialog';
 
@@ -13,12 +14,15 @@ export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  description?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   children: React.ReactNode;
   footer?: React.ReactNode;
   closeOnOverlay?: boolean;
   closeOnEsc?: boolean;
   className?: string;
+  bodyClassName?: string;
+  footerClassName?: string;
 }
 
 const sizeClasses: Record<NonNullable<ModalProps['size']>, string> = {
@@ -35,10 +39,16 @@ export default function Modal({
   size = 'md',
   children,
   footer,
-  closeOnOverlay = true,
-  closeOnEsc = true,
+  closeOnOverlay: _closeOnOverlay = true,
+  closeOnEsc: _closeOnEsc = true,
   className = '',
+  description,
+  bodyClassName = '',
+  footerClassName = '',
 }: ModalProps) {
+  void _closeOnOverlay;
+  void _closeOnEsc;
+
   return (
     <Dialog
       open={isOpen}
@@ -49,24 +59,29 @@ export default function Modal({
       <DialogContent
         className={cn(
           sizeClasses[size],
-          "max-h-[90vh] flex flex-col gap-0 p-0",
+          "max-h-[90vh] flex flex-col gap-0 p-0 bg-card text-card-foreground shadow-2xl ring-1 ring-border/70",
           className
         )}
         showCloseButton
       >
         {/* Header */}
-        <DialogHeader className="px-6 py-4 border-b border-border">
+        <DialogHeader className="px-6 py-4 border-b border-border bg-card/95">
           <DialogTitle className="text-lg font-semibold text-foreground">
             {title}
           </DialogTitle>
+          {description && (
+            <DialogDescription className="text-sm text-muted-foreground">
+              {description}
+            </DialogDescription>
+          )}
         </DialogHeader>
 
         {/* Body */}
-        <div className="px-6 py-4 overflow-y-auto flex-1">{children}</div>
+        <div className={cn("px-6 py-4 overflow-y-auto flex-1 bg-card", bodyClassName)}>{children}</div>
 
         {/* Footer */}
         {footer && (
-          <DialogFooter className="px-6 py-4 border-t border-border flex justify-end gap-3 rounded-b-xl">
+          <DialogFooter className={cn("px-6 py-4 border-t border-border flex justify-end gap-3 rounded-b-xl bg-muted/30", footerClassName)}>
             {footer}
           </DialogFooter>
         )}

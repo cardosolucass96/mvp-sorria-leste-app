@@ -8,15 +8,15 @@ export interface BadgeProps {
 }
 
 const colorClasses: Record<NonNullable<BadgeProps['color']>, string> = {
-  gray: 'bg-muted text-foreground',
-  orange: 'bg-primary/10 text-primary',
-  amber: 'bg-warning-500/10 text-warning-600 dark:text-warning-400',
-  green: 'bg-success-500/10 text-success-600 dark:text-success-400',
-  red: 'bg-error-500/10 text-error-600 dark:text-error-400',
-  blue: 'bg-info-500/10 text-info-600 dark:text-info-400',
-  purple: 'bg-evaluation-500/10 text-evaluation-600 dark:text-evaluation-400',
-  evaluation: 'bg-evaluation-500/10 text-evaluation-600 dark:text-evaluation-400',
-  yellow: 'bg-warning-500/10 text-warning-600 dark:text-warning-400',
+  gray: 'border border-border bg-muted/65 text-foreground',
+  orange: 'border border-primary/15 bg-primary/10 text-primary',
+  amber: 'border border-warning-200 dark:border-warning-800/50 bg-warning-50 dark:bg-warning-800/18 text-warning-800 dark:text-warning-200',
+  green: 'border border-success-200 dark:border-success-800/50 bg-success-50 dark:bg-success-800/18 text-success-800 dark:text-success-200',
+  red: 'border border-error-200 dark:border-error-900/60 bg-error-50 dark:bg-error-900/20 text-error-800 dark:text-error-200',
+  blue: 'border border-info-200 dark:border-info-800/50 bg-info-50 dark:bg-info-800/18 text-info-800 dark:text-info-200',
+  purple: 'border border-evaluation-200 dark:border-evaluation-900/60 bg-evaluation-50 dark:bg-evaluation-900/20 text-evaluation-800 dark:text-evaluation-200',
+  evaluation: 'border border-evaluation-200 dark:border-evaluation-900/60 bg-evaluation-50 dark:bg-evaluation-900/20 text-evaluation-800 dark:text-evaluation-200',
+  yellow: 'border border-warning-200 dark:border-warning-800/50 bg-warning-50 dark:bg-warning-800/18 text-warning-800 dark:text-warning-200',
 };
 
 const sizeClasses: Record<NonNullable<BadgeProps['size']>, string> = {

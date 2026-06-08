@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { VIEW_MODE_LABELS } from '@/lib/constants/navigation';
 import { ROLE_LABELS } from '@/lib/constants/roles';
 import TrocarSenhaModal from '@/components/domain/TrocarSenhaModal';
+import Button from '@/components/ui/Button';
 import UnitSelector from './UnitSelector';
 import {
   DropdownMenu,
@@ -214,7 +215,7 @@ export default function Header() {
                 }}
               >
                 <PopoverTrigger
-                  className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                  className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   title="Pesquisar clientes"
                   aria-label="Pesquisar clientes"
                 >
@@ -233,7 +234,7 @@ export default function Header() {
                         value={termoBuscaClientes}
                         onChange={(e) => setTermoBuscaClientes(e.target.value)}
                         placeholder="Buscar por nome, CPF, telefone ou email..."
-                        className="w-full pl-10 pr-3 py-2 border border-input rounded-lg text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                        className="field-control w-full py-2 pl-10 pr-9 text-sm"
                       />
                       {termoBuscaClientes && (
                         <button
@@ -246,14 +247,15 @@ export default function Header() {
                         </button>
                       )}
                     </div>
-                    <button
+                    <Button
                       type="submit"
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
                       disabled={!termoBuscaClientes.trim()}
+                      fullWidth
+                      size="sm"
                     >
                       <Search className="size-4" />
                       Buscar
-                    </button>
+                    </Button>
 
                     {termoBuscaClientes.trim() && (
                       <div className="space-y-1 pt-1">
@@ -274,7 +276,7 @@ export default function Header() {
                                   <button
                                     type="button"
                                     onClick={() => handleSelecionarCliente(cliente.id)}
-                                    className="w-full text-left rounded-md px-2.5 py-2 text-sm hover:bg-accent transition-colors"
+                                    className="w-full rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                                   >
                                     <p className="font-medium text-foreground">{cliente.nome}</p>
                                     {(cliente.cpf || cliente.telefone || cliente.email) && (
@@ -293,7 +295,7 @@ export default function Header() {
                         {clientesSugeridos.length > 0 && (
                           <button
                             type="button"
-                            className="w-full text-left rounded-md px-2.5 py-2 text-xs text-primary underline-offset-4 hover:underline"
+                            className="w-full rounded-md px-2.5 py-2 text-left text-xs text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                             onClick={() => irParaListaClientes(termoBuscaClientes)}
                           >
                             Ver todos os resultados
@@ -306,31 +308,35 @@ export default function Header() {
               </Popover>
 
               {/* Theme toggle */}
-              <button
+              <Button
                 onClick={handleThemeToggle}
-                className="hidden sm:flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                className="hidden sm:inline-flex text-muted-foreground"
                 title={themeActionLabel}
                 aria-label={`Ativar ${themeActionLabel.toLowerCase()}`}
                 disabled={!mounted}
+                variant="ghost"
+                size="icon-sm"
               >
                 {isDarkMode ? (
                   <Sun className="size-4" />
                 ) : (
                   <Moon className="size-4" />
                 )}
-              </button>
+              </Button>
 
               {/* Admin/Dentista toggle — desktop only */}
               {isAdmin && (
-                <button
+                <Button
                   onClick={toggleViewMode}
                   className={cn(
-                    'hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                    'hidden md:inline-flex text-xs',
                     viewMode === 'admin'
-                      ? 'bg-muted text-foreground hover:bg-accent'
-                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 dark:hover:bg-emerald-900'
+                      ? ''
+                      : 'border-emerald-500/20 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/70 dark:bg-emerald-950 dark:text-emerald-300 dark:hover:bg-emerald-900'
                   )}
                   title={viewMode === 'admin' ? 'Trocar para visão Dentista' : 'Trocar para visão Admin'}
+                  variant={viewMode === 'admin' ? 'secondary' : 'outline'}
+                  size="sm"
                 >
                   {viewMode === 'admin' ? (
                     <Shield className="size-3.5" />
@@ -338,13 +344,13 @@ export default function Header() {
                     <Stethoscope className="size-3.5" />
                   )}
                   <span>{VIEW_MODE_LABELS[viewMode]}</span>
-                </button>
+                </Button>
               )}
 
               {/* Avatar dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  className="flex items-center gap-2 rounded-md p-1 hover:bg-accent transition-colors cursor-pointer outline-none"
+                  className="flex items-center gap-2 rounded-md p-1 transition-colors cursor-pointer outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   <UserAvatar nome={user.nome} className="h-8 w-8" />
                   <div className="hidden md:block text-left">

@@ -98,14 +98,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             aria-invalid={!!error}
             aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
             className={cn(
-              "w-full px-3 py-2 border rounded-lg text-sm",
+              "field-control min-w-0 px-3 py-2 text-sm",
               "transition-colors duration-200",
-              "focus:outline-none focus:ring-2 focus:border-transparent",
-              "disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed",
               icon && "pl-10",
               error
-                ? "border-error-300 focus:ring-error-400 text-error-900 placeholder-error-300"
-                : "border-input text-foreground placeholder:text-neutral-500 focus:ring-ring"
+                ? "border-error-300 text-foreground placeholder:text-error-300 focus-visible:ring-error-400/40"
+                : "text-foreground"
             )}
           />
         </div>

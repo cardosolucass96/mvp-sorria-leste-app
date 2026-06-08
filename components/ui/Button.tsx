@@ -1,6 +1,7 @@
 'use client';
 
 import { forwardRef } from 'react';
+import { cn } from '@/lib/utils';
 import Spinner from './Spinner';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -15,12 +16,12 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 const variantClasses: Record<NonNullable<ButtonProps['variant']>, string> = {
   primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm hover:shadow-md focus:ring-ring',
   default: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm hover:shadow-md focus:ring-ring',
-  secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 focus:ring-ring',
-  danger: 'bg-destructive text-white hover:bg-destructive/90 focus:ring-destructive',
-  destructive: 'bg-destructive text-white hover:bg-destructive/90 focus:ring-destructive',
+  secondary: 'border border-border bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80 focus:ring-ring',
+  danger: 'bg-error-600 text-white hover:bg-error-700 focus:ring-error-400',
+  destructive: 'bg-error-600 text-white hover:bg-error-700 focus:ring-error-400',
   success: 'bg-success-600 text-white hover:bg-success-700 focus:ring-success-400',
   ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground focus:ring-ring',
-  outline: 'border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground focus:ring-ring',
+  outline: 'border border-input bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground focus:ring-ring',
   link: 'text-primary underline-offset-4 hover:underline',
 };
 
@@ -57,20 +58,23 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     return (
       <button
+        data-slot="button"
         ref={ref}
         type={type}
         disabled={isDisabled}
         aria-busy={loading}
-        className={`
-          inline-flex items-center justify-center font-medium rounded-lg
-          transition-all duration-200 cursor-pointer
-          focus:outline-none focus:ring-2 focus:ring-offset-2
-          ${variantClasses[variant]}
-          ${sizeClasses[size]}
-          ${fullWidth ? 'w-full' : ''}
-          ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
-          ${className}
-        `.trim()}
+        className={cn(
+          'inline-flex items-center justify-center rounded-lg font-medium',
+          'transition-all duration-200',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+          'disabled:pointer-events-none disabled:opacity-50',
+          'cursor-pointer',
+          variantClasses[variant],
+          sizeClasses[size],
+          fullWidth && 'w-full',
+          isDisabled && 'cursor-not-allowed',
+          className
+        )}
         {...props}
       >
         {loading ? (
@@ -101,8 +105,8 @@ export const buttonVariants = cva(
         default: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm hover:shadow-md focus:ring-ring',
         primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm hover:shadow-md focus:ring-ring',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 focus:ring-ring',
-        danger: 'bg-destructive text-white hover:bg-destructive/90 focus:ring-destructive',
-        destructive: 'bg-destructive text-white hover:bg-destructive/90 focus:ring-destructive',
+        danger: 'bg-error-600 text-white hover:bg-error-700 focus:ring-error-400',
+        destructive: 'bg-error-600 text-white hover:bg-error-700 focus:ring-error-400',
         success: 'bg-success-600 text-white hover:bg-success-700 focus:ring-success-400',
         outline: 'border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground focus:ring-ring',
         ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground focus:ring-ring',

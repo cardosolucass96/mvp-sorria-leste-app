@@ -12,6 +12,7 @@ import {
 import Tabs from '@/components/ui/Tabs';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
+import Alert from '@/components/ui/Alert';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import type { Cliente, VinculoCliente } from '@/lib/types';
 import type { FichaData } from './prontuario/types';
@@ -137,9 +138,9 @@ export default function ProntuarioDrawer({
             </div>
           )}
           {error && (
-            <div className="rounded-lg border border-error-200 bg-error-50 text-error-700 p-3 text-sm">
+            <Alert type="error">
               {error}
-            </div>
+            </Alert>
           )}
           {!loading && cliente && ficha && (
             <>
@@ -165,8 +166,8 @@ export default function ProntuarioDrawer({
           )}
         </div>
 
-        <div className="border-t border-border px-4 py-3 bg-surface flex gap-2 shrink-0">
-          <Button variant="secondary" onClick={onClose} className="flex-1 sm:flex-none">
+        <div className="border-t border-border px-4 py-3 bg-card/95 flex gap-2 shrink-0">
+          <Button variant="outline" onClick={onClose} className="flex-1 sm:flex-none">
             Fechar
           </Button>
           {onCta && ctaLabel && (

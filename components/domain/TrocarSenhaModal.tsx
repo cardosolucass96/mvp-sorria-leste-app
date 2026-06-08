@@ -5,6 +5,7 @@ import { KeyRound } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
 import { useAuth } from '@/contexts/AuthContext';
 
 export interface TrocarSenhaModalProps {
@@ -87,6 +88,7 @@ export default function TrocarSenhaModal({ isOpen, onClose }: TrocarSenhaModalPr
       isOpen={isOpen}
       onClose={fechar}
       title="Alterar Senha"
+      description="Atualize sua senha de acesso com segurança."
       size="sm"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -122,15 +124,15 @@ export default function TrocarSenhaModal({ isOpen, onClose }: TrocarSenhaModalPr
         />
 
         {erro && (
-          <div className="bg-error-500/10 border border-error-500/20 text-error-600 dark:text-error-400 px-4 py-3 rounded-lg text-sm">
+          <Alert type="error">
             {erro}
-          </div>
+          </Alert>
         )}
 
         {sucesso && (
-          <div className="bg-success-500/10 border border-success-500/20 text-success-600 dark:text-success-400 px-4 py-3 rounded-lg text-sm">
+          <Alert type="success">
             {sucesso}
-          </div>
+          </Alert>
         )}
 
         <div className="flex gap-3 pt-2">

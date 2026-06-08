@@ -10,9 +10,9 @@ export interface CardProps {
 }
 
 const variantClasses: Record<NonNullable<CardProps['variant']>, string> = {
-  default: 'bg-background shadow-md border border-border',
-  outlined: 'bg-background border-2 border-border',
-  elevated: 'bg-background shadow-lg border border-border',
+  default: 'bg-card text-card-foreground shadow-sm border border-border',
+  outlined: 'bg-card text-card-foreground border-2 border-border',
+  elevated: 'bg-card text-card-foreground shadow-lg border border-border',
 };
 
 export default function Card({
@@ -28,12 +28,13 @@ export default function Card({
   return (
     <Tag
       onClick={onClick}
+      {...(Tag === 'button' ? { type: 'button' as const } : {})}
       className={cn(
         "rounded-xl transition-all duration-200",
         variantClasses[variant],
         !noPadding && "p-6",
         borderColor && `border-l-4 ${borderColor}`,
-        onClick && "cursor-pointer hover:shadow-lg hover:-translate-y-0.5 w-full text-left",
+        onClick && "w-full cursor-pointer text-left hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className
       )}
     >

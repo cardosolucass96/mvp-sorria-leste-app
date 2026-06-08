@@ -8,6 +8,7 @@ import {
   AlertDialog,
   AlertDialogContent,
   AlertDialogHeader,
+  AlertDialogMedia,
   AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -31,9 +32,9 @@ const typeIcons: Record<NonNullable<ConfirmDialogProps['type']>, LucideIcon> = {
   info: Info,
 };
 
-const typeVariants: Record<NonNullable<ConfirmDialogProps['type']>, 'danger' | 'primary'> = {
+const typeVariants: Record<NonNullable<ConfirmDialogProps['type']>, 'danger' | 'primary' | 'secondary'> = {
   danger: 'danger',
-  warning: 'primary',
+  warning: 'secondary',
   info: 'primary',
 };
 
@@ -59,13 +60,17 @@ export default function ConfirmDialog({
     >
       <AlertDialogContent size="default">
         <AlertDialogHeader>
+          <AlertDialogMedia
+            className={cn(
+              type === 'danger' && 'bg-error-50 text-error-700 dark:bg-error-900/20 dark:text-error-200',
+              type === 'warning' && 'bg-warning-50 text-warning-700 dark:bg-warning-800/18 dark:text-warning-200',
+              type === 'info' && 'bg-info-50 text-info-700 dark:bg-info-800/18 dark:text-info-200'
+            )}
+          >
+            <Icon className="size-5" aria-hidden="true" />
+          </AlertDialogMedia>
           <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>
-            <span className="flex gap-3 items-start">
-              <Icon className="size-5 shrink-0 text-muted-foreground mt-0.5" aria-hidden="true" />
-              <span>{message}</span>
-            </span>
-          </AlertDialogDescription>
+          <AlertDialogDescription>{message}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={loading}>

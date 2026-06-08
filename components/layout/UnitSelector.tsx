@@ -34,7 +34,7 @@ export default function UnitSelector() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-muted text-foreground hover:bg-accent transition-colors cursor-pointer outline-none"
+        className="flex items-center gap-1.5 rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs font-medium text-foreground shadow-xs transition-colors cursor-pointer outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         title={`Unidade atual: ${nomeAtual}`}
         aria-label={`Trocar unidade. Atual: ${nomeAtual}`}
       >

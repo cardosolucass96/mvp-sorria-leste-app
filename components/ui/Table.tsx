@@ -83,11 +83,11 @@ export default function Table<T>({
   };
 
   return (
-    <div className={cn("overflow-x-auto rounded-xl border border-border", className)}>
+    <div className={cn("overflow-x-auto rounded-xl border border-border bg-card text-card-foreground shadow-sm", className)}>
       <table className="w-full text-sm" aria-busy={loading || undefined}>
         {caption && <caption className="sr-only">{caption}</caption>}
 
-        <thead className="bg-muted">
+        <thead className="bg-muted/65">
           <tr>
             {columns.map((col) => (
               <th
@@ -96,7 +96,7 @@ export default function Table<T>({
                 className={cn(
                   "px-4 py-3 text-xs font-semibold uppercase tracking-wider text-foreground",
                   alignClass(col.align),
-                  stickyHeader && "sticky top-0 bg-muted z-10"
+                  stickyHeader && "sticky top-0 bg-muted/95 supports-backdrop-filter:backdrop-blur z-10"
                 )}
                 style={col.width ? { width: col.width } : undefined}
               >
@@ -117,7 +117,7 @@ export default function Table<T>({
           </tr>
         </thead>
 
-        <tbody className="divide-y divide-border bg-background">
+        <tbody className="divide-y divide-border bg-card">
           {loading ? (
             <>
               <SkeletonRow cols={columns.length} rowIndex={0} />

@@ -15,27 +15,27 @@ export interface AlertProps {
 
 const typeConfig = {
   info: {
-    bg: 'bg-info-500/10',
-    border: 'border-info-500/20',
-    text: 'text-info-600 dark:text-info-400',
+    bg: 'bg-info-50/90 dark:bg-info-800/18',
+    border: 'border-info-200 dark:border-info-900/60',
+    text: 'text-info-800 dark:text-info-200',
     Icon: Info,
   },
   success: {
-    bg: 'bg-success-500/10',
-    border: 'border-success-500/20',
-    text: 'text-success-600 dark:text-success-400',
+    bg: 'bg-success-50/90 dark:bg-success-800/18',
+    border: 'border-success-200 dark:border-success-900/60',
+    text: 'text-success-800 dark:text-success-200',
     Icon: CheckCircle,
   },
   warning: {
-    bg: 'bg-warning-500/10',
-    border: 'border-warning-500/20',
-    text: 'text-warning-600 dark:text-warning-400',
+    bg: 'bg-warning-50/90 dark:bg-warning-800/18',
+    border: 'border-warning-200 dark:border-warning-900/60',
+    text: 'text-warning-800 dark:text-warning-200',
     Icon: AlertTriangle,
   },
   error: {
-    bg: 'bg-error-500/10',
-    border: 'border-error-500/20',
-    text: 'text-error-600 dark:text-error-400',
+    bg: 'bg-error-50/90 dark:bg-error-900/20',
+    border: 'border-error-200 dark:border-error-900/60',
+    text: 'text-error-800 dark:text-error-200',
     Icon: XCircle,
   },
 } as const;
@@ -74,7 +74,7 @@ export default function Alert({
       {dismissible && (
         <button
           onClick={handleDismiss}
-          className="shrink-0 p-0.5 rounded hover:bg-black/5 transition-colors"
+          className="shrink-0 rounded p-0.5 text-current/70 transition-colors hover:bg-black/5 hover:text-current dark:hover:bg-white/10"
           aria-label="Fechar alerta"
         >
           <X className="w-4 h-4" />
