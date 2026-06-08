@@ -130,6 +130,21 @@ export default function FollowupPage() {
   const canCreate = canAccess;
   const isReadOnlyAdmin = hasRole('admin');
   const canMutate = hasRole('atendente') && !isReadOnlyAdmin;
+  const currentUserRoles = useMemo(
+    () => (
+      user
+        ? (user.roles && user.roles.length > 0 ? user.roles : [user.role]).map((role) => role.toLowerCase())
+        : []
+    ),
+    [user]
+  );
+  const fallbackResponsaveis = useMemo<ResponsavelOption[]>(() => {
+    const currentUserId = Number(user?.id);
+    const canFallbackCurrentUser = !Number.isNaN(currentUserId)
+      && user?.nome
+      && (currentUserRoles.includes('atendente') || currentUserRoles.includes('admin'));
+    return canFallbackCurrentUser ? [{ id: currentUserId, nome: user.nome }] : [];
+  }, [currentUserRoles, user]);
 
   const [tarefas, setTarefas] = useState<FollowupTarefaCompleta[]>([]);
   const [summary, setSummary] = useState<FollowupSummary>({
@@ -201,9 +216,23 @@ export default function FollowupPage() {
 
     async function carregarResponsaveis() {
       setLoadingResponsaveis(true);
+
+      const aplicarResponsaveis = (options: ResponsavelOption[]) => {
+        const mergedOptions = options.some((responsavel) => responsavel.id === fallbackResponsaveis[0]?.id)
+          ? options
+          : [...options, ...fallbackResponsaveis];
+
+        if (!cancelled) {
+          setResponsaveis(mergedOptions);
+        }
+      };
+
       try {
         const res = await fetch(`/api/usuarios?unidade_id=${currentUnidade}`);
-        if (!res.ok) return;
+        if (!res.ok) {
+          aplicarResponsaveis(fallbackResponsaveis);
+          return;
+        }
         const data: UsuarioResponsavel[] = await res.json();
         const options = data
           .filter((usuario) => {
@@ -215,28 +244,9 @@ export default function FollowupPage() {
             return roles.includes('atendente') || roles.includes('admin');
           })
           .map((item) => ({ id: item.id, nome: item.nome }));
-
-        const currentUserId = Number(user?.id);
-        const currentUserRoles = user
-          ? ((user.roles && user.roles.length > 0 ? user.roles : [user.role]).map((role) => role.toLowerCase()))
-          : [];
-        const canFallbackCurrentUser = !Number.isNaN(currentUserId)
-          && user?.nome
-          && (currentUserRoles.includes('atendente') || currentUserRoles.includes('admin'));
-        const fallbackOptions = canFallbackCurrentUser
-          ? [{ id: currentUserId, nome: user.nome }]
-          : [];
-        const mergedOptions = options.some((responsavel) => responsavel.id === fallbackOptions[0]?.id)
-          ? options
-          : [...options, ...fallbackOptions];
-
-        if (!cancelled) {
-          setResponsaveis(mergedOptions);
-        }
+        aplicarResponsaveis(options);
       } catch {
-        if (!cancelled) {
-          setResponsaveis([]);
-        }
+        aplicarResponsaveis(fallbackResponsaveis);
       } finally {
         if (!cancelled) {
           setLoadingResponsaveis(false);
@@ -248,7 +258,12 @@ export default function FollowupPage() {
     return () => {
       cancelled = true;
     };
-  }, [canAccess, currentUnidade, user?.id, user?.nome]);
+  }, [canAccess, currentUnidade, fallbackResponsaveis]);
+
+  useEffect(() => {
+    if (!taskModalOpen || editingTask || taskForm.responsavelUsuarioId || responsaveis.length !== 1) return;
+    setTaskForm((prev) => ({ ...prev, responsavelUsuarioId: String(responsaveis[0].id) }));
+  }, [editingTask, responsaveis, taskForm.responsavelUsuarioId, taskModalOpen]);
 
   useEffect(() => {
     if (!taskModalOpen) return;
@@ -394,8 +409,12 @@ export default function FollowupPage() {
   }
 
   const abrirNovaTarefa = useCallback(async (clienteId?: number) => {
+    const responsavelInicialId = responsaveis[0]?.id ?? fallbackResponsaveis[0]?.id ?? null;
     setEditingTask(null);
-    setTaskForm(initialFormState);
+    setTaskForm({
+      ...initialFormState,
+      responsavelUsuarioId: responsavelInicialId ? String(responsavelInicialId) : '',
+    });
     setTaskFormError('');
     setClienteResultados([]);
     setTaskModalOpen(true);
@@ -423,7 +442,7 @@ export default function FollowupPage() {
     } catch {
       setTaskFormError('Não foi possível carregar o cliente para pré-seleção.');
     }
-  }, []);
+  }, [fallbackResponsaveis, responsaveis]);
 
   useEffect(() => {
     if (!canCreate) return;
@@ -441,7 +460,7 @@ export default function FollowupPage() {
     nextParams.delete('cliente_id');
     const nextSearch = nextParams.toString();
     router.replace(`/followup${nextSearch ? `?${nextSearch}` : ''}`);
-  }, [canCreate, openFollowup, openFollowupClienteId, abrirNovaTarefa, router]);
+  }, [abrirNovaTarefa, canCreate, openFollowup, openFollowupClienteId, router, searchParams]);
 
   function abrirEdicao(task: FollowupTarefaCompleta) {
     setEditingTask(task);

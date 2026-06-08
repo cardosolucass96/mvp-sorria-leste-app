@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 
@@ -20,6 +20,10 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
+  }),
+  useSearchParams: () => ({
+    get: () => null,
+    toString: () => '',
   }),
 }));
 
@@ -238,5 +242,32 @@ describe('FollowupPage', () => {
       expect(localStorage.getItem('followup-view-mode')).toBe('calendario');
     });
     expect(screen.getByTestId('followup-calendario')).toBeInTheDocument();
+  });
+
+  test('abre a modal de tarefa mesmo quando a listagem de responsáveis falha', async () => {
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse({
+        items: [makeTask({ id: 1, titulo: 'Tarefa aberta' })],
+        summary: {
+          abertas: 1,
+          atrasadas: 0,
+          vencem_hoje: 1,
+          concluidas_hoje: 0,
+        },
+      })
+    );
+
+    global.fetch = jest.fn(() =>
+      mockJsonResponse({ error: 'Erro ao buscar usuários' }, { ok: false, status: 500 })
+    ) as jest.Mock;
+
+    const user = userEvent.setup();
+    render(<FollowupPage />);
+
+    const novaTarefaButton = await screen.findByRole('button', { name: /Nova tarefa/i });
+    await user.click(novaTarefaButton);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('combobox', { name: /Responsável/i })).toBeInTheDocument();
   });
 });

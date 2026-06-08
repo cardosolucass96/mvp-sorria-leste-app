@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
 import { Usuario } from '@/lib/types';
 import { ALL_ROLES } from '@/lib/constants/roles';
+import { garantirSchemaUsuariosValorDiaria } from '@/lib/helpers/garantirUsuarioSchema';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -10,6 +11,7 @@ interface RouteParams {
 // GET /api/usuarios/[id] - Buscar usuário por ID (com suas unidades e roles)
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    await garantirSchemaUsuariosValorDiaria();
     const { id } = await params;
     const usuario = await queryOne<Usuario>(
       'SELECT id, nome, email, role, valor_diaria, ativo, created_at FROM usuarios WHERE id = ?',
@@ -53,6 +55,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // PUT /api/usuarios/[id] - Atualizar usuário
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
+    await garantirSchemaUsuariosValorDiaria();
     const { id } = await params;
     const body = await request.json();
     const { nome, email, role, roles, role_primaria, ativo, unidade_ids, valor_diaria } = body;

@@ -49,13 +49,12 @@ afterEach(() => {
 describe('GET /api/usuarios', () => {
   // Usuarios em GET list nunca retornam senha (SELECT exclui coluna)
   const usuariosSemSenha = TODOS_USUARIOS.map(u => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { ...rest } = u;
     return rest;
   });
 
   it('retorna lista de usuários ordenados por nome', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios order by nome', usuariosSemSenha);
+    mockQueryResponse('from usuarios order by nome', usuariosSemSenha);
 
     const { status, data } = await callRoute(listUsuarios, '/api/usuarios');
 
@@ -66,7 +65,7 @@ describe('GET /api/usuarios', () => {
   });
 
   it('retorna lista vazia quando não há usuários', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios order by nome', []);
+    mockQueryResponse('from usuarios order by nome', []);
 
     const { status, data } = await callRoute(listUsuarios, '/api/usuarios');
 
@@ -75,9 +74,9 @@ describe('GET /api/usuarios', () => {
   });
 
   it('nunca retorna campo senha na listagem', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios', usuariosSemSenha);
+    mockQueryResponse('from usuarios order by nome', usuariosSemSenha);
 
-    const { status, data } = await callRoute<Record<string, unknown>[]>(listUsuarios, '/api/usuarios');
+    const { status } = await callRoute<Record<string, unknown>[]>(listUsuarios, '/api/usuarios');
 
     expect(status).toBe(200);
     // Verifica a query SQL — não deve conter "senha"
@@ -118,12 +117,12 @@ describe('GET /api/usuarios', () => {
     ]);
 
     const selectQuery = getExecutedQueries().find((entry) => entry.sql.includes('FROM usuarios u'));
-    expect(selectQuery?.sql).toContain('JOIN usuario_roles ur ON ur.usuario_id = u.id');
-    expect(selectQuery?.sql).toContain('INNER JOIN usuario_unidades uu ON uu.usuario_id = u.id');
+    expect(selectQuery?.sql).toContain('FROM usuario_roles ur');
+    expect(selectQuery?.sql).toContain('FROM usuario_unidades uu');
     expect(selectQuery?.sql).toContain('ur.role = ?');
     expect(selectQuery?.sql).toContain('uu.unidade_id = ?');
     expect(selectQuery?.sql).toContain('u.ativo = 1');
-    expect(selectQuery?.params).toEqual(['atendente', 2]);
+    expect(selectQuery?.params).toEqual(['atendente', 'atendente', 2]);
   });
 });
 
@@ -137,7 +136,7 @@ describe('POST /api/usuarios', () => {
     // Email não duplicado
     mockQueryResponse('select id from usuarios where email', []);
     // Retorno pós-INSERT
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', [{
+    mockQueryResponse('from usuarios where id', [{
       id: 10,
       nome: 'Novo Usuário',
       email: 'novo@sorrialeste.com',
@@ -160,7 +159,7 @@ describe('POST /api/usuarios', () => {
   it('hasheia a senha padrão (Sorria@123) no INSERT', async () => {
     setLastInsertId(11);
     mockQueryResponse('select id from usuarios where email', []);
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', [{
+    mockQueryResponse('from usuarios where id', [{
       id: 11, nome: 'Hash User', email: 'hash@test.com', role: 'executor', ativo: 1, created_at: '2025-03-20',
     }]);
 
@@ -174,14 +173,14 @@ describe('POST /api/usuarios', () => {
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO usuarios'));
     expect(insertQuery).toBeDefined();
     // O 4o parâmetro (senha) deve ser o hash, não "Sorria@123"
-    expect(insertQuery!.params[3]).toBe('pbkdf2:100000:mocksalt:mockhash');
-    expect(insertQuery!.params[3]).not.toBe('Sorria@123');
+    expect(insertQuery!.params[4]).toBe('pbkdf2:100000:mocksalt:mockhash');
+    expect(insertQuery!.params[4]).not.toBe('Sorria@123');
   });
 
   it('lowercase e trim no email', async () => {
     setLastInsertId(12);
     mockQueryResponse('select id from usuarios where email', []);
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', [{
+    mockQueryResponse('from usuarios where id', [{
       id: 12, nome: 'Email Test', email: 'upper@test.com', role: 'admin', ativo: 1, created_at: '2025-03-20',
     }]);
 
@@ -202,7 +201,7 @@ describe('POST /api/usuarios', () => {
   it('trim no nome', async () => {
     setLastInsertId(13);
     mockQueryResponse('select id from usuarios where email', []);
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', [{
+    mockQueryResponse('from usuarios where id', [{
       id: 13, nome: 'Trimmed', email: 'trim@test.com', role: 'avaliador', ativo: 1, created_at: '2025-03-20',
     }]);
 
@@ -219,7 +218,7 @@ describe('POST /api/usuarios', () => {
   it('nunca retorna campo senha no response', async () => {
     setLastInsertId(14);
     mockQueryResponse('select id from usuarios where email', []);
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', [{
+    mockQueryResponse('from usuarios where id', [{
       id: 14, nome: 'No Senha', email: 'nossh@test.com', role: 'atendente', ativo: 1, created_at: '2025-03-20',
     }]);
 
@@ -238,7 +237,7 @@ describe('POST /api/usuarios', () => {
 
 describe('GET /api/usuarios/[id]', () => {
   it('retorna usuário pelo ID', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ADMIN);
+    mockQueryResponse('from usuarios where id', USUARIO_ADMIN);
 
     const ctx = createRouteContext({ id: '1' });
     const { status, data } = await callRoute(getUsuario, '/api/usuarios/1', {}, ctx);
@@ -257,7 +256,7 @@ describe('GET /api/usuarios/[id]', () => {
   });
 
   it('retorna usuário inativo normalmente (sem filtro)', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_INATIVO);
+    mockQueryResponse('from usuarios where id', USUARIO_INATIVO);
 
     const ctx = createRouteContext({ id: '5' });
     const { status, data } = await callRoute<Record<string, unknown>>(getUsuario, '/api/usuarios/5', {}, ctx);
@@ -267,10 +266,10 @@ describe('GET /api/usuarios/[id]', () => {
   });
 
   it('nunca retorna campo senha no GET por ID', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ADMIN);
+    mockQueryResponse('from usuarios where id', USUARIO_ADMIN);
 
     const ctx = createRouteContext({ id: '1' });
-    const { data } = await callRoute<Record<string, unknown>>(getUsuario, '/api/usuarios/1', {}, ctx);
+    await callRoute<Record<string, unknown>>(getUsuario, '/api/usuarios/1', {}, ctx);
 
     // A query seleciona colunas específicas (sem senha)
     const queries = getExecutedQueries();
@@ -285,7 +284,7 @@ describe('GET /api/usuarios/[id]', () => {
 
 describe('PUT /api/usuarios/[id]', () => {
   it('atualiza nome do usuário', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ATENDENTE);
+    mockQueryResponse('from usuarios where id', USUARIO_ATENDENTE);
 
     const ctx = createRouteContext({ id: '2' });
     const { status } = await callRoute(updateUsuario, '/api/usuarios/2', {
@@ -302,7 +301,7 @@ describe('PUT /api/usuarios/[id]', () => {
   });
 
   it('atualiza role do usuário', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ATENDENTE);
+    mockQueryResponse('from usuarios where id', USUARIO_ATENDENTE);
 
     const ctx = createRouteContext({ id: '2' });
     const { status } = await callRoute(updateUsuario, '/api/usuarios/2', {
@@ -318,7 +317,7 @@ describe('PUT /api/usuarios/[id]', () => {
   });
 
   it('desativa usuário (ativo = false → 0)', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_EXECUTOR);
+    mockQueryResponse('from usuarios where id', USUARIO_EXECUTOR);
 
     const ctx = createRouteContext({ id: '4' });
     const { status } = await callRoute(updateUsuario, '/api/usuarios/4', {
@@ -335,7 +334,7 @@ describe('PUT /api/usuarios/[id]', () => {
   });
 
   it('reativa usuário (ativo = true → 1)', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_INATIVO);
+    mockQueryResponse('from usuarios where id', USUARIO_INATIVO);
 
     const ctx = createRouteContext({ id: '5' });
     const { status } = await callRoute(updateUsuario, '/api/usuarios/5', {
@@ -362,7 +361,7 @@ describe('PUT /api/usuarios/[id]', () => {
   });
 
   it('atualização parcial — não altera campos não enviados (COALESCE)', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_AVALIADOR);
+    mockQueryResponse('from usuarios where id', USUARIO_AVALIADOR);
 
     const ctx = createRouteContext({ id: '3' });
     await callRoute(updateUsuario, '/api/usuarios/3', {
@@ -375,11 +374,12 @@ describe('PUT /api/usuarios/[id]', () => {
     // email, role, ativo devem ser null → COALESCE mantém valor original
     expect(updateQuery!.params[1]).toBeNull(); // email
     expect(updateQuery!.params[2]).toBeNull(); // role
-    expect(updateQuery!.params[3]).toBeNull(); // ativo
+    expect(updateQuery!.params[3]).toBeNull(); // valor_diaria
+    expect(updateQuery!.params[4]).toBeNull(); // ativo
   });
 
   it('trim e lowercase no email durante update', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ATENDENTE);
+    mockQueryResponse('from usuarios where id', USUARIO_ATENDENTE);
 
     const ctx = createRouteContext({ id: '2' });
     await callRoute(updateUsuario, '/api/usuarios/2', {

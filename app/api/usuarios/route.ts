@@ -3,11 +3,13 @@ import { query, execute } from '@/lib/db';
 import { Usuario } from '@/lib/types';
 import { hashPassword } from '@/lib/auth';
 import { ALL_ROLES } from '@/lib/constants/roles';
+import { garantirSchemaUsuariosValorDiaria } from '@/lib/helpers/garantirUsuarioSchema';
 
 // GET /api/usuarios - Listar todos os usuários (com suas unidades e roles)
 // Params: ?unidade_id=X | ?categoria_id=X | ?role=X (filtra por roles válidas p/ a categoria ou pela role exata)
 export async function GET(request: NextRequest) {
   try {
+    await garantirSchemaUsuariosValorDiaria();
     const { searchParams } = new URL(request.url);
     const unidadeId = searchParams.get('unidade_id');
     const categoriaId = searchParams.get('categoria_id');
@@ -119,6 +121,7 @@ export async function GET(request: NextRequest) {
 // POST /api/usuarios - Criar novo usuário
 export async function POST(request: Request) {
   try {
+    await garantirSchemaUsuariosValorDiaria();
     const body = await request.json();
     const { nome, email, role, roles, role_primaria, unidade_ids, valor_diaria } = body;
 
