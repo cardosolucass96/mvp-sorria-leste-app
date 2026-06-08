@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   senha TEXT NOT NULL DEFAULT 'Sorria@123',
   role TEXT NOT NULL CHECK (role IN ('atendente', 'avaliador', 'executor', 'admin')),
   ativo INTEGER NOT NULL DEFAULT 1,
+  valor_diaria REAL NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
@@ -396,6 +397,45 @@ CREATE TABLE IF NOT EXISTS movimentacoes_saldo (
   FOREIGN KEY (cliente_destino_id) REFERENCES clientes(id)
 );
 
+-- Fechamento oficial de caixa por dia/unidade
+CREATE TABLE IF NOT EXISTS fechamentos_caixa (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  unidade_id INTEGER NOT NULL,
+  data_referencia TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'aberto'
+    CHECK (status IN ('aberto', 'fechado')),
+  base_json TEXT,
+  draft_json TEXT,
+  snapshot_json TEXT,
+  editado_manual INTEGER NOT NULL DEFAULT 0,
+  ajustes_count INTEGER NOT NULL DEFAULT 0,
+  fechado_por_id INTEGER,
+  fechado_em TEXT,
+  updated_by_id INTEGER,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  FOREIGN KEY (unidade_id) REFERENCES unidades(id),
+  FOREIGN KEY (fechado_por_id) REFERENCES usuarios(id),
+  FOREIGN KEY (updated_by_id) REFERENCES usuarios(id)
+);
+
+-- Auditoria de ajustes/reaberturas/fechamento do caixa
+CREATE TABLE IF NOT EXISTS fechamento_caixa_eventos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  unidade_id INTEGER NOT NULL,
+  data_referencia TEXT NOT NULL,
+  tipo_evento TEXT NOT NULL
+    CHECK (tipo_evento IN ('ajuste', 'fechado', 'reaberto')),
+  entidade_tipo TEXT NOT NULL,
+  entidade_chave TEXT NOT NULL,
+  antes_json TEXT,
+  depois_json TEXT,
+  motivo TEXT,
+  usuario_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  FOREIGN KEY (unidade_id) REFERENCES unidades(id),
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+);
+
 -- Vínculos entre clientes
 CREATE TABLE IF NOT EXISTS vinculos_clientes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -457,6 +497,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_followup_legado_unique
 CREATE INDEX IF NOT EXISTS idx_movimentacoes_cliente ON movimentacoes_saldo(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_movimentacoes_tipo ON movimentacoes_saldo(tipo);
 CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes_saldo(created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fechamentos_caixa_unidade_data ON fechamentos_caixa(unidade_id, data_referencia);
+CREATE INDEX IF NOT EXISTS idx_fechamentos_caixa_status ON fechamentos_caixa(status);
+CREATE INDEX IF NOT EXISTS idx_fechamento_caixa_eventos_unidade_data ON fechamento_caixa_eventos(unidade_id, data_referencia);
+CREATE INDEX IF NOT EXISTS idx_fechamento_caixa_eventos_tipo ON fechamento_caixa_eventos(tipo_evento);
 CREATE INDEX IF NOT EXISTS idx_vinculos_cliente_id ON vinculos_clientes(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_vinculos_cliente_vinculado_id ON vinculos_clientes(cliente_vinculado_id);
 CREATE INDEX IF NOT EXISTS idx_usu_unid_usuario ON usuario_unidades(usuario_id);

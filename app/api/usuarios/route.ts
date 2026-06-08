@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       }
 
       usuarios = await query<Usuario>(
-        `SELECT DISTINCT u.id, u.nome, u.email, u.role, u.ativo, u.created_at
+        `SELECT DISTINCT u.id, u.nome, u.email, u.role, u.ativo, u.valor_diaria, u.created_at
            FROM usuarios u
            ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
           ORDER BY u.nome`,
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
       );
     } else {
       usuarios = await query<Usuario>(
-        'SELECT id, nome, email, role, ativo, created_at FROM usuarios ORDER BY nome'
+        'SELECT id, nome, email, role, ativo, valor_diaria, created_at FROM usuarios ORDER BY nome'
       );
     }
 
@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nome, email, role, roles, role_primaria, unidade_ids } = body;
+    const { nome, email, role, roles, role_primaria, unidade_ids, valor_diaria } = body;
 
     // Resolve roles efetivas e role primária (compatibilidade com clientes antigos que só mandavam `role`).
     const rolesEfetivas: string[] = Array.isArray(roles) && roles.length > 0 ? roles : (role ? [role] : []);
@@ -157,6 +157,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Role primária deve estar em roles' }, { status: 400 });
     }
 
+    const valorDiariaNum = valor_diaria === undefined ? 0 : Number(valor_diaria);
+    if (!Number.isFinite(valorDiariaNum) || valorDiariaNum < 0) {
+      return NextResponse.json({ error: 'valor_diaria deve ser um número maior ou igual a 0' }, { status: 400 });
+    }
+
     // Para o CHECK constraint de usuarios.role (que não inclui 'ortodontista'), armazenamos a primária
     // convertendo 'ortodontista' → 'executor' (role primária de display sem afetar autorização).
     const primariaParaColuna = primaria === 'ortodontista' ? 'executor' : primaria;
@@ -178,8 +183,8 @@ export async function POST(request: Request) {
     const senhaHash = await hashPassword('Sorria@123');
 
     const result = await execute(
-      'INSERT INTO usuarios (nome, email, role, senha) VALUES (?, ?, ?, ?)',
-      [nome.trim(), email.toLowerCase().trim(), primariaParaColuna, senhaHash]
+      'INSERT INTO usuarios (nome, email, role, valor_diaria, senha) VALUES (?, ?, ?, ?, ?)',
+      [nome.trim(), email.toLowerCase().trim(), primariaParaColuna, valorDiariaNum, senhaHash]
     );
 
     const userId = result.lastInsertRowid as number;
@@ -202,7 +207,7 @@ export async function POST(request: Request) {
     }
 
     const novoUsuario = await query<Usuario>(
-      'SELECT id, nome, email, role, ativo, created_at FROM usuarios WHERE id = ?',
+      'SELECT id, nome, email, role, valor_diaria, ativo, created_at FROM usuarios WHERE id = ?',
       [userId]
     );
 

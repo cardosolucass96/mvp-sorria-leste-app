@@ -60,6 +60,7 @@ export interface Usuario {
   email: string;
   role: UserRole;           // Role primária (display/badge). Autorização usa `roles`.
   roles?: UserRole[];       // Todas as roles do usuário (source of truth em usuario_roles)
+  valor_diaria?: number;
   ativo: number; // 0 ou 1
   created_at: string;
 }

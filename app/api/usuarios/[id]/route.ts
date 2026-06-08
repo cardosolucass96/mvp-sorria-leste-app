@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const usuario = await queryOne<Usuario>(
-      'SELECT id, nome, email, role, ativo, created_at FROM usuarios WHERE id = ?',
+      'SELECT id, nome, email, role, valor_diaria, ativo, created_at FROM usuarios WHERE id = ?',
       [id]
     );
 
@@ -55,13 +55,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nome, email, role, roles, role_primaria, ativo, unidade_ids } = body;
+    const { nome, email, role, roles, role_primaria, ativo, unidade_ids, valor_diaria } = body;
 
     // Verifica se usuário existe
     const existing = await queryOne<Usuario>(
-      'SELECT id, nome, email, role, ativo, created_at FROM usuarios WHERE id = ?',
+      'SELECT id, nome, email, role, valor_diaria, ativo, created_at FROM usuarios WHERE id = ?',
       [id]
     );
+
+    const valorDiariaNum = valor_diaria === undefined ? undefined : Number(valor_diaria);
+    if (valorDiariaNum !== undefined && (!Number.isFinite(valorDiariaNum) || valorDiariaNum < 0)) {
+      return NextResponse.json({ error: 'valor_diaria deve ser um número maior ou igual a 0' }, { status: 400 });
+    }
 
     if (!existing) {
       return NextResponse.json(
@@ -115,12 +120,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         nome = COALESCE(?, nome),
         email = COALESCE(?, email),
         role = COALESCE(?, role),
+        valor_diaria = COALESCE(?, valor_diaria),
         ativo = COALESCE(?, ativo)
       WHERE id = ?`,
       [
         nome?.trim() || null,
         email?.toLowerCase().trim() || null,
         primariaParaColuna,
+        valorDiariaNum ?? null,
         ativo !== undefined ? (ativo ? 1 : 0) : null,
         id
       ]
@@ -149,7 +156,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const updated = await queryOne<Usuario>(
-      'SELECT id, nome, email, role, ativo, created_at FROM usuarios WHERE id = ?',
+      'SELECT id, nome, email, role, valor_diaria, ativo, created_at FROM usuarios WHERE id = ?',
       [id]
     );
 

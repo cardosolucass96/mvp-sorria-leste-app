@@ -7,6 +7,7 @@ import { PageHeader, Card, Button, Input, Badge, Alert, LoadingState, Table, Con
 import type { TableColumn } from '@/components/ui/Table';
 import { ROLE_LABELS_DESCRITIVOS, ROLE_LABELS, ALL_ROLES } from '@/lib/constants/roles';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import { formatarMoeda } from '@/lib/utils/formatters';
 
 interface UsuarioComUnidades extends Usuario {
   unidade_ids?: number[];
@@ -18,6 +19,7 @@ interface UsuarioFormData {
   email: string;
   roles: UserRole[];
   role_primaria: UserRole;
+  valor_diaria: number;
   unidade_ids: number[];
 }
 
@@ -26,6 +28,7 @@ const initialFormData: UsuarioFormData = {
   email: '',
   roles: ['atendente'],
   role_primaria: 'atendente',
+  valor_diaria: 0,
   unidade_ids: [1],
 };
 
@@ -37,6 +40,7 @@ export default function UsuariosPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState<UsuarioFormData>(initialFormData);
+  const [filtroStatus, setFiltroStatus] = useState<'ativos' | 'inativos' | 'todos'>('ativos');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -104,6 +108,7 @@ export default function UsuariosPage() {
       email: usuario.email,
       roles: userRoles,
       role_primaria: primaria,
+      valor_diaria: typeof usuario.valor_diaria === 'number' ? usuario.valor_diaria : 0,
       unidade_ids: usuario.unidade_ids || [1],
     });
     setEditingId(usuario.id);
@@ -142,6 +147,7 @@ export default function UsuariosPage() {
         email: formData.email,
         roles: formData.roles,
         role_primaria: formData.role_primaria,
+        valor_diaria: formData.valor_diaria,
         unidade_ids: formData.unidade_ids,
       };
 
@@ -243,6 +249,12 @@ export default function UsuariosPage() {
     });
   };
 
+  const usuariosFiltrados = usuarios.filter((u) => {
+    if (filtroStatus === 'todos') return true;
+    if (filtroStatus === 'ativos') return u.ativo;
+    return !u.ativo;
+  });
+
   if (isLoading) {
     return <LoadingState mode="spinner" text="Carregando..." />;
   }
@@ -253,7 +265,24 @@ export default function UsuariosPage() {
         title="Usuários"
         icon={<Users className="w-7 h-7" />}
         description="Gerenciar usuários do sistema"
-        actions={<Button onClick={handleNew}>+ Novo Usuário</Button>}
+        actions={
+          <div className="flex items-center gap-2">
+            <label htmlFor="filtro-status-usuarios" className="text-sm text-muted-foreground whitespace-nowrap">
+              Status:
+            </label>
+            <select
+              id="filtro-status-usuarios"
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value as 'ativos' | 'inativos' | 'todos')}
+              className="px-3 py-2 border border-input rounded-lg text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            >
+              <option value="ativos">Ativos</option>
+              <option value="inativos">Inativos</option>
+              <option value="todos">Todos</option>
+            </select>
+            <Button onClick={handleNew}>+ Novo Usuário</Button>
+          </div>
+        }
       />
 
       {error && (
@@ -285,6 +314,18 @@ export default function UsuariosPage() {
                 value={formData.email}
                 onChange={(v) => setFormData({ ...formData, email: v })}
                 required
+              />
+              <Input
+                label="Valor de diária (R$)"
+                name="valor_diaria"
+                type="number"
+                min={0}
+                step={0.01}
+                value={formData.valor_diaria}
+                onChange={(v) => {
+                  const value = Number(v.replace(',', '.'));
+                  setFormData({ ...formData, valor_diaria: Number.isFinite(value) ? value : 0 });
+                }}
               />
             </div>
             <div>
@@ -387,6 +428,11 @@ export default function UsuariosPage() {
             render: (u) => <span className="text-neutral-600">{u.email}</span>,
           },
           {
+            key: 'valor_diaria',
+            label: 'Valor diária',
+            render: (u) => <span>{formatarMoeda(typeof u.valor_diaria === 'number' ? u.valor_diaria : 0)}</span>,
+          },
+          {
             key: 'role',
             label: 'Perfis',
             render: (u) => {
@@ -457,9 +503,15 @@ export default function UsuariosPage() {
             ),
           },
         ] as TableColumn<UsuarioComUnidades>[]}
-        data={usuarios}
+        data={usuariosFiltrados}
         keyExtractor={(u) => u.id}
-        emptyMessage="Nenhum usuário cadastrado"
+        emptyMessage={
+          filtroStatus === 'todos'
+            ? 'Nenhum usuário cadastrado'
+            : filtroStatus === 'ativos'
+              ? 'Nenhum usuário ativo encontrado'
+              : 'Nenhum usuário inativo encontrado'
+        }
         caption="Usuários do sistema"
       />
     </div>

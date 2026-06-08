@@ -16,6 +16,7 @@ import {
   FileText,
   User,
   Banknote,
+  Wallet,
   Calendar,
   Building2,
   Tags,
@@ -45,6 +46,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { href: '/categorias', label: 'Filas', icon: Tags, roles: ['admin'] },
   { href: '/usuarios', label: 'Usuários', icon: User, roles: ['admin'] },
   { href: '/unidades', label: 'Unidades', icon: Building2, roles: ['admin'] },
+  { href: '/fechamento-caixa', label: 'Fechamento de Caixa', icon: Wallet, roles: ['admin'] },
   { href: '/minhas-comissoes', label: 'Minhas Comissões', icon: Banknote, roles: ['avaliador'] },
   { href: '/comissoes', label: 'Comissões', icon: Banknote, roles: ['admin'] },
 ];
