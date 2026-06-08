@@ -146,7 +146,7 @@ beforeEach(() => {
     if (value && typeof (value as Promise<T>).then === 'function') {
       return { id: '10' } as T;
     }
-    return actualReactUse(value as T);
+    return actualReactUse(value as React.Usable<T>);
   });
 
   mockUseAuth.mockReturnValue({
