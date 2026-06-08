@@ -118,8 +118,8 @@ function ProgressoEtapas({ etapas }: { etapas: ProgressoEtapa[] }) {
           key={i}
           className={`text-xs px-1.5 py-0.5 rounded ${
             etapa.status === 'concluido'
-              ? 'bg-success-100 text-success-700'
-              : 'bg-neutral-100 text-neutral-400'
+              ? 'bg-success-500/10 text-success-700 dark:text-success-300'
+              : 'bg-muted text-muted-foreground'
           }`}
           title={`${etapa.nome}: ${etapa.status === 'concluido' ? 'Concluída' : 'Pendente'}`}
         >
@@ -1035,7 +1035,7 @@ export default function AtendimentoDetalhePage({
               <p className={`text-xl font-semibold ${
                 atendimento.total - atendimento.total_pago > 0 
                   ? 'text-error-600' 
-                  : 'text-neutral-400'
+                  : 'text-muted-foreground'
               }`}>
                 {formatarMoeda(atendimento.total - atendimento.total_pago)}
               </p>
@@ -1067,21 +1067,21 @@ export default function AtendimentoDetalhePage({
             <p className="text-sm">Nenhum procedimento adicionado</p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-border-light">
-            <table className="w-full text-sm">
-              <thead className="bg-primary-50">
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="detail-table">
+              <thead>
                 <tr>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-left">Procedimento</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-left">Vendedor</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-left">Executor</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-right">Valor</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-center">Status</th>
+                  <th className="text-left">Procedimento</th>
+                  <th className="text-left">Vendedor</th>
+                  <th className="text-left">Executor</th>
+                  <th className="text-right">Valor</th>
+                  <th className="text-center">Status</th>
                   {podRemover && (
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-900 text-center w-20">Ações</th>
+                    <th className="w-20 text-center">Ações</th>
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100 bg-surface">
+              <tbody>
                 {itensAgrupados.map((entry) => {
                   if (entry.tipo === 'solo') {
                     const item = entry.item;
@@ -1099,7 +1099,7 @@ export default function AtendimentoDetalhePage({
                             trocandoExecutor === item.id ? (
                               <select
                                 autoFocus
-                                className="text-sm border border-border rounded px-2 py-1 bg-surface"
+                                className="field-control max-w-52 px-2 py-1 text-sm"
                                 defaultValue={item.executor_id ?? ''}
                                 onChange={(e) => handleTrocarExecutor(item.id, e.target.value ? parseInt(e.target.value) : null)}
                                 onBlur={() => setTrocandoExecutor(null)}
@@ -1145,14 +1145,14 @@ export default function AtendimentoDetalhePage({
                     <React.Fragment key={groupId}>
                       {/* Header do grupo */}
                       <tr
-                        className="bg-neutral-50 cursor-pointer hover:bg-neutral-100 transition-colors"
+                        className="cursor-pointer bg-muted/45 transition-colors hover:bg-accent/45"
                         onClick={() => toggleGrupo(groupId)}
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             {expandido ? <ChevronDown className="w-4 h-4 text-muted" /> : <ChevronRight className="w-4 h-4 text-muted" />}
                             <span className="font-medium">{primeiro.procedimento_nome}</span>
-                            <span className="text-xs text-muted bg-neutral-200 px-1.5 py-0.5 rounded">
+                            <span className="rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
                               {grupoItens.length} {grupoItens.length === 1 ? 'dente' : 'dentes'}
                             </span>
                           </div>
@@ -1168,7 +1168,7 @@ export default function AtendimentoDetalhePage({
                             trocandoExecutor === primeiro.id ? (
                               <select
                                 autoFocus
-                                className="text-sm border border-border rounded px-2 py-1 bg-surface"
+                                className="field-control max-w-52 px-2 py-1 text-sm"
                                 defaultValue={primeiro.executor_id ?? ''}
                                 onChange={async (e) => {
                                   const novoId = e.target.value ? parseInt(e.target.value) : null;
@@ -1209,7 +1209,7 @@ export default function AtendimentoDetalhePage({
 
                       {/* Sub-linhas dos dentes */}
                       {expandido && grupoItens.map((item) => (
-                        <tr key={item.id} className="bg-neutral-50/50">
+                        <tr key={item.id} className="bg-secondary/35">
                           <td className="px-4 py-2 pl-12">
                             <span className="text-muted">
                               {item.dentes
@@ -1293,7 +1293,7 @@ export default function AtendimentoDetalhePage({
               const proc = procedimentos.find(p => p.id === parseInt(procId));
               return proc?.por_dente === 1 ? (
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Dentes *</label>
+                  <label className="mb-2 block text-sm font-medium text-foreground">Dentes *</label>
                   <SeletorDentes
                     valor={dentesFaces}
                     onChange={setDentesFaces}
@@ -1434,7 +1434,7 @@ export default function AtendimentoDetalhePage({
 
               {/* Valor */}
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">
+                <label className="mb-1 block text-sm font-medium text-foreground">
                   Valor recebido (R$) *
                 </label>
                 <div className="flex gap-2">
@@ -1471,11 +1471,11 @@ export default function AtendimentoDetalhePage({
 
               {/* Distribuição */}
               {val > 0 && (
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="px-3 py-2 bg-surface-secondary">
-                    <span className="text-sm font-medium text-neutral-700">Como distribuir nos procedimentos</span>
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <div className="bg-muted/65 px-3 py-2">
+                    <span className="text-sm font-medium text-foreground">Como distribuir nos procedimentos</span>
                   </div>
-                  <div className="divide-y">
+                  <div className="divide-y divide-border bg-card">
                     {atendimento.itens.map(item => {
                       const devido = item.valor - item.valor_pago;
                       if (devido <= 0) return null;
@@ -1497,14 +1497,18 @@ export default function AtendimentoDetalhePage({
                               type="number" step="0.01" min="0" max={devido}
                               value={itensPagamento[item.id] ?? ''}
                               onChange={(e) => setItensPagamento(prev => ({ ...prev, [item.id]: parseFloat(e.target.value) || 0 }))}
-                              className="w-28 text-right px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              className="field-control w-28 px-3 py-2 text-right text-sm"
                             />
                           </div>
                         </div>
                       );
                     })}
                   </div>
-                  <div className={`flex justify-between px-3 py-2 text-sm font-medium ${ok ? 'bg-success-50 text-success-700' : 'bg-error-50 text-error-700'}`}>
+                  <div className={`flex justify-between px-3 py-2 text-sm font-medium ${
+                    ok
+                      ? 'bg-success-500/10 text-success-700 dark:text-success-300'
+                      : 'bg-error-500/10 text-error-700 dark:text-error-300'
+                  }`}>
                     <span>{ok ? '✓ Valor totalmente alocado' : val - totalAlocado > 0 ? `Falta alocar: ${formatarMoeda(val - totalAlocado)}` : `Excesso: ${formatarMoeda(totalAlocado - val)}`}</span>
                     <span>{formatarMoeda(totalAlocado)} / {formatarMoeda(val)}</span>
                   </div>

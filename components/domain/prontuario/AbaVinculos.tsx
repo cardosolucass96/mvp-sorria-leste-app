@@ -21,7 +21,7 @@ export default function AbaVinculos({ vinculos }: AbaVinculosProps) {
   return (
     <div className="space-y-2">
       {vinculos.map(v => (
-        <div key={v.id} className="rounded-lg border border-neutral-200 p-3">
+        <div key={v.id} className="rounded-lg border border-border p-3">
           <Link
             href={`/clientes/${v.outro_cliente_id}`}
             className="font-medium text-primary-600 hover:underline text-sm"
@@ -33,7 +33,7 @@ export default function AbaVinculos({ vinculos }: AbaVinculosProps) {
             {v.outro_cliente_telefone && <span>Tel: {v.outro_cliente_telefone}</span>}
           </div>
           {v.observacao && (
-            <p className="mt-2 text-sm text-foreground bg-neutral-50 rounded px-2 py-1.5 whitespace-pre-wrap">
+            <p className="mt-2 whitespace-pre-wrap rounded bg-muted/35 px-2 py-1.5 text-sm text-foreground">
               {v.observacao}
             </p>
           )}

@@ -270,7 +270,7 @@ export default function AgendaPage() {
     nextParams.delete('cliente_id');
     const nextSearch = nextParams.toString();
     router.replace(`/agenda${nextSearch ? `?${nextSearch}` : ''}`);
-  }, [openAgenda, openAgendaClienteId, router]);
+  }, [openAgenda, openAgendaClienteId, router, searchParams, abrirNovoAgendamento]);
 
   const carregarExecutores = useCallback(async () => {
     if (executores.length > 0) return;
@@ -682,7 +682,7 @@ export default function AgendaPage() {
         onClick={cardDestino ? () => router.push(cardDestino) : undefined}
       >
         {/* Cabeçalho */}
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border-light bg-surface-secondary flex-wrap">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-secondary px-4 py-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-foreground">{grupo.cliente_nome}</span>
             {grupo.cliente_telefone && (
@@ -745,7 +745,7 @@ export default function AgendaPage() {
               type="button"
               onClick={(e) => { e.stopPropagation(); setDrawerClienteId(grupo.cliente_id); }}
               title="Ver prontuário"
-              className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700"
+              className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/35 hover:bg-primary/10 hover:text-primary"
             >
               <FileText className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Prontuário</span>
@@ -769,7 +769,7 @@ export default function AgendaPage() {
                   size="sm"
                   onClick={() => setCancelarDialog({ isOpen: true, grupo, motivo: '' })}
                   disabled={isLoading}
-                  className="!text-error-500 hover:!bg-error-50"
+                  className="!text-error-600 dark:!text-error-300 hover:!bg-error-500/10"
                   title="Cancelar agendamento(s)"
                 >
                   <X className="w-3.5 h-3.5 mr-1" />
@@ -790,7 +790,7 @@ export default function AgendaPage() {
                   size="sm"
                   onClick={() => handleFaltouReagendar(grupo)}
                   disabled={isLoading}
-                  className="!text-warning-700 !border-warning-300 hover:!bg-warning-50"
+                  className="!border-warning-500/30 !text-warning-800 dark:!text-warning-200 hover:!bg-warning-500/10"
                   title="Faltou — cria novos agendamentos pendentes"
                 >
                   <CalendarClock className="w-3.5 h-3.5 mr-1" />
@@ -801,7 +801,7 @@ export default function AgendaPage() {
                   size="sm"
                   onClick={() => handleFaltou(grupo)}
                   disabled={isLoading}
-                  className="!text-warning-700 !border-warning-300 hover:!bg-warning-50"
+                  className="!border-warning-500/30 !text-warning-800 dark:!text-warning-200 hover:!bg-warning-500/10"
                 >
                   <UserX className="w-3.5 h-3.5 mr-1" />
                   Faltou
@@ -822,7 +822,7 @@ export default function AgendaPage() {
         </div>
 
         {/* Lista de procedimentos */}
-        <div className="divide-y divide-border-light">
+        <div className="divide-y divide-border">
           {grupo.agendamentos.map((ag) => {
             const podTrocar = isAdminOrAtendente && (ag.status === 'pendente' || ag.status === 'agendado');
             return (
@@ -939,7 +939,7 @@ export default function AgendaPage() {
 
         {/* Filtros rápidos — só no modo lista */}
         {viewMode === 'lista' && (
-          <div className="flex gap-2 mt-3 pt-3 border-t border-border-light">
+          <div className="mt-3 flex gap-2 border-t border-border pt-3">
             {FILTROS_RAPIDOS.map(f => (
               <button
                 key={f.id}
@@ -947,7 +947,7 @@ export default function AgendaPage() {
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   filtroRapido === f.id
                     ? 'bg-primary-600 text-white'
-                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-foreground'
+                    : 'bg-muted/70 text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
               >
                 {f.label}
@@ -1015,7 +1015,7 @@ export default function AgendaPage() {
           {/* Agendamentos sem data */}
           {agrupadosSemData.length > 0 && (
             <div className="mt-8">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-600">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Sem data agendada ({agrupadosSemData.reduce((s, g) => s + g.agendamentos.length, 0)})
               </h3>
               <div className="space-y-3">
@@ -1041,7 +1041,7 @@ export default function AgendaPage() {
                   key={n}
                   onClick={() => setPage(n)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    n === page ? 'bg-primary text-white' : 'border border-border-light text-muted-foreground hover:text-foreground'
+                    n === page ? 'bg-primary text-white' : 'border border-border text-muted-foreground hover:bg-accent/40 hover:text-foreground'
                   }`}
                 >
                   {n}
@@ -1092,7 +1092,7 @@ export default function AgendaPage() {
               min={new Date().toISOString().slice(0, 16)}
               value={reagendarDialog.novaData}
               onChange={e => setReagendarDialog(prev => ({ ...prev, novaData: e.target.value }))}
-              className="w-full rounded-lg border border-border-light bg-surface px-3 py-2 text-sm text-foreground"
+              className="field-control w-full px-3 py-2 text-sm"
             />
           </div>
           <div className="flex justify-end gap-2">
@@ -1134,7 +1134,7 @@ export default function AgendaPage() {
               min={new Date().toISOString().slice(0, 16)}
               value={reagendarDiretoDialog.novaData}
               onChange={e => setReagendarDiretoDialog(prev => ({ ...prev, novaData: e.target.value }))}
-              className="w-full rounded-lg border border-border-light bg-surface px-3 py-2 text-sm text-foreground"
+              className="field-control w-full px-3 py-2 text-sm"
             />
           </div>
           <div className="flex justify-end gap-2">
@@ -1230,16 +1230,16 @@ export default function AgendaPage() {
               value={novoBuscaCliente}
               onChange={e => buscarClientes(e.target.value)}
               placeholder="Digite o nome do cliente..."
-              className="mb-2 w-full rounded-lg border border-border-light bg-surface px-3 py-2 text-sm text-foreground placeholder:text-neutral-500"
+              className="field-control mb-2 w-full px-3 py-2 text-sm"
               autoFocus
             />
             {novoClientes.length > 0 && (
-              <div className="border border-border-light rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
                 {novoClientes.map(c => (
                   <button
                     key={c.id}
                     onClick={() => { setNovoClienteSelecionado(c); setNovoClientes([]); }}
-                    className="w-full border-b border-border-light px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-secondary last:border-0"
+                    className="w-full border-b border-border px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-secondary last:border-0"
                   >
                     <span className="font-medium">{c.nome}</span>
                     {c.telefone && <span className="ml-2 text-muted-foreground">{formatarTelefone(c.telefone)}</span>}
@@ -1254,7 +1254,7 @@ export default function AgendaPage() {
         ) : (
           <div className="space-y-4">
             {/* Cliente selecionado */}
-            <div className="flex items-center justify-between bg-surface-secondary rounded-lg px-3 py-2">
+            <div className="flex items-center justify-between rounded-lg bg-surface-secondary px-3 py-2">
               <div>
                 <span className="text-sm font-medium">{novoClienteSelecionado.nome}</span>
                 {novoClienteSelecionado.telefone && (
@@ -1278,7 +1278,7 @@ export default function AgendaPage() {
                   className={`flex-1 px-4 py-2 font-medium transition-colors ${
                     novoTipo === 'avaliacao'
                       ? 'bg-primary-600 text-white'
-                      : 'bg-surface text-muted-foreground hover:bg-surface-secondary hover:text-foreground'
+                      : 'bg-card text-muted-foreground hover:bg-surface-secondary hover:text-foreground'
                   }`}
                 >
                   Avaliação
@@ -1288,7 +1288,7 @@ export default function AgendaPage() {
                   className={`flex-1 px-4 py-2 font-medium transition-colors border-l border-border ${
                     novoTipo === 'procedimento'
                       ? 'bg-primary-600 text-white'
-                      : 'bg-surface text-muted-foreground hover:bg-surface-secondary hover:text-foreground'
+                      : 'bg-card text-muted-foreground hover:bg-surface-secondary hover:text-foreground'
                   }`}
                 >
                   Procedimento

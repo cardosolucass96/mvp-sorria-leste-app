@@ -17,7 +17,7 @@ export default function AbaPagamentos({ pagamentos, movimentacoes }: AbaPagament
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-semibold text-muted uppercase tracking-wide">Pagamentos</h3>
-          <span className="text-sm font-semibold text-success-700">
+          <span className="text-sm font-semibold text-success-700 dark:text-success-300">
             Total: {formatarMoeda(total)}
           </span>
         </div>
@@ -28,7 +28,7 @@ export default function AbaPagamentos({ pagamentos, movimentacoes }: AbaPagament
             {pagamentos.map(p => (
               <div
                 key={p.id}
-                className={`rounded-lg border border-neutral-200 p-3 ${p.cancelado ? 'opacity-60 bg-neutral-50' : ''}`}
+                className={`rounded-lg border border-border p-3 ${p.cancelado ? 'bg-muted/35 opacity-60' : ''}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
@@ -37,7 +37,7 @@ export default function AbaPagamentos({ pagamentos, movimentacoes }: AbaPagament
                         {METODOS_LABEL[p.metodo] || p.metodo}
                       </span>
                       {p.cancelado ? (
-                        <span className="text-xs px-1.5 py-0.5 bg-error-100 text-error-700 rounded">
+                        <span className="rounded bg-error-500/10 px-1.5 py-0.5 text-xs text-error-700 dark:text-error-200">
                           Cancelado
                         </span>
                       ) : null}
@@ -55,7 +55,7 @@ export default function AbaPagamentos({ pagamentos, movimentacoes }: AbaPagament
                   </div>
                   <div className="text-right shrink-0">
                     <p
-                      className={`text-sm font-semibold ${p.cancelado ? 'line-through text-neutral-400' : 'text-success-600'}`}
+                      className={`text-sm font-semibold ${p.cancelado ? 'text-muted-foreground line-through' : 'text-success-600 dark:text-success-300'}`}
                     >
                       {formatarMoeda(p.valor)}
                     </p>
@@ -77,7 +77,7 @@ export default function AbaPagamentos({ pagamentos, movimentacoes }: AbaPagament
               const isEntrada = ['credito', 'transferencia_entrada'].includes(m.tipo);
               const cfg = HISTORICO_CONFIG[m.tipo] ?? { label: m.tipo, cor: 'bg-neutral-400' };
               return (
-                <div key={i} className="rounded-lg border border-neutral-200 p-3">
+                <div key={i} className="rounded-lg border border-border p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -86,7 +86,7 @@ export default function AbaPagamentos({ pagamentos, movimentacoes }: AbaPagament
                       </div>
                       <p className="text-xs text-muted mt-1">{formatarDataHora(m.data)}</p>
                       {m.descricao && (
-                        <p className="text-xs text-neutral-600 mt-1">{m.descricao}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{m.descricao}</p>
                       )}
                     </div>
                     <div className="text-right shrink-0">

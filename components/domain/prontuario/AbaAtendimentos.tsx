@@ -23,7 +23,7 @@ export default function AbaAtendimentos({ atendimentos }: AbaAtendimentosProps) 
         <Link
           key={a.id}
           href={`/atendimentos/${a.id}`}
-          className="block rounded-lg border border-neutral-200 p-3 hover:bg-surface-secondary active:bg-neutral-100 transition"
+          className="block rounded-lg border border-border p-3 transition hover:bg-surface-secondary active:bg-accent/50"
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
@@ -39,7 +39,7 @@ export default function AbaAtendimentos({ atendimentos }: AbaAtendimentosProps) 
             </div>
             <div className="text-right shrink-0">
               <p className="text-sm font-medium">{formatarMoeda(a.total ?? 0)}</p>
-              <p className="text-xs text-success-600 font-medium">
+              <p className="text-xs font-medium text-success-600 dark:text-success-300">
                 Pago: {formatarMoeda(a.total_pago ?? 0)}
               </p>
             </div>

@@ -30,7 +30,7 @@ interface DashboardStats {
 
 export default function Home() {
   usePageTitle('Início');
-  const { user, hasRole, effectiveRole, viewMode } = useAuth();
+  const { user, effectiveRole, viewMode } = useAuth();
   const unitFetch = useUnitFetch();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +69,7 @@ export default function Home() {
             <LayoutDashboard className="w-8 h-8 text-primary-500" aria-hidden="true" />
             Painel Administrativo
           </h1>
-          <p className="mt-2 text-neutral-600">
+          <p className="mt-2 text-muted-foreground">
             Olá, {user?.nome?.split(' ')[0]}! Visão geral do sistema.
           </p>
         </div>
@@ -124,8 +124,8 @@ export default function Home() {
         </div>
 
         {/* Ações Rápidas */}
-        <div className="card bg-gradient-to-r from-primary-50 to-warning-50">
-          <h2 className="text-base font-semibold mb-4 text-primary-800">Ações Rápidas</h2>
+        <div className="card tone-primary">
+          <h2 className="mb-4 text-base font-semibold text-foreground">Ações Rápidas</h2>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {[
               { href: '/clientes/novo', Icon: UserPlus, label: 'Novo Cliente' },
@@ -134,9 +134,9 @@ export default function Home() {
               { href: '/comissoes', Icon: Banknote, label: 'Comissões' },
               { href: '/usuarios', Icon: User, label: 'Usuários' },
             ].map(({ href, Icon, label }) => (
-              <Link key={href} href={href} className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all hover:shadow-md border border-primary-100">
+              <Link key={href} href={href} className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card/75 p-4 transition-all hover:bg-primary/10 hover:shadow-md">
                 <Icon className="w-7 h-7 text-primary-500" aria-hidden="true" />
-                <span className="text-sm font-medium text-center text-primary-800">{label}</span>
+                <span className="text-center text-sm font-medium text-foreground">{label}</span>
               </Link>
             ))}
           </div>
@@ -155,7 +155,7 @@ export default function Home() {
           <h1 className="text-3xl font-bold text-foreground">
             Olá, {user?.nome?.split(' ')[0]}!
           </h1>
-          <p className="mt-2 text-neutral-600">
+          <p className="mt-2 text-muted-foreground">
             Área de Recepção — Atendimento ao Cliente
           </p>
         </div>
@@ -186,34 +186,34 @@ export default function Home() {
 
         {/* Ações Principais */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Link href="/clientes/novo" className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-primary-50 border-2 border-primary-200">
+          <Link href="/clientes/novo" className="card tone-primary hover:-translate-y-1 hover:shadow-lg transition-all">
             <div className="flex items-center gap-4">
               <div className="p-4 bg-primary-500 rounded-full">
                 <UserPlus className="w-7 h-7 text-white" aria-hidden="true" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-primary-900">Cadastrar Novo Cliente</h3>
-                <p className="text-sm text-primary-700">Registrar um novo paciente no sistema</p>
+                <h3 className="text-xl font-bold text-foreground">Cadastrar Novo Cliente</h3>
+                <p className="text-sm text-muted-foreground">Registrar um novo paciente no sistema</p>
               </div>
             </div>
           </Link>
 
-          <Link href="/atendimentos/novo" className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-warning-50 border-2 border-warning-200">
+          <Link href="/atendimentos/novo" className="card tone-warning hover:-translate-y-1 hover:shadow-lg transition-all">
             <div className="flex items-center gap-4">
               <div className="p-4 bg-warning-500 rounded-full">
                 <FileEdit className="w-7 h-7 text-white" aria-hidden="true" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-warning-900">Novo Atendimento</h3>
-                <p className="text-sm text-warning-700">Iniciar atendimento para cliente existente</p>
+                <h3 className="text-xl font-bold text-foreground">Novo Atendimento</h3>
+                <p className="text-sm text-muted-foreground">Iniciar atendimento para cliente existente</p>
               </div>
             </div>
           </Link>
         </div>
 
         {/* Acesso Rápido */}
-        <div className="card bg-gradient-to-r from-primary-50 to-warning-50">
-          <h2 className="text-base font-semibold mb-4 text-primary-800">Acesso Rápido</h2>
+        <div className="card tone-primary">
+          <h2 className="mb-4 text-base font-semibold text-foreground">Acesso Rápido</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { href: '/clientes', Icon: Search, label: 'Buscar Cliente' },
@@ -221,9 +221,9 @@ export default function Home() {
               { href: '/pagamentos', Icon: CreditCard, label: 'Pagamentos' },
               { href: '/minhas-comissoes', Icon: Banknote, label: 'Minhas Comissões' },
             ].map(({ href, Icon, label }) => (
-              <Link key={href} href={href} className="flex flex-col items-center gap-2 p-4 bg-surface rounded-xl hover:bg-primary-50 transition-all border border-primary-100">
+              <Link key={href} href={href} className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card/75 p-4 transition-all hover:bg-primary/10">
                 <Icon className="w-6 h-6 text-primary-500" aria-hidden="true" />
-                <span className="text-sm text-primary-800">{label}</span>
+                <span className="text-sm text-foreground">{label}</span>
               </Link>
             ))}
           </div>
@@ -243,7 +243,7 @@ export default function Home() {
             <Search className="w-8 h-8 text-primary-500" aria-hidden="true" />
             Área do Avaliador
           </h1>
-          <p className="mt-2 text-neutral-600">
+          <p className="mt-2 text-muted-foreground">
             Olá, Dr(a). {user?.nome?.split(' ')[0]}! Sua fila de avaliações.
           </p>
         </div>
@@ -274,15 +274,15 @@ export default function Home() {
 
         {/* Ação Principal */}
         <Link href="/avaliacao" className="block">
-          <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-primary-50 to-warning-50 border-2 border-primary-300">
+          <div className="card tone-primary hover:-translate-y-1 hover:shadow-lg transition-all">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="p-4 bg-primary-500 rounded-full">
                   <Search className="w-8 h-8 text-white" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-primary-900">Acessar Fila de Avaliação</h3>
-                  <p className="text-primary-700">
+                  <h3 className="text-2xl font-bold text-foreground">Acessar Fila de Avaliação</h3>
+                  <p className="text-muted-foreground">
                     {(stats?.meusAtendimentosAvaliacao || 0) + (stats?.atendimentosDisponiveisAvaliacao || 0)} atendimentos aguardando
                   </p>
                 </div>
@@ -293,14 +293,14 @@ export default function Home() {
         </Link>
 
         {/* Info de Comissões */}
-        <div className="card bg-success-50 border border-success-200">
+        <div className="card tone-success">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-semibold text-success-900 flex items-center gap-2">
+              <h3 className="flex items-center gap-2 font-semibold text-foreground">
                 <Banknote className="w-4 h-4" aria-hidden="true" />
                 Suas Comissões de Venda
               </h3>
-              <p className="text-sm text-success-700">Comissão sobre procedimentos que você vendeu</p>
+              <p className="text-sm text-muted-foreground">Comissão sobre procedimentos que você vendeu</p>
             </div>
             <Link href="/minhas-comissoes" className="btn bg-success-600 text-white hover:bg-success-700">
               Ver Detalhes
@@ -323,7 +323,7 @@ export default function Home() {
             <Stethoscope className="w-8 h-8 text-primary-500" aria-hidden="true" />
             {isDentista ? 'Área do Dentista' : 'Área do Executor'}
           </h1>
-          <p className="mt-2 text-neutral-600">
+          <p className="mt-2 text-muted-foreground">
             Olá, Dr(a). {user?.nome?.split(' ')[0]}! {isDentista ? 'Suas filas de avaliação e execução.' : 'Sua fila de procedimentos.'}
           </p>
         </div>
@@ -359,15 +359,15 @@ export default function Home() {
         <div className={`grid grid-cols-1 ${isDentista ? 'md:grid-cols-2' : ''} gap-4`}>
           {isDentista && (
             <Link href="/avaliacao" className="block">
-              <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-evaluation-50 to-evaluation-50 border-2 border-evaluation-100">
+              <div className="card tone-evaluation hover:-translate-y-1 hover:shadow-lg transition-all">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="p-4 bg-evaluation-500 rounded-full">
                       <Search className="w-7 h-7 text-white" aria-hidden="true" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-evaluation-900">Fila de Avaliação</h3>
-                      <p className="text-evaluation-700">
+                      <h3 className="text-xl font-bold text-foreground">Fila de Avaliação</h3>
+                      <p className="text-muted-foreground">
                         {(stats?.meusAtendimentosAvaliacao || 0) + (stats?.atendimentosDisponiveisAvaliacao || 0)} atendimentos aguardando
                       </p>
                     </div>
@@ -379,15 +379,15 @@ export default function Home() {
           )}
 
           <Link href="/execucao" className="block">
-            <div className="card hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-r from-primary-50 to-warning-50 border-2 border-primary-300">
+            <div className="card tone-primary hover:-translate-y-1 hover:shadow-lg transition-all">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="p-4 bg-primary-500 rounded-full">
                     <Activity className="w-7 h-7 text-white" aria-hidden="true" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-primary-900">Fila de Execução</h3>
-                    <p className="text-primary-700">
+                    <h3 className="text-xl font-bold text-foreground">Fila de Execução</h3>
+                    <p className="text-muted-foreground">
                       {(stats?.meusProcedimentos || 0) + (stats?.procedimentosDisponiveis || 0)} procedimentos na fila
                     </p>
                   </div>
@@ -400,14 +400,14 @@ export default function Home() {
 
         {/* Meus Procedimentos */}
         <Link href="/meus-procedimentos" className="block">
-          <div className="card bg-success-50 border border-success-200 hover:shadow-lg transition-all">
+          <div className="card tone-success hover:shadow-lg transition-all">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-success-900 flex items-center gap-2">
+                <h3 className="flex items-center gap-2 font-semibold text-foreground">
                   <ClipboardList className="w-4 h-4" aria-hidden="true" />
                   Meus Procedimentos
                 </h3>
-                <p className="text-sm text-success-700">Histórico completo de avaliações e execuções</p>
+                <p className="text-sm text-muted-foreground">Histórico completo de avaliações e execuções</p>
               </div>
               <span className="btn bg-success-600 text-white hover:bg-success-700">
                 Ver Detalhes
@@ -429,13 +429,13 @@ export default function Home() {
           <Stethoscope className="w-8 h-8 text-primary-500" aria-hidden="true" />
           Bem-vindo ao Sorria Leste!
         </h1>
-        <p className="mt-2 text-neutral-600">
+        <p className="mt-2 text-muted-foreground">
           Sistema de Gestão Odontológica
         </p>
       </div>
 
-      <div className="card bg-warning-50 border border-warning-200">
-        <div className="flex items-center gap-2 text-warning-800">
+      <div className="card tone-warning">
+        <div className="flex items-center gap-2 text-foreground">
           <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
           <p>Seu perfil não está configurado corretamente. Entre em contato com o administrador.</p>
         </div>

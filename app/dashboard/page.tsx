@@ -5,7 +5,7 @@ import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import {
   LayoutDashboard, DollarSign, ArrowDownCircle, AlertTriangle, Target,
-  ClipboardList, Users, TrendingUp, Banknote, BarChart2, Activity,
+  ClipboardList, Users, TrendingUp, Banknote, BarChart2,
   Award, Star, Megaphone, Stethoscope,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,7 +71,11 @@ export default function DashboardAdminPage() {
   }, [user, authLoading, router, isAdmin]);
 
   useEffect(() => {
-    fetchDashboard();
+    const timer = window.setTimeout(() => {
+      void fetchDashboard();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [fetchDashboard]);
 
   const aplicarPeriodo = (periodo: string) => {
@@ -246,7 +250,7 @@ export default function DashboardAdminPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Faturamento Mensal */}
             <Card>
-              <h3 className="text-base font-semibold mb-4 text-neutral-800 flex items-center gap-2">
+              <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <TrendingUp className="w-4 h-4 text-primary-500" />
                 Faturamento Mensal
               </h3>
@@ -254,7 +258,7 @@ export default function DashboardAdminPage() {
                 {data.faturamentoMensal.length > 0 ? (
                   data.faturamentoMensal.map((mes) => (
                     <div key={mes.mes} className="flex items-center gap-3">
-                      <span className="w-16 text-sm text-neutral-600">{formatMes(mes.mes)}</span>
+                      <span className="w-16 text-sm text-muted-foreground">{formatMes(mes.mes)}</span>
                       <div className="flex-1 bg-surface-muted rounded-full h-8 overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-primary-400 to-primary-500 rounded-full flex items-center justify-end pr-2"
@@ -275,7 +279,7 @@ export default function DashboardAdminPage() {
 
             {/* Atendimentos por Status */}
             <Card>
-              <h3 className="text-base font-semibold mb-4 text-neutral-800 flex items-center gap-2">
+              <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <BarChart2 className="w-4 h-4 text-primary-500" />
                 Atendimentos por Status
               </h3>
@@ -284,7 +288,7 @@ export default function DashboardAdminPage() {
                   const config = STATUS_CONFIG[status.status as AtendimentoStatus];
                   return (
                     <div key={status.status} className="flex items-center gap-3">
-                      <span className="w-40 text-sm text-neutral-600">{config?.label || status.status}</span>
+                      <span className="w-40 text-sm text-muted-foreground">{config?.label || status.status}</span>
                       <div className="flex-1 bg-surface-muted rounded-full h-6 overflow-hidden">
                         <div
                           className={`h-full ${config?.bgCor || 'bg-neutral-300'} rounded-full flex items-center justify-end pr-2`}
@@ -301,7 +305,7 @@ export default function DashboardAdminPage() {
 
             {/* Faturamento por Canal */}
             <Card>
-              <h3 className="text-base font-semibold mb-4 text-neutral-800 flex items-center gap-2">
+              <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <Megaphone className="w-4 h-4 text-primary-500" />
                 Faturamento por Canal de Aquisição
               </h3>
@@ -310,7 +314,7 @@ export default function DashboardAdminPage() {
                   const colors = ['bg-info-500', 'bg-success-500', 'bg-evaluation-500', 'bg-pink-500', 'bg-evaluation-500'];
                   return (
                     <div key={canal.origem} className="flex items-center gap-3">
-                      <span className="w-28 text-sm text-neutral-600 truncate">{canal.label}</span>
+                      <span className="w-28 truncate text-sm text-muted-foreground">{canal.label}</span>
                       <div className="flex-1 bg-surface-muted rounded-full h-8 overflow-hidden">
                         <div
                           className={`h-full ${colors[idx % colors.length]} rounded-full flex items-center justify-end pr-2`}
@@ -321,7 +325,7 @@ export default function DashboardAdminPage() {
                           </span>
                         </div>
                       </div>
-                      <span className="text-xs text-neutral-400 w-20 text-right">{canal.count} atend.</span>
+                      <span className="w-20 text-right text-xs text-muted-foreground">{canal.count} atend.</span>
                     </div>
                   );
                 })}
@@ -330,21 +334,21 @@ export default function DashboardAdminPage() {
 
             {/* Top Procedimentos */}
             <Card>
-              <h3 className="text-base font-semibold mb-4 text-neutral-800 flex items-center gap-2">
+              <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <Stethoscope className="w-4 h-4 text-primary-500" />
                 Top 10 Procedimentos
               </h3>
               <div className="space-y-2">
                 {data.topProcedimentos.slice(0, 10).map((proc, idx) => (
                   <div key={proc.nome} className="flex items-center gap-3">
-                    <span className="w-6 h-6 flex items-center justify-center bg-primary-100 text-primary-600 rounded-full text-xs font-bold">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                       {idx + 1}
                     </span>
-                    <span className="flex-1 text-sm text-neutral-700 truncate" title={proc.nome}>
+                    <span className="flex-1 truncate text-sm text-foreground" title={proc.nome}>
                       {proc.nome}
                     </span>
                     <span className="text-sm font-medium text-foreground">{formatCurrency(proc.total)}</span>
-                    <span className="text-xs text-neutral-400 w-12 text-right">{proc.count}x</span>
+                    <span className="w-12 text-right text-xs text-muted-foreground">{proc.count}x</span>
                   </div>
                 ))}
               </div>
@@ -354,20 +358,20 @@ export default function DashboardAdminPage() {
           {/* Rankings */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
-              <h3 className="text-base font-semibold mb-4 text-neutral-800 flex items-center gap-2">
+              <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <Award className="w-4 h-4 text-primary-500" />
                 Top Vendedores
               </h3>
               <div className="space-y-3">
                 {data.topVendedores.length > 0 ? (
                   data.topVendedores.map((v, idx) => (
-                    <div key={v.nome} className="flex items-center gap-3 p-3 bg-surface-secondary rounded-lg">
+                    <div key={v.nome} className="flex items-center gap-3 rounded-lg bg-secondary/55 p-3">
                       <span className={`w-8 h-8 flex items-center justify-center rounded-full text-white font-bold text-sm ${
                         idx === 0 ? 'bg-warning-500' : idx === 1 ? 'bg-neutral-400' : idx === 2 ? 'bg-warning-600' : 'bg-neutral-300'
                       }`}>
                         {idx + 1}
                       </span>
-                      <span className="flex-1 font-medium text-neutral-800">{v.nome}</span>
+                      <span className="flex-1 font-medium text-foreground">{v.nome}</span>
                       <span className="text-success-600 font-semibold">{formatCurrency(v.total)}</span>
                     </div>
                   ))
@@ -378,20 +382,20 @@ export default function DashboardAdminPage() {
             </Card>
 
             <Card>
-              <h3 className="text-base font-semibold mb-4 text-neutral-800 flex items-center gap-2">
+              <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <Star className="w-4 h-4 text-primary-500" />
                 Top Executores
               </h3>
               <div className="space-y-3">
                 {data.topExecutores.length > 0 ? (
                   data.topExecutores.map((e, idx) => (
-                    <div key={e.nome} className="flex items-center gap-3 p-3 bg-surface-secondary rounded-lg">
+                    <div key={e.nome} className="flex items-center gap-3 rounded-lg bg-secondary/55 p-3">
                       <span className={`w-8 h-8 flex items-center justify-center rounded-full text-white font-bold text-sm ${
                         idx === 0 ? 'bg-warning-500' : idx === 1 ? 'bg-neutral-400' : idx === 2 ? 'bg-warning-600' : 'bg-neutral-300'
                       }`}>
                         {idx + 1}
                       </span>
-                      <span className="flex-1 font-medium text-neutral-800">{e.nome}</span>
+                      <span className="flex-1 font-medium text-foreground">{e.nome}</span>
                       <span className="text-info-600 font-semibold">{formatCurrency(e.total)}</span>
                     </div>
                   ))

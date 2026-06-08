@@ -24,7 +24,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
       {prontuarios.map(item => {
         const dentes = formatarDentes(item.dentes);
         return (
-          <div key={item.item_id} className="rounded-lg border border-neutral-200 p-4">
+          <div key={item.item_id} className="rounded-lg border border-border p-4">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="min-w-0 flex-1">
                 <h4 className="font-semibold text-sm">
@@ -73,7 +73,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
                   </p>
                 </div>
                 {item.prontuario_observacoes && (
-                  <div className="bg-warning-50 rounded-lg p-3 border-l-4 border-warning-400">
+                  <div className="rounded-lg border-l-4 border-warning-400 bg-warning-500/10 p-3">
                     <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">
                       Observações
                     </p>
@@ -83,7 +83,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
                   </div>
                 )}
                 {item.item_observacoes && (
-                  <div className="rounded-lg p-3 border border-neutral-200">
+                  <div className="rounded-lg border border-border p-3">
                     <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">
                       Observações do Item
                     </p>
@@ -102,7 +102,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
                 </div>
               </div>
             ) : (
-              <div className="rounded-lg p-3 border border-dashed border-neutral-300 text-center">
+              <div className="rounded-lg border border-dashed border-border text-center p-3">
                 <p className="text-xs text-muted">Prontuário não preenchido</p>
               </div>
             )}

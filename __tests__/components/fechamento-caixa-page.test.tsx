@@ -185,7 +185,7 @@ describe('FechamentoCaixaPage', () => {
     render(<FechamentoCaixaPage />);
 
     expect(await screen.findByLabelText('Dia')).toBeInTheDocument();
-    expect(screen.queryByText('Histórico recente')).not.toBeInTheDocument();
+    expect(screen.getByText('Histórico recente')).toBeInTheDocument();
     expect(screen.getByText('Entradas por método')).toBeInTheDocument();
     expect(screen.getByText('Cancelamentos do dia')).toBeInTheDocument();
     expect(screen.getByText('Detalhamento por dentista')).toBeInTheDocument();

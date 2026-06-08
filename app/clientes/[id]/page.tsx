@@ -951,7 +951,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               {cliente.observacoes && (
                 <div>
                   <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">Observações</h2>
-                  <p className="text-neutral-700 whitespace-pre-wrap">{cliente.observacoes}</p>
+                  <p className="whitespace-pre-wrap text-foreground/90">{cliente.observacoes}</p>
                 </div>
               )}
             </div>
@@ -971,7 +971,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             </div>
             <div>
               <p className="text-xs text-muted">Saldo disponível</p>
-              <p className={`font-semibold text-lg ${saldo.saldo > 0 ? 'text-success-700' : ''}`}>{formatarMoeda(saldo.saldo)}</p>
+              <p className={`text-lg font-semibold ${saldo.saldo > 0 ? 'text-success-700 dark:text-success-300' : ''}`}>{formatarMoeda(saldo.saldo)}</p>
               <p className="text-xs text-muted mt-0.5">Saldo real gerado por estornos</p>
             </div>
           </div>
@@ -1022,8 +1022,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           {!ficha?.atendimentos.length ? (
             <p className="text-center py-8 text-muted">Nenhum atendimento registrado</p>
           ) : (
-            <table className="min-w-full divide-y divide-neutral-200">
-              <thead className="bg-surface-secondary">
+            <table className="detail-table">
+              <thead>
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Selecionar</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">#</th>
@@ -1035,7 +1035,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-200">
+              <tbody>
                 {ficha.atendimentos.map(a => (
                   <tr key={a.id} className="hover:bg-surface-secondary">
                     <td className="px-4 py-3">
@@ -1071,8 +1071,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           {!ficha?.procedimentos.length ? (
             <p className="text-center py-8 text-muted">Nenhum procedimento registrado</p>
           ) : (
-            <table className="min-w-full divide-y divide-neutral-200">
-              <thead className="bg-surface-secondary">
+            <table className="detail-table">
+              <thead>
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Procedimento</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Atend.</th>
@@ -1083,7 +1083,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                   <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-200">
+              <tbody>
                 {ficha.procedimentos.map(p => {
                   const podeEstornar = p.valor_pago > 0 && p.status !== 'concluido';
                   return (
@@ -1127,15 +1127,15 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <CreditCard className="w-5 h-5" /> Pagamentos
               </h2>
-              <span className="text-sm font-semibold text-success-700">
+              <span className="text-sm font-semibold text-success-700 dark:text-success-300">
                 Total: {formatarMoeda(totalGasto)}
               </span>
             </div>
             {!ficha?.pagamentos.length ? (
               <p className="text-center py-8 text-muted">Nenhum pagamento registrado</p>
             ) : (
-              <table className="min-w-full divide-y divide-neutral-200">
-                <thead className="bg-surface-secondary">
+              <table className="detail-table">
+                <thead>
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Atend.</th>
@@ -1145,15 +1145,15 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-200">
+                <tbody>
                   {ficha.pagamentos.map(p => (
-                    <tr key={p.id} className={p.cancelado ? 'opacity-50 bg-neutral-50' : 'hover:bg-surface-secondary'}>
+                    <tr key={p.id} className={p.cancelado ? 'bg-muted/35 opacity-50' : undefined}>
                       <td className="px-4 py-3 text-sm">{formatarDataHora(p.created_at)}</td>
                       <td className="px-4 py-3 text-sm">
                         <Link href={`/atendimentos/${p.atendimento_id}`} className="text-info-600 hover:text-info-800">#{p.atendimento_id}</Link>
                       </td>
                       <td className="px-4 py-3 text-sm">{METODOS_LABEL[p.metodo] || p.metodo}</td>
-                      <td className={`px-4 py-3 text-right font-medium ${p.cancelado ? 'line-through text-neutral-400' : 'text-success-600'}`}>
+                      <td className={`px-4 py-3 text-right font-medium ${p.cancelado ? 'text-muted-foreground line-through' : 'text-success-600 dark:text-success-300'}`}>
                         {formatarMoeda(p.valor)}
                       </td>
                       <td className="px-4 py-3 text-sm">{p.recebido_por_nome || '-'}</td>
@@ -1172,8 +1172,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
                 <CreditCard className="w-5 h-5" /> Movimentações de Saldo
               </h2>
-              <table className="min-w-full divide-y divide-neutral-200">
-                <thead className="bg-surface-secondary">
+              <table className="detail-table">
+                <thead>
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Tipo</th>
@@ -1182,7 +1182,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                     <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Saldo após</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-200">
+                <tbody>
                   {ficha.movimentacoes.map((m, i) => {
                     const isEntrada = ['credito', 'transferencia_entrada'].includes(m.tipo);
                     const cfg = HISTORICO_CONFIG[m.tipo] ?? { label: m.tipo, cor: 'bg-neutral-400' };
@@ -1227,8 +1227,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           {!agendamentos.length ? (
             <p className="text-center py-8 text-muted">Nenhum agendamento registrado</p>
           ) : (
-            <table className="min-w-full divide-y divide-neutral-200">
-              <thead className="bg-surface-secondary">
+            <table className="detail-table">
+              <thead>
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Procedimento</th>
@@ -1237,7 +1237,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Atendimento</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-200">
+              <tbody>
                 {agendamentos.map((agendamento) => {
                   const statusConfig = AGENDAMENTO_STATUS_CONFIG[agendamento.status];
                   return (
@@ -1300,7 +1300,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               {followups.map((followup) => {
                 const tipoConfig = FOLLOWUP_TIPO_CONFIG[followup.tipo];
                 return (
-                  <div key={followup.id} className="rounded-lg border border-neutral-200 p-4 hover:bg-surface-secondary">
+                  <div key={followup.id} className="rounded-lg border border-border p-4 hover:bg-surface-secondary">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1308,7 +1308,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                           <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${tipoConfig.borderColor} border`}>
                             {tipoConfig.label}
                           </span>
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${followup.status === 'concluida' ? 'bg-success-100 text-success-700' : 'bg-warning-100 text-warning-700'}`}>
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${followup.status === 'concluida' ? 'bg-success-500/10 text-success-800 dark:text-success-200' : 'bg-warning-500/10 text-warning-800 dark:text-warning-200'}`}>
                             {FOLLOWUP_STATUS_LABELS[followup.status]}
                           </span>
                         </div>
@@ -1322,7 +1322,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                           {followup.concluida_em && <span>Concluído em: {formatarDataHora(followup.concluida_em)}</span>}
                         </div>
                         {followup.nota_conclusao && (
-                          <p className="mt-3 rounded-md bg-neutral-50 px-3 py-2 text-sm text-foreground">
+                          <p className="mt-3 rounded-md bg-muted/35 px-3 py-2 text-sm text-foreground">
                             {followup.nota_conclusao}
                           </p>
                         )}
@@ -1382,18 +1382,18 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
 
                   {item.prontuario_descricao ? (
                     <div className="space-y-3">
-                      <div className="bg-surface-secondary rounded-lg p-4 border-l-4 border-primary-400">
+                      <div className="rounded-lg border-l-4 border-primary-400 bg-surface-secondary p-4">
                         <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Descrição do Procedimento</p>
                         <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{item.prontuario_descricao}</p>
                       </div>
                       {item.prontuario_observacoes && (
-                        <div className="bg-warning-50 rounded-lg p-4 border-l-4 border-warning-400">
+                        <div className="rounded-lg border-l-4 border-warning-400 bg-warning-500/10 p-4">
                           <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Observações</p>
                           <p className="text-sm text-foreground whitespace-pre-wrap">{item.prontuario_observacoes}</p>
                         </div>
                       )}
                       {item.item_observacoes && (
-                        <div className="rounded-lg p-4 border border-neutral-200">
+                        <div className="rounded-lg border border-border p-4">
                           <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Observações do Item</p>
                           <p className="text-sm text-foreground whitespace-pre-wrap">{item.item_observacoes}</p>
                         </div>
@@ -1407,7 +1407,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-lg p-4 border border-dashed border-neutral-300 text-center">
+                    <div className="rounded-lg border border-dashed border-border p-4 text-center">
                       <p className="text-sm text-muted">Prontuário não preenchido</p>
                     </div>
                   )}
@@ -1521,7 +1521,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             const eventosSaldo = ficha.historico.filter(ev => TIPOS_SALDO.has(ev.tipo));
             const renderTimeline = (eventos: EventoHistorico[]) => (
               <div className="relative">
-                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-neutral-200" />
+                <div className="absolute bottom-0 left-4 top-0 w-0.5 bg-border" />
                 <div className="space-y-4">
                   {eventos.map((ev, i) => {
                     const cfg = HISTORICO_CONFIG[ev.tipo] ?? { label: ev.tipo, cor: 'bg-neutral-400' };
@@ -1560,7 +1560,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 )}
                 {eventosSaldo.length > 0 && (
                   <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted mb-4 pt-2 border-t border-neutral-200">Movimentações de Saldo</h3>
+                    <h3 className="border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted mb-4">Movimentações de Saldo</h3>
                     {renderTimeline(eventosSaldo)}
                   </div>
                 )}
@@ -1586,7 +1586,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           ) : (
             <div className="space-y-3">
               {vinculos.map(v => (
-                <div key={v.id} className="flex items-start justify-between gap-4 p-4 rounded-lg border border-neutral-200 hover:bg-surface-secondary">
+                <div key={v.id} className="flex items-start justify-between gap-4 rounded-lg border border-border p-4 hover:bg-surface-secondary">
                   <div className="flex-1 min-w-0">
                     <Link href={`/clientes/${v.outro_cliente_id}`} className="font-medium text-info-600 hover:text-info-800 hover:underline">
                       {v.outro_cliente_nome}
@@ -1596,12 +1596,12 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                       {v.outro_cliente_telefone && <span>Tel: {v.outro_cliente_telefone}</span>}
                     </div>
                     {v.observacao && (
-                      <p className="mt-2 text-sm text-foreground bg-neutral-50 rounded px-3 py-2 whitespace-pre-wrap">{v.observacao}</p>
+                      <p className="mt-2 whitespace-pre-wrap rounded bg-muted/35 px-3 py-2 text-sm text-foreground">{v.observacao}</p>
                     )}
                   </div>
                   <button
                     onClick={() => handleRemoveVinculo(v)}
-                    className="text-neutral-400 hover:text-error-600 shrink-0 mt-0.5"
+                    className="mt-0.5 shrink-0 text-muted-foreground hover:text-error-600"
                     title="Remover vínculo"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1636,7 +1636,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
                 <input
                   type="text"
-                  className="w-full pl-9 pr-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                  className="field-control w-full py-2 pl-9 pr-3 text-sm"
                   placeholder="Nome, CPF ou telefone..."
                   value={vinculoBusca}
                   onChange={e => { setVinculoBusca(e.target.value); setVinculoClienteSelecionado(null); }}
@@ -1644,11 +1644,11 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 />
               </div>
               {vinculoBuscaResultados.length > 0 && !vinculoClienteSelecionado && (
-                <div className="mt-1 border border-neutral-200 rounded-lg divide-y divide-neutral-100 max-h-48 overflow-y-auto">
+                <div className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-border divide-y divide-border">
                   {vinculoBuscaResultados.map(c => (
                     <button
                       key={c.id}
-                      className="w-full text-left px-3 py-2 hover:bg-surface-secondary text-sm"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-surface-secondary"
                       onClick={() => { setVinculoClienteSelecionado(c); setVinculoBusca(c.nome); setVinculoBuscaResultados([]); }}
                     >
                       <span className="font-medium">{c.nome}</span>
@@ -1659,16 +1659,16 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 </div>
               )}
               {vinculoClienteSelecionado && (
-                <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-primary-50 border border-primary-200 rounded-lg text-sm">
-                  <span className="font-medium text-primary-800">{vinculoClienteSelecionado.nome}</span>
-                  <button onClick={() => { setVinculoClienteSelecionado(null); setVinculoBusca(''); }} className="ml-auto text-primary-600 hover:text-primary-900 text-xs">Trocar</button>
+                <div className="tone-primary mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-sm">
+                  <span className="font-medium text-foreground">{vinculoClienteSelecionado.nome}</span>
+                  <button onClick={() => { setVinculoClienteSelecionado(null); setVinculoBusca(''); }} className="ml-auto text-primary hover:text-primary/80 text-xs">Trocar</button>
                 </div>
               )}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Observação <span className="text-muted font-normal">(opcional)</span></label>
               <textarea
-                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+                className="field-control w-full resize-none px-3 py-2 text-sm"
                 rows={3}
                 placeholder="Descreva o vínculo entre eles..."
                 value={vinculoObservacao}
@@ -1779,22 +1779,22 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         >
           <div className="space-y-4">
             {modalPagamento.cancelado ? (
-              <div className="rounded-lg p-3 bg-error-50 border border-error-200">
+              <div className="tone-error rounded-lg p-3">
                 <p className="text-sm font-semibold text-error-700">Pagamento Cancelado</p>
                 {modalPagamento.motivo_cancelamento && (
                   <p className="text-sm text-error-600 mt-1">Motivo: {modalPagamento.motivo_cancelamento}</p>
                 )}
               </div>
             ) : (
-              <div className="rounded-lg p-3 bg-success-50 border border-success-200">
-                <p className="text-sm font-semibold text-success-700">Pagamento Confirmado</p>
+              <div className="tone-success rounded-lg p-3">
+                <p className="text-sm font-semibold text-success-700 dark:text-success-300">Pagamento Confirmado</p>
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-muted uppercase tracking-wide">Valor</p>
-                <p className={`font-semibold text-lg ${modalPagamento.cancelado ? 'line-through text-neutral-400' : 'text-success-600'}`}>
+                <p className={`text-lg font-semibold ${modalPagamento.cancelado ? 'text-muted-foreground line-through' : 'text-success-600 dark:text-success-300'}`}>
                   {formatarMoeda(modalPagamento.valor)}
                 </p>
               </div>
@@ -1860,8 +1860,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           <div>
             <label className="block text-sm font-medium mb-1">Cliente destino *</label>
             {transferenciaDestinoId ? (
-              <div className="flex items-center gap-2 p-2 bg-success-50 rounded-lg border border-success-200">
-                <span className="text-sm font-medium text-success-800 flex-1">{transferenciaDestinoNome}</span>
+              <div className="tone-success flex items-center gap-2 rounded-lg p-2">
+                <span className="flex-1 text-sm font-medium text-foreground">{transferenciaDestinoNome}</span>
                 <button
                   onClick={() => { setTransferenciaDestinoId(null); setTransferenciaDestinoNome(''); setTransferBusca(''); setTransferResultados([]); }}
                   className="text-sm text-error-600 hover:text-error-800"
@@ -1880,12 +1880,12 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                   autoFocus
                 />
                 {transferResultados.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-surface border border-neutral-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
                     {transferResultados.map((c) => (
                       <button
                         key={c.id}
                         onClick={() => { setTransferenciaDestinoId(c.id); setTransferenciaDestinoNome(c.nome); setTransferBusca(''); setTransferResultados([]); }}
-                        className="w-full text-left px-3 py-2 hover:bg-neutral-50 text-sm"
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-accent/40"
                       >
                         {c.nome}
                         {c.cpf && <span className="text-muted ml-2">({c.cpf})</span>}

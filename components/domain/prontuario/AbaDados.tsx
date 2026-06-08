@@ -15,8 +15,8 @@ export default function AbaDados({ cliente, saldo }: AbaDadosProps) {
   return (
     <div className="space-y-6">
       {saldo && (saldo.saldo > 0 || saldo.saldo_calculado > 0) && (
-        <div className="rounded-lg border border-primary-200 bg-primary-50 p-4">
-          <h3 className="text-xs font-semibold text-primary-700 uppercase tracking-wide mb-2">Saldo</h3>
+        <div className="tone-primary rounded-lg p-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground">Saldo</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-muted">Crédito em procedimentos</p>
@@ -24,7 +24,7 @@ export default function AbaDados({ cliente, saldo }: AbaDadosProps) {
             </div>
             <div>
               <p className="text-xs text-muted">Saldo disponível</p>
-              <p className={`font-semibold ${saldo.saldo > 0 ? 'text-success-700' : ''}`}>
+              <p className={`font-semibold ${saldo.saldo > 0 ? 'text-success-700 dark:text-success-300' : ''}`}>
                 {formatarMoeda(saldo.saldo)}
               </p>
             </div>
@@ -68,7 +68,7 @@ export default function AbaDados({ cliente, saldo }: AbaDadosProps) {
       {cliente.observacoes && (
         <div>
           <h3 className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Observações</h3>
-          <p className="text-sm text-neutral-700 whitespace-pre-wrap">{cliente.observacoes}</p>
+          <p className="text-sm text-foreground/90 whitespace-pre-wrap">{cliente.observacoes}</p>
         </div>
       )}
     </div>

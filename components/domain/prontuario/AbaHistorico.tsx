@@ -15,14 +15,14 @@ export default function AbaHistorico({ historico }: AbaHistoricoProps) {
 
   return (
     <div className="relative">
-      <div className="absolute left-[7px] top-0 bottom-0 w-0.5 bg-neutral-200" />
+      <div className="absolute bottom-0 left-[7px] top-0 w-0.5 bg-border" />
       <div className="space-y-3">
         {historico.map((ev, i) => {
           const cfg = HISTORICO_CONFIG[ev.tipo] ?? { label: ev.tipo, cor: 'bg-neutral-400' };
           return (
             <div key={i} className="flex gap-3 relative">
               <div
-                className={`w-4 h-4 rounded-full mt-0.5 shrink-0 z-10 ring-2 ring-white ${cfg.cor}`}
+                className={`z-10 mt-0.5 h-4 w-4 shrink-0 rounded-full ring-2 ring-background ${cfg.cor}`}
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">

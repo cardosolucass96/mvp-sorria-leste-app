@@ -160,7 +160,7 @@ export default function AtendimentosPage() {
                 </div>
                 <div className="p-2 space-y-2 max-h-[60vh] overflow-y-auto">
                   {atendimentosPorStatus[status].length === 0 ? (
-                    <div className="p-4 text-center text-neutral-400 text-sm">Nenhum atendimento</div>
+                    <div className="p-4 text-center text-sm text-muted-foreground">Nenhum atendimento</div>
                   ) : (
                     atendimentosPorStatus[status].map((atendimento) => {
                       const inicioEtapa = atendimento.status === 'em_execucao' && atendimento.liberado_em
@@ -168,10 +168,10 @@ export default function AtendimentosPage() {
                         : atendimento.created_at;
                       return (
                         <Link key={atendimento.id} href={`/atendimentos/${atendimento.id}`}
-                          className="block bg-surface rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow border border-neutral-200">
+                          className="block rounded-lg border border-border bg-card p-3 shadow-sm transition-all hover:bg-accent/35 hover:shadow-md">
                           <div className="font-medium text-foreground mb-1">{atendimento.cliente_nome}</div>
                           {atendimento.procedimentos_resumo && (
-                            <div className="text-xs text-neutral-600 mb-1 truncate" title={atendimento.procedimentos_resumo}>
+                            <div className="mb-1 truncate text-xs text-muted-foreground" title={atendimento.procedimentos_resumo}>
                               🦷 {atendimento.procedimentos_resumo}
                             </div>
                           )}
@@ -180,7 +180,7 @@ export default function AtendimentosPage() {
                               👤 {atendimento.executores_resumo}
                             </div>
                           )}
-                          <div className="flex justify-between items-center text-xs text-neutral-400 mt-1">
+                          <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
                             <span>#{atendimento.id}</span>
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />

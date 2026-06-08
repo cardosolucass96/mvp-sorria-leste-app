@@ -954,7 +954,7 @@ export default function FechamentoCaixaPage() {
             <div className="space-y-3">
               {resultado.resumo.faturamento_por_metodo.length > 0 ? (
                 resultado.resumo.faturamento_por_metodo.map((item) => (
-                  <div key={item.metodo} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-surface-secondary">
+                  <div key={item.metodo} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/55 p-3">
                     <div>
                       <p className="font-medium">{METODO_LABELS[item.metodo] || item.metodo}</p>
                       <p className="text-xs text-muted-foreground">{item.quantidade} lançamento(s)</p>
@@ -976,9 +976,9 @@ export default function FechamentoCaixaPage() {
               </Badge>
             </div>
             <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-surface-secondary">
+              <div className="rounded-lg border border-border bg-secondary/55 p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Valor cancelado</p>
-                <p className="text-2xl font-bold text-error-600">{formatarMoeda(resultado.resumo.pagamentos_cancelados_dia.valor)}</p>
+                <p className="text-2xl font-bold text-error-600 dark:text-error-300">{formatarMoeda(resultado.resumo.pagamentos_cancelados_dia.valor)}</p>
               </div>
               <p className="text-sm text-muted-foreground">
                 Os pagamentos cancelados ficam visíveis para conferência, mas não entram no faturamento do fechamento.
@@ -995,7 +995,7 @@ export default function FechamentoCaixaPage() {
                 resultado.graficos.procedimentos_por_quantidade.slice(0, 10).map((item) => (
                   <div key={item.nome} className="space-y-1.5">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm text-neutral-700 truncate">{item.nome}</span>
+                      <span className="truncate text-sm text-foreground">{item.nome}</span>
                       <span className="text-xs text-muted-foreground">{item.quantidade}x · {formatarMoeda(item.valor_total)}</span>
                     </div>
                     <div className="h-3 rounded-full bg-surface-muted overflow-hidden">
@@ -1019,7 +1019,7 @@ export default function FechamentoCaixaPage() {
                 resultado.graficos.ranking_avaliadores.slice(0, 10).map((item) => (
                   <div key={`avaliador-${item.usuario_id}`} className="space-y-1.5">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm text-neutral-700 truncate">{item.nome}</span>
+                      <span className="truncate text-sm text-foreground">{item.nome}</span>
                       <span className="text-xs text-muted-foreground">{item.quantidade} proc. · {formatarMoeda(item.valor_gerado)}</span>
                     </div>
                     <div className="h-3 rounded-full bg-surface-muted overflow-hidden">
@@ -1043,7 +1043,7 @@ export default function FechamentoCaixaPage() {
                 resultado.graficos.ranking_executores.slice(0, 10).map((item) => (
                   <div key={`executor-${item.usuario_id}`} className="space-y-1.5">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm text-neutral-700 truncate">{item.nome}</span>
+                      <span className="truncate text-sm text-foreground">{item.nome}</span>
                       <span className="text-xs text-muted-foreground">{item.quantidade} proc. · {formatarMoeda(item.valor_gerado)}</span>
                     </div>
                     <div className="h-3 rounded-full bg-surface-muted overflow-hidden">
@@ -1089,7 +1089,7 @@ export default function FechamentoCaixaPage() {
           {resultado.lancamentos_manuais_gerais.length > 0 ? (
             <div className="space-y-2">
               {resultado.lancamentos_manuais_gerais.map((item) => (
-                <div key={item.id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 p-3 rounded-lg bg-surface-secondary">
+                <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-border bg-secondary/55 p-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-medium">{item.descricao}</p>
                     <p className="text-xs text-muted-foreground">{item.motivo}</p>
@@ -1427,7 +1427,7 @@ export default function FechamentoCaixaPage() {
                   {isExpanded && (
                     <div className="mt-6 space-y-4">
                       {dentista.ajustes.length > 0 && (
-                        <div className="rounded-lg border border-warning-200 bg-warning-500/5 p-4">
+                        <div className="rounded-lg border border-warning-500/20 bg-warning-500/10 p-4">
                           <p className="text-sm font-semibold mb-2">Ajustes no profissional</p>
                           <div className="space-y-1.5">
                             {dentista.ajustes.map((ajuste, index) => (
@@ -1443,7 +1443,7 @@ export default function FechamentoCaixaPage() {
                         <div className="space-y-2">
                           <p className="text-sm font-semibold">Lançamentos manuais do profissional</p>
                           {dentista.lancamentos_manuais.map((item) => (
-                            <div key={item.id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 p-3 rounded-lg bg-surface-secondary">
+                            <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-border bg-secondary/55 p-3 md:flex-row md:items-center md:justify-between">
                               <div>
                                 <p className="font-medium">{item.descricao}</p>
                                 <p className="text-xs text-muted-foreground">{item.motivo}</p>
