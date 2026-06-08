@@ -21,23 +21,14 @@ export interface StatusBadgeProps {
   className?: string;
 }
 
-// Mapear cor do config para BadgeProps['color']
-const corToBadgeColor: Record<string, BadgeProps['color']> = {
-  'bg-muted': 'gray',
-  'bg-info-500/10': 'blue',
-  'bg-warning-500/10': 'yellow',
-  'bg-evaluation-500/10': 'evaluation',
-  'bg-success-500/10': 'green',
-  'bg-primary/10': 'orange',
-  'bg-error-500/10': 'red',
-  'bg-blue-500/10': 'blue',
-  'bg-green-500/10': 'green',
-  'bg-yellow-500/10': 'yellow',
-  'bg-red-500/10': 'red',
-};
-
 function getBadgeColor(bgCor: string): NonNullable<BadgeProps['color']> {
-  return corToBadgeColor[bgCor] ?? 'gray';
+  if (bgCor.includes('evaluation') || bgCor.includes('purple')) return 'evaluation';
+  if (bgCor.includes('primary') || bgCor.includes('orange')) return 'orange';
+  if (bgCor.includes('warning') || bgCor.includes('yellow') || bgCor.includes('amber')) return 'yellow';
+  if (bgCor.includes('success') || bgCor.includes('green')) return 'green';
+  if (bgCor.includes('info') || bgCor.includes('blue')) return 'blue';
+  if (bgCor.includes('error') || bgCor.includes('red') || bgCor.includes('destructive')) return 'red';
+  return 'gray';
 }
 
 export default function StatusBadge({

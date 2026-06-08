@@ -19,38 +19,38 @@ export interface StatusConfig {
 export const STATUS_CONFIG: Record<AtendimentoStatus, StatusConfig> = {
   triagem: {
     label: 'Triagem',
-    cor: 'text-neutral-700',
-    bgCor: 'bg-neutral-100',
+    cor: 'text-secondary-foreground',
+    bgCor: 'bg-secondary',
     icon: ClipboardList,
   },
   avaliacao: {
     label: 'Avaliação',
-    cor: 'text-info-700',
-    bgCor: 'bg-info-100',
+    cor: 'text-info-800 dark:text-info-200',
+    bgCor: 'bg-info-500/10',
     icon: Search,
   },
   aguardando_pagamento: {
     label: 'Aguardando Pagamento',
-    cor: 'text-warning-700',
-    bgCor: 'bg-warning-100',
+    cor: 'text-warning-800 dark:text-warning-200',
+    bgCor: 'bg-warning-500/10',
     icon: Clock,
   },
   em_execucao: {
     label: 'Em Execução',
-    cor: 'text-evaluation-700',
-    bgCor: 'bg-evaluation-100',
+    cor: 'text-evaluation-800 dark:text-evaluation-200',
+    bgCor: 'bg-evaluation-500/10',
     icon: Activity,
   },
   finalizado: {
     label: 'Finalizado',
-    cor: 'text-success-700',
-    bgCor: 'bg-success-100',
+    cor: 'text-success-800 dark:text-success-200',
+    bgCor: 'bg-success-500/10',
     icon: CheckCircle,
   },
   encerrado: {
     label: 'Encerrado',
-    cor: 'text-neutral-600',
-    bgCor: 'bg-neutral-200',
+    cor: 'text-muted-foreground',
+    bgCor: 'bg-muted',
     icon: Archive,
   },
 };
@@ -107,26 +107,26 @@ export interface ItemStatusConfig {
 export const ITEM_STATUS_CONFIG: Record<ItemStatus, ItemStatusConfig> = {
   pendente: {
     label: 'Pendente',
-    cor: 'text-neutral-600',
-    bgCor: 'bg-neutral-100',
+    cor: 'text-secondary-foreground',
+    bgCor: 'bg-secondary',
     icon: Clock,
   },
   pago: {
     label: 'Pago',
-    cor: 'text-info-700',
-    bgCor: 'bg-info-100',
+    cor: 'text-info-800 dark:text-info-200',
+    bgCor: 'bg-info-500/10',
     icon: DollarSign,
   },
   executando: {
     label: 'Em Execução',
-    cor: 'text-primary-700',
-    bgCor: 'bg-primary-100',
+    cor: 'text-primary',
+    bgCor: 'bg-primary/10',
     icon: Activity,
   },
   concluido: {
     label: 'Concluído',
-    cor: 'text-success-700',
-    bgCor: 'bg-success-100',
+    cor: 'text-success-800 dark:text-success-200',
+    bgCor: 'bg-success-500/10',
     icon: CheckCircle,
   },
 };
@@ -144,18 +144,18 @@ export interface ParcelaStatusConfig {
 export const PARCELA_STATUS_CONFIG: Record<ParcelaStatus, ParcelaStatusConfig> = {
   pendente: {
     label: 'Pendente',
-    cor: 'text-warning-700',
-    bgCor: 'bg-warning-100',
+    cor: 'text-warning-800 dark:text-warning-200',
+    bgCor: 'bg-warning-500/10',
   },
   paga: {
     label: 'Paga',
-    cor: 'text-success-700',
-    bgCor: 'bg-success-100',
+    cor: 'text-success-800 dark:text-success-200',
+    bgCor: 'bg-success-500/10',
   },
   vencida: {
     label: 'Vencida',
-    cor: 'text-error-700',
-    bgCor: 'bg-error-100',
+    cor: 'text-error-800 dark:text-error-200',
+    bgCor: 'bg-error-500/10',
   },
 };
 
@@ -179,8 +179,8 @@ export function getAtendimentoStatus(status: string): StatusConfig {
   return (
     STATUS_CONFIG[status as AtendimentoStatus] ?? {
       label: status,
-      cor: 'text-neutral-600',
-      bgCor: 'bg-neutral-100',
+      cor: 'text-muted-foreground',
+      bgCor: 'bg-muted',
       icon: HelpCircle,
     }
   );
@@ -191,8 +191,8 @@ export function getItemStatus(status: string): ItemStatusConfig {
   return (
     ITEM_STATUS_CONFIG[status as ItemStatus] ?? {
       label: status,
-      cor: 'text-neutral-600',
-      bgCor: 'bg-neutral-100',
+      cor: 'text-muted-foreground',
+      bgCor: 'bg-muted',
       icon: HelpCircle,
     }
   );

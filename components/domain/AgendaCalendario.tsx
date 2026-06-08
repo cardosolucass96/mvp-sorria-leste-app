@@ -88,7 +88,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
           modifiers={modifiers}
           modifiersClassNames={{
             faltou: '[&_button]:ring-1 [&_button]:ring-warning-300',
-            pendente: '[&_button]:ring-1 [&_button]:ring-neutral-300',
+            pendente: '[&_button]:ring-1 [&_button]:ring-border',
             agendado: '[&_button]:ring-1 [&_button]:ring-primary-300',
             realizado: '[&_button]:ring-1 [&_button]:ring-success-300',
             cancelado: '[&_button]:ring-1 [&_button]:ring-error-300',
@@ -108,7 +108,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                   data-selected-single={isSelected ? true : undefined}
                   className={
                     'relative flex h-full w-full flex-col items-center justify-center gap-0.5 rounded-md text-sm font-normal aspect-square min-w-(--cell-size) ' +
-                    'hover:bg-primary-50 data-[selected-single=true]:bg-primary-600 data-[selected-single=true]:text-white ' +
+                    'hover:bg-primary/10 data-[selected-single=true]:bg-primary-600 data-[selected-single=true]:text-white ' +
                     (className ?? '')
                   }
                 >
