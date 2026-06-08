@@ -67,6 +67,14 @@ interface ResponsavelOption {
   nome: string;
 }
 
+interface UsuarioResponsavel {
+  id: number;
+  nome: string;
+  ativo?: number | boolean;
+  role?: string;
+  roles?: string[];
+}
+
 interface FollowupFormState {
   cliente: ClienteBusca | null;
   clienteBusca: string;
@@ -194,11 +202,36 @@ export default function FollowupPage() {
     async function carregarResponsaveis() {
       setLoadingResponsaveis(true);
       try {
-        const res = await fetch(`/api/usuarios?role=atendente&unidade_id=${currentUnidade}`);
+        const res = await fetch(`/api/usuarios?unidade_id=${currentUnidade}`);
         if (!res.ok) return;
-        const data: Array<{ id: number; nome: string }> = await res.json();
+        const data: UsuarioResponsavel[] = await res.json();
+        const options = data
+          .filter((usuario) => {
+            if (Number(usuario.ativo) === 0) return false;
+            const roles = (usuario.roles && usuario.roles.length > 0
+              ? usuario.roles
+              : [usuario.role || '']
+            ).map((role) => role.toLowerCase());
+            return roles.includes('atendente') || roles.includes('admin');
+          })
+          .map((item) => ({ id: item.id, nome: item.nome }));
+
+        const currentUserId = Number(user?.id);
+        const currentUserRoles = user
+          ? ((user.roles && user.roles.length > 0 ? user.roles : [user.role]).map((role) => role.toLowerCase()))
+          : [];
+        const canFallbackCurrentUser = !Number.isNaN(currentUserId)
+          && user?.nome
+          && (currentUserRoles.includes('atendente') || currentUserRoles.includes('admin'));
+        const fallbackOptions = canFallbackCurrentUser
+          ? [{ id: currentUserId, nome: user.nome }]
+          : [];
+        const mergedOptions = options.some((responsavel) => responsavel.id === fallbackOptions[0]?.id)
+          ? options
+          : [...options, ...fallbackOptions];
+
         if (!cancelled) {
-          setResponsaveis(data.map((item) => ({ id: item.id, nome: item.nome })));
+          setResponsaveis(mergedOptions);
         }
       } catch {
         if (!cancelled) {
@@ -215,7 +248,7 @@ export default function FollowupPage() {
     return () => {
       cancelled = true;
     };
-  }, [canAccess, currentUnidade]);
+  }, [canAccess, currentUnidade, user?.id, user?.nome]);
 
   useEffect(() => {
     if (!taskModalOpen) return;

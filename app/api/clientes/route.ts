@@ -18,14 +18,17 @@ export async function GET(request: NextRequest) {
     let total: number;
 
     if (busca) {
-      const like = `%${busca}%`;
+      const like = `%${busca.toLowerCase()}%`;
       const [countResult, dataResult] = await batch([
         {
-          sql: `SELECT COUNT(*) as total FROM clientes WHERE nome LIKE ? OR cpf LIKE ? OR telefone LIKE ? OR email LIKE ?`,
+          sql: `SELECT COUNT(*) as total FROM clientes
+                WHERE LOWER(nome) LIKE ? OR LOWER(cpf) LIKE ? OR LOWER(telefone) LIKE ? OR LOWER(email) LIKE ?`,
           params: [like, like, like, like],
         },
         {
-          sql: `SELECT * FROM clientes WHERE nome LIKE ? OR cpf LIKE ? OR telefone LIKE ? OR email LIKE ? ORDER BY ${ordem} LIMIT ? OFFSET ?`,
+          sql: `SELECT * FROM clientes
+                WHERE LOWER(nome) LIKE ? OR LOWER(cpf) LIKE ? OR LOWER(telefone) LIKE ? OR LOWER(email) LIKE ?
+                ORDER BY ${ordem} LIMIT ? OFFSET ?`,
           params: [like, like, like, like, limit, offset],
         },
       ]);

@@ -784,12 +784,6 @@ function main() {
     if (task.descricao) descriptionParts.push(task.descricao);
     descriptionParts.push(`Motivo legado: ${task.motivo}`);
     if (task.consultor) descriptionParts.push(`Consultor legado: ${task.consultor}`);
-    if (task.criadoPor) descriptionParts.push(`Criado por legado: ${task.criadoPor}`);
-    if (task.alteradoPor) descriptionParts.push(`Alterado por legado: ${task.alteradoPor}`);
-    descriptionParts.push(`Código legado: ${task.legacyId}`);
-    if (task.tipoLegado) descriptionParts.push(`Tipo legado: ${task.tipoLegado}`);
-    if (task.tipoRegistro) descriptionParts.push(`Tipo registro legado: ${task.tipoRegistro}`);
-    if (task.ativoLegado) descriptionParts.push(`Ativo legado: ${task.ativoLegado}`);
 
     preparedRows.push({
       cliente_id: clientResolution.client.id,

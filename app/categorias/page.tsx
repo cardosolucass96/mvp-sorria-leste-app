@@ -54,6 +54,7 @@ function slugify(nome: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 }
+const SLUG_REGEX = /^[a-z0-9-]+$/;
 
 export default function CategoriasPage() {
   usePageTitle('Filas');
@@ -159,10 +160,31 @@ export default function CategoriasPage() {
     e.preventDefault();
     setError('');
 
+    const nome = formData.nome.trim();
+    const slug = slugify(formData.slug);
+    if (!nome) {
+      setError('Nome é obrigatório');
+      return;
+    }
+    if (!slug || !SLUG_REGEX.test(slug)) {
+      setError('Slug inválido. Use apenas minúsculas, números e hífen.');
+      return;
+    }
     if (formData.roles.length === 0) {
       setError('Selecione ao menos uma role');
       return;
     }
+    if (formData.roles.length > new Set(formData.roles).size) {
+      setError('Não é possível selecionar o mesmo cargo mais de uma vez');
+      return;
+    }
+
+    const payload = {
+      ...formData,
+      nome,
+      slug,
+      ordem: Number.isFinite(formData.ordem) ? formData.ordem : 0,
+    };
 
     try {
       const url = editingId ? `/api/categorias/${editingId}` : '/api/categorias';
@@ -170,7 +192,7 @@ export default function CategoriasPage() {
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
       const data = await response.json();
       if (!response.ok) {

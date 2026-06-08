@@ -77,12 +77,12 @@ export async function isValidResponsavelAtendente(
       WHERE u.id = ?
         AND u.ativo = 1
         AND (
-          u.role = 'atendente'
+          u.role IN ('atendente', 'admin')
           OR EXISTS (
             SELECT 1
               FROM usuario_roles ur
              WHERE ur.usuario_id = u.id
-               AND ur.role = 'atendente'
+               AND ur.role IN ('atendente', 'admin')
           )
         )
         AND EXISTS (

@@ -61,8 +61,8 @@ describe('GET /api/clientes', () => {
   });
 
   it('busca por nome parcial', async () => {
-    mockQueryResponse('select count(*) as total from clientes where nome like', { total: 1 });
-    mockQueryResponse('where nome like', [CLIENTE_BASICO]);
+    mockQueryResponse('select count(*) as total from clientes', { total: 1 });
+    mockQueryResponse('where lower(nome) like', [CLIENTE_BASICO]);
 
     const { status, data } = await callRoute<{ clientes: typeof TODOS_CLIENTES }>(listClientes, '/api/clientes', {
       searchParams: { busca: 'Lucas' },
@@ -75,12 +75,12 @@ describe('GET /api/clientes', () => {
     const queries = getExecutedQueries();
     const searchQuery = queries.find(q => q.sql.includes('LIKE'));
     expect(searchQuery).toBeDefined();
-    expect(searchQuery!.params).toContain('%Lucas%');
+    expect(searchQuery!.params).toContain('%lucas%');
   });
 
   it('busca por CPF parcial', async () => {
-    mockQueryResponse('select count(*) as total from clientes where nome like', { total: 1 });
-    mockQueryResponse('where nome like', [CLIENTE_BASICO]);
+    mockQueryResponse('select count(*) as total from clientes', { total: 1 });
+    mockQueryResponse('where lower(nome) like', [CLIENTE_BASICO]);
 
     const { status, data } = await callRoute<{ clientes: typeof TODOS_CLIENTES }>(listClientes, '/api/clientes', {
       searchParams: { busca: '529982' },
@@ -91,8 +91,8 @@ describe('GET /api/clientes', () => {
   });
 
   it('busca por telefone', async () => {
-    mockQueryResponse('select count(*) as total from clientes where nome like', { total: 1 });
-    mockQueryResponse('where nome like', [CLIENTE_BASICO]);
+    mockQueryResponse('select count(*) as total from clientes', { total: 1 });
+    mockQueryResponse('where lower(nome) like', [CLIENTE_BASICO]);
 
     const { status, data } = await callRoute<{ clientes: typeof TODOS_CLIENTES }>(listClientes, '/api/clientes', {
       searchParams: { busca: '11999887766' },
@@ -103,8 +103,8 @@ describe('GET /api/clientes', () => {
   });
 
   it('busca por email', async () => {
-    mockQueryResponse('select count(*) as total from clientes where nome like', { total: 1 });
-    mockQueryResponse('where nome like', [CLIENTE_COMPLETO]);
+    mockQueryResponse('select count(*) as total from clientes', { total: 1 });
+    mockQueryResponse('where lower(nome) like', [CLIENTE_COMPLETO]);
 
     const { status, data } = await callRoute<{ clientes: typeof TODOS_CLIENTES }>(listClientes, '/api/clientes', {
       searchParams: { busca: 'roberto@email' },
@@ -115,8 +115,8 @@ describe('GET /api/clientes', () => {
   });
 
   it('busca sem resultados retorna array vazio', async () => {
-    mockQueryResponse('select count(*) as total from clientes where nome like', { total: 0 });
-    mockQueryResponse('where nome like', []);
+    mockQueryResponse('select count(*) as total from clientes', { total: 0 });
+    mockQueryResponse('where lower(nome) like', []);
 
     const { status, data } = await callRoute<{ clientes: unknown[] }>(listClientes, '/api/clientes', {
       searchParams: { busca: 'ninguem_aqui' },
