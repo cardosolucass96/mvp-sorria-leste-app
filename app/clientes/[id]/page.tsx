@@ -24,6 +24,7 @@ import {
 import { PageHeader, Card, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal } from '@/components/ui';
 import { StatusBadge, ClienteForm, ClienteFormData, AnexosGallery } from '@/components/domain';
 import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarTelefone, formatarDentes, parseDentesLabels } from '@/lib/utils/formatters';
+import { finalizarJanelaDeImpressao } from '@/lib/utils/print';
 import { getOrigemLabel } from '@/lib/constants/origens';
 import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
 import { FOLLOWUP_STATUS_LABELS, FOLLOWUP_TIPO_CONFIG } from '@/lib/constants/followup';
@@ -511,7 +512,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <td>${escapeHtml(item.status)}</td>
               <td style=\"text-align:right\">${formatarMoeda(parseSafeNumber(item.valor))}</td>
               <td style=\"text-align:right\">${formatarMoeda(parseSafeNumber(item.valor_pago))}</td>
-              <td>${escapeHtml(item.dentes || '-')}</td>
+              <td>${escapeHtml(formatarDentes(item.dentes) || '-')}</td>
               <td>${escapeHtml(parseSafeNumber(item.quantidade))}</td>
             </tr>
             <tr>
@@ -605,6 +606,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       return;
     }
 
+    const logoUrl = `${window.location.origin}/logo-sorria-leste-laranja-fundo-transparente.svg`;
+
     janela.document.write(`
       <!doctype html>
       <html>
@@ -612,25 +615,39 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           <meta charset=\"utf-8\" />
           <title>Relatório de Atendimentos - ${escapeHtml(cliente.nome)}</title>
           <style>
-            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; font-size: 12px; }
-            h1 { font-size: 18px; margin: 0 0 8px; }
-            h2 { font-size: 14px; margin: 16px 0 8px; }
+            :root { --sorria-orange: #ea580c; }
+            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; font-size: 12px; background: #ffffff; }
+            h1 { font-size: 20px; margin: 0; color: #0f172a; letter-spacing: 0.2px; }
+            h2 { font-size: 14px; margin: 16px 0 8px; color: var(--sorria-orange); }
             h3 { font-size: 12px; margin: 12px 0 6px; }
             .section { margin-top: 16px; border-top: 1px solid #cbd5e1; padding-top: 12px; page-break-inside: avoid; }
-            .header { border: 1px solid #cbd5e1; padding: 12px; margin-bottom: 12px; background: #f8fafc; }
-            .summary { margin: 12px 0; }
+            .header { border: 1px solid #fed7aa; padding: 14px 14px 12px; margin-bottom: 14px; background: #fff7ed; border-radius: 6px; }
+            .summary { margin: 12px 0; background: #fff; border: 1px solid #fed7aa; border-radius: 6px; padding: 10px 12px; }
+            .report-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+            .brand { display: flex; align-items: center; gap: 10px; }
+            .brand img { width: 40px; height: 40px; object-fit: contain; }
+            .brand-text { color: var(--sorria-orange); font-size: 12px; font-weight: 700; letter-spacing: 0.2px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
             th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
-            th { background: #f1f5f9; }
+            th { background: #ffedd5; color: #7c2d12; }
             ul { padding-left: 16px; margin: 0; }
             .muted { color: #64748b; }
           </style>
         </head>
         <body>
           <div class=\"header\">
-            <h1>Relatório de Atendimentos do Cliente</h1>
+            <div class=\"report-header\">
+              <div class=\"brand\">
+                <img src="${logoUrl}" alt="Logo Sorria Leste" />
+                <div>
+                  <h1>Relatório de Atendimentos</h1>
+                  <div class="brand-text">Sorria Leste</div>
+                </div>
+              </div>
+              <div><strong>Atendimentos:</strong> ${escapeHtml(atendimentosSelecionadosList.length)}</div>
+            </div>
             <div><strong>Cliente:</strong> ${escapeHtml(cliente.nome)}</div>
-            <div><strong>CPF:</strong> ${escapeHtml(cliente.cpf || '-')} <strong>Telefone:</strong> ${escapeHtml(cliente.telefone || '-')}</div>
+            <div><strong>CPF:</strong> ${escapeHtml(formatarCPF(cliente.cpf))} <strong>Telefone:</strong> ${escapeHtml(formatarTelefone(cliente.telefone))}</div>
             <div><strong>Email:</strong> ${escapeHtml(cliente.email || '-')} <strong>Plano:</strong> ${escapeHtml(cliente.plano_odontologico || '-')}</div>
             <div><strong>Sexo:</strong> ${escapeHtml(cliente.sexo ? cliente.sexo.charAt(0).toUpperCase() + cliente.sexo.slice(1) : '-')} <strong>Data nascimento:</strong> ${escapeHtml(cliente.data_nascimento ? formatarData(cliente.data_nascimento) : '-')}</div>
             <div><strong>Endereço:</strong> ${escapeHtml(cliente.endereco || '-')}</div>
@@ -645,11 +662,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         </body>
       </html>
     `);
-    janela.document.close();
-    janela.focus();
-    setTimeout(() => {
-      janela.print();
-    }, 150);
+    finalizarJanelaDeImpressao(janela);
   };
 
   const handleUploadAnexo = async ({ file, titulo, descricao }: { file: File; titulo?: string; descricao?: string }) => {

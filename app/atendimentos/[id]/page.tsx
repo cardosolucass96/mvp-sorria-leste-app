@@ -4,7 +4,7 @@ import React, { useState, useEffect, use, useCallback } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatarMoeda, formatarDataHora, tempoDecorrido, nomeProcedimentoItem, formatarDenteUnicoComFaces } from '@/lib/utils/formatters';
+import { formatarMoeda, formatarDataHora, tempoDecorrido, nomeProcedimentoItem, formatarDenteUnicoComFaces, formatarDentes } from '@/lib/utils/formatters';
 import { STATUS_CONFIG, PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 import type { AtendimentoStatus, AtendimentoTipo } from '@/lib/types';
 import { StatusBadge, StatusPipeline } from '@/components/domain';
@@ -14,6 +14,7 @@ import usePageTitle from '@/lib/utils/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { finalizarJanelaDeImpressao } from '@/lib/utils/print';
 
 interface Procedimento {
   id: number;
@@ -107,6 +108,17 @@ interface PagamentoAgrupado {
   created_at: string;
   recebido_por_nome: string | null;
   formas: PagamentoForma[];
+}
+
+interface PagamentoSimples {
+  id: number;
+  valor: number;
+  metodo: string;
+  observacoes: string | null;
+  cancelado: number;
+  motivo_cancelamento: string | null;
+  created_at: string;
+  recebido_por_nome: string | null;
 }
 
 function ProgressoEtapas({ etapas }: { etapas: ProgressoEtapa[] }) {
@@ -664,6 +676,45 @@ export default function AtendimentoDetalhePage({
     return 'pendente';
   };
 
+  const carregarPagamentosParaImpressao = async (atendimentoId: number): Promise<PagamentoAgrupado[]> => {
+    try {
+      const resAgrupado = await fetch(`/api/atendimentos/${atendimentoId}/pagamentos?grouped=1`);
+      if (resAgrupado.ok) {
+        return (await resAgrupado.json()) as PagamentoAgrupado[];
+      }
+      console.warn('[print] grouped payments unavailable, falling back to simple payments list');
+    } catch (error) {
+      console.warn('[print] grouped payments fetch failed, falling back to simple payments list', error);
+    }
+
+    const resSimples = await fetch(`/api/atendimentos/${atendimentoId}/pagamentos`);
+    if (!resSimples.ok) {
+      throw new Error('Erro ao carregar pagamentos do atendimento para impressão.');
+    }
+
+    const pagamentosSimples = (await resSimples.json()) as PagamentoSimples[];
+    return pagamentosSimples.map((pagamento) => ({
+      id: `pagamento:${pagamento.id}`,
+      valor_total: parseSafeNumber(pagamento.valor),
+      observacoes: pagamento.observacoes,
+      cancelado: pagamento.cancelado,
+      motivo_cancelamento: pagamento.motivo_cancelamento,
+      created_at: pagamento.created_at,
+      recebido_por_nome: pagamento.recebido_por_nome,
+      formas: [
+        {
+          id: pagamento.id,
+          valor: parseSafeNumber(pagamento.valor),
+          metodo: pagamento.metodo,
+          observacoes: pagamento.observacoes,
+          cancelado: pagamento.cancelado,
+          motivo_cancelamento: pagamento.motivo_cancelamento,
+          created_at: pagamento.created_at,
+        },
+      ],
+    }));
+  };
+
   const podRemover = atendimento?.status === 'avaliacao';
   const podTrocarExecutor = hasRole(['atendente', 'admin']) && atendimento && ['avaliacao', 'aguardando_pagamento', 'em_execucao'].includes(atendimento.status);
 
@@ -672,13 +723,7 @@ export default function AtendimentoDetalhePage({
 
     try {
       setImprimindoAtendimento(true);
-      const res = await fetch(`/api/atendimentos/${atendimento.id}/pagamentos?grouped=1`);
-      if (!res.ok) {
-        setError('Erro ao carregar pagamentos do atendimento para impressão.');
-        return;
-      }
-
-      const pagamentos = (await res.json()) as PagamentoAgrupado[];
+      const pagamentos = await carregarPagamentosParaImpressao(atendimento.id);
       const itensHtml = atendimento.itens.length
         ? atendimento.itens.map((item) => `
             <tr>
@@ -687,7 +732,7 @@ export default function AtendimentoDetalhePage({
               <td>${escapeHtml(item.executor_nome || '-')}</td>
               <td>${escapeHtml(item.status)}</td>
               <td style="text-align:right">${formatarMoeda(parseSafeNumber(item.valor))}</td>
-              <td>${escapeHtml(item.dentes || item.dente_unico || '-')}</td>
+              <td>${escapeHtml(formatarDentes(item.dentes) || item.dente_unico || '-')}</td>
               <td style="text-align:right">${formatarMoeda(parseSafeNumber(item.valor_pago))}</td>
             </tr>
           `).join('')
@@ -818,11 +863,9 @@ export default function AtendimentoDetalhePage({
           </body>
         </html>
       `);
-      janela.document.close();
-      janela.focus();
-      setTimeout(() => {
-        janela.print();
-      }, 150);
+      finalizarJanelaDeImpressao(janela);
+    } catch {
+      setError('Erro ao carregar pagamentos do atendimento para impressão.');
     } finally {
       setImprimindoAtendimento(false);
     }
