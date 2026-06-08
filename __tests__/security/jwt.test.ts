@@ -44,6 +44,7 @@ function forgeToken(payload: Partial<JwtPayload>): string {
     sub: 1,
     email: 'admin@test.com',
     role: 'admin',
+    roles: ['admin'],
     nome: 'Admin',
     unidade_ids: [1, 2],
     unidade_atual: 1,

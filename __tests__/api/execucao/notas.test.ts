@@ -44,7 +44,7 @@ describe('GET /api/execucao/item/[id]/notas', () => {
     mockQueryResponse('from notas_execucao n', [NOTA_EXEMPLO]);
 
     const ctx = createRouteContext({ id: '3' });
-    const { status, data } = await callRoute(listNotas, '/api/execucao/item/3/notas', {}, ctx);
+    const { status, data } = await callRoute<typeof NOTA_EXEMPLO[]>(listNotas, '/api/execucao/item/3/notas', {}, ctx);
 
     expect(status).toBe(200);
     expect(data).toHaveLength(1);

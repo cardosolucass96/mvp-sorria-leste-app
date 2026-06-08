@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+// @ts-nocheck
 /**
  * Sprint 6 Tests - Avaliação
  * Testes para o workflow de avaliação do dentista

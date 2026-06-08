@@ -6,7 +6,7 @@
  *        DELETE  /api/execucao/item/[id]/anexos?anexo_id=X  (remove R2 + banco)
  */
 
-import { callRoute, createRouteContext, createMockFormData } from '../../helpers/api-test-helper';
+import { callRoute, createRouteContext } from '../../helpers/api-test-helper';
 import {
   setupCloudflareContextMock,
   teardownCloudflareContextMock,
@@ -57,7 +57,7 @@ describe('GET /api/execucao/item/[id]/anexos', () => {
     mockQueryResponse('from anexos_execucao a', [ANEXO_EXEMPLO]);
 
     const ctx = createRouteContext({ id: '3' });
-    const { status, data } = await callRoute(listAnexos, '/api/execucao/item/3/anexos', {}, ctx);
+    const { status, data } = await callRoute<typeof ANEXO_EXEMPLO[]>(listAnexos, '/api/execucao/item/3/anexos', {}, ctx);
 
     expect(status).toBe(200);
     expect(data).toHaveLength(1);

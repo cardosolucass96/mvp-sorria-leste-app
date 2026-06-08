@@ -37,7 +37,7 @@ type AuthenticatedHandler = (
  * Rejeita com 401 se não autenticado.
  */
 export function withAuth(handler: AuthenticatedHandler) {
-  return async (request: NextRequest, routeContext?: unknown) => {
+  return async (request: NextRequest, routeContext?: unknown): Promise<Response> => {
     const token = extractToken(request);
 
     if (!token) {
@@ -62,7 +62,8 @@ export function withAuth(handler: AuthenticatedHandler) {
       ...(routeContext && typeof routeContext === 'object' ? routeContext : {}),
     };
 
-    return handler(request, authContext);
+    const response = await handler(request, authContext);
+    return response ?? NextResponse.json(null, { status: 204 });
   };
 }
 

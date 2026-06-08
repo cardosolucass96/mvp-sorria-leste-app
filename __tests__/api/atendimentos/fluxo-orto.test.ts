@@ -17,15 +17,6 @@ import {
   setLastInsertId,
   getExecutedQueries,
 } from '../../helpers/db-mock';
-import {
-  CLIENTE_JOAO,
-  USUARIO_EXECUTOR,
-  USUARIO_AVALIADOR,
-  PROC_LIMPEZA,
-  PROC_RESTAURACAO,
-  PROC_INATIVO,
-  ATENDIMENTO_TRIAGEM,
-} from '../../helpers/seed';
 
 // Mock JWT para bypass de autenticação nos testes
 jest.mock('@/lib/auth/jwt', () => ({
@@ -73,7 +64,7 @@ describe('POST /api/atendimentos — fluxo orto', () => {
       cliente_nome: 'João Silva', avaliador_nome: null,
     });
 
-    const { status, data } = await callRoute(createAtendimento, '/api/atendimentos', {
+    const { status, data } = await callRoute<{ status: string; avaliador_nome: string | null }>(createAtendimento, '/api/atendimentos', {
       method: 'POST',
       body: baseBody,
     });

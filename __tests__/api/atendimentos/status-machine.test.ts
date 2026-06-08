@@ -53,7 +53,7 @@ afterEach(() => {
 });
 
 // Helper para mock do atendimento + response pós-update
-function mockAtendimentoAndReturn(atendimento: Record<string, unknown>) {
+function mockAtendimentoAndReturn<T extends object>(atendimento: T) {
   mockQueryResponse('select * from atendimentos where id', atendimento);
   mockQueryResponse('from atendimentos a', atendimento);
 }

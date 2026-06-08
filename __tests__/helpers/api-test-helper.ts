@@ -35,7 +35,8 @@ interface RouteResponse<T = unknown> {
  * ```
  */
 export async function callRoute<T = unknown>(
-  handler: (request: NextRequest, context?: unknown) => Promise<Response>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handler: (...args: any[]) => Promise<Response | void>,
   path: string,
   options: CallRouteOptions = {},
   routeContext?: unknown
@@ -73,6 +74,9 @@ export async function callRoute<T = unknown>(
 
   // Chamar handler
   const response = await handler(request, routeContext);
+  if (!response) {
+    throw new Error(`Route handler ${path} retornou void em vez de Response.`);
+  }
 
   // Parsear resposta
   let data: T;
@@ -101,7 +105,7 @@ export async function callRoute<T = unknown>(
  * const { data } = await callRoute(GET, '/api/clientes/1', {}, ctx);
  * ```
  */
-export function createRouteContext(params: Record<string, string | string[]>) {
+export function createRouteContext<TParams extends Record<string, string | string[]>>(params: TParams) {
   return { params: Promise.resolve(params) };
 }
 

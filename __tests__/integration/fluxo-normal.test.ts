@@ -530,7 +530,7 @@ describe('Integração — Fluxo Normal Completo', () => {
   describe('Etapa 11 — Prontuário', () => {
     test('POST /api/execucao/item/1/prontuario cria prontuário', async () => {
       // Não existe prontuário anterior
-      mockQueryResponse('select id from prontuarios where item_atendimento_id', null as any);
+      mockQueryResponse('select id from prontuarios where item_atendimento_id', []);
       // Retorna prontuário criado
       mockQueryResponse('select \n        p.*', {
         id: 1,
@@ -543,7 +543,7 @@ describe('Integração — Fluxo Normal Completo', () => {
       });
 
       const ctx = createRouteContext({ id: '1' });
-      const { status, data } = await callRoute(postProntuario, '/api/execucao/item/1/prontuario', {
+      const { status, data } = await callRoute<{ success: boolean; message: string; prontuario: Record<string, unknown> }>(postProntuario, '/api/execucao/item/1/prontuario', {
         method: 'POST',
         body: {
           usuario_id: EXECUTOR.id,
@@ -699,7 +699,7 @@ describe('Integração — Fluxo Normal Completo', () => {
         },
       ]);
 
-      const { status, data } = await callRoute(getComissoes, '/api/comissoes', {
+      const { status, data } = await callRoute<{ comissoes: Array<Record<string, unknown>>; totais: Record<string, unknown> }>(getComissoes, '/api/comissoes', {
         method: 'GET',
         searchParams: { usuario_id: String(AVALIADOR.id) },
       });
@@ -730,7 +730,7 @@ describe('Integração — Fluxo Normal Completo', () => {
         },
       ]);
 
-      const { status, data } = await callRoute(getComissoes, '/api/comissoes', {
+      const { status, data } = await callRoute<Array<Record<string, unknown>>>(getComissoes, '/api/comissoes', {
         method: 'GET',
         searchParams: { resumo: 'true' },
       });

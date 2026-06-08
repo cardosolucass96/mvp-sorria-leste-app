@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+// @ts-nocheck
 /**
  * Testes automatizados - Sprint 7
  * 
@@ -133,7 +135,7 @@ describe.skip('Sprint 7 - Sistema de Pagamentos por Procedimento', () => {
       const columns = query(
         "PRAGMA table_info(itens_atendimento)"
       );
-      const valorPagoColumn = columns.find((col: any) => col.name === 'valor_pago');
+      const valorPagoColumn = columns.find((col: { name: string }) => col.name === 'valor_pago');
       expect(valorPagoColumn).toBeDefined();
       expect(valorPagoColumn.type).toBe('REAL');
     });

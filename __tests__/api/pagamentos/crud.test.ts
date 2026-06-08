@@ -164,7 +164,7 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
     mockQueryResponse('from pagamentos where id', { ...PAGAMENTO_PIX, id: 1 });
 
     const ctx = createRouteContext({ id: '3' });
-    const { status, data } = await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
+    const { status, data } = await callRoute<{ metodo: string }>(createPagamento, '/api/atendimentos/3/pagamentos', {
       method: 'POST',
       body: baseBody,
     }, ctx);

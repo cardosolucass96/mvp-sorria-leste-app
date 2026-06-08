@@ -13,7 +13,7 @@ const cfMock = require('@opennextjs/cloudflare') as {
   __resetMocks: () => void;
 };
 
-type MockRow = Record<string, unknown>;
+type MockRow = object;
 
 interface MockQueryResult {
   results: MockRow[];
@@ -35,9 +35,9 @@ export function resetMockDb() {
 
 /** Configura o próximo retorno para uma query que contenha a substring dada.
  *  Aceita tanto um array de rows quanto um único objeto (para queryOne/first). */
-export function mockQueryResponse(sqlSubstring: string, rows: MockRow[] | MockRow) {
+export function mockQueryResponse<T extends MockRow>(sqlSubstring: string, rows: T[] | T) {
   const rowArray = Array.isArray(rows) ? rows : [rows];
-  mockResponses.set(sqlSubstring.toLowerCase(), rowArray);
+  mockResponses.set(sqlSubstring.toLowerCase(), rowArray as MockRow[]);
 }
 
 /** Define o último ID inserido (para simular AUTO_INCREMENT) */
@@ -104,7 +104,7 @@ export const mockDb = {
   async batch(statements: ReturnType<typeof createMockStatement>[]) {
     return Promise.all(statements.map(stmt => stmt.all()));
   },
-  async exec(_sql: string) {
+  async exec() {
     return { count: 0, duration: 0 };
   },
 };
@@ -163,7 +163,7 @@ export const mockR2Bucket = {
       async arrayBuffer() { return item.body.buffer.slice(item.body.byteOffset, item.body.byteOffset + item.body.byteLength); },
       async text() { return item.body.toString(); },
       async json<T>() { return JSON.parse(item.body.toString()) as T; },
-      async blob() { return new Blob([item.body]); },
+      async blob() { return new Blob([new Uint8Array(item.body)]); },
     };
   },
   async delete(keys: string | string[]) {

@@ -111,10 +111,26 @@ export const CLIENTE_COMPLETO: Cliente = {
   created_at: '2025-01-12 10:00:00',
 };
 
+export const CLIENTE_JOAO: Cliente = {
+  id: 4,
+  nome: 'João Silva',
+  cpf: '39053344705',
+  telefone: '85999990000',
+  email: 'joao@email.com',
+  data_nascimento: '1992-03-10',
+  endereco: 'Rua João, 10',
+  origem: 'organico',
+  sexo: null,
+  plano_odontologico: null,
+  observacoes: null,
+  created_at: '2025-01-13 10:00:00',
+};
+
 export const TODOS_CLIENTES: Cliente[] = [
   CLIENTE_BASICO,
   CLIENTE_MINIMO,
   CLIENTE_COMPLETO,
+  CLIENTE_JOAO,
 ];
 
 // ===========================================
@@ -132,6 +148,7 @@ export const PROC_LIMPEZA: Procedimento = {
   por_dente: 0,
   tem_etapas: 0,
   tem_face: 0,
+  categoria_id: null,
   ativo: 1,
   created_at: '2025-01-01 00:00:00',
 };
@@ -147,6 +164,7 @@ export const PROC_RESTAURACAO: Procedimento = {
   por_dente: 1, // Cobrado por dente
   tem_etapas: 0,
   tem_face: 1,
+  categoria_id: null,
   ativo: 1,
   created_at: '2025-01-01 00:00:00',
 };
@@ -162,6 +180,7 @@ export const PROC_CANAL: Procedimento = {
   por_dente: 1,
   tem_etapas: 0,
   tem_face: 0,
+  categoria_id: null,
   ativo: 1,
   created_at: '2025-01-01 00:00:00',
 };
@@ -177,6 +196,7 @@ export const PROC_INATIVO: Procedimento = {
   por_dente: 0,
   tem_etapas: 0,
   tem_face: 0,
+  categoria_id: null,
   ativo: 0,
   created_at: '2025-01-01 00:00:00',
 };
@@ -201,6 +221,7 @@ export const ATENDIMENTO_TRIAGEM: Atendimento = {
   unidade_id: 1,
   status: 'triagem',
   tipo: 'normal',
+  categoria_id: null,
   motivo_saida: null,
   observacoes: null,
   created_at: '2025-02-01 10:00:00',
@@ -217,6 +238,7 @@ export const ATENDIMENTO_AVALIACAO: Atendimento = {
   unidade_id: 1,
   status: 'avaliacao',
   tipo: 'normal',
+  categoria_id: null,
   motivo_saida: null,
   observacoes: 'Paciente com dor',
   created_at: '2025-02-02 10:00:00',
@@ -233,6 +255,7 @@ export const ATENDIMENTO_AGUARDANDO_PGTO: Atendimento = {
   unidade_id: 1,
   status: 'aguardando_pagamento',
   tipo: 'normal',
+  categoria_id: null,
   motivo_saida: null,
   observacoes: null,
   created_at: '2025-02-03 10:00:00',
@@ -249,6 +272,7 @@ export const ATENDIMENTO_EM_EXECUCAO: Atendimento = {
   unidade_id: 1,
   status: 'em_execucao',
   tipo: 'normal',
+  categoria_id: null,
   motivo_saida: null,
   observacoes: null,
   created_at: '2025-02-04 10:00:00',
@@ -268,6 +292,12 @@ export const ITEM_LIMPEZA_PENDENTE: ItemAtendimento = {
   criado_por_id: 3,
   valor: 150.0,
   valor_original: 150.0,
+  valor_final: null,
+  desconto_valor: 0,
+  desconto_motivo: null,
+  desconto_aplicado_por_id: null,
+  desconto_aplicado_em: null,
+  etapas_valores: null,
   valor_pago: 0,
   dentes: null,
   quantidade: 1,
@@ -291,6 +321,12 @@ export const ITEM_RESTAURACAO_PAGO: ItemAtendimento = {
   criado_por_id: 3,
   valor: 400.0, // 200 x 2 dentes
   valor_original: 400.0,
+  valor_final: null,
+  desconto_valor: 0,
+  desconto_motivo: null,
+  desconto_aplicado_por_id: null,
+  desconto_aplicado_em: null,
+  etapas_valores: null,
   valor_pago: 400.0,
   dentes: '["11","21"]',
   quantidade: 2,
@@ -314,6 +350,12 @@ export const ITEM_CANAL_EXECUTANDO: ItemAtendimento = {
   criado_por_id: 3,
   valor: 800.0,
   valor_original: 800.0,
+  valor_final: null,
+  desconto_valor: 0,
+  desconto_motivo: null,
+  desconto_aplicado_por_id: null,
+  desconto_aplicado_em: null,
+  etapas_valores: null,
   valor_pago: 800.0,
   dentes: '["36"]',
   quantidade: 1,
