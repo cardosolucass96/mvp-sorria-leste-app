@@ -59,7 +59,7 @@ export default function Modal({
       <DialogContent
         className={cn(
           sizeClasses[size],
-          "max-h-[90vh] flex flex-col gap-0 p-0 bg-card text-card-foreground shadow-2xl ring-1 ring-border/70",
+          "max-h-[90vh] flex flex-col gap-0 overflow-hidden p-0 bg-card text-card-foreground shadow-2xl ring-1 ring-border/70",
           className
         )}
         showCloseButton
@@ -81,7 +81,7 @@ export default function Modal({
 
         {/* Footer */}
         {footer && (
-          <DialogFooter className={cn("px-6 py-4 border-t border-border flex justify-end gap-3 rounded-b-xl bg-muted/30", footerClassName)}>
+          <DialogFooter className={cn("mx-0 mb-0 px-6 py-4 border-t border-border flex justify-end gap-3 rounded-b-xl bg-muted/30", footerClassName)}>
             {footer}
           </DialogFooter>
         )}

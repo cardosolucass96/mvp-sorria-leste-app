@@ -58,7 +58,7 @@ export default function ConfirmDialog({
         if (!open) onClose();
       }}
     >
-      <AlertDialogContent size="default">
+      <AlertDialogContent size="default" className="overflow-hidden">
         <AlertDialogHeader>
           <AlertDialogMedia
             className={cn(
@@ -72,7 +72,7 @@ export default function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{message}</AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="mx-0 mb-0">
           <Button variant="ghost" onClick={onClose} disabled={loading}>
             {cancelLabel}
           </Button>
