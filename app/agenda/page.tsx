@@ -255,23 +255,6 @@ export default function AgendaPage() {
     carregarAgendamentos();
   }, [carregarAgendamentos]);
 
-  useEffect(() => {
-    if (openAgenda !== '1') return;
-
-    const clienteId = Number(openAgendaClienteId);
-    if (!Number.isInteger(clienteId) || clienteId <= 0) {
-      void abrirNovoAgendamento();
-    } else {
-      void abrirNovoAgendamento(clienteId);
-    }
-
-    const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.delete('open');
-    nextParams.delete('cliente_id');
-    const nextSearch = nextParams.toString();
-    router.replace(`/agenda${nextSearch ? `?${nextSearch}` : ''}`);
-  }, [openAgenda, openAgendaClienteId, router, searchParams, abrirNovoAgendamento]);
-
   const carregarExecutores = useCallback(async () => {
     if (executores.length > 0) return;
     try {
@@ -324,6 +307,23 @@ export default function AgendaPage() {
     }
     carregarExecutores();
   }, [novoProcedimentos.length, carregarExecutores]);
+
+  useEffect(() => {
+    if (openAgenda !== '1') return;
+
+    const clienteId = Number(openAgendaClienteId);
+    if (!Number.isInteger(clienteId) || clienteId <= 0) {
+      void abrirNovoAgendamento();
+    } else {
+      void abrirNovoAgendamento(clienteId);
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('open');
+    nextParams.delete('cliente_id');
+    const nextSearch = nextParams.toString();
+    router.replace(`/agenda${nextSearch ? `?${nextSearch}` : ''}`);
+  }, [openAgenda, openAgendaClienteId, router, searchParams, abrirNovoAgendamento]);
 
   const buscarClientes = async (termo: string) => {
     setNovoBuscaCliente(termo);
