@@ -63,13 +63,49 @@ export async function GET(request: NextRequest) {
         conditions.push('u.ativo = 1');
       }
 
-      usuarios = await query<Usuario>(
-        `SELECT DISTINCT u.id, u.nome, u.email, u.role, u.ativo, u.valor_diaria, u.created_at
-           FROM usuarios u
-           ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
-          ORDER BY u.nome`,
-        params
-      );
+      try {
+        usuarios = await query<Usuario>(
+          `SELECT DISTINCT u.id, u.nome, u.email, u.role, u.ativo, u.valor_diaria, u.created_at
+             FROM usuarios u
+             ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+            ORDER BY u.nome`,
+          params
+        );
+      } catch (error) {
+        // Bancos legados podem ainda não ter `usuario_roles`.
+        // Nesse caso, fazemos fallback para a role primária em `usuarios.role`.
+        if (unidadeId || (!categoriaId && !role)) {
+          throw error;
+        }
+
+        const fallbackConditions: string[] = [];
+        const fallbackParams: Array<string | number> = [];
+
+        if (categoriaId) {
+          fallbackConditions.push(`EXISTS (
+            SELECT 1
+              FROM categoria_roles cr
+             WHERE cr.categoria_id = ?
+               AND cr.role = u.role
+          )`);
+          fallbackParams.push(parseInt(categoriaId));
+        }
+
+        if (role) {
+          fallbackConditions.push('u.role = ?');
+          fallbackParams.push(role);
+        }
+
+        fallbackConditions.push('u.ativo = 1');
+
+        usuarios = await query<Usuario>(
+          `SELECT DISTINCT u.id, u.nome, u.email, u.role, u.ativo, u.valor_diaria, u.created_at
+             FROM usuarios u
+            WHERE ${fallbackConditions.join(' AND ')}
+            ORDER BY u.nome`,
+          fallbackParams
+        );
+      }
     } else {
       usuarios = await query<Usuario>(
         'SELECT id, nome, email, role, ativo, valor_diaria, created_at FROM usuarios ORDER BY nome'
@@ -78,14 +114,18 @@ export async function GET(request: NextRequest) {
 
     // Buscar unidades de cada usuário
     const unidadesMap = new Map<number, number[]>();
-    const unidadesRows = await query<{ usuario_id: number; unidade_id: number }>(
-      'SELECT usuario_id, unidade_id FROM usuario_unidades ORDER BY unidade_id'
-    );
-    for (const row of unidadesRows) {
-      if (!unidadesMap.has(row.usuario_id)) {
-        unidadesMap.set(row.usuario_id, []);
+    try {
+      const unidadesRows = await query<{ usuario_id: number; unidade_id: number }>(
+        'SELECT usuario_id, unidade_id FROM usuario_unidades ORDER BY unidade_id'
+      );
+      for (const row of unidadesRows) {
+        if (!unidadesMap.has(row.usuario_id)) {
+          unidadesMap.set(row.usuario_id, []);
+        }
+        unidadesMap.get(row.usuario_id)!.push(row.unidade_id);
       }
-      unidadesMap.get(row.usuario_id)!.push(row.unidade_id);
+    } catch {
+      // Tabela ainda não migrada; devolve `unidade_ids: []`.
     }
 
     // Buscar roles de cada usuário (fallback graceful se tabela não existir ainda)

@@ -25,11 +25,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const unidades = await query<{ unidade_id: number }>(
-      'SELECT unidade_id FROM usuario_unidades WHERE usuario_id = ? ORDER BY unidade_id',
-      [id]
-    );
-    const unidade_ids = unidades.map(u => u.unidade_id);
+    let unidade_ids: number[] = [];
+    try {
+      const unidades = await query<{ unidade_id: number }>(
+        'SELECT unidade_id FROM usuario_unidades WHERE usuario_id = ? ORDER BY unidade_id',
+        [id]
+      );
+      unidade_ids = unidades.map(u => u.unidade_id);
+    } catch {
+      // tabela não existe ainda
+    }
 
     let roles: string[] = [usuario.role];
     try {
@@ -164,20 +169,34 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     );
 
     // Buscar unidades atualizadas
-    const unidades = await query<{ unidade_id: number }>(
-      'SELECT unidade_id FROM usuario_unidades WHERE usuario_id = ? ORDER BY unidade_id',
-      [id]
-    );
+    let unidadesAtualizadas: number[] = [];
+    try {
+      const unidades = await query<{ unidade_id: number }>(
+        'SELECT unidade_id FROM usuario_unidades WHERE usuario_id = ? ORDER BY unidade_id',
+        [id]
+      );
+      unidadesAtualizadas = unidades.map(u => u.unidade_id);
+    } catch {
+      // tabela não existe ainda
+    }
 
-    const rolesFinais = await query<{ role: string }>(
-      'SELECT role FROM usuario_roles WHERE usuario_id = ?',
-      [id]
-    );
+    let rolesFinais: string[] = [updated?.role || 'atendente'];
+    try {
+      const rolesRows = await query<{ role: string }>(
+        'SELECT role FROM usuario_roles WHERE usuario_id = ?',
+        [id]
+      );
+      if (rolesRows.length > 0) {
+        rolesFinais = rolesRows.map(r => r.role);
+      }
+    } catch {
+      // tabela não existe ainda
+    }
 
     return NextResponse.json({
       ...updated,
-      unidade_ids: unidades.map(u => u.unidade_id),
-      roles: rolesFinais.length > 0 ? rolesFinais.map(r => r.role) : [updated?.role || 'atendente'],
+      unidade_ids: unidadesAtualizadas,
+      roles: rolesFinais,
     });
   } catch (error) {
     console.error('Erro ao atualizar usuário:', error);
