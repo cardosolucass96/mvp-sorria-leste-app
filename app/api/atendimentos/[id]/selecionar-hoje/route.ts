@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { execute, query, queryOne } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
+import { resolverExecutorDestinoId } from '@/lib/utils/destinoExecutor';
 
 type DestinoStatus = 'fazer_hoje' | 'agendar' | 'pago_sem_data' | 'nao_pago_sem_data';
 
@@ -125,7 +126,7 @@ async function criarAgendamentoFuturo({
       atendimento.cliente_id,
       atendimento.id,
       item.procedimento_id,
-      executorId ?? item.executor_id ?? null,
+      resolverExecutorDestinoId(executorId, item.executor_id),
       dataAgendada ?? null,
       inferirStatusAgendamento(destinoStatus, dataAgendada),
       etapaModeloId,
@@ -279,7 +280,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
             [
               atendimentoId,
               item.procedimento_id,
-              (destino?.executor_id ?? item.executor_id) || null,
+              resolverExecutorDestinoId(destino?.executor_id, item.executor_id),
               item.criado_por_id,
               valorEtapa,
               valorEtapa,

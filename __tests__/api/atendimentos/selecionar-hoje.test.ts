@@ -110,4 +110,80 @@ describe('POST /api/atendimentos/[id]/selecionar-hoje', () => {
     expect(updateExecutorQuery).toBeDefined();
     expect(updateExecutorQuery?.params).toEqual([1, 1]);
   });
+
+  it('mantem executor nulo ao gerar agendamento futuro sem executor', async () => {
+    mockQueryResponse('select id, cliente_id, unidade_id, categoria_id, status from atendimentos', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select * from itens_atendimento where atendimento_id', [
+      { ...ITEM_LIMPEZA_PENDENTE, executor_id: 4 },
+    ]);
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status } = await callRoute(
+      selecionarHoje,
+      '/api/atendimentos/3/selecionar-hoje',
+      {
+        method: 'POST',
+        body: {
+          destinos: [
+            {
+              item_id: 1,
+              etapa_modelo_id: null,
+              destino_status: 'agendar',
+              data_agendada: '2026-07-10',
+              executor_id: null,
+            },
+          ],
+        },
+      },
+      ctx
+    );
+
+    expect(status).toBe(200);
+
+    const queries = getExecutedQueries();
+    const insertAgendamentoQuery = queries.find((query) => query.sql.includes('INSERT INTO agendamentos'));
+
+    expect(insertAgendamentoQuery).toBeDefined();
+    expect(insertAgendamentoQuery?.params[3]).toBeNull();
+  });
+
+  it('mantem executor nulo ao quebrar procedimento em etapas para fazer_hoje', async () => {
+    mockQueryResponse('select id, cliente_id, unidade_id, categoria_id, status from atendimentos', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select * from itens_atendimento where atendimento_id', [
+      { ...ITEM_LIMPEZA_PENDENTE, procedimento_id: 9, executor_id: 4, etapas_valores: null },
+    ]);
+    mockQueryResponse('select count(*) as count from procedimento_etapas_modelo where procedimento_id', { count: 1 });
+    mockQueryResponse('select id, nome, valor from procedimento_etapas_modelo where procedimento_id', [
+      { id: 101, nome: 'Sessão 1', valor: 150 },
+    ]);
+    mockQueryResponse('select coalesce(sum(pa.valor_alocado), 0) as total', { total: 0 });
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status } = await callRoute(
+      selecionarHoje,
+      '/api/atendimentos/3/selecionar-hoje',
+      {
+        method: 'POST',
+        body: {
+          destinos: [
+            {
+              item_id: 1,
+              etapa_modelo_id: 101,
+              destino_status: 'fazer_hoje',
+              executor_id: null,
+            },
+          ],
+        },
+      },
+      ctx
+    );
+
+    expect(status).toBe(200);
+
+    const queries = getExecutedQueries();
+    const insertItemQuery = queries.find((query) => query.sql.includes('INSERT INTO itens_atendimento\n              (atendimento_id'));
+
+    expect(insertItemQuery).toBeDefined();
+    expect(insertItemQuery?.params[2]).toBeNull();
+  });
 });

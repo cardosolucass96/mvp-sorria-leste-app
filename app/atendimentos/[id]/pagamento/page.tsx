@@ -7,6 +7,7 @@ import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { formatarDataHora, formatarMoeda, nomeProcedimentoItem } from '@/lib/utils/formatters';
 import { cn } from '@/lib/utils';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import { getExecutorDestinoInicial } from '@/lib/utils/destinoExecutor';
 import type { Usuario } from '@/lib/types';
 import Alert from '@/components/ui/Alert';
 import LoadingState from '@/components/ui/LoadingState';
@@ -315,7 +316,11 @@ export default function PagamentoPage({
                 saldo
               ),
               data: etapa.data_agendada ?? '',
-              executorId: etapa.executor_destino_id ? String(etapa.executor_destino_id) : (item.executor_id ? String(item.executor_id) : ''),
+              executorId: getExecutorDestinoInicial(
+                etapa.destino_status,
+                etapa.executor_destino_id,
+                item.executor_id
+              ),
             };
           }
           continue;
@@ -333,7 +338,11 @@ export default function PagamentoPage({
             saldo
           ),
           data: item.destino_data_agendada ?? '',
-          executorId: item.destino_executor_id ? String(item.destino_executor_id) : (item.executor_id ? String(item.executor_id) : ''),
+          executorId: getExecutorDestinoInicial(
+            item.destino_status,
+            item.destino_executor_id,
+            item.executor_id
+          ),
         };
       }
 
