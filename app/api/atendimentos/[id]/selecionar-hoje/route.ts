@@ -9,6 +9,7 @@ interface AtendimentoRow {
   id: number;
   cliente_id: number;
   unidade_id: number;
+  categoria_id: number | null;
   status: string;
 }
 
@@ -42,6 +43,59 @@ interface DestinoInput {
 function inferirStatusAgendamento(destino: DestinoStatus, dataAgendada?: string | null) {
   if (destino === 'agendar' && dataAgendada) return 'agendado';
   return 'pendente';
+}
+
+async function carregarRolesUsuarioAtivo(usuarioId: number): Promise<string[] | null> {
+  const usuario = await queryOne<{ id: number; role: string }>(
+    'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
+    [usuarioId]
+  );
+
+  if (!usuario) return null;
+
+  let roles = [usuario.role];
+  try {
+    const rolesRows = await query<{ role: string }>(
+      'SELECT role FROM usuario_roles WHERE usuario_id = ?',
+      [usuarioId]
+    );
+    if (rolesRows.length > 0) {
+      roles = Array.from(new Set([usuario.role, ...rolesRows.map((row) => row.role)]));
+    }
+  } catch {
+    // Bancos legados podem ainda não ter `usuario_roles`.
+  }
+
+  return roles;
+}
+
+async function validarExecutorSelecionado(
+  executorId: number,
+  categoriaId: number | null
+): Promise<'not_found' | 'ok' | 'invalid'> {
+  const roles = await carregarRolesUsuarioAtivo(executorId);
+  if (!roles) return 'not_found';
+  if (roles.includes('admin')) return 'ok';
+
+  if (categoriaId) {
+    try {
+      const categoriaRoles = await query<{ role: string }>(
+        'SELECT role FROM categoria_roles WHERE categoria_id = ?',
+        [categoriaId]
+      );
+      const allowedRoles = categoriaRoles
+        .map((row) => row.role)
+        .filter((role) => role !== 'admin');
+
+      if (allowedRoles.length > 0) {
+        return roles.some((role) => allowedRoles.includes(role)) ? 'ok' : 'invalid';
+      }
+    } catch {
+      // Bancos legados podem ainda não ter `categoria_roles`.
+    }
+  }
+
+  return roles.some((role) => ['executor', 'ortodontista'].includes(role)) ? 'ok' : 'invalid';
 }
 
 async function criarAgendamentoFuturo({
@@ -97,7 +151,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     }
 
     const atendimento = await queryOne<AtendimentoRow>(
-      'SELECT id, cliente_id, unidade_id, status FROM atendimentos WHERE id = ? AND unidade_id = ?',
+      'SELECT id, cliente_id, unidade_id, categoria_id, status FROM atendimentos WHERE id = ? AND unidade_id = ?',
       [atendimentoId, context.unidadeId]
     );
 
@@ -107,6 +161,22 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     if (atendimento.status !== 'aguardando_pagamento') {
       return NextResponse.json({ error: 'Atendimento não está em aguardando_pagamento' }, { status: 400 });
+    }
+
+    const executorIds = [...new Set(
+      destinos
+        .map((destino) => destino.executor_id)
+        .filter((executorId): executorId is number => typeof executorId === 'number' && Number.isFinite(executorId))
+    )];
+
+    for (const executorId of executorIds) {
+      const validacaoExecutor = await validarExecutorSelecionado(executorId, atendimento.categoria_id);
+      if (validacaoExecutor === 'not_found') {
+        return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
+      }
+      if (validacaoExecutor === 'invalid') {
+        return NextResponse.json({ error: 'Executor não tem permissão para esta categoria' }, { status: 400 });
+      }
     }
 
     await execute('DELETE FROM itens_atendimento_destinos WHERE atendimento_id = ?', [atendimentoId]);
@@ -151,6 +221,12 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       if (!temEtapas) {
         const destino = destinosItem[0];
         if (!destino || destino.destino_status === 'fazer_hoje') {
+          if (destino && destino.executor_id !== undefined && (destino.executor_id ?? null) !== (item.executor_id ?? null)) {
+            await execute(
+              'UPDATE itens_atendimento SET executor_id = ? WHERE id = ?',
+              [destino.executor_id ?? null, item.id]
+            );
+          }
           itensHoje += 1;
           continue;
         }
