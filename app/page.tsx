@@ -37,7 +37,9 @@ export default function Home() {
 
   const carregarDados = useCallback(async () => {
     try {
-      const roleParaAPI = effectiveRole || user?.role;
+      const roleParaAPI = user?.role === 'admin' && viewMode === 'dentista'
+        ? 'admin'
+        : (effectiveRole || user?.role);
       const response = await unitFetch(`/api/dashboard?usuario_id=${user?.id}&role=${roleParaAPI}`);
       const data = await response.json();
       setStats(data);

@@ -55,7 +55,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 
     const emAvaliacao = (await query<{ count: number }>(
       `SELECT COUNT(*) as count FROM atendimentos
-       WHERE status IN ('triagem', 'avaliacao') AND unidade_id = ?`,
+       WHERE status = 'avaliacao' AND unidade_id = ?`,
       [uid]
     ))[0]?.count || 0;
 
@@ -101,13 +101,13 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       if (role === 'avaliador' || role === 'admin') {
         meusAtendimentosAvaliacao = (await query<{ count: number }>(
           `SELECT COUNT(*) as count FROM atendimentos
-           WHERE status IN ('triagem', 'avaliacao') AND unidade_id = ? AND avaliador_id = ?`,
+           WHERE status = 'avaliacao' AND unidade_id = ? AND avaliador_id = ?`,
           [uid, parseInt(usuarioId)]
         ))[0]?.count || 0;
 
         atendimentosDisponiveisAvaliacao = (await query<{ count: number }>(
           `SELECT COUNT(*) as count FROM atendimentos
-           WHERE status IN ('triagem', 'avaliacao') AND unidade_id = ? AND avaliador_id IS NULL`,
+           WHERE status = 'avaliacao' AND unidade_id = ? AND avaliador_id IS NULL`,
           [uid]
         ))[0]?.count || 0;
       }

@@ -752,7 +752,7 @@ describe('Integração — Fluxo Normal Completo', () => {
       mockQueryResponse("status = 'aguardando_pagamento'", { count: 0 });
       mockQueryResponse("status in ('finalizado', 'encerrado')", { count: 1 });
       mockQueryResponse("status = 'em_execucao'", { count: 0 });
-      mockQueryResponse("status in ('triagem', 'avaliacao')", { count: 0 });
+      mockQueryResponse("status = 'avaliacao'", { count: 0 });
 
       const { status, data } = await callRoute(getDashboard, '/api/dashboard');
 
@@ -769,7 +769,7 @@ describe('Integração — Fluxo Normal Completo', () => {
       mockQueryResponse("status = 'aguardando_pagamento'", { count: 0 });
       mockQueryResponse("status in ('finalizado', 'encerrado')", { count: 1 });
       mockQueryResponse("status = 'em_execucao'", { count: 0 });
-      mockQueryResponse("status in ('triagem', 'avaliacao')", { count: 0 });
+      mockQueryResponse("status = 'avaliacao'", { count: 0 });
       // Comissões do executor (agora com JOIN atendimentos)
       mockQueryResponse('sum(co.valor_comissao)', { total: 165 });
       // Procedimentos do executor

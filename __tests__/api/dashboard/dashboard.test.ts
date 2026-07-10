@@ -121,16 +121,16 @@ describe('GET /api/dashboard — stats gerais', () => {
     expect(data.emExecucao).toBe(12);
   });
 
-  it('emAvaliacao conta triagem + avaliacao', async () => {
-    mockQueryResponse("status in ('triagem', 'avaliacao')", [{ count: 7 }]);
+  it('emAvaliacao conta apenas atendimentos em avaliacao', async () => {
+    mockQueryResponse("status = 'avaliacao'", [{ count: 7 }]);
 
     const { data } = await callRoute<DashboardStats>(getDashboard, '/api/dashboard');
     expect(data.emAvaliacao).toBe(7);
 
-    // Verifica que a query inclui ambos os status
+    // Verifica que a query usa apenas a fila real da tela /avaliacao
     const queries = getExecutedQueries();
     const avaliacaoQuery = queries.find(q =>
-      q.sql.toLowerCase().includes("'triagem'") && q.sql.toLowerCase().includes("'avaliacao'")
+      q.sql.toLowerCase().includes("status = 'avaliacao'")
     );
     expect(avaliacaoQuery).toBeDefined();
   });
@@ -225,7 +225,7 @@ describe('GET /api/dashboard — role avaliador', () => {
 
     const queries = getExecutedQueries();
     const meusQuery = queries.find(q =>
-      q.sql.includes('avaliador_id = ?') && q.sql.includes("'triagem'")
+      q.sql.includes('avaliador_id = ?') && q.sql.includes("status = 'avaliacao'")
     );
     expect(meusQuery).toBeDefined();
     expect(meusQuery!.params).toContain(3);
