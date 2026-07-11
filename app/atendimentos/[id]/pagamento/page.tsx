@@ -7,8 +7,11 @@ import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { formatarDataHora, formatarMoeda, nomeProcedimentoItem } from '@/lib/utils/formatters';
 import { cn } from '@/lib/utils';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import { apiFetch } from '@/lib/utils/apiFetch';
 import { getExecutorDestinoInicial } from '@/lib/utils/destinoExecutor';
+import { isExecutorDisponivel } from '@/lib/utils/usuariosProfissionais';
 import type { Usuario } from '@/lib/types';
+import { useAuth } from '@/contexts/AuthContext';
 import Alert from '@/components/ui/Alert';
 import LoadingState from '@/components/ui/LoadingState';
 import {
@@ -240,6 +243,7 @@ export default function PagamentoPage({
   const { id } = use(params);
   const router = useRouter();
   const unitFetch = useUnitFetch();
+  const { currentUnidade } = useAuth();
 
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
   const [pagamentos, setPagamentos] = useState<PagamentoGrupo[]>([]);
@@ -266,16 +270,21 @@ export default function PagamentoPage({
   const [errosSessao, setErrosSessao] = useState<Record<string, string>>({});
   const [historicoAberto, setHistoricoAberto] = useState(false);
 
-  const carregarExecutores = async () => {
+  const carregarExecutores = useCallback(async () => {
     try {
-      const res = await fetch('/api/usuarios');
+      const params = new URLSearchParams();
+      if (currentUnidade) {
+        params.set('unidade_id', String(currentUnidade));
+      }
+
+      const res = await apiFetch(`/api/usuarios${params.toString() ? `?${params}` : ''}`);
       if (!res.ok) return;
       const data: Usuario[] = await res.json();
-      setExecutores(data.filter((usuario) => usuario.role === 'executor' || usuario.role === 'admin'));
+      setExecutores(data.filter(isExecutorDisponivel));
     } catch {
-      // noop
+      setExecutores([]);
     }
-  };
+  }, [currentUnidade]);
 
   const carregarDados = useCallback(async () => {
     try {
@@ -361,8 +370,11 @@ export default function PagamentoPage({
 
   useEffect(() => {
     void carregarDados();
+  }, [carregarDados]);
+
+  useEffect(() => {
     void carregarExecutores();
-  }, [carregarDados, id]);
+  }, [carregarExecutores]);
 
   const linhas = useMemo<LinhaCobranca[]>(() => {
     if (!atendimento) return [];

@@ -391,6 +391,31 @@ describe('PUT /api/usuarios/[id]', () => {
     const updateQuery = queries.find(q => q.sql.includes('UPDATE usuarios'));
     expect(updateQuery!.params[1]).toBe('novo@email.com');
   });
+
+  it('atualiza vínculos de unidades do usuário', async () => {
+    mockQueryResponse('from usuarios where id', USUARIO_ATENDENTE);
+    mockQueryResponse('select unidade_id from usuario_unidades where usuario_id', [
+      { unidade_id: 2 },
+    ]);
+    mockQueryResponse('select role from usuario_roles where usuario_id', [
+      { role: 'atendente' },
+    ]);
+
+    const ctx = createRouteContext({ id: '2' });
+    const { status, data } = await callRoute<Record<string, unknown>>(updateUsuario, '/api/usuarios/2', {
+      method: 'PUT',
+      body: { unidade_ids: [2] },
+    }, ctx);
+
+    expect(status).toBe(200);
+    expect(data.unidade_ids).toEqual([2]);
+
+    const queries = getExecutedQueries();
+    const deleteUnidades = queries.find(q => q.sql.includes('DELETE FROM usuario_unidades'));
+    const insertUnidade = queries.find(q => q.sql.includes('INSERT OR IGNORE INTO usuario_unidades'));
+    expect(deleteUnidades?.params).toEqual(['2']);
+    expect(insertUnidade?.params).toEqual(['2', 2]);
+  });
 });
 
 // =============================================================================

@@ -200,6 +200,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Role primária deve estar em roles' }, { status: 400 });
     }
 
+    if (unidade_ids !== undefined && (!Array.isArray(unidade_ids) || unidade_ids.length === 0)) {
+      return NextResponse.json({ error: 'Selecione ao menos uma unidade' }, { status: 400 });
+    }
+
     const valorDiariaNum = valor_diaria === undefined ? 0 : Number(valor_diaria);
     if (!Number.isFinite(valorDiariaNum) || valorDiariaNum < 0) {
       return NextResponse.json({ error: 'valor_diaria deve ser um número maior ou igual a 0' }, { status: 400 });

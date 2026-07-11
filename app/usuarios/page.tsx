@@ -8,6 +8,7 @@ import type { TableColumn } from '@/components/ui/Table';
 import { ROLE_LABELS_DESCRITIVOS, ROLE_LABELS, ALL_ROLES } from '@/lib/constants/roles';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { formatarMoeda } from '@/lib/utils/formatters';
+import { apiFetch } from '@/lib/utils/apiFetch';
 
 interface UsuarioComUnidades extends Usuario {
   unidade_ids?: number[];
@@ -56,21 +57,69 @@ export default function UsuariosPage() {
     setConfirmDialog({ ...config, isOpen: true });
   };
 
+  const getDefaultUnidadeIds = (ids?: number[]) => {
+    const validIds = Array.isArray(ids)
+      ? Array.from(new Set(ids.filter((id) => unidades.some((unidade) => unidade.id === id))))
+      : [];
+
+    if (validIds.length > 0) {
+      return validIds;
+    }
+
+    if (unidades.length > 0) {
+      return [unidades[0].id];
+    }
+
+    return [];
+  };
+
+  const buildFormData = (usuario?: UsuarioComUnidades): UsuarioFormData => {
+    if (!usuario) {
+      return {
+        ...initialFormData,
+        unidade_ids: getDefaultUnidadeIds(),
+      };
+    }
+
+    const userRoles: UserRole[] = usuario.roles && usuario.roles.length > 0 ? usuario.roles : [usuario.role];
+    const primaria: UserRole = userRoles.includes(usuario.role) ? usuario.role : userRoles[0];
+
+    return {
+      nome: usuario.nome,
+      email: usuario.email,
+      roles: userRoles,
+      role_primaria: primaria,
+      valor_diaria: typeof usuario.valor_diaria === 'number' ? usuario.valor_diaria : 0,
+      unidade_ids: getDefaultUnidadeIds(usuario.unidade_ids),
+    };
+  };
+
   // Carregar usuários e unidades
   const loadUsuarios = async () => {
     try {
       const [resUsuarios, resUnidades] = await Promise.all([
-        fetch('/api/usuarios'),
-        fetch('/api/unidades'),
+        apiFetch('/api/usuarios'),
+        apiFetch('/api/unidades'),
       ]);
+
+      if (!resUsuarios.ok) {
+        const data = await resUsuarios.json().catch(() => null);
+        throw new Error(data?.error || 'Erro ao carregar usuários');
+      }
+
       const dataUsuarios = await resUsuarios.json();
-      setUsuarios(dataUsuarios);
+      setUsuarios(Array.isArray(dataUsuarios) ? dataUsuarios : []);
+
       if (resUnidades.ok) {
         const dataUnidades = await resUnidades.json();
-        setUnidades(dataUnidades);
+        setUnidades(Array.isArray(dataUnidades) ? dataUnidades : []);
+      } else {
+        setUnidades([]);
+        const data = await resUnidades.json().catch(() => null);
+        setError(data?.error || 'Não foi possível carregar as unidades. Faça login novamente e tente de novo.');
       }
-    } catch {
-      setError('Erro ao carregar usuários');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar usuários');
     } finally {
       setIsLoading(false);
     }
@@ -93,34 +142,48 @@ export default function UsuariosPage() {
 
   // Abrir formulário para novo usuário
   const handleNew = () => {
-    setFormData(initialFormData);
+    if (unidades.length === 0) {
+      setError('Não foi possível carregar as unidades para este cadastro.');
+      return;
+    }
+
+    setFormData(buildFormData());
     setEditingId(null);
     setShowForm(true);
     setError('');
   };
 
   // Abrir formulário para editar
-  const handleEdit = (usuario: UsuarioComUnidades) => {
-    const userRoles: UserRole[] = usuario.roles && usuario.roles.length > 0 ? usuario.roles : [usuario.role];
-    const primaria: UserRole = userRoles.includes(usuario.role) ? usuario.role : userRoles[0];
-    setFormData({
-      nome: usuario.nome,
-      email: usuario.email,
-      roles: userRoles,
-      role_primaria: primaria,
-      valor_diaria: typeof usuario.valor_diaria === 'number' ? usuario.valor_diaria : 0,
-      unidade_ids: usuario.unidade_ids || [1],
-    });
-    setEditingId(usuario.id);
-    setShowForm(true);
-    setError('');
+  const handleEdit = async (usuario: UsuarioComUnidades) => {
+    if (unidades.length === 0) {
+      setError('Não foi possível carregar as unidades para este cadastro.');
+      return;
+    }
+
+    try {
+      const response = await apiFetch(`/api/usuarios/${usuario.id}`);
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        setError(data?.error || 'Erro ao carregar dados do usuário');
+        return;
+      }
+
+      const usuarioCompleto: UsuarioComUnidades = await response.json();
+      setFormData(buildFormData(usuarioCompleto));
+      setEditingId(usuario.id);
+      setShowForm(true);
+      setError('');
+    } catch {
+      setError('Erro ao carregar dados do usuário');
+    }
   };
 
   // Cancelar formulário
   const handleCancel = () => {
     setShowForm(false);
     setEditingId(null);
-    setFormData(initialFormData);
+    setFormData(buildFormData());
     setError('');
   };
 
@@ -137,6 +200,10 @@ export default function UsuariosPage() {
       setError('Role primária deve estar entre as selecionadas');
       return;
     }
+    if (formData.unidade_ids.length === 0) {
+      setError('Selecione ao menos uma unidade');
+      return;
+    }
 
     try {
       const url = editingId ? `/api/usuarios/${editingId}` : '/api/usuarios';
@@ -151,7 +218,7 @@ export default function UsuariosPage() {
         unidade_ids: formData.unidade_ids,
       };
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -182,7 +249,7 @@ export default function UsuariosPage() {
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         try {
-          const response = await fetch(`/api/usuarios/${id}`, {
+          const response = await apiFetch(`/api/usuarios/${id}`, {
             method: 'DELETE',
           });
 
@@ -204,7 +271,7 @@ export default function UsuariosPage() {
   // Reativar usuário
   const handleReactivate = async (id: number) => {
     try {
-      const response = await fetch(`/api/usuarios/${id}`, {
+      const response = await apiFetch(`/api/usuarios/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ativo: true }),

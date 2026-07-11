@@ -124,7 +124,7 @@ describe('POST /api/usuarios — validações', () => {
     });
 
     expect(status).toBe(400);
-    expect(data.error).toBe('Role inválido');
+    expect(data.error).toBe('Role inválida: superadmin');
   });
 
   it('rejeita role vazia', async () => {
@@ -178,6 +178,16 @@ describe('POST /api/usuarios — validações', () => {
     expect(status).toBe(409);
     expect(data.error).toBe('Email já cadastrado');
   });
+
+  it('rejeita criação com unidade_ids vazia', async () => {
+    const { status, data } = await callRoute<{ error: string }>(createUsuario, '/api/usuarios', {
+      method: 'POST',
+      body: { nome: 'Sem Unidade', email: 'sem-unidade@test.com', role: 'admin', unidade_ids: [] },
+    });
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Selecione ao menos uma unidade');
+  });
 });
 
 // =============================================================================
@@ -186,7 +196,7 @@ describe('POST /api/usuarios — validações', () => {
 
 describe('PUT /api/usuarios/[id] — validações', () => {
   it('rejeita role inválida no update', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ATENDENTE);
+    mockQueryResponse('from usuarios where id', USUARIO_ATENDENTE);
 
     const ctx = createRouteContext({ id: '2' });
     const { status, data } = await callRoute<{ error: string }>(updateUsuario, '/api/usuarios/2', {
@@ -201,7 +211,7 @@ describe('PUT /api/usuarios/[id] — validações', () => {
   it.each([
     'admin', 'atendente', 'avaliador', 'executor',
   ])('aceita role válida no update: %s', async (role) => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ATENDENTE);
+    mockQueryResponse('from usuarios where id', USUARIO_ATENDENTE);
 
     const ctx = createRouteContext({ id: '2' });
     const { status } = await callRoute(updateUsuario, '/api/usuarios/2', {
@@ -213,7 +223,7 @@ describe('PUT /api/usuarios/[id] — validações', () => {
   });
 
   it('rejeita email duplicado no update (email diferente do atual)', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ATENDENTE);
+    mockQueryResponse('from usuarios where id', USUARIO_ATENDENTE);
     mockQueryResponse('select id from usuarios where email', [{ id: 1 }]);
 
     const ctx = createRouteContext({ id: '2' });
@@ -227,7 +237,7 @@ describe('PUT /api/usuarios/[id] — validações', () => {
   });
 
   it('permite manter mesmo email (não verifica duplicidade)', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ATENDENTE);
+    mockQueryResponse('from usuarios where id', USUARIO_ATENDENTE);
 
     const ctx = createRouteContext({ id: '2' });
     const { status } = await callRoute(updateUsuario, '/api/usuarios/2', {
@@ -239,7 +249,7 @@ describe('PUT /api/usuarios/[id] — validações', () => {
   });
 
   it('role vazia/falsy é ignorada (COALESCE mantém original)', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ADMIN);
+    mockQueryResponse('from usuarios where id', USUARIO_ADMIN);
 
     const ctx = createRouteContext({ id: '1' });
     const { status } = await callRoute(updateUsuario, '/api/usuarios/1', {
@@ -252,7 +262,7 @@ describe('PUT /api/usuarios/[id] — validações', () => {
   });
 
   it('ativo false → converte para 0 (inteiro)', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ADMIN);
+    mockQueryResponse('from usuarios where id', USUARIO_ADMIN);
 
     const ctx = createRouteContext({ id: '1' });
     await callRoute(updateUsuario, '/api/usuarios/1', {
@@ -264,13 +274,13 @@ describe('PUT /api/usuarios/[id] — validações', () => {
     const queries = getExecutedQueries();
     const updateQuery = queries.find(q => q.sql.includes('UPDATE usuarios'));
     // ativo deve ser 0 (número), não false (boolean)
-    const ativoParam = updateQuery!.params[3];
+    const ativoParam = updateQuery!.params[4];
     expect(ativoParam).toBe(0);
     expect(typeof ativoParam).toBe('number');
   });
 
   it('ativo true → converte para 1 (inteiro)', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_INATIVO);
+    mockQueryResponse('from usuarios where id', USUARIO_INATIVO);
 
     const ctx = createRouteContext({ id: '5' });
     await callRoute(updateUsuario, '/api/usuarios/5', {
@@ -281,13 +291,13 @@ describe('PUT /api/usuarios/[id] — validações', () => {
     const { getExecutedQueries } = await import('../../helpers/db-mock');
     const queries = getExecutedQueries();
     const updateQuery = queries.find(q => q.sql.includes('UPDATE usuarios'));
-    const ativoParam = updateQuery!.params[3];
+    const ativoParam = updateQuery!.params[4];
     expect(ativoParam).toBe(1);
     expect(typeof ativoParam).toBe('number');
   });
 
   it('ativo não enviado → null (COALESCE mantém original)', async () => {
-    mockQueryResponse('select id, nome, email, role, ativo, created_at from usuarios where id', USUARIO_ADMIN);
+    mockQueryResponse('from usuarios where id', USUARIO_ADMIN);
 
     const ctx = createRouteContext({ id: '1' });
     await callRoute(updateUsuario, '/api/usuarios/1', {
@@ -298,7 +308,20 @@ describe('PUT /api/usuarios/[id] — validações', () => {
     const { getExecutedQueries } = await import('../../helpers/db-mock');
     const queries = getExecutedQueries();
     const updateQuery = queries.find(q => q.sql.includes('UPDATE usuarios'));
-    const ativoParam = updateQuery!.params[3];
+    const ativoParam = updateQuery!.params[4];
     expect(ativoParam).toBeNull();
+  });
+
+  it('rejeita atualização com unidade_ids vazia', async () => {
+    mockQueryResponse('from usuarios where id', USUARIO_ATENDENTE);
+
+    const ctx = createRouteContext({ id: '2' });
+    const { status, data } = await callRoute<{ error: string }>(updateUsuario, '/api/usuarios/2', {
+      method: 'PUT',
+      body: { unidade_ids: [] },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Selecione ao menos uma unidade');
   });
 });

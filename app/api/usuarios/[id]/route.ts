@@ -102,6 +102,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    if (unidade_ids !== undefined && (!Array.isArray(unidade_ids) || unidade_ids.length === 0)) {
+      return NextResponse.json({ error: 'Selecione ao menos uma unidade' }, { status: 400 });
+    }
+
     // Role primária na coluna usuarios.role (CHECK constraint antigo não permite 'ortodontista')
     const primariaParaColuna = primariaBody
       ? (primariaBody === 'ortodontista' ? 'executor' : primariaBody)
