@@ -40,6 +40,10 @@ interface ItemPagamentoRow {
   valor_final: number | null;
   valor_pago: number;
   etapas_valores: string | null;
+  criado_por_id: number;
+  adicionado_em_execucao: number;
+  comissao_venda: number | null;
+  comissao_acrescimo: number | null;
 }
 
 interface PagamentoAgrupadoRow extends Pagamento {
@@ -146,9 +150,20 @@ async function validarAlocacoes(
   const placeholders = itemIds.map(() => '?').join(',');
   const itens = itemIds.length > 0
     ? await query<ItemPagamentoRow>(
-        `SELECT id, procedimento_id, valor, valor_final, valor_pago, etapas_valores
-         FROM itens_atendimento
-         WHERE atendimento_id = ? AND id IN (${placeholders})`,
+        `SELECT
+           i.id,
+           i.procedimento_id,
+           i.valor,
+           i.valor_final,
+           i.valor_pago,
+           i.etapas_valores,
+           i.criado_por_id,
+           i.adicionado_em_execucao,
+           p.comissao_venda,
+           p.comissao_acrescimo
+         FROM itens_atendimento i
+         LEFT JOIN procedimentos p ON p.id = i.procedimento_id
+         WHERE i.atendimento_id = ? AND i.id IN (${placeholders})`,
         [atendimentoId, ...itemIds]
       )
     : [];
@@ -173,7 +188,7 @@ async function validarAlocacoes(
     }
   }
 
-  return { itemIds };
+  return { itemIds, itensMap };
 }
 
 async function criarGrupoDePagamentos({
@@ -183,6 +198,7 @@ async function criarGrupoDePagamentos({
   valorTotal,
   formas,
   alocacoes,
+  itensMap,
 }: {
   atendimentoId: number;
   recebidoPorId: number;
@@ -190,6 +206,7 @@ async function criarGrupoDePagamentos({
   valorTotal: number;
   formas: PagamentoFormaInput[];
   alocacoes: NormalizedAlocacao[];
+  itensMap: Map<number, ItemPagamentoRow>;
 }) {
   const grupoResult = await execute(
     `INSERT INTO pagamentos_grupos (
@@ -242,10 +259,33 @@ async function criarGrupoDePagamentos({
       const valorAlocado = roundMoney(Math.min(saldoDaForma, alocacao.restante));
       if (valorAlocado <= 0) continue;
 
+      const item = itensMap.get(alocacao.item_id);
+      const origemComissao = item?.adicionado_em_execucao ? 'acrescimo' : 'avaliacao';
+      const percentualComissao = roundMoney(Number(
+        origemComissao === 'acrescimo'
+          ? item?.comissao_acrescimo ?? 0
+          : item?.comissao_venda ?? 0
+      ));
+
       await execute(
-        `INSERT INTO pagamentos_alocacoes (pagamento_id, item_atendimento_id, etapa_modelo_id, valor_alocado)
-         VALUES (?, ?, ?, ?)`,
-        [pagamentoId, alocacao.item_id, alocacao.etapa_modelo_id, valorAlocado]
+        `INSERT INTO pagamentos_alocacoes (
+           pagamento_id,
+           item_atendimento_id,
+           etapa_modelo_id,
+           valor_alocado,
+           criado_por_id,
+           origem_comissao,
+           percentual_comissao
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          pagamentoId,
+          alocacao.item_id,
+          alocacao.etapa_modelo_id,
+          valorAlocado,
+          item?.criado_por_id ?? null,
+          origemComissao,
+          percentualComissao,
+        ]
       );
 
       alocacao.restante = roundMoney(alocacao.restante - valorAlocado);
@@ -430,6 +470,7 @@ export const POST = withUnit(async (
         valorTotal,
         formas: formasNormalizadas,
         alocacoes: alocacoesNormalizadas,
+        itensMap: validacaoAlocacoes.itensMap,
       });
 
       await recalcularFinanceiroItens(validacaoAlocacoes.itemIds);
@@ -477,6 +518,7 @@ export const POST = withUnit(async (
       valorTotal: valorNormalizado,
       formas: [{ metodo, valor: valorNormalizado }],
       alocacoes: alocacoesNormalizadas,
+      itensMap: validacaoAlocacoes.itensMap,
     });
 
     await recalcularFinanceiroItens(validacaoAlocacoes.itemIds);

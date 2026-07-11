@@ -1,5 +1,6 @@
 import type {
   FechamentoCaixaAjusteResumo,
+  FechamentoCaixaAvaliacaoPagaDia,
   FechamentoCaixaDentista,
   FechamentoCaixaDraft,
   FechamentoCaixaLancamentoManual,
@@ -74,12 +75,25 @@ function sortProcedimentos(procedimentos: FechamentoCaixaProcedimento[]) {
   });
 }
 
+function sortAvaliacoesPagas(avaliacoes: FechamentoCaixaAvaliacaoPagaDia[]) {
+  avaliacoes.sort((a, b) => {
+    if (a.included !== b.included) return a.included ? -1 : 1;
+    const dateA = a.pago_em ? new Date(a.pago_em.replace(' ', 'T')).getTime() : 0;
+    const dateB = b.pago_em ? new Date(b.pago_em.replace(' ', 'T')).getTime() : 0;
+    if (dateB !== dateA) return dateB - dateA;
+    return a.procedimento_label.localeCompare(b.procedimento_label, 'pt-BR');
+  });
+}
+
 export function applyFechamentoCaixaDraft(
   base: FechamentoCaixaVisao,
   draft: FechamentoCaixaDraft | null | undefined
 ): FechamentoCaixaVisao {
   const safeDraft = draft ?? createEmptyFechamentoCaixaDraft();
   const result = clone(base);
+  result.avaliacoes_pagas_dia = Array.isArray(result.avaliacoes_pagas_dia)
+    ? result.avaliacoes_pagas_dia
+    : [];
   result.pagamentos_recebidos_dia = Array.isArray(result.pagamentos_recebidos_dia)
     ? result.pagamentos_recebidos_dia
     : [];
@@ -96,6 +110,11 @@ export function applyFechamentoCaixaDraft(
       procedimento.ajustes = [];
       procedimento.manualmente_editado = false;
     });
+  });
+
+  result.avaliacoes_pagas_dia.forEach((avaliacao) => {
+    avaliacao.ajustes = [];
+    avaliacao.manualmente_editado = false;
   });
 
   result.lancamentos_manuais_gerais = [];
@@ -190,6 +209,39 @@ export function applyFechamentoCaixaDraft(
     });
   });
 
+  result.avaliacoes_pagas_dia.forEach((avaliacao) => {
+    const entry = safeDraft.procedimentos[avaliacao.key];
+    if (!entry) return;
+
+    if (entry.included === false) {
+      avaliacao.included = false;
+      avaliacao.ajustes.push(
+        createAjuste(
+          'procedimento_excluido',
+          'Procedimento excluído do fechamento',
+          entry.included_motivo || 'Sem motivo informado',
+          true,
+          false
+        )
+      );
+    }
+
+    if (entry.valor_override != null) {
+      const before = avaliacao.valor_base;
+      avaliacao.valor_base = roundMoney(entry.valor_override);
+      avaliacao.valor_comissao = roundMoney(avaliacao.valor_base * (avaliacao.percentual / 100));
+      avaliacao.ajustes.push(
+        createAjuste(
+          'procedimento_valor_override',
+          'Valor do procedimento ajustado manualmente',
+          entry.valor_motivo || 'Sem motivo informado',
+          before,
+          avaliacao.valor_base
+        )
+      );
+    }
+  });
+
   safeDraft.lancamentos_manuais.forEach((lancamento) => {
     const normalized: FechamentoCaixaLancamentoManual = {
       ...lancamento,
@@ -216,13 +268,24 @@ export function applyFechamentoCaixaDraft(
   });
 
   result.dentistas.forEach((dentista) => {
+    const avaliacoesPagas = result.avaliacoes_pagas_dia.filter((item) => item.usuario_id === dentista.usuario_id);
+
     dentista.procedimentos_executados.forEach((procedimento) => {
       procedimento.manualmente_editado = procedimento.ajustes.length > 0;
     });
+    avaliacoesPagas.forEach((avaliacao) => {
+      avaliacao.manualmente_editado = avaliacao.ajustes.length > 0;
+    });
+    dentista.comissao_avaliacao = roundMoney(
+      avaliacoesPagas
+        .filter((avaliacao) => avaliacao.included)
+        .reduce((sum, avaliacao) => sum + avaliacao.valor_comissao, 0)
+    );
 
     dentista.ajuste_count =
       dentista.ajustes.length
-      + dentista.procedimentos_executados.reduce((sum, item) => sum + item.ajustes.length, 0);
+      + dentista.procedimentos_executados.reduce((sum, item) => sum + item.ajustes.length, 0)
+      + avaliacoesPagas.reduce((sum, item) => sum + item.ajustes.length, 0);
     dentista.manualmente_editado = dentista.ajuste_count > 0;
     dentista.total_dia = roundMoney(
       dentista.valor_diaria
@@ -236,11 +299,16 @@ export function applyFechamentoCaixaDraft(
   const visibleProcedimentos = visibleDentistas.flatMap((dentista) =>
     dentista.procedimentos_executados.filter((procedimento) => procedimento.included)
   );
+  const visibleAvaliacoesPagas = result.avaliacoes_pagas_dia.filter((avaliacao) =>
+    avaliacao.included && !excludedUsers.has(avaliacao.usuario_id)
+  );
   const activeGeneralAdjustments = result.lancamentos_manuais_gerais.reduce((sum, item) => sum + item.valor, 0);
 
   result.resumo.procedimentos_executados = visibleProcedimentos.length;
   result.resumo.total_diarias = roundMoney(visibleDentistas.reduce((sum, dentista) => sum + dentista.valor_diaria, 0));
-  result.resumo.total_comissao_avaliacao = roundMoney(visibleDentistas.reduce((sum, dentista) => sum + dentista.comissao_avaliacao, 0));
+  result.resumo.total_comissao_avaliacao = roundMoney(
+    visibleAvaliacoesPagas.reduce((sum, avaliacao) => sum + avaliacao.valor_comissao, 0)
+  );
   result.resumo.total_comissao_execucao = 0;
   result.resumo.ajustes_manuais = roundMoney(
     activeGeneralAdjustments
@@ -277,22 +345,22 @@ export function applyFechamentoCaixaDraft(
   const rankingAvaliadoresMap = new Map<string, { usuario_id: number; nome: string; valor_gerado: number; quantidade: number }>();
   const rankingExecutoresMap = new Map<string, { usuario_id: number; nome: string; valor_gerado: number; quantidade: number }>();
 
-  visibleProcedimentos.forEach((procedimento) => {
-    procedimento.ranking_avaliadores
-      .filter((item) => !excludedUsers.has(item.usuario_id))
-      .forEach((item) => {
-        const key = toKey(item.usuario_id);
-        const current = rankingAvaliadoresMap.get(key) ?? {
-          usuario_id: item.usuario_id,
-          nome: item.nome,
-          valor_gerado: 0,
-          quantidade: 0,
-        };
-        current.valor_gerado = roundMoney(current.valor_gerado + item.valor_gerado);
-        current.quantidade += 1;
-        rankingAvaliadoresMap.set(key, current);
-      });
+  visibleAvaliacoesPagas.forEach((avaliacao) => {
+    const dentista = result.dentistas.find((item) => item.usuario_id === avaliacao.usuario_id);
+    if (!dentista) return;
+    const key = toKey(avaliacao.usuario_id);
+    const current = rankingAvaliadoresMap.get(key) ?? {
+      usuario_id: avaliacao.usuario_id,
+      nome: dentista.nome,
+      valor_gerado: 0,
+      quantidade: 0,
+    };
+    current.valor_gerado = roundMoney(current.valor_gerado + avaliacao.valor_base);
+    current.quantidade += 1;
+    rankingAvaliadoresMap.set(key, current);
+  });
 
+  visibleProcedimentos.forEach((procedimento) => {
     procedimento.ranking_executores
       .filter((item) => !excludedUsers.has(item.usuario_id))
       .forEach((item) => {
@@ -323,6 +391,7 @@ export function applyFechamentoCaixaDraft(
 
   result.ajustes_count = countFechamentoCaixaAdjustments(safeDraft);
   result.editado_manual = result.ajustes_count > 0;
+  sortAvaliacoesPagas(result.avaliacoes_pagas_dia);
   sortDentistas(result.dentistas);
   return result;
 }

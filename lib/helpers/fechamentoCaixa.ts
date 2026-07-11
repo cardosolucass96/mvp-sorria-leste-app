@@ -15,6 +15,7 @@ import type {
   FechamentoCaixaVisao,
 } from '@/lib/fechamento-caixa/types';
 import { garantirSchemaComissoesOrigem } from './garantirComissaoSchema';
+import { garantirEsquemaPagamentosGrupos } from './pagamentosGrupos';
 import { garantirSchemaUsuariosValorDiaria } from './garantirUsuarioSchema';
 
 interface SQLiteColumn {
@@ -51,6 +52,8 @@ interface PagamentoRecebidoRow {
   atendimento_id: number;
   cliente_id: number;
   cliente_nome: string;
+  cliente_cpf: string | null;
+  cliente_telefone: string | null;
   pagamento_grupo_id: number | null;
   recebido_por_id: number | null;
   recebido_por_nome: string | null;
@@ -97,6 +100,25 @@ interface ComissaoRow {
   origem: 'avaliacao' | 'acrescimo' | 'execucao';
   valor_base: number;
   valor_comissao: number;
+}
+
+interface AvaliacaoPagaRow {
+  target_type: 'item' | 'agendamento';
+  target_id: number;
+  atendimento_id: number | null;
+  usuario_id: number | null;
+  usuario_nome: string | null;
+  usuario_valor_diaria: number | null;
+  origem: 'avaliacao' | 'acrescimo' | null;
+  percentual: number | null;
+  valor_referencia: number;
+  valor_alocado: number;
+  pago_em: string;
+  cliente_nome: string;
+  procedimento_nome: string | null;
+  etapa_label: string | null;
+  dentes: string | null;
+  dente_unico: string | null;
 }
 
 interface AvaliacaoFallback {
@@ -185,6 +207,10 @@ function buildAvaliacaoFallback(row: ProcedimentoRow, valorReferencia: number): 
   };
 }
 
+function buildFechamentoProcedureKey(targetType: 'item' | 'agendamento', targetId: number): string {
+  return `${targetType}:${targetId}`;
+}
+
 function agruparPagamentosRecebidos(rows: PagamentoRecebidoRow[]): FechamentoCaixaPagamentoRecebido[] {
   const grouped = new Map<string, FechamentoCaixaPagamentoRecebido>();
 
@@ -199,6 +225,8 @@ function agruparPagamentosRecebidos(rows: PagamentoRecebidoRow[]): FechamentoCai
         atendimento_id: row.atendimento_id,
         cliente_id: row.cliente_id,
         cliente_nome: row.cliente_nome,
+        cliente_cpf: row.cliente_cpf,
+        cliente_telefone: row.cliente_telefone,
         valor_total: roundMoney(row.grupo_valor_total ?? row.valor),
         observacoes: row.grupo_observacoes ?? row.observacoes,
         cancelado: Boolean(row.grupo_cancelado ?? row.cancelado),
@@ -231,6 +259,9 @@ function agruparPagamentosRecebidos(rows: PagamentoRecebidoRow[]): FechamentoCai
 
 function sanitizeFechamentoView(view: FechamentoCaixaVisao): FechamentoCaixaVisao {
   const sanitized = cloneJson(view);
+  sanitized.avaliacoes_pagas_dia = Array.isArray(sanitized.avaliacoes_pagas_dia)
+    ? sanitized.avaliacoes_pagas_dia
+    : [];
   sanitized.pagamentos_recebidos_dia = Array.isArray(sanitized.pagamentos_recebidos_dia)
     ? sanitized.pagamentos_recebidos_dia
     : [];
@@ -248,6 +279,9 @@ function sanitizeFechamentoView(view: FechamentoCaixaVisao): FechamentoCaixaVisa
   const visibleProcedimentos = visibleDentistas.flatMap((dentista) =>
     dentista.procedimentos_executados.filter((procedimento) => procedimento.included)
   );
+  const visibleAvaliacoesPagas = sanitized.avaliacoes_pagas_dia.filter((avaliacao) =>
+    avaliacao.included && visibleDentistas.some((dentista) => dentista.usuario_id === avaliacao.usuario_id)
+  );
   const ajustesGerais = sanitized.lancamentos_manuais_gerais.reduce((sum, item) => sum + item.valor, 0);
   const ajustesProfissionais = visibleDentistas.reduce(
     (sum, dentista) => sum + dentista.lancamentos_manuais.reduce((inner, item) => inner + item.valor, 0),
@@ -256,7 +290,9 @@ function sanitizeFechamentoView(view: FechamentoCaixaVisao): FechamentoCaixaVisa
 
   sanitized.resumo.procedimentos_executados = visibleProcedimentos.length;
   sanitized.resumo.total_diarias = roundMoney(visibleDentistas.reduce((sum, dentista) => sum + dentista.valor_diaria, 0));
-  sanitized.resumo.total_comissao_avaliacao = roundMoney(visibleDentistas.reduce((sum, dentista) => sum + dentista.comissao_avaliacao, 0));
+  sanitized.resumo.total_comissao_avaliacao = roundMoney(
+    visibleAvaliacoesPagas.reduce((sum, avaliacao) => sum + avaliacao.valor_comissao, 0)
+  );
   sanitized.resumo.total_comissao_execucao = 0;
   sanitized.resumo.ajustes_manuais = roundMoney(ajustesGerais + ajustesProfissionais);
   sanitized.resumo.total_final = roundMoney(
@@ -678,6 +714,7 @@ export async function garantirSchemaFechamentoCaixa() {
 export async function construirBaseFechamentoCaixa(unidadeId: number, dataReferencia: string): Promise<FechamentoCaixaVisao> {
   await garantirSchemaFechamentoCaixa();
   await garantirSchemaComissoesOrigem();
+  await garantirEsquemaPagamentosGrupos();
   await garantirSchemaUsuariosValorDiaria();
 
   const unidade = await queryOne<UnidadeRow>(
@@ -747,6 +784,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
        p.atendimento_id,
        a.cliente_id,
        c.nome as cliente_nome,
+       c.cpf as cliente_cpf,
+       c.telefone as cliente_telefone,
        p.pagamento_grupo_id,
        p.recebido_por_id,
        u.nome as recebido_por_nome,
@@ -770,6 +809,67 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
        AND DATE(p.created_at) = ?
      ORDER BY COALESCE(pg.created_at, p.created_at) DESC, p.created_at DESC, p.id DESC`,
     [unidadeId, dataReferencia]
+  );
+
+  const avaliacoesPagasRows = await query<AvaliacaoPagaRow>(
+    `SELECT
+       'item' as target_type,
+       pa.item_atendimento_id as target_id,
+       i.atendimento_id,
+       pa.criado_por_id as usuario_id,
+       u.nome as usuario_nome,
+       u.valor_diaria as usuario_valor_diaria,
+       pa.origem_comissao as origem,
+       pa.percentual_comissao as percentual,
+       COALESCE(i.valor_final, i.valor) as valor_referencia,
+       pa.valor_alocado,
+       pa.created_at as pago_em,
+       c.nome as cliente_nome,
+       p.nome as procedimento_nome,
+       i.etapa_label,
+       i.dentes,
+       i.dente_unico
+     FROM pagamentos_alocacoes pa
+     INNER JOIN pagamentos pg ON pg.id = pa.pagamento_id
+     INNER JOIN itens_atendimento i ON i.id = pa.item_atendimento_id
+     INNER JOIN atendimentos a ON a.id = i.atendimento_id
+     INNER JOIN clientes c ON c.id = a.cliente_id
+     INNER JOIN procedimentos p ON p.id = i.procedimento_id
+     LEFT JOIN usuarios u ON u.id = pa.criado_por_id
+     WHERE a.unidade_id = ?
+       AND pg.cancelado = 0
+       AND pa.item_atendimento_id IS NOT NULL
+
+     UNION ALL
+
+     SELECT
+       'agendamento' as target_type,
+       pa.agendamento_id as target_id,
+       ag.atendimento_origem_id as atendimento_id,
+       pa.criado_por_id as usuario_id,
+       u.nome as usuario_nome,
+       u.valor_diaria as usuario_valor_diaria,
+       pa.origem_comissao as origem,
+       pa.percentual_comissao as percentual,
+       COALESCE(ag.valor, 0) as valor_referencia,
+       pa.valor_alocado,
+       pa.created_at as pago_em,
+       c.nome as cliente_nome,
+       p.nome as procedimento_nome,
+       etapa.nome as etapa_label,
+       NULL as dentes,
+       NULL as dente_unico
+     FROM pagamentos_alocacoes pa
+     INNER JOIN pagamentos pg ON pg.id = pa.pagamento_id
+     INNER JOIN agendamentos ag ON ag.id = pa.agendamento_id
+     INNER JOIN clientes c ON c.id = ag.cliente_id
+     LEFT JOIN procedimentos p ON p.id = ag.procedimento_id
+     LEFT JOIN procedimento_etapas_modelo etapa ON etapa.id = COALESCE(pa.etapa_modelo_id, ag.etapa_modelo_id)
+     LEFT JOIN usuarios u ON u.id = pa.criado_por_id
+     WHERE ag.unidade_id = ?
+       AND pg.cancelado = 0
+       AND pa.agendamento_id IS NOT NULL`,
+    [unidadeId, unidadeId]
   );
 
   const procedimentosRows = await query<ProcedimentoRow>(

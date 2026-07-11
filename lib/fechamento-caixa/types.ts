@@ -75,6 +75,22 @@ export interface FechamentoCaixaProcedimento {
   ranking_executores: FechamentoCaixaRankingVinculo[];
 }
 
+export interface FechamentoCaixaAvaliacaoPagaDia {
+  key: string;
+  usuario_id: number;
+  cliente_nome: string;
+  procedimento_nome: string;
+  procedimento_label: string;
+  origem: 'avaliacao' | 'acrescimo';
+  percentual: number;
+  valor_base: number;
+  valor_comissao: number;
+  pago_em: string | null;
+  included: boolean;
+  manualmente_editado: boolean;
+  ajustes: FechamentoCaixaAjusteResumo[];
+}
+
 export interface FechamentoCaixaDentista {
   usuario_id: number;
   nome: string;
@@ -146,6 +162,8 @@ export interface FechamentoCaixaPagamentoRecebido {
   atendimento_id: number;
   cliente_id: number;
   cliente_nome: string;
+  cliente_cpf: string | null;
+  cliente_telefone: string | null;
   valor_total: number;
   observacoes: string | null;
   cancelado: boolean;
@@ -165,6 +183,7 @@ export interface FechamentoCaixaVisao {
   resumo: FechamentoCaixaResumo;
   graficos: FechamentoCaixaGraficos;
   dentistas: FechamentoCaixaDentista[];
+  avaliacoes_pagas_dia: FechamentoCaixaAvaliacaoPagaDia[];
   lancamentos_manuais_gerais: FechamentoCaixaLancamentoManual[];
   pagamentos_recebidos_dia: FechamentoCaixaPagamentoRecebido[];
 }
