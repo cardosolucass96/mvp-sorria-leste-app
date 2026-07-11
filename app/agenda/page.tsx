@@ -55,6 +55,8 @@ interface Usuario {
   id: number;
   nome: string;
   role: string;
+  roles?: string[];
+  ativo?: number;
 }
 
 interface ClienteBusca {
@@ -78,6 +80,12 @@ interface GrupoCliente {
   agendamentos: Agendamento[];
 }
 
+interface AgendamentosPaginadosResponse {
+  items: Agendamento[];
+  total?: number;
+  pages?: number;
+}
+
 const STATUS_OPTIONS = [
   { value: 'pendente,agendado,faltou,realizado', label: 'Ativos' },
   { value: 'pendente', label: 'Pendente' },
@@ -95,8 +103,38 @@ const FILTROS_RAPIDOS = [
   { id: 'todos', label: 'Todos' },
 ] as const;
 
+const ROLES_DENTISTA_AGENDA = ['avaliador', 'executor', 'ortodontista'] as const;
+
+function getUsuarioRoles(usuario: Usuario) {
+  return Array.isArray(usuario.roles) && usuario.roles.length > 0 ? usuario.roles : [usuario.role];
+}
+
+function isProfissionalAgenda(usuario: Usuario) {
+  if (usuario.ativo === 0) return false;
+  const roles = getUsuarioRoles(usuario);
+  return roles.includes('admin') || roles.some((role) => ROLES_DENTISTA_AGENDA.includes(role as typeof ROLES_DENTISTA_AGENDA[number]));
+}
+
 function formatDate(d: Date) {
   return d.toISOString().slice(0, 10);
+}
+
+function normalizarAgendamentosResponse(
+  response: Agendamento[] | AgendamentosPaginadosResponse
+) {
+  if (Array.isArray(response)) {
+    return {
+      items: response,
+      total: response.length,
+      pages: 1,
+    };
+  }
+
+  return {
+    items: response.items ?? [],
+    total: response.total ?? 0,
+    pages: response.pages ?? 1,
+  };
 }
 
 export default function AgendaPage() {
@@ -106,7 +144,7 @@ export default function AgendaPage() {
   const openAgenda = searchParams.get('open');
   const openAgendaClienteId = searchParams.get('cliente_id');
   const { toast } = useToast();
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, currentUnidade } = useAuth();
   const unitFetch = useUnitFetch();
 
   // Avaliador/executor só vê seus próprios agendamentos
@@ -121,6 +159,7 @@ export default function AgendaPage() {
 
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('pendente,agendado,faltou,realizado');
+  const [filtroDentista, setFiltroDentista] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [filtroRapido, setFiltroRapido] = useState<string | null>(null);
@@ -152,8 +191,8 @@ export default function AgendaPage() {
     }
   }, [viewMode]);
 
-  // Executores (para trocar executor)
-  const [executores, setExecutores] = useState<Usuario[]>([]);
+  // Profissionais da agenda (avaliadores/executores/ortodontistas)
+  const [profissionaisAgenda, setProfissionaisAgenda] = useState<Usuario[]>([]);
 
   // Confirm dialog para "Faltou"
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -233,36 +272,58 @@ export default function AgendaPage() {
       // Avaliador/executor: filtrar só seus agendamentos
       if (isDentista && user) {
         params.append('executor_id', String(user.id));
+      } else if (filtroDentista) {
+        params.append('executor_id', filtroDentista);
       }
 
       const res = await unitFetch(`/api/agendamentos?${params}`);
-      const data = await res.json();
+      const data: Agendamento[] | AgendamentosPaginadosResponse = await res.json();
       if (!res.ok) {
-        setError(data.error || 'Erro ao carregar agendamentos');
+        const errorMessage = !Array.isArray(data) && 'error' in data ? data.error : null;
+        setError(errorMessage || 'Erro ao carregar agendamentos');
         return;
       }
-      setAgendamentos(data.items ?? []);
-      setTotal(data.total ?? 0);
-      setPages(data.pages ?? 1);
+      const normalized = normalizarAgendamentosResponse(data);
+      setAgendamentos(normalized.items);
+      setTotal(normalized.total);
+      setPages(normalized.pages);
     } catch {
       setError('Erro ao carregar agendamentos');
     } finally {
       setLoading(false);
     }
-  }, [filtroStatus, busca, dataInicio, dataFim, page, isDentista, user, unitFetch, viewMode, calendarMonth]);
+  }, [filtroStatus, busca, filtroDentista, dataInicio, dataFim, page, isDentista, user, unitFetch, viewMode, calendarMonth]);
 
   useEffect(() => {
     carregarAgendamentos();
   }, [carregarAgendamentos]);
 
-  const carregarExecutores = useCallback(async () => {
-    if (executores.length > 0) return;
+  const carregarProfissionaisAgenda = useCallback(async () => {
+    if (!isAdminOrAtendente) return;
     try {
-      const res = await apiFetch('/api/usuarios');
+      const params = new URLSearchParams();
+      if (currentUnidade) {
+        params.append('unidade_id', String(currentUnidade));
+      }
+      const res = await apiFetch(`/api/usuarios${params.toString() ? `?${params}` : ''}`);
+      if (!res.ok) return;
       const data: Usuario[] = await res.json();
-      setExecutores(data.filter(u => u.role === 'executor' || u.role === 'admin'));
+      setProfissionaisAgenda(data.filter(isProfissionalAgenda));
     } catch {}
-  }, [executores.length]);
+  }, [currentUnidade, isAdminOrAtendente]);
+
+  useEffect(() => {
+    if (!isAdminOrAtendente) {
+      setProfissionaisAgenda([]);
+      setFiltroDentista('');
+      return;
+    }
+    void carregarProfissionaisAgenda();
+  }, [isAdminOrAtendente, carregarProfissionaisAgenda]);
+
+  useEffect(() => {
+    setFiltroDentista('');
+  }, [currentUnidade]);
 
   // ─── Novo agendamento ─────────────────────────────────────────
 
@@ -277,7 +338,7 @@ export default function AgendaPage() {
     setNovoExecId('');
     setNovoData('');
     setNovoObs('');
-    // Carrega procedimentos e executores
+    // Carrega procedimentos e profissionais da agenda
     if (novoProcedimentos.length === 0) {
       try {
         const res = await apiFetch('/api/procedimentos');
@@ -305,8 +366,8 @@ export default function AgendaPage() {
         setNovoError('Não foi possível carregar o cliente para pré-seleção.');
       }
     }
-    carregarExecutores();
-  }, [novoProcedimentos.length, carregarExecutores]);
+    void carregarProfissionaisAgenda();
+  }, [novoProcedimentos.length, carregarProfissionaisAgenda]);
 
   useEffect(() => {
     if (openAgenda !== '1') return;
@@ -839,7 +900,7 @@ export default function AgendaPage() {
                     if (ag.executor_nome) {
                       return podTrocar ? (
                         <button
-                          onClick={(e) => { e.stopPropagation(); carregarExecutores(); setExecutorDialog({ isOpen: true, agendamento: ag, executorId: String(ag.executor_id ?? '') }); }}
+                          onClick={(e) => { e.stopPropagation(); void carregarProfissionaisAgenda(); setExecutorDialog({ isOpen: true, agendamento: ag, executorId: String(ag.executor_id ?? '') }); }}
                           className="block text-xs text-muted-foreground transition-colors hover:text-primary-600 hover:underline"
                           title={`Clique para trocar ${roleLabel.toLowerCase()}`}
                         >
@@ -851,7 +912,7 @@ export default function AgendaPage() {
                     }
                     return podTrocar ? (
                       <button
-                        onClick={(e) => { e.stopPropagation(); carregarExecutores(); setExecutorDialog({ isOpen: true, agendamento: ag, executorId: '' }); }}
+                        onClick={(e) => { e.stopPropagation(); void carregarProfissionaisAgenda(); setExecutorDialog({ isOpen: true, agendamento: ag, executorId: '' }); }}
                         className="block text-xs italic text-muted-foreground transition-colors hover:text-primary-600 hover:underline"
                         title={`Clique para definir ${roleLabel.toLowerCase()}`}
                       >
@@ -924,6 +985,24 @@ export default function AgendaPage() {
               placeholder="Todos"
             />
           </div>
+          {isAdminOrAtendente && (
+            <div className="min-w-[240px]">
+              <Select
+                label="Dentista"
+                name="filtroDentista"
+                value={filtroDentista}
+                onChange={(value) => {
+                  setFiltroDentista(value);
+                  setPage(1);
+                }}
+                options={profissionaisAgenda.map((profissional) => ({
+                  value: String(profissional.id),
+                  label: profissional.nome,
+                }))}
+                placeholder="Todos os dentistas"
+              />
+            </div>
+          )}
           {viewMode === 'lista' && (
             <>
               <div className="min-w-[160px]">
@@ -1185,19 +1264,26 @@ export default function AgendaPage() {
 
       {/* Trocar executor */}
       {executorDialog.isOpen && executorDialog.agendamento && (
-        <Modal isOpen onClose={() => setExecutorDialog({ isOpen: false, agendamento: null, executorId: '' })} title="Trocar Executor">
+        <Modal
+          isOpen
+          onClose={() => setExecutorDialog({ isOpen: false, agendamento: null, executorId: '' })}
+          title={executorDialog.agendamento.tipo === 'avaliacao' ? 'Trocar Avaliador' : 'Trocar Executor'}
+        >
           <p className="mb-4 text-sm text-muted-foreground">
             {executorDialog.agendamento.procedimento_nome}
             {executorDialog.agendamento.etapa_modelo_nome && ` — ${executorDialog.agendamento.etapa_modelo_nome}`}
           </p>
           <Select
-            label="Executor"
+            label={executorDialog.agendamento.tipo === 'avaliacao' ? 'Avaliador' : 'Executor'}
             name="executor_id"
             value={executorDialog.executorId}
             onChange={(v) => setExecutorDialog(prev => ({ ...prev, executorId: v }))}
             options={[
-              { value: '', label: 'Sem executor' },
-              ...executores.map(ex => ({ value: String(ex.id), label: ex.nome })),
+              { value: '', label: executorDialog.agendamento.tipo === 'avaliacao' ? 'Sem avaliador' : 'Sem executor' },
+              ...profissionaisAgenda.map((profissional) => ({
+                value: String(profissional.id),
+                label: profissional.nome,
+              })),
             ]}
           />
           <div className="flex justify-end gap-2 mt-4">
@@ -1320,7 +1406,10 @@ export default function AgendaPage() {
                 onChange={setNovoExecId}
                 options={[
                   { value: '', label: novoTipo === 'avaliacao' ? 'Sem avaliador' : 'Sem executor' },
-                  ...executores.map(ex => ({ value: String(ex.id), label: ex.nome })),
+                  ...profissionaisAgenda.map((profissional) => ({
+                    value: String(profissional.id),
+                    label: profissional.nome,
+                  })),
                 ]}
               />
             ) : (

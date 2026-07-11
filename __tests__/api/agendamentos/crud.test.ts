@@ -19,7 +19,6 @@ import {
   CLIENTE_BASICO,
   CLIENTE_COMPLETO,
   PROC_LIMPEZA,
-  PROC_CANAL,
   USUARIO_EXECUTOR,
   USUARIO_ADMIN,
 } from '../../helpers/seed';
@@ -162,6 +161,20 @@ describe('GET /api/agendamentos', () => {
     const queries = getExecutedQueries();
     const selectQuery = queries.find(q => q.sql.includes('FROM agendamentos'));
     expect(selectQuery?.sql).toContain('c.nome LIKE');
+  });
+
+  it('filtra por dentista responsável', async () => {
+    mockQueryResponse('from agendamentos', [AGENDAMENTO_PROCEDIMENTO]);
+    mockQueryResponse('count(*) as total', [{ total: 1 }]);
+
+    await callRoute(listAgendamentos, '/api/agendamentos', {
+      searchParams: { page: '1', executor_id: '4' },
+    });
+
+    const queries = getExecutedQueries();
+    const selectQuery = queries.find(q => q.sql.includes('FROM agendamentos'));
+    expect(selectQuery?.sql).toContain('a.executor_id = ?');
+    expect(selectQuery?.params).toContain(4);
   });
 
   it('filtra por data_inicio e data_fim', async () => {
