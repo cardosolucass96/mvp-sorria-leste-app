@@ -212,11 +212,15 @@ CREATE TABLE IF NOT EXISTS pagamentos_alocacoes (
   agendamento_id INTEGER,
   etapa_modelo_id INTEGER,
   valor_alocado REAL NOT NULL,
+  criado_por_id INTEGER,
+  origem_comissao TEXT CHECK (origem_comissao IN ('avaliacao', 'acrescimo')),
+  percentual_comissao REAL,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   FOREIGN KEY (pagamento_id) REFERENCES pagamentos(id),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
   FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id),
-  FOREIGN KEY (etapa_modelo_id) REFERENCES procedimento_etapas_modelo(id)
+  FOREIGN KEY (etapa_modelo_id) REFERENCES procedimento_etapas_modelo(id),
+  FOREIGN KEY (criado_por_id) REFERENCES usuarios(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_pagamentos_grupos_atendimento ON pagamentos_grupos(atendimento_id);

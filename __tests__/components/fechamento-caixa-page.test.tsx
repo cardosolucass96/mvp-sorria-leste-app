@@ -114,6 +114,27 @@ function createResponseFixture(): FechamentoCaixaResponse {
         ranking_executores: [{ usuario_id: 5, nome: 'Dra. Alice', valor_gerado: 250 }],
       }],
     }],
+    avaliacoes_pagas_dia: [{
+      key: 'item:1',
+      usuario_id: 5,
+      cliente_nome: 'Maria',
+      procedimento_nome: 'Limpeza',
+      procedimento_label: 'Limpeza',
+      origem: 'avaliacao' as const,
+      percentual: 12,
+      valor_base: 250,
+      valor_comissao: 30,
+      pago_em: '2026-06-07 09:20:00',
+      included: true,
+      manualmente_editado: true,
+      ajustes: [{
+        tipo: 'procedimento_valor_override' as const,
+        label: 'Valor do procedimento ajustado manualmente',
+        motivo: 'Conferido na revisão',
+        antes: 230,
+        depois: 250,
+      }],
+    }],
     lancamentos_manuais_gerais: [],
     pagamentos_recebidos_dia: [{
       id: 'grupo:1',
@@ -260,7 +281,7 @@ describe('FechamentoCaixaPage', () => {
     expect(screen.getByText('Cancelamentos do dia')).toBeInTheDocument();
     expect(screen.getByText('Detalhamento por dentista')).toBeInTheDocument();
     expect(screen.getByText('Comissão avaliação + acréscimos')).toBeInTheDocument();
-    expect(screen.getByText('Procedimentos executados no dia com comissão de avaliação ou acréscimo')).toBeInTheDocument();
+    expect(screen.getByText('Procedimentos pagos no dia com comissão de avaliação ou acréscimo')).toBeInTheDocument();
     expect(screen.getByText('Paula')).toBeInTheDocument();
     expect(screen.getByText('Pagamento do dia conferido')).toBeInTheDocument();
     expect(screen.getByText('Telefone: (11) 99876-5432')).toBeInTheDocument();

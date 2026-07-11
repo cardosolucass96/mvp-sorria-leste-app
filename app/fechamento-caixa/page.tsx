@@ -154,61 +154,44 @@ interface AvaliacaoProcedimentoListItem {
   key: string;
   procedimento_label: string;
   cliente_nome: string;
-  concluido_at: string | null;
-  valor: number;
-  valor_gerado: number;
+  pago_em: string | null;
+  valor_base: number;
   valor_comissao: number;
   origem: 'avaliacao' | 'acrescimo';
   included: boolean;
   manualmente_editado: boolean;
-  ajustes: FechamentoCaixaVisao['dentistas'][number]['procedimentos_executados'][number]['ajustes'];
+  ajustes: FechamentoCaixaVisao['avaliacoes_pagas_dia'][number]['ajustes'];
 }
 
 type ProcedimentoExecutadoListItem = FechamentoCaixaVisao['dentistas'][number]['procedimentos_executados'][number];
+type ProcedimentoAjustavelListItem = ProcedimentoExecutadoListItem | FechamentoCaixaVisao['avaliacoes_pagas_dia'][number];
 type PagamentoRecebidoListItem = FechamentoCaixaVisao['pagamentos_recebidos_dia'][number];
 
 function buildAvaliadosPorDentista(
-  dentistas: FechamentoCaixaVisao['dentistas']
+  fechamento: FechamentoCaixaVisao | null
 ): Map<number, AvaliacaoProcedimentoListItem[]> {
   const grouped = new Map<number, Map<string, AvaliacaoProcedimentoListItem>>();
+  if (!fechamento) return new Map<number, AvaliacaoProcedimentoListItem[]>();
 
-  dentistas.forEach((dentista) => {
+  fechamento.dentistas.forEach((dentista) => {
     grouped.set(dentista.usuario_id, new Map());
   });
 
-  dentistas.forEach((dentista) => {
-    dentista.procedimentos_executados.forEach((procedimento) => {
-      procedimento.ranking_avaliadores.forEach((vinculo) => {
-        const valorComissao = roundMoney(vinculo.valor_comissao ?? 0);
-        if (valorComissao <= 0) return;
+  fechamento.avaliacoes_pagas_dia.forEach((avaliacao) => {
+    const current = grouped.get(avaliacao.usuario_id);
+    if (!current) return;
 
-        const current = grouped.get(vinculo.usuario_id);
-        if (!current) return;
-
-        const origem = vinculo.origem === 'acrescimo' ? 'acrescimo' : 'avaliacao';
-        const compositeKey = `${procedimento.key}:${origem}`;
-        const existing = current.get(compositeKey);
-
-        if (existing) {
-          existing.valor_gerado = roundMoney(existing.valor_gerado + vinculo.valor_gerado);
-          existing.valor_comissao = roundMoney(existing.valor_comissao + valorComissao);
-          return;
-        }
-
-        current.set(compositeKey, {
-          key: procedimento.key,
-          procedimento_label: procedimento.procedimento_label,
-          cliente_nome: procedimento.cliente_nome,
-          concluido_at: procedimento.concluido_at,
-          valor: procedimento.valor,
-          valor_gerado: roundMoney(vinculo.valor_gerado),
-          valor_comissao: valorComissao,
-          origem,
-          included: procedimento.included,
-          manualmente_editado: procedimento.manualmente_editado,
-          ajustes: procedimento.ajustes,
-        });
-      });
+    current.set(avaliacao.key, {
+      key: avaliacao.key,
+      procedimento_label: avaliacao.procedimento_label,
+      cliente_nome: avaliacao.cliente_nome,
+      pago_em: avaliacao.pago_em,
+      valor_base: roundMoney(avaliacao.valor_base),
+      valor_comissao: roundMoney(avaliacao.valor_comissao),
+      origem: avaliacao.origem,
+      included: avaliacao.included,
+      manualmente_editado: avaliacao.manualmente_editado,
+      ajustes: avaliacao.ajustes,
     });
   });
 
@@ -216,8 +199,8 @@ function buildAvaliadosPorDentista(
 
   grouped.forEach((itemsByKey, usuarioId) => {
     const sortedItems = Array.from(itemsByKey.values()).sort((a, b) => {
-      const dateA = a.concluido_at ? new Date(a.concluido_at.replace(' ', 'T')).getTime() : 0;
-      const dateB = b.concluido_at ? new Date(b.concluido_at.replace(' ', 'T')).getTime() : 0;
+      const dateA = a.pago_em ? new Date(a.pago_em.replace(' ', 'T')).getTime() : 0;
+      const dateB = b.pago_em ? new Date(b.pago_em.replace(' ', 'T')).getTime() : 0;
       if (dateB !== dateA) return dateB - dateA;
       return a.procedimento_label.localeCompare(b.procedimento_label, 'pt-BR');
     });
@@ -394,8 +377,14 @@ export default function FechamentoCaixaPage() {
     return base?.dentistas.find((item) => item.usuario_id === usuarioId) ?? null;
   }, [base]);
 
-  const findBaseProcedure = useCallback((itemKey: string) => {
-    return base?.dentistas.flatMap((item) => item.procedimentos_executados).find((item) => item.key === itemKey) ?? null;
+  const findBaseProcedure = useCallback((itemKey: string): ProcedimentoAjustavelListItem | null => {
+    const procedimentoExecutado = base?.dentistas
+      .flatMap((item) => item.procedimentos_executados)
+      .find((item) => item.key === itemKey);
+    if (procedimentoExecutado) {
+      return procedimentoExecutado;
+    }
+    return base?.avaliacoes_pagas_dia.find((item) => item.key === itemKey) ?? null;
   }, [base]);
 
   const persistDraft = useCallback(async (customDraft?: FechamentoCaixaDraft) => {
@@ -567,7 +556,7 @@ export default function FechamentoCaixaPage() {
         `).join('')
       : '<tr><td colspan="3" class="muted">Sem dados</td></tr>';
 
-    const procedimentosAvaliadosPorDentista = buildAvaliadosPorDentista(resultado.dentistas);
+    const procedimentosAvaliadosPorDentista = buildAvaliadosPorDentista(resultado);
     const profissionaisHtml = resultado.dentistas.map((dentista) => {
       const procedimentosAvaliados = procedimentosAvaliadosPorDentista.get(dentista.usuario_id) ?? [];
       const procedimentosAvaliadosHtml = procedimentosAvaliados.length > 0
@@ -575,12 +564,13 @@ export default function FechamentoCaixaPage() {
             <tr>
               <td>${escapeHtml(procedimento.procedimento_label)}</td>
               <td>${escapeHtml(procedimento.cliente_nome)}</td>
+              <td>${escapeHtml(formatarDataHora(procedimento.pago_em))}</td>
               <td>${escapeHtml(procedimento.origem === 'acrescimo' ? 'Comissão de acréscimo' : 'Comissão de avaliação')}</td>
               <td style="text-align:right">${formatarMoeda(procedimento.valor_comissao)}</td>
-              <td style="text-align:right">${formatarMoeda(procedimento.valor_gerado)}</td>
+              <td style="text-align:right">${formatarMoeda(procedimento.valor_base)}</td>
             </tr>
           `).join('')
-        : '<tr><td colspan="5" class="muted">Sem procedimentos executados no dia com comissão de avaliação ou acréscimo</td></tr>';
+        : '<tr><td colspan="6" class="muted">Sem procedimentos pagos no dia com comissão de avaliação ou acréscimo</td></tr>';
 
       const procedimentos = dentista.procedimentos_executados.length > 0
         ? dentista.procedimentos_executados.map((procedimento) => `
@@ -616,8 +606,9 @@ export default function FechamentoCaixaPage() {
           <table>
             <thead>
               <tr>
-                <th>Procedimento executado</th>
+                <th>Procedimento pago</th>
                 <th>Cliente</th>
+                <th>Pago em</th>
                 <th>Tipo</th>
                 <th>Comissão</th>
                 <th>Base</th>
@@ -808,8 +799,8 @@ export default function FechamentoCaixaPage() {
   );
   const currentResultado = resultado;
   const procedimentosAvaliadosPorDentista = useMemo(
-    () => buildAvaliadosPorDentista(currentDentistas),
-    [currentDentistas]
+    () => buildAvaliadosPorDentista(currentResultado),
+    [currentResultado]
   );
   const historicoRelevante = useMemo(
     () => recentes.filter((item) => item.data_referencia !== selectedDate),
@@ -1346,17 +1337,17 @@ export default function FechamentoCaixaPage() {
                   ),
                 },
                 {
-                  key: 'concluido_at',
-                  label: 'Concluído em',
+                  key: 'pago_em',
+                  label: 'Pago em',
                   render: (procedimento) => (
-                    <span className="text-sm text-muted-foreground">{formatarDataHora(procedimento.concluido_at)}</span>
+                    <span className="text-sm text-muted-foreground">{formatarDataHora(procedimento.pago_em)}</span>
                   ),
                 },
                 {
-                  key: 'valor_gerado',
+                  key: 'valor_base',
                   label: 'Base',
                   align: 'right',
-                  render: (procedimento) => <span className="font-semibold text-primary-600">{formatarMoeda(procedimento.valor_gerado)}</span>,
+                  render: (procedimento) => <span className="font-semibold text-primary-600">{formatarMoeda(procedimento.valor_base)}</span>,
                 },
                 {
                   key: 'valor_comissao',
@@ -1386,12 +1377,12 @@ export default function FechamentoCaixaPage() {
                         size="sm"
                         icon={<Pencil className="w-4 h-4" />}
                         disabled={readOnly}
-                        onClick={() => setEditProcedureModal({
-                          open: true,
-                          itemKey: procedimento.key,
-                          valor: formatNumberInput(procedimento.valor),
-                          motivo: '',
-                        })}
+                          onClick={() => setEditProcedureModal({
+                            open: true,
+                            itemKey: procedimento.key,
+                            valor: formatNumberInput(procedimento.valor_base),
+                            motivo: '',
+                          })}
                       >
                         Editar valor
                       </Button>
@@ -1654,7 +1645,7 @@ export default function FechamentoCaixaPage() {
 
                       <div className="space-y-3">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-semibold">Procedimentos executados no dia com comissão de avaliação ou acréscimo</p>
+                          <p className="text-sm font-semibold">Procedimentos pagos no dia com comissão de avaliação ou acréscimo</p>
                           <Badge color="gray">{procedimentosAvaliados.length}</Badge>
                         </div>
 
@@ -1662,11 +1653,11 @@ export default function FechamentoCaixaPage() {
                           <Table
                             columns={procedimentosAvaliadosColumns}
                             data={procedimentosAvaliados}
-                            keyExtractor={(procedimento) => `${procedimento.key}-${procedimento.origem}`}
-                            emptyMessage="Sem procedimentos executados no dia com comissão de avaliação ou acréscimo."
+                            keyExtractor={(procedimento) => procedimento.key}
+                            emptyMessage="Sem procedimentos pagos no dia com comissão de avaliação ou acréscimo."
                           />
                         ) : (
-                          <p className="text-sm text-muted-foreground">Sem procedimentos executados no dia com comissão de avaliação ou acréscimo.</p>
+                          <p className="text-sm text-muted-foreground">Sem procedimentos pagos no dia com comissão de avaliação ou acréscimo.</p>
                         )}
                       </div>
 
@@ -1802,7 +1793,8 @@ export default function FechamentoCaixaPage() {
                 if (!baseProcedure) return;
 
                 const valor = roundMoney(parseCurrencyInput(editProcedureModal.valor));
-                const changed = valor !== roundMoney(baseProcedure.valor);
+                const valorBaseAtual = roundMoney('valor' in baseProcedure ? baseProcedure.valor : baseProcedure.valor_base);
+                const changed = valor !== valorBaseAtual;
                 if (changed && !editProcedureModal.motivo.trim()) {
                   toast.error('Informe o motivo do ajuste manual.');
                   return;

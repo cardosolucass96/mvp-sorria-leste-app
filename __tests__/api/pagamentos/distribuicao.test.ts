@@ -34,10 +34,31 @@ describe('POST /api/atendimentos/[id]/pagamentos — alocação explícita', () 
   function mockFluxoPadrao() {
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
     mockQueryResponse('status, procedimento_id, etapas_valores', {
-      id: 101, valor: 500, valor_final: 500, valor_pago: 0, status: 'pendente', procedimento_id: 1, etapas_valores: null,
+      id: 101,
+      valor: 500,
+      valor_final: 500,
+      valor_pago: 0,
+      status: 'pendente',
+      procedimento_id: 1,
+      etapas_valores: null,
+      criado_por_id: 3,
+      adicionado_em_execucao: 0,
+      comissao_venda: 10,
+      comissao_acrescimo: 15,
     });
     mockQueryResponse('from itens_atendimento', [
-      { id: 101, procedimento_id: 1, valor: 500, valor_final: 500, valor_pago: 0, etapas_valores: null },
+      {
+        id: 101,
+        procedimento_id: 1,
+        valor: 500,
+        valor_final: 500,
+        valor_pago: 0,
+        etapas_valores: null,
+        criado_por_id: 3,
+        adicionado_em_execucao: 0,
+        comissao_venda: 10,
+        comissao_acrescimo: 15,
+      },
     ]);
     mockQueryResponse('coalesce(sum(pa.valor_alocado), 0) as total', { total: 500 });
   }
@@ -60,7 +81,11 @@ describe('POST /api/atendimentos/[id]/pagamentos — alocação explícita', () 
     expect(status).toBe(201);
 
     const queries = getExecutedQueries();
-    expect(queries.some((query) => query.sql.includes('INSERT INTO pagamentos_alocacoes'))).toBe(true);
+    const insertAlocacao = queries.find((query) => query.sql.includes('INSERT INTO pagamentos_alocacoes'));
+    expect(insertAlocacao).toBeTruthy();
+    expect(insertAlocacao?.sql).toContain('criado_por_id');
+    expect(insertAlocacao?.sql).toContain('origem_comissao');
+    expect(insertAlocacao?.sql).toContain('percentual_comissao');
   });
 
   it('rejeita quando não há alocações', async () => {

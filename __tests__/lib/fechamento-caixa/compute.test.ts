@@ -102,6 +102,38 @@ function createBaseVisao(): FechamentoCaixaVisao {
         ],
       },
     ],
+    avaliacoes_pagas_dia: [
+      {
+        key: 'item:1',
+        usuario_id: 1,
+        cliente_nome: 'Maria',
+        procedimento_nome: 'Limpeza',
+        procedimento_label: 'Limpeza',
+        origem: 'avaliacao',
+        percentual: 50,
+        valor_base: 100,
+        valor_comissao: 50,
+        pago_em: '2026-06-07 08:00:00',
+        included: true,
+        manualmente_editado: false,
+        ajustes: [],
+      },
+      {
+        key: 'item:2',
+        usuario_id: 2,
+        cliente_nome: 'João',
+        procedimento_nome: 'Canal',
+        procedimento_label: 'Canal',
+        origem: 'avaliacao',
+        percentual: 6.67,
+        valor_base: 300,
+        valor_comissao: 20,
+        pago_em: '2026-06-07 10:00:00',
+        included: true,
+        manualmente_editado: false,
+        ajustes: [],
+      },
+    ],
     lancamentos_manuais_gerais: [],
     pagamentos_recebidos_dia: [
       {
@@ -194,7 +226,8 @@ describe('fechamento-caixa compute', () => {
     expect(result.dentistas[0].nome).toBe('Dra. Ana');
     expect(result.dentistas[0].valor_diaria).toBe(150);
     expect(result.dentistas[0].comissao_execucao).toBe(0);
-    expect(result.dentistas[0].total_dia).toBe(190);
+    expect(result.dentistas[0].comissao_avaliacao).toBe(60);
+    expect(result.dentistas[0].total_dia).toBe(200);
     expect(result.dentistas[0].manualmente_editado).toBe(true);
     expect(result.dentistas[0].lancamentos_manuais).toHaveLength(1);
 
@@ -203,16 +236,29 @@ describe('fechamento-caixa compute', () => {
 
     expect(result.resumo.procedimentos_executados).toBe(1);
     expect(result.resumo.total_diarias).toBe(150);
-    expect(result.resumo.total_comissao_avaliacao).toBe(50);
+    expect(result.resumo.total_comissao_avaliacao).toBe(60);
     expect(result.resumo.total_comissao_execucao).toBe(0);
     expect(result.resumo.ajustes_manuais).toBe(40);
-    expect(result.resumo.total_final).toBe(840);
+    expect(result.resumo.total_final).toBe(830);
 
     expect(result.graficos.procedimentos_por_quantidade).toEqual([
       { nome: 'Limpeza', quantidade: 1, valor_total: 120 },
     ]);
     expect(result.graficos.ranking_avaliadores).toEqual([
       { usuario_id: 1, nome: 'Dra. Ana', valor_gerado: 120, quantidade: 1 },
+    ]);
+    expect(result.avaliacoes_pagas_dia).toMatchObject([
+      {
+        key: 'item:2',
+        included: true,
+        manualmente_editado: false,
+      },
+      {
+        key: 'item:1',
+        valor_base: 120,
+        valor_comissao: 60,
+        manualmente_editado: true,
+      },
     ]);
     expect(result.graficos.ranking_executores).toEqual([
       { usuario_id: 1, nome: 'Dra. Ana', valor_gerado: 120, quantidade: 1 },

@@ -46,39 +46,54 @@ describe('obterFechamentoCaixaResponse', () => {
     teardownCloudflareContextMock();
   });
 
-  it('atribui comissão ao avaliador original com base no procedimento executado do dia', async () => {
+  it('atribui comissão ao avaliador original com base no procedimento quitado no dia', async () => {
     mockCommonQueries();
-    mockQueryResponse('from itens_atendimento i', [
+    mockQueryResponse('from pagamentos_alocacoes pa', [
       {
-        item_id: 1,
+        target_type: 'item',
+        target_id: 1,
         atendimento_id: 70,
-        executor_id: 20,
-        executor_nome: 'Dra. Ana Executora',
-        executor_valor_diaria: 100,
-        criado_por_id: 10,
-        criado_por_nome: 'Dr. Carlos Avaliador',
-        criado_por_valor_diaria: 80,
-        adicionado_em_execucao: 0,
-        comissao_venda: 10,
-        comissao_acrescimo: 15,
-        valor: 200,
-        concluido_at: '2026-06-07 16:45:00',
+        usuario_id: 10,
+        usuario_nome: 'Dr. Carlos Avaliador',
+        usuario_valor_diaria: 80,
+        origem: 'avaliacao',
+        percentual: 10,
+        valor_referencia: 200,
+        valor_alocado: 200,
+        pago_em: '2026-06-07 16:45:00',
+        cliente_nome: 'Paciente Teste',
+        procedimento_nome: 'Limpeza',
+        etapa_label: null,
         dentes: null,
         dente_unico: null,
-        etapa_label: null,
-        procedimento_nome: 'Limpeza',
-        cliente_nome: 'Paciente Teste',
       },
     ]);
+    mockQueryResponse('from itens_atendimento i', []);
 
     const response = await obterFechamentoCaixaResponse(1, '2026-06-07');
     const avaliador = response.resultado.dentistas.find((item) => item.usuario_id === 10);
-    const executor = response.resultado.dentistas.find((item) => item.usuario_id === 20);
 
-    expect(response.resultado.resumo.procedimentos_executados).toBe(1);
+    expect(response.resultado.resumo.procedimentos_executados).toBe(0);
     expect(response.resultado.resumo.total_comissao_avaliacao).toBe(20);
     expect(response.resultado.graficos.ranking_avaliadores).toEqual([
       { usuario_id: 10, nome: 'Dr. Carlos Avaliador', valor_gerado: 200, quantidade: 1 },
+    ]);
+    expect(response.resultado.avaliacoes_pagas_dia).toEqual([
+      {
+        key: 'item:1',
+        usuario_id: 10,
+        cliente_nome: 'Paciente Teste',
+        procedimento_nome: 'Limpeza',
+        procedimento_label: 'Limpeza',
+        origem: 'avaliacao',
+        percentual: 10,
+        valor_base: 200,
+        valor_comissao: 20,
+        pago_em: '2026-06-07 16:45:00',
+        included: true,
+        manualmente_editado: false,
+        ajustes: [],
+      },
     ]);
 
     expect(avaliador).toMatchObject({
@@ -88,57 +103,209 @@ describe('obterFechamentoCaixaResponse', () => {
       total_dia: 100,
     });
     expect(avaliador?.procedimentos_executados).toHaveLength(0);
+  });
 
-    expect(executor?.procedimentos_executados[0].ranking_avaliadores).toEqual([
+  it('usa comissão de acréscimo quando o procedimento foi quitado no dia', async () => {
+    mockCommonQueries();
+    mockQueryResponse('from pagamentos_alocacoes pa', [
       {
+        target_type: 'item',
+        target_id: 2,
+        atendimento_id: 71,
         usuario_id: 10,
-        nome: 'Dr. Carlos Avaliador',
-        valor_gerado: 200,
-        valor_comissao: 20,
-        origem: 'avaliacao',
+        usuario_nome: 'Dr. Carlos Avaliador',
+        usuario_valor_diaria: 80,
+        origem: 'acrescimo',
+        percentual: 12,
+        valor_referencia: 300,
+        valor_alocado: 300,
+        pago_em: '2026-06-07 17:10:00',
+        cliente_nome: 'Paciente Acréscimo',
+        procedimento_nome: 'Teste Mult',
+        etapa_label: null,
+        dentes: null,
+        dente_unico: null,
+      },
+    ]);
+    mockQueryResponse('from itens_atendimento i', []);
+
+    const response = await obterFechamentoCaixaResponse(1, '2026-06-07');
+
+    expect(response.resultado.resumo.total_comissao_avaliacao).toBe(36);
+    expect(response.resultado.graficos.ranking_avaliadores).toEqual([
+      { usuario_id: 10, nome: 'Dr. Carlos Avaliador', valor_gerado: 300, quantidade: 1 },
+    ]);
+    expect(response.resultado.avaliacoes_pagas_dia).toEqual([
+      {
+        key: 'item:2',
+        usuario_id: 10,
+        cliente_nome: 'Paciente Acréscimo',
+        procedimento_nome: 'Teste Mult',
+        procedimento_label: 'Teste Mult',
+        percentual: 12,
+        valor_base: 300,
+        valor_comissao: 36,
+        origem: 'acrescimo',
+        pago_em: '2026-06-07 17:10:00',
+        included: true,
+        manualmente_editado: false,
+        ajustes: [],
       },
     ]);
   });
 
-  it('usa comissão de acréscimo quando o procedimento foi adicionado na execução e concluído no dia', async () => {
+  it('não contabiliza comissão de avaliação no dia da execução quando a quitação ocorreu antes', async () => {
     mockCommonQueries();
+    mockQueryResponse('from pagamentos_alocacoes pa', [
+      {
+        target_type: 'item',
+        target_id: 3,
+        atendimento_id: 72,
+        usuario_id: 10,
+        usuario_nome: 'Dr. Carlos Avaliador',
+        usuario_valor_diaria: 80,
+        origem: 'avaliacao',
+        percentual: 10,
+        valor_referencia: 400,
+        valor_alocado: 400,
+        pago_em: '2026-06-06 18:00:00',
+        cliente_nome: 'Paciente Antecipado',
+        procedimento_nome: 'Canal',
+        etapa_label: null,
+        dentes: null,
+        dente_unico: null,
+      },
+    ]);
     mockQueryResponse('from itens_atendimento i', [
       {
-        item_id: 2,
-        atendimento_id: 71,
+        item_id: 3,
+        atendimento_id: 72,
         executor_id: 20,
         executor_nome: 'Dra. Ana Executora',
         executor_valor_diaria: 100,
         criado_por_id: 10,
         criado_por_nome: 'Dr. Carlos Avaliador',
         criado_por_valor_diaria: 80,
-        adicionado_em_execucao: 1,
+        adicionado_em_execucao: 0,
         comissao_venda: 10,
-        comissao_acrescimo: 12,
-        valor: 300,
-        concluido_at: '2026-06-07 17:10:00',
+        comissao_acrescimo: 15,
+        valor: 400,
+        concluido_at: '2026-06-07 11:10:00',
         dentes: null,
         dente_unico: null,
         etapa_label: null,
-        procedimento_nome: 'Teste Mult',
-        cliente_nome: 'Paciente Acréscimo',
+        procedimento_nome: 'Canal',
+        cliente_nome: 'Paciente Antecipado',
       },
     ]);
 
     const response = await obterFechamentoCaixaResponse(1, '2026-06-07');
-    const executor = response.resultado.dentistas.find((item) => item.usuario_id === 20);
 
-    expect(response.resultado.resumo.total_comissao_avaliacao).toBe(36);
-    expect(response.resultado.graficos.ranking_avaliadores).toEqual([
-      { usuario_id: 10, nome: 'Dr. Carlos Avaliador', valor_gerado: 300, quantidade: 1 },
-    ]);
-    expect(executor?.procedimentos_executados[0].ranking_avaliadores).toEqual([
+    expect(response.resultado.resumo.procedimentos_executados).toBe(1);
+    expect(response.resultado.resumo.total_comissao_avaliacao).toBe(0);
+    expect(response.resultado.graficos.ranking_avaliadores).toEqual([]);
+    expect(response.resultado.avaliacoes_pagas_dia).toEqual([]);
+    expect(response.resultado.dentistas.find((item) => item.usuario_id === 20)?.procedimentos_executados).toHaveLength(1);
+  });
+
+  it('só contabiliza a comissão no dia em que a última parcela quitou o procedimento', async () => {
+    mockCommonQueries();
+    mockQueryResponse('from pagamentos_alocacoes pa', [
       {
+        target_type: 'item',
+        target_id: 4,
+        atendimento_id: 73,
         usuario_id: 10,
-        nome: 'Dr. Carlos Avaliador',
-        valor_gerado: 300,
-        valor_comissao: 36,
-        origem: 'acrescimo',
+        usuario_nome: 'Dr. Carlos Avaliador',
+        usuario_valor_diaria: 80,
+        origem: 'avaliacao',
+        percentual: 10,
+        valor_referencia: 200,
+        valor_alocado: 100,
+        pago_em: '2026-06-06 14:00:00',
+        cliente_nome: 'Paciente Parcelado',
+        procedimento_nome: 'Limpeza',
+        etapa_label: null,
+        dentes: null,
+        dente_unico: null,
+      },
+      {
+        target_type: 'item',
+        target_id: 4,
+        atendimento_id: 73,
+        usuario_id: 10,
+        usuario_nome: 'Dr. Carlos Avaliador',
+        usuario_valor_diaria: 80,
+        origem: 'avaliacao',
+        percentual: 10,
+        valor_referencia: 200,
+        valor_alocado: 100,
+        pago_em: '2026-06-07 09:30:00',
+        cliente_nome: 'Paciente Parcelado',
+        procedimento_nome: 'Limpeza',
+        etapa_label: null,
+        dentes: null,
+        dente_unico: null,
+      },
+    ]);
+    mockQueryResponse('from itens_atendimento i', []);
+
+    const response = await obterFechamentoCaixaResponse(1, '2026-06-07');
+
+    expect(response.resultado.resumo.total_comissao_avaliacao).toBe(20);
+    expect(response.resultado.graficos.ranking_avaliadores).toEqual([
+      { usuario_id: 10, nome: 'Dr. Carlos Avaliador', valor_gerado: 200, quantidade: 1 },
+    ]);
+    expect(response.resultado.avaliacoes_pagas_dia[0]).toMatchObject({
+      key: 'item:4',
+      pago_em: '2026-06-07 09:30:00',
+      valor_base: 200,
+      valor_comissao: 20,
+    });
+  });
+
+  it('preserva o avaliador original quando a alocação já foi movida para um agendamento', async () => {
+    mockCommonQueries();
+    mockQueryResponse('from pagamentos_alocacoes pa', [
+      {
+        target_type: 'agendamento',
+        target_id: 33,
+        atendimento_id: 74,
+        usuario_id: 10,
+        usuario_nome: 'Dr. Carlos Avaliador',
+        usuario_valor_diaria: 80,
+        origem: 'avaliacao',
+        percentual: 8,
+        valor_referencia: 250,
+        valor_alocado: 250,
+        pago_em: '2026-06-07 12:00:00',
+        cliente_nome: 'Paciente Remarcado',
+        procedimento_nome: 'Canal',
+        etapa_label: 'Sessão 2',
+        dentes: null,
+        dente_unico: null,
+      },
+    ]);
+    mockQueryResponse('from itens_atendimento i', []);
+
+    const response = await obterFechamentoCaixaResponse(1, '2026-06-07');
+
+    expect(response.resultado.resumo.total_comissao_avaliacao).toBe(20);
+    expect(response.resultado.avaliacoes_pagas_dia).toEqual([
+      {
+        key: 'agendamento:33',
+        usuario_id: 10,
+        cliente_nome: 'Paciente Remarcado',
+        procedimento_nome: 'Canal',
+        procedimento_label: 'Canal — Sessão 2',
+        origem: 'avaliacao',
+        percentual: 8,
+        valor_base: 250,
+        valor_comissao: 20,
+        pago_em: '2026-06-07 12:00:00',
+        included: true,
+        manualmente_editado: false,
+        ajustes: [],
       },
     ]);
   });
