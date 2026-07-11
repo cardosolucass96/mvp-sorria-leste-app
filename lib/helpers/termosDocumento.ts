@@ -328,6 +328,10 @@ const TERMO_PRINT_STYLES = `
     min-width: 95mm;
   }
 
+  .termo-fill-line--short {
+    min-width: 28mm;
+  }
+
   .termo-list {
     margin: 0 0 3mm 5mm;
     padding-left: 4mm;

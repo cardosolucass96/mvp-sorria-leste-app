@@ -7,10 +7,6 @@ interface RenderConfig {
 }
 
 const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9._-]+)\s*\}\}/g;
-const FILLABLE_PLACEHOLDER_KEYS = new Set([
-  'escolha_protese',
-  'observacoes_protese',
-]);
 
 function escapeHtml(value: string) {
   return value
@@ -95,6 +91,17 @@ function normalizarValor(value: unknown): string {
   return value === null || value === undefined ? '' : String(value);
 }
 
+function getPlaceholderLineVariant(key: string) {
+  if (/observ|motivo|endereco|descricao/i.test(key)) return 'long';
+  if (/data|ano|cro|cpf|id|num|valor|telefone/i.test(key)) return 'short';
+  return 'medium';
+}
+
+function renderPlaceholderFillLine(key: string) {
+  const variant = getPlaceholderLineVariant(key);
+  return `<span class="termo-fill-line termo-fill-line--${variant}" data-placeholder="${escapeHtml(key)}"></span>`;
+}
+
 export function buildTermoContext(cliente: Cliente, overrides: RenderConfig = {}): Record<string, string> {
   const base: Record<string, string> = {
     cliente_nome: normalizarValor(cliente.nome),
@@ -157,17 +164,11 @@ export function renderTermoTemplate(html: string, context: Record<string, string
     const chave = token.trim().toLowerCase();
     if (!Object.prototype.hasOwnProperty.call(context, chave)) {
       faltando.add(chave);
-      return '';
+      return renderPlaceholderFillLine(chave);
     }
 
     const value = context[chave] ?? '';
-    if (!value) {
-      if (FILLABLE_PLACEHOLDER_KEYS.has(chave)) {
-        const variant = chave === 'observacoes_protese' ? 'long' : 'medium';
-        return `<span class="termo-fill-line termo-fill-line--${variant}" data-placeholder="${escapeHtml(chave)}"></span>`;
-      }
-      return '';
-    }
+    if (!value) return renderPlaceholderFillLine(chave);
 
     return `<strong class="termo-variable">${escapeHtml(value)}</strong>`;
   });

@@ -56,4 +56,20 @@ describe('termosDocumento', () => {
     expect(formatted).toContain('Escolha do paciente:');
     expect(formatted).toContain('Observações:');
   });
+
+  it('substitui qualquer placeholder vazio ou desconhecido por linha de preenchimento', () => {
+    const { html, placeholdersNaoEncontrados } = renderTermoTemplate(
+      '<p>Paciente: {{cliente_nome}}</p><p>CPF: {{cliente_cpf}}</p><p>Campo extra: {{campo_livre}}</p>',
+      buildSampleTermoContext({
+        cliente_nome: '',
+        cliente_cpf: '',
+      })
+    );
+    const formatted = formatTermoHtmlContent(html);
+
+    expect(formatted).toContain('termo-fill-line termo-fill-line--medium');
+    expect(formatted).toContain('termo-fill-line termo-fill-line--short');
+    expect(formatted).toContain('data-placeholder="campo_livre"');
+    expect(placeholdersNaoEncontrados).toContain('campo_livre');
+  });
 });
