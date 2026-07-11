@@ -887,7 +887,7 @@ export default function AtendimentoDetalhePage({
 
   const carregarPagamentosParaImpressao = async (atendimentoId: number): Promise<PagamentoAgrupado[]> => {
     try {
-      const resAgrupado = await fetch(`/api/atendimentos/${atendimentoId}/pagamentos?grouped=1`);
+      const resAgrupado = await unitFetch(`/api/atendimentos/${atendimentoId}/pagamentos?grouped=1`);
       if (resAgrupado.ok) {
         return (await resAgrupado.json()) as PagamentoAgrupado[];
       }
@@ -896,7 +896,7 @@ export default function AtendimentoDetalhePage({
       console.warn('[print] grouped payments fetch failed, falling back to simple payments list', error);
     }
 
-    const resSimples = await fetch(`/api/atendimentos/${atendimentoId}/pagamentos`);
+    const resSimples = await unitFetch(`/api/atendimentos/${atendimentoId}/pagamentos`);
     if (!resSimples.ok) {
       throw new Error('Erro ao carregar pagamentos do atendimento para impressão.');
     }
