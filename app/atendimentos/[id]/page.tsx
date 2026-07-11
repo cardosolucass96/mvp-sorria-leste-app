@@ -163,7 +163,7 @@ export default function AtendimentoDetalhePage({
   const { id } = use(params);
   const router = useRouter();
   const { hasRole, user, currentUnidade } = useAuth();
-  const podeGerenciarTriagem = Boolean(
+  const podeGerenciarEdicaoRecepcao = Boolean(
     user && getRolesUsuario(user).some((role) => ['admin', 'atendente'].includes(role))
   );
   const { toast } = useToast();
@@ -337,10 +337,10 @@ export default function AtendimentoDetalhePage({
   }, [currentUnidade, unitFetch]);
 
   useEffect(() => {
-    if (atendimento?.status === 'triagem' && podeGerenciarTriagem) {
+    if (atendimento?.status === 'triagem' && podeGerenciarEdicaoRecepcao) {
       carregarAvaliadores();
     }
-  }, [atendimento?.status, carregarAvaliadores, podeGerenciarTriagem]);
+  }, [atendimento?.status, carregarAvaliadores, podeGerenciarEdicaoRecepcao]);
 
   const carregarVendedores = useCallback(async () => {
     setLoadingVendedores(true);
@@ -370,10 +370,10 @@ export default function AtendimentoDetalhePage({
   }, [currentUnidade, unitFetch]);
 
   useEffect(() => {
-    if (atendimento?.status === 'triagem' && podeGerenciarTriagem) {
+    if (atendimento?.status === 'triagem' && podeGerenciarEdicaoRecepcao) {
       carregarVendedores();
     }
-  }, [atendimento?.status, carregarVendedores, podeGerenciarTriagem]);
+  }, [atendimento?.status, carregarVendedores, podeGerenciarEdicaoRecepcao]);
 
   const handleAtualizarAvaliador = useCallback(async (novoAvaliadorId: string) => {
     if (!atendimento) return;
@@ -923,28 +923,25 @@ export default function AtendimentoDetalhePage({
     }));
   };
 
+  const podeEditarProcedimentosCompartilhados = Boolean(
+    podeGerenciarEdicaoRecepcao
+    && atendimento
+    && ['triagem', 'avaliacao'].includes(atendimento.status)
+  );
   const podRemover = Boolean(
     atendimento
     && (
       atendimento.status === 'avaliacao'
-      || (atendimento.status === 'triagem' && podeGerenciarTriagem)
+      || (atendimento.status === 'triagem' && podeGerenciarEdicaoRecepcao)
     )
   );
   const podTrocarExecutor = Boolean(
-    podeGerenciarTriagem
+    podeGerenciarEdicaoRecepcao
     && atendimento
     && ['triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao'].includes(atendimento.status)
   );
-  const podEditarValor = Boolean(
-    podeGerenciarTriagem
-    && atendimento
-    && atendimento.status === 'triagem'
-  );
-  const podEditarVendedor = Boolean(
-    podeGerenciarTriagem
-    && atendimento
-    && atendimento.status === 'triagem'
-  );
+  const podEditarValor = podeEditarProcedimentosCompartilhados;
+  const podEditarVendedor = podeEditarProcedimentosCompartilhados;
   const avaliadoresDisponiveis = (() => {
     if (!atendimento?.avaliador_id || !atendimento.avaliador_nome) return avaliadores;
     if (avaliadores.some((avaliador) => avaliador.id === atendimento.avaliador_id)) return avaliadores;
@@ -1377,7 +1374,7 @@ export default function AtendimentoDetalhePage({
             </div>
             <div>
               <p className="text-sm text-muted">Avaliador</p>
-              {atendimento.status === 'triagem' && podeGerenciarTriagem ? (
+                  {atendimento.status === 'triagem' && podeGerenciarEdicaoRecepcao ? (
                 <div className="mt-1 space-y-2">
                   <select
                     aria-label="Avaliador"

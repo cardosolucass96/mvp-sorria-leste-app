@@ -142,9 +142,9 @@ function makeAtendimento(status: string) {
   };
 }
 
-function makeAtendimentoAgrupado() {
+function makeAtendimentoAgrupado(status = 'triagem') {
   return {
-    ...makeAtendimento('triagem'),
+    ...makeAtendimento(status),
     itens: [
       {
         id: 101,
@@ -302,14 +302,20 @@ describe('AtendimentoDetalhePage triagem editável', () => {
   test('em triagem permite abrir o seletor de vendedor do item', async () => {
     await renderPage('triagem');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Vendedor do item 101' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Vendedor do item 101' }));
+    });
+
     expect(screen.getByRole('combobox', { name: 'Vendedor do item 101' })).toBeInTheDocument();
   });
 
   test('em triagem permite abrir o seletor de vendedor do grupo', async () => {
     await renderPage('triagem', makeAtendimentoAgrupado());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Vendedor do grupo grupo-restauracao' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Vendedor do grupo grupo-restauracao' }));
+    });
+
     expect(screen.getByRole('combobox', { name: 'Vendedor do grupo grupo-restauracao' })).toBeInTheDocument();
   });
 
@@ -328,6 +334,45 @@ describe('AtendimentoDetalhePage triagem editável', () => {
     expect(await screen.findByRole('combobox', { name: 'Avaliador' })).toBeInTheDocument();
     expect(screen.getByLabelText(/Editar valor de Restauração Estética/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Vendedor do item 101' })).toBeInTheDocument();
+  });
+});
+
+describe('AtendimentoDetalhePage avaliação com editor compartilhado', () => {
+  test('em avaliacao renderiza editor de valor, vendedor, executor e remoção do item simples', async () => {
+    await renderPage('avaliacao');
+
+    expect(screen.getByLabelText(/Editar valor de Restauração Estética/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Vendedor do item 101' })).toBeInTheDocument();
+    expect(screen.getByTitle('Clique para trocar executor')).toBeInTheDocument();
+    expect(screen.getByTitle('Remover')).toBeInTheDocument();
+  });
+
+  test('em avaliacao itens agrupados mantêm vendedor no cabeçalho e valor apenas nas sublinhas', async () => {
+    await renderPage('avaliacao', makeAtendimentoAgrupado('avaliacao'));
+
+    expect(screen.getByRole('button', { name: 'Vendedor do grupo grupo-restauracao' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Editar valor de Restauração Estética/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Restauração Estética'));
+
+    expect(screen.getAllByLabelText(/Editar valor de Restauração Estética/i)).toHaveLength(2);
+  });
+
+  test('admin em modo dentista continua vendo o editor compartilhado em avaliacao', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 1, role: 'admin', roles: ['admin'] },
+      currentUnidade: 1,
+      hasRole: (roles: string | string[]) => {
+        const values = Array.isArray(roles) ? roles : [roles];
+        return values.some((role) => ['avaliador', 'executor', 'ortodontista'].includes(role));
+      },
+    });
+
+    await renderPage('avaliacao');
+
+    expect(screen.getByLabelText(/Editar valor de Restauração Estética/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Vendedor do item 101' })).toBeInTheDocument();
+    expect(screen.getByTitle('Clique para trocar executor')).toBeInTheDocument();
   });
 });
 

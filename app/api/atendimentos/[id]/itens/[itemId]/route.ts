@@ -119,10 +119,13 @@ export const PUT = withUnit(async (
     // Validação: edição de valor só em avaliacao ou aguardando_pagamento
     // Garante também valor >= 0 e valor >= valor_pago (sem criar excesso não tratado).
     const valorRecebido = valor_final !== undefined ? valor_final : valor;
-    const triagemGerenciadaPorRecepcao = atendimento.status === 'triagem'
+    const ajustesTriagemGerenciadosPelaRecepcao = atendimento.status === 'triagem'
       && (executor_id !== undefined || criado_por_id !== undefined || valorRecebido !== undefined);
+    const vendedorGerenciadoNoEditorCompartilhado = ['triagem', 'avaliacao'].includes(atendimento.status)
+      && criado_por_id !== undefined;
 
-    if (triagemGerenciadaPorRecepcao && !userHasAnyRole(context.user, ['admin', 'atendente'])) {
+    if ((ajustesTriagemGerenciadosPelaRecepcao || vendedorGerenciadoNoEditorCompartilhado)
+      && !userHasAnyRole(context.user, ['admin', 'atendente'])) {
       return NextResponse.json(
         { error: 'Acesso não autorizado para este perfil' },
         { status: 403 }
@@ -165,9 +168,9 @@ export const PUT = withUnit(async (
     }
 
     if (criado_por_id !== undefined) {
-      if (atendimento.status !== 'triagem') {
+      if (!['triagem', 'avaliacao'].includes(atendimento.status)) {
         return NextResponse.json(
-          { error: 'Só é possível editar o vendedor durante a triagem' },
+          { error: 'Só é possível editar o vendedor durante a triagem ou avaliação' },
           { status: 400 }
         );
       }
