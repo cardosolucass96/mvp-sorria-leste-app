@@ -111,6 +111,8 @@ function createBaseVisao(): FechamentoCaixaVisao {
         atendimento_id: 10,
         cliente_id: 100,
         cliente_nome: 'Maria',
+        cliente_cpf: '12345678901',
+        cliente_telefone: '11987654321',
         valor_total: 1000,
         observacoes: 'Pagamento confirmado',
         cancelado: false,

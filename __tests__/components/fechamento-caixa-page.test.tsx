@@ -122,6 +122,8 @@ function createResponseFixture(): FechamentoCaixaResponse {
       atendimento_id: 1,
       cliente_id: 77,
       cliente_nome: 'Maria',
+      cliente_cpf: '12345678901',
+      cliente_telefone: '11998765432',
       valor_total: 1200,
       observacoes: 'Pagamento do dia conferido',
       cancelado: false,
@@ -157,6 +159,8 @@ function createResponseFixture(): FechamentoCaixaResponse {
       atendimento_id: 2,
       cliente_id: 88,
       cliente_nome: 'João',
+      cliente_cpf: '98765432100',
+      cliente_telefone: '1133334444',
       valor_total: 300,
       observacoes: null,
       cancelado: true,
@@ -259,6 +263,9 @@ describe('FechamentoCaixaPage', () => {
     expect(screen.getByText('Procedimentos executados no dia com comissão de avaliação ou acréscimo')).toBeInTheDocument();
     expect(screen.getByText('Paula')).toBeInTheDocument();
     expect(screen.getByText('Pagamento do dia conferido')).toBeInTheDocument();
+    expect(screen.getByText('Telefone: (11) 99876-5432')).toBeInTheDocument();
+    expect(screen.getByText('CPF: 123.456.789-01')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Maria' })).toHaveAttribute('href', '/clientes/77');
     expect(screen.queryByText('Boas práticas')).not.toBeInTheDocument();
     expect(screen.queryByText('Comissão execução')).not.toBeInTheDocument();
 
@@ -315,6 +322,8 @@ describe('FechamentoCaixaPage', () => {
       expect(html).toContain('Pagamentos recebidos no dia');
       expect(html).toContain('Descritivo');
       expect(html).toContain('Pagamento do dia conferido');
+      expect(html).toContain('Telefone: (11) 99876-5432');
+      expect(html).toContain('CPF: 123.456.789-01');
       expect(html).toContain('PIX: Entrada principal');
       expect(html).toContain('Motivo do cancelamento: Cliente desistiu da forma parcelada');
       expect(html).toContain('Crediário: Parcelado em acordo interno');

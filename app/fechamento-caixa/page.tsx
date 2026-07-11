@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -23,7 +24,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import usePageTitle from '@/lib/utils/usePageTitle';
-import { formatarData, formatarDataHora, formatarMoeda } from '@/lib/utils/formatters';
+import { formatarCPF, formatarData, formatarDataHora, formatarMoeda, formatarTelefone } from '@/lib/utils/formatters';
 import {
   Alert,
   Badge,
@@ -524,8 +525,11 @@ export default function FechamentoCaixaPage() {
       ? (resultado.pagamentos_recebidos_dia ?? []).map((item) => `
           <tr>
             <td>${escapeHtml(formatarDataHora(item.created_at))}</td>
-            <td>${escapeHtml(item.cliente_nome)}</td>
-            <td>${escapeHtml(`#${item.atendimento_id}`)}</td>
+            <td>${joinPrintLines([
+              item.cliente_nome,
+              `Telefone: ${formatarTelefone(item.cliente_telefone)}`,
+              `CPF: ${formatarCPF(item.cliente_cpf)}`,
+            ])}</td>
             <td>${joinPrintLines(
               item.formas.map((forma) => `${METODO_LABELS[forma.metodo] || forma.metodo}: ${formatarMoeda(forma.valor)}`)
             )}</td>
@@ -541,7 +545,7 @@ export default function FechamentoCaixaPage() {
             <td>${escapeHtml(item.cancelado ? `Cancelado${item.motivo_cancelamento ? ` - ${item.motivo_cancelamento}` : ''}` : 'Recebido')}</td>
           </tr>
         `).join('')
-      : '<tr><td colspan="8" class="muted">Nenhum pagamento recebido nesse dia</td></tr>';
+      : '<tr><td colspan="7" class="muted">Nenhum pagamento recebido nesse dia</td></tr>';
 
     const rankingAvaliadoresHtml = resultado.graficos.ranking_avaliadores.length > 0
       ? resultado.graficos.ranking_avaliadores.map((item) => `
@@ -722,7 +726,6 @@ export default function FechamentoCaixaPage() {
                 <tr>
                   <th>Recebido em</th>
                   <th>Cliente</th>
-                  <th>Atendimento</th>
                   <th>Formas</th>
                   <th>Recebido por</th>
                   <th>Descritivo</th>
@@ -856,9 +859,17 @@ export default function FechamentoCaixaPage() {
       label: 'Cliente',
       render: (item) => (
         <div className="space-y-1">
-          <p className="font-medium">{item.cliente_nome}</p>
+          <Link
+            href={`/clientes/${item.cliente_id}`}
+            className="block w-fit font-medium text-info-600 transition-colors hover:text-info-800 hover:underline"
+          >
+            {item.cliente_nome}
+          </Link>
           <p className="text-xs text-muted-foreground">
-            Atendimento #{item.atendimento_id}
+            Telefone: {formatarTelefone(item.cliente_telefone)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            CPF: {formatarCPF(item.cliente_cpf)}
           </p>
         </div>
       ),
