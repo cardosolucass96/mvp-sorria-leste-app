@@ -372,9 +372,9 @@ describe('FechamentoCaixaPage', () => {
       expect(html).toContain('Pagamento do dia conferido');
       expect(html).toContain('Telefone: (11) 99876-5432');
       expect(html).toContain('CPF: 123.456.789-01');
-      expect(html).toContain('PIX: Entrada principal');
       expect(html).toContain('Motivo do cancelamento: Cliente desistiu da forma parcelada');
-      expect(html).toContain('Crediário: Parcelado em acordo interno');
+      expect(html).not.toContain('PIX: Entrada principal');
+      expect(html).not.toContain('Crediário: Parcelado em acordo interno');
 
       act(() => {
         jest.runAllTimers();

@@ -573,9 +573,6 @@ export default function FechamentoCaixaPage() {
             <td>${escapeHtml(item.recebido_por_nome || '-')}</td>
             <td>${joinPrintLines([
               item.observacoes,
-              ...item.formas
-                .filter((forma) => Boolean(forma.observacoes?.trim()))
-                .map((forma) => `${METODO_LABELS[forma.metodo] || forma.metodo}: ${forma.observacoes}`),
               item.cancelado && item.motivo_cancelamento ? `Motivo do cancelamento: ${item.motivo_cancelamento}` : null,
             ])}</td>
             <td style="text-align:right">${formatarMoeda(item.valor_total)}</td>
@@ -965,15 +962,10 @@ export default function FechamentoCaixaPage() {
       key: 'formas',
       label: 'Formas de pagamento',
       render: (item) => (
-        <div className="space-y-2">
+        <div className="space-y-1">
           {item.formas.map((forma) => (
             <div key={forma.id} className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-medium">{METODO_LABELS[forma.metodo] || forma.metodo}</p>
-                {forma.observacoes && (
-                  <p className="text-xs text-muted-foreground">{forma.observacoes}</p>
-                )}
-              </div>
+              <p className="font-medium">{METODO_LABELS[forma.metodo] || forma.metodo}</p>
               <span className={forma.cancelado ? 'font-semibold text-error-600' : 'font-semibold'}>
                 {formatarMoeda(forma.valor)}
               </span>
