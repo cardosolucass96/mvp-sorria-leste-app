@@ -351,7 +351,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
               root: '!w-full',
               month: 'w-full gap-3',
               month_caption: 'hidden',
-              table: 'w-full table-fixed border-separate border-spacing-x-2 border-spacing-y-2.5',
+              month_grid: 'w-full table-fixed border-separate border-spacing-x-2 border-spacing-y-2.5',
               weekdays: 'flex w-full',
               weekday: 'flex-1 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500',
               week: 'mt-0 flex w-full',
