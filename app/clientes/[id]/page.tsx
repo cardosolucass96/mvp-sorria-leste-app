@@ -29,6 +29,7 @@ import { getOrigemLabel } from '@/lib/constants/origens';
 import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
 import { FOLLOWUP_STATUS_LABELS, FOLLOWUP_TIPO_CONFIG } from '@/lib/constants/followup';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
+import { buildTermoPrintableDocument } from '@/lib/helpers/termosDocumento';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 const METODOS_LABEL: Record<string, string> = {
@@ -543,20 +544,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         return;
       }
 
-      janela.document.write(`
-        <!doctype html>
-        <html>
-          <head>
-            <meta charset="utf-8" />
-            <title>${escapeHtml(titulo)}</title>
-            <style>
-              body { font-family: Arial, Helvetica, sans-serif; margin: 20mm; color: #0f172a; }
-              img { max-width: 100%; }
-            </style>
-          </head>
-          <body>${html}</body>
-        </html>
-      `);
+      janela.document.write(buildTermoPrintableDocument(titulo, html));
       finalizarJanelaDeImpressao(janela);
       setModalTermoAberto(false);
       setSuccess('Termo pronto para impressão.');

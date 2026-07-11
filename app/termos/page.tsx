@@ -6,6 +6,8 @@ import { FileText, Plus, Pencil, Trash2 } from 'lucide-react';
 import { TermoTemplate } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader, Card, Button, Input, Textarea, Checkbox, Alert, LoadingState, ConfirmDialog } from '@/components/ui';
+import { buildTermoPrintableDocument } from '@/lib/helpers/termosDocumento';
+import { buildSampleTermoContext, renderTermoTemplate, TERMO_PLACEHOLDER_KEYS } from '@/lib/helpers/termosPlaceholder';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface TermoForm {
@@ -14,20 +16,6 @@ interface TermoForm {
   conteudo_html: string;
   ativo: number;
 }
-
-const PLACEHOLDERS = [
-  'cliente_nome',
-  'cliente_cpf',
-  'cliente_telefone',
-  'cliente_email',
-  'cliente_endereco',
-  'cliente_origem_label',
-  'cliente_data_nascimento',
-  'cliente_plano_odontologico',
-  'data_atual',
-  'data_hora_atual',
-  'ano_atual',
-];
 
 const INITIAL_FORM: TermoForm = {
   titulo: '',
@@ -70,6 +58,11 @@ export default function TermosPage() {
     onConfirm: () => void | Promise<void>;
     confirmLabel?: string;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
+  const previewHtml = form.conteudo_html.trim()
+    ? renderTermoTemplate(form.conteudo_html, buildSampleTermoContext()).html
+    : '';
+  const previewDocument = buildTermoPrintableDocument(form.titulo || 'Previa do termo', previewHtml);
 
   const carregarTermos = async () => {
     try {
@@ -322,7 +315,21 @@ export default function TermosPage() {
 
             <div>
               <p className="text-sm text-muted-foreground mb-1">Placeholders disponíveis para uso:</p>
-              <p className="text-sm font-mono break-words">{PLACEHOLDERS.map((chave) => `{{${chave}}}`).join(' · ')}</p>
+              <p className="text-sm font-mono break-words">{TERMO_PLACEHOLDER_KEYS.map((chave) => `{{${chave}}}`).join(' · ')}</p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Prévia de impressão</p>
+                <p className="text-xs text-muted-foreground">A prévia usa valores de exemplo para preencher os placeholders.</p>
+              </div>
+              <div className="overflow-hidden rounded-xl border border-border bg-white">
+                <iframe
+                  title="Prévia do termo"
+                  srcDoc={previewDocument}
+                  className="h-[980px] w-full bg-white"
+                />
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-1">
