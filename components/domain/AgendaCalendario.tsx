@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Calendar as ShadCalendar } from '@/components/ui/_shadcn/calendar';
 import Button from '@/components/ui/Button';
@@ -120,6 +121,10 @@ function formatDayHeader(date: Date): string {
 }
 
 function renderEventLabel<T extends AgendamentoMinimal>(group: AgendaEventGroup<T>): string {
+  if (!group.hasExplicitTime) {
+    return group.firstName;
+  }
+
   return `${group.timeLabel} ${group.firstName}`;
 }
 
@@ -321,6 +326,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
           <ShadCalendar
             mode="single"
             hideNavigation
+            locale={ptBR}
             month={startOfAgendaMonth(focusedDate)}
             onMonthChange={(nextMonth) => onFocusedDateChange(nextMonth)}
             selected={selectedDay ?? undefined}
@@ -345,11 +351,11 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
               root: 'w-full',
               month: 'w-full gap-3',
               month_caption: 'hidden',
-              table: 'w-full border-separate border-spacing-x-2 border-spacing-y-2.5',
-              weekdays: 'flex',
+              table: 'w-full table-fixed border-separate border-spacing-x-2 border-spacing-y-2.5',
+              weekdays: 'flex w-full',
               weekday: 'flex-1 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500',
               week: 'mt-0 flex w-full',
-              day: 'aspect-auto h-auto w-full p-0 align-top',
+              day: 'aspect-auto h-auto min-w-0 flex-1 p-0 align-top',
               outside: 'opacity-45',
               today: 'bg-transparent text-foreground',
             }}

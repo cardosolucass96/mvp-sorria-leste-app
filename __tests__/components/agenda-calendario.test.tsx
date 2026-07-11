@@ -47,7 +47,7 @@ const AGENDAMENTOS_FIXTURE: TestAgendamento[] = [
     id: 5,
     cliente_id: 13,
     cliente_nome: 'Diego Paz',
-    data_agendada: null,
+    data_agendada: '2026-07-16',
     status: 'pendente',
   },
 ];
@@ -87,8 +87,11 @@ describe('AgendaCalendario', () => {
 
     expect(screen.getByText('09:00 Ana')).toBeInTheDocument();
     expect(screen.getByText('11:00 Bruno')).toBeInTheDocument();
+    expect(screen.getByText('Diego')).toBeInTheDocument();
     expect(screen.getByText('+1 outro(s)')).toBeInTheDocument();
     expect(screen.queryByText(/^Sem data$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Sem hora/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/^dom$/i)).toBeInTheDocument();
   });
 
   test('seleciona o dia ao clicar na célula do mês', () => {
