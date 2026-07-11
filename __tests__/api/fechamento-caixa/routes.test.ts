@@ -96,13 +96,13 @@ function createResponseFixture(overrides: Partial<FechamentoCaixaResponse> = {})
   };
 }
 
-async function buildAuthHeaders(role: 'admin' | 'atendente' = 'admin') {
+async function buildAuthHeaders(role: 'admin' | 'atendente' | 'avaliador' | 'executor' = 'admin') {
   const token = await generateToken({
     id: 77,
-    email: 'admin@sorria.com',
+    email: `${role}@sorria.com`,
     role,
     roles: [role],
-    nome: 'Admin Teste',
+    nome: `${role} Teste`,
     unidade_ids: [9],
     unidade_atual: 9,
   });
@@ -131,10 +131,22 @@ describe('GET /api/fechamento-caixa', () => {
     expect(data.error).toContain('Token');
   });
 
-  it('rejeita quando o usuário não é admin', async () => {
-    const { status, data } = await callRoute<{ error: string }>(GET, '/api/fechamento-caixa', {
+  it('permite atendente autenticado', async () => {
+    mockObterFechamentoCaixaResponse.mockResolvedValue(createResponseFixture());
+
+    const { status } = await callRoute<FechamentoCaixaResponse>(GET, '/api/fechamento-caixa', {
       searchParams: { data: '2026-06-07' },
       headers: await buildAuthHeaders('atendente'),
+    });
+
+    expect(status).toBe(200);
+    expect(mockObterFechamentoCaixaResponse).toHaveBeenCalledWith(9, '2026-06-07');
+  });
+
+  it('rejeita quando o usuário não tem perfil autorizado', async () => {
+    const { status, data } = await callRoute<{ error: string }>(GET, '/api/fechamento-caixa', {
+      searchParams: { data: '2026-06-07' },
+      headers: await buildAuthHeaders('executor'),
     });
 
     expect(status).toBe(403);
@@ -207,9 +219,55 @@ describe('PUT /api/fechamento-caixa', () => {
       usuarioId: 77,
     });
   });
+
+  it('permite atendente salvar revisão', async () => {
+    const draft = {
+      profissionais: {},
+      procedimentos: {},
+      lancamentos_manuais: [],
+    };
+    mockSalvarDraftFechamentoCaixa.mockResolvedValue(createResponseFixture({ draft }));
+
+    const { status } = await callRoute<FechamentoCaixaResponse>(PUT, '/api/fechamento-caixa', {
+      method: 'PUT',
+      searchParams: { data: '2026-06-07' },
+      headers: await buildAuthHeaders('atendente'),
+      body: { draft },
+    });
+
+    expect(status).toBe(200);
+    expect(mockSalvarDraftFechamentoCaixa).toHaveBeenCalledWith({
+      unidadeId: 9,
+      dataReferencia: '2026-06-07',
+      draft,
+      usuarioId: 77,
+    });
+  });
 });
 
 describe('POST /api/fechamento-caixa/fechar', () => {
+  it('permite atendente fechar caixa', async () => {
+    mockFecharFechamentoCaixa.mockResolvedValue(createResponseFixture({
+      fechamento: {
+        ...createResponseFixture().fechamento,
+        status: 'fechado',
+      },
+    }));
+
+    const { status } = await callRoute<FechamentoCaixaResponse>(postFechar, '/api/fechamento-caixa/fechar', {
+      method: 'POST',
+      headers: await buildAuthHeaders('atendente'),
+      body: { data: '2026-06-07' },
+    });
+
+    expect(status).toBe(200);
+    expect(mockFecharFechamentoCaixa).toHaveBeenCalledWith({
+      unidadeId: 9,
+      dataReferencia: '2026-06-07',
+      usuarioId: 77,
+    });
+  });
+
   it('converte erro de validação em 400', async () => {
     mockFecharFechamentoCaixa.mockRejectedValue(new Error('Valor inválido informado no fechamento de caixa.'));
 
@@ -245,6 +303,24 @@ describe('POST /api/fechamento-caixa/reabrir', () => {
       dataReferencia: '2026-06-07',
       usuarioId: 77,
       motivo: 'Conferência refeita pela gerência',
+    });
+  });
+
+  it('permite atendente reabrir fechamento', async () => {
+    mockReabrirFechamentoCaixa.mockResolvedValue(createResponseFixture());
+
+    const { status } = await callRoute<FechamentoCaixaResponse>(postReabrir, '/api/fechamento-caixa/reabrir', {
+      method: 'POST',
+      headers: await buildAuthHeaders('atendente'),
+      body: { data: '2026-06-07', motivo: 'Conferência refeita no balcão' },
+    });
+
+    expect(status).toBe(200);
+    expect(mockReabrirFechamentoCaixa).toHaveBeenCalledWith({
+      unidadeId: 9,
+      dataReferencia: '2026-06-07',
+      usuarioId: 77,
+      motivo: 'Conferência refeita no balcão',
     });
   });
 

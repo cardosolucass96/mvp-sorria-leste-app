@@ -217,9 +217,10 @@ function buildAvaliadosPorDentista(
 export default function FechamentoCaixaPage() {
   usePageTitle('Fechamento de Caixa');
   const router = useRouter();
-  const { user, isLoading: authLoading, isAdmin } = useAuth();
+  const { user, isLoading: authLoading, hasRole } = useAuth();
   const unitFetch = useUnitFetch();
   const { toast } = useToast();
+  const canAccess = hasRole(['admin', 'atendente']);
 
   const [selectedDate, setSelectedDate] = useState(todayIso());
   const [loading, setLoading] = useState(true);
@@ -307,16 +308,16 @@ export default function FechamentoCaixaPage() {
   }, [unitFetch]);
 
   useEffect(() => {
-    if (!authLoading && (!user || !isAdmin)) {
+    if (!authLoading && (!user || !canAccess)) {
       router.push('/');
     }
-  }, [authLoading, user, isAdmin, router]);
+  }, [authLoading, user, canAccess, router]);
 
   useEffect(() => {
-    if (!authLoading && user && isAdmin) {
+    if (!authLoading && user && canAccess) {
       fetchData(selectedDate);
     }
-  }, [authLoading, user, isAdmin, selectedDate, fetchData]);
+  }, [authLoading, user, canAccess, selectedDate, fetchData]);
 
   const applyLocalDraft = useCallback((nextDraft: FechamentoCaixaDraft) => {
     setDraft(nextDraft);
@@ -768,7 +769,7 @@ export default function FechamentoCaixaPage() {
     [currentResultado]
   );
 
-  if (authLoading || !user || !isAdmin) {
+  if (authLoading || !user || !canAccess) {
     return null;
   }
 

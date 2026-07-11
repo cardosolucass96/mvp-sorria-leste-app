@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { fecharFechamentoCaixa, validarDataFechamentoCaixa } from '@/lib/helpers/fechamentoCaixa';
 
-export const POST = withUnitRole(['admin'], async (
+export const POST = withUnitRole(['admin', 'atendente'], async (
   request: NextRequest,
   context: UnitAuthenticatedContext
 ) => {

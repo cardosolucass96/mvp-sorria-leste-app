@@ -158,6 +158,10 @@ beforeEach(() => {
     user: { id: 99, role: 'admin', roles: ['admin'] },
     isLoading: false,
     isAdmin: true,
+    hasRole: (roles: string | string[]) => {
+      const allowed = Array.isArray(roles) ? roles : [roles];
+      return allowed.includes('admin');
+    },
   });
 
   mockUnitFetch.mockImplementation(() => mockJsonResponse(createResponseFixture()));
@@ -195,5 +199,23 @@ describe('FechamentoCaixaPage', () => {
     expect(screen.queryByText('Comissão execução')).not.toBeInTheDocument();
 
     expect((await screen.findAllByText('Dra. Alice')).length).toBeGreaterThan(0);
+  });
+
+  test('permite acesso para atendente sem redirecionar', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 55, role: 'atendente', roles: ['atendente'] },
+      isLoading: false,
+      isAdmin: false,
+      hasRole: (roles: string | string[]) => {
+        const allowed = Array.isArray(roles) ? roles : [roles];
+        return allowed.includes('atendente');
+      },
+    });
+
+    render(<FechamentoCaixaPage />);
+
+    expect(await screen.findByText('Fechamento de Caixa')).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockUnitFetch).toHaveBeenCalledTimes(1);
   });
 });

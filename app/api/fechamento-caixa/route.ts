@@ -7,7 +7,7 @@ import {
 } from '@/lib/helpers/fechamentoCaixa';
 import type { FechamentoCaixaDraft } from '@/lib/fechamento-caixa/types';
 
-export const GET = withUnitRole(['admin'], async (
+export const GET = withUnitRole(['admin', 'atendente'], async (
   request: NextRequest,
   context: UnitAuthenticatedContext
 ) => {
@@ -23,7 +23,7 @@ export const GET = withUnitRole(['admin'], async (
   }
 });
 
-export const PUT = withUnitRole(['admin'], async (
+export const PUT = withUnitRole(['admin', 'atendente'], async (
   request: NextRequest,
   context: UnitAuthenticatedContext
 ) => {
