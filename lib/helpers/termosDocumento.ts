@@ -172,7 +172,7 @@ const TERMO_PRINT_STYLES = `
 
   @page {
     size: A4;
-    margin: 18mm 16mm 22mm;
+    margin: 14mm 13mm 17mm;
   }
 
   * {
@@ -189,8 +189,8 @@ const TERMO_PRINT_STYLES = `
 
   body {
     font-family: Georgia, "Times New Roman", serif;
-    font-size: 12pt;
-    line-height: 1.6;
+    font-size: 10.5pt;
+    line-height: 1.42;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -209,7 +209,7 @@ const TERMO_PRINT_STYLES = `
 
   p,
   li {
-    margin: 0 0 3.6mm;
+    margin: 0 0 2.4mm;
   }
 
   img {
@@ -231,30 +231,30 @@ const TERMO_PRINT_STYLES = `
 
   .termo-eyebrow,
   .termo-subtitle {
-    margin: 0 0 2mm;
+    margin: 0 0 1.4mm;
     text-align: center;
     text-indent: 0;
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 10pt;
+    font-size: 8.8pt;
     font-weight: 700;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
   }
 
   .termo-title {
-    margin: 0 0 7mm;
+    margin: 0 0 4.5mm;
     text-align: center;
     text-indent: 0;
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 15pt;
+    font-size: 13pt;
     font-weight: 700;
-    letter-spacing: 0.05em;
-    line-height: 1.35;
+    letter-spacing: 0.04em;
+    line-height: 1.22;
     text-transform: uppercase;
   }
 
   .termo-paragraph {
-    text-indent: 7mm;
+    text-indent: 5mm;
   }
 
   .termo-no-indent,
@@ -265,57 +265,57 @@ const TERMO_PRINT_STYLES = `
   }
 
   .termo-section-title {
-    margin: 7mm 0 3mm;
-    padding-top: 2.2mm;
+    margin: 5mm 0 2mm;
+    padding-top: 1.2mm;
     border-top: 1px solid #cbd5e1;
     text-align: left;
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 10.8pt;
+    font-size: 9.8pt;
     font-weight: 700;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
   }
 
   .termo-clause {
-    margin-top: 4.5mm;
+    margin-top: 3.2mm;
   }
 
   .termo-clause-label {
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 10.5pt;
+    font-size: 9.7pt;
     font-weight: 700;
     letter-spacing: 0.03em;
   }
 
   .termo-date-line {
-    margin: 12mm 0 10mm;
+    margin: 8mm 0 7mm;
     text-align: center;
   }
 
   .termo-signature-caption {
-    margin: 14mm 0 0;
+    margin: 9mm 0 0;
     text-align: center;
-    font-size: 10.5pt;
+    font-size: 9.6pt;
     page-break-inside: avoid;
   }
 
   .termo-signature-caption::before {
     content: "";
     display: block;
-    width: 72mm;
+    width: 64mm;
     max-width: 100%;
-    margin: 0 auto 3mm;
+    margin: 0 auto 2mm;
     border-top: 1px solid #334155;
   }
 
   .termo-data-line {
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 10.8pt;
+    font-size: 9.8pt;
   }
 
   .termo-list {
-    margin: 0 0 4mm 6mm;
-    padding-left: 5mm;
+    margin: 0 0 3mm 5mm;
+    padding-left: 4mm;
   }
 
   .termo-note {

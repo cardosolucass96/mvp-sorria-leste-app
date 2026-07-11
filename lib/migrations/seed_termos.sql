@@ -40,6 +40,7 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
+<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -70,6 +71,7 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
+<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -122,6 +124,7 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
+<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -150,6 +153,7 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
+<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -186,6 +190,7 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
+<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -219,6 +224,7 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
+<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -252,6 +258,7 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
+<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -287,6 +294,7 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
+<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -322,6 +330,7 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
+<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -355,6 +364,7 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
+<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
