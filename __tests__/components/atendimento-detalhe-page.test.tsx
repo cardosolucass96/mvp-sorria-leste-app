@@ -9,6 +9,7 @@ import AtendimentoDetalhePage from '@/app/atendimentos/[id]/page';
 const mockPush = jest.fn();
 const mockUnitFetch = jest.fn();
 const mockUseAuth = jest.fn();
+const mockFinalizarJanelaDeImpressao = jest.fn();
 const actualReactUse = React.use;
 
 jest.mock('next/link', () => {
@@ -39,6 +40,10 @@ jest.mock('@/contexts/AuthContext', () => ({
 
 jest.mock('@/lib/hooks/useUnitFetch', () => ({
   useUnitFetch: () => mockUnitFetch,
+}));
+
+jest.mock('@/lib/utils/print', () => ({
+  finalizarJanelaDeImpressao: (...args: unknown[]) => mockFinalizarJanelaDeImpressao(...args),
 }));
 
 jest.mock('@/components/domain', () => ({
@@ -98,6 +103,20 @@ function mockJsonResponse(data: unknown, init: { ok?: boolean; status?: number }
     status: init.status ?? 200,
     json: async () => data,
   });
+}
+
+function makePrintWindow() {
+  return {
+    document: {
+      write: jest.fn(),
+      close: jest.fn(),
+      readyState: 'loading',
+    },
+    addEventListener: jest.fn(),
+    setTimeout: jest.fn(),
+    focus: jest.fn(),
+    print: jest.fn(),
+  } as unknown as Window;
 }
 
 function makeAtendimento(status: string) {
@@ -268,6 +287,71 @@ describe('AtendimentoDetalhePage rollback seguro', () => {
       });
     }
   );
+});
+
+describe('AtendimentoDetalhePage impressão', () => {
+  test('em finalizado exibe botão "Imprimir recibos"', async () => {
+    await renderPage('finalizado');
+
+    expect(screen.getByRole('button', { name: 'Imprimir recibos' })).toBeInTheDocument();
+  });
+
+  test('imprime recibos somente com a seção de pagamentos', async () => {
+    await renderPage('finalizado', {
+      ...makeAtendimento('finalizado'),
+      total_pago: 300,
+      finalizado_at: '2026-06-05 15:00:00',
+    });
+
+    const printWindow = makePrintWindow();
+    jest.spyOn(window, 'open').mockReturnValue(printWindow);
+
+    mockUnitFetch.mockImplementation((url: string) => {
+      if (url === '/api/atendimentos/10/pagamentos?grouped=1') {
+        return mockJsonResponse([
+          {
+            id: 'grupo:1',
+            valor_total: 300,
+            observacoes: 'Entrada do tratamento',
+            cancelado: 0,
+            motivo_cancelamento: null,
+            created_at: '2026-06-05 15:10:00',
+            recebido_por_nome: 'Ana Atendente',
+            formas: [
+              {
+                id: 77,
+                valor: 300,
+                metodo: 'pix',
+                observacoes: 'Entrada do tratamento',
+                cancelado: 0,
+                motivo_cancelamento: null,
+                created_at: '2026-06-05 15:10:00',
+              },
+            ],
+          },
+        ]);
+      }
+
+      throw new Error(`Unhandled request: ${url}`);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Imprimir recibos' }));
+    });
+
+    await waitFor(() => {
+      expect(printWindow.document.write).toHaveBeenCalled();
+    });
+
+    const html = (printWindow.document.write as jest.Mock).mock.calls[0][0] as string;
+
+    expect(html).toContain('Recibos de Pagamento');
+    expect(html).toContain('<h2>Pagamentos</h2>');
+    expect(html).not.toContain('<h2>Procedimentos realizados</h2>');
+    expect(html).toContain('PIX');
+    expect(html).toContain('Ana Atendente');
+    expect(mockFinalizarJanelaDeImpressao).toHaveBeenCalledWith(printWindow);
+  });
 });
 
 describe('AtendimentoDetalhePage triagem editável', () => {

@@ -16,6 +16,11 @@ describe('relatorios de impressao', () => {
     const source = fs.readFileSync(pagePath, 'utf-8');
 
     expect(source).toContain('carregarPagamentosParaImpressao');
+    expect(source).toContain('renderizarTabelaPagamentosImpressao');
+    expect(source).toContain('abrirRelatorioDeImpressao');
+    expect(source).toContain('imprimirRecibos');
+    expect(source).toContain('Recibos de Pagamento');
+    expect(source).toContain('Imprimir recibos');
     expect(source).toContain('unitFetch(`/api/atendimentos/${atendimentoId}/pagamentos?grouped=1`)');
     expect(source).toContain('unitFetch(`/api/atendimentos/${atendimentoId}/pagamentos`)');
     expect(source).toContain("formatarDentes(item.dentes) || item.dente_unico || '-'");

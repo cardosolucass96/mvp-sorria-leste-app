@@ -182,6 +182,7 @@ export default function AtendimentoDetalhePage({
     confirmLabel?: string;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [imprimindoAtendimento, setImprimindoAtendimento] = useState(false);
+  const [imprimindoRecibos, setImprimindoRecibos] = useState(false);
 
   const escapeHtml = (value: unknown) => {
     return String(value ?? '')
@@ -924,6 +925,152 @@ export default function AtendimentoDetalhePage({
     }));
   };
 
+  const renderizarTabelaPagamentosImpressao = (pagamentos: PagamentoAgrupado[]) => {
+    return pagamentos.length
+      ? pagamentos.flatMap((pagamento) => {
+          if (!pagamento.formas?.length) {
+            return `<tr>
+              <td>${formatarDataHora(pagamento.created_at)}</td>
+              <td>${escapeHtml(getMetodoPagamentoLabel(''))}</td>
+              <td style="text-align:right;">${formatarMoeda(parseSafeNumber(pagamento.valor_total))}</td>
+              <td style="text-align:center">${pagamento.cancelado ? 'Cancelado' : 'Ativo'}</td>
+              <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
+              <td>${escapeHtml(pagamento.observacoes || '-')}</td>
+            </tr>`;
+          }
+
+          return pagamento.formas.map((forma) => `
+            <tr>
+              <td>${formatarDataHora(forma.created_at || pagamento.created_at)}</td>
+              <td>${escapeHtml(getMetodoPagamentoLabel(forma.metodo))}</td>
+              <td style="text-align:right;">${formatarMoeda(parseSafeNumber(forma.valor))}</td>
+              <td style="text-align:center">${(forma.cancelado || pagamento.cancelado) ? 'Cancelado' : 'Ativo'}</td>
+              <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
+              <td>${escapeHtml(forma.observacoes || pagamento.observacoes || '-')}</td>
+            </tr>
+          `);
+        }).join('')
+      : '<tr><td colspan="6" class="muted">Nenhum pagamento registrado</td></tr>';
+  };
+
+  const abrirRelatorioDeImpressao = ({
+    tituloDocumento,
+    tituloCabecalho,
+    pagamentosHtml,
+    itensHtml,
+  }: {
+    tituloDocumento: string;
+    tituloCabecalho: string;
+    pagamentosHtml: string;
+    itensHtml?: string;
+  }) => {
+    if (!atendimento) return false;
+
+    const janela = window.open('', '_blank');
+    if (!janela) {
+      setError('Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-up está ativo.');
+      return false;
+    }
+
+    const totalGeral = parseSafeNumber(atendimento.total);
+    const pago = parseSafeNumber(atendimento.total_pago);
+    const saldoPendente = Math.max(totalGeral - pago, 0);
+    const logoUrl = `${window.location.origin}/logo-sorria-leste-laranja-fundo-transparente.svg`;
+
+    janela.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(tituloDocumento)} #${escapeHtml(String(atendimento.id))}</title>
+          <style>
+            :root { --sorria-orange: #ea580c; }
+            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; font-size: 12px; background: #ffffff; }
+            h1 { font-size: 20px; margin: 0; color: #0f172a; letter-spacing: 0.2px; }
+            h2 { font-size: 14px; margin: 16px 0 8px; color: var(--sorria-orange); }
+            h3 { font-size: 12px; margin: 12px 0 6px; }
+            .header { border: 1px solid #fed7aa; padding: 14px 14px 12px; margin-bottom: 14px; background: #fff7ed; border-radius: 6px; }
+            .summary { margin: 12px 0; }
+            .report-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+            .brand { display: flex; align-items: center; gap: 10px; }
+            .brand img { width: 40px; height: 40px; object-fit: contain; }
+            .brand-text { color: var(--sorria-orange); font-size: 12px; font-weight: 700; letter-spacing: 0.2px; }
+            .summary { background: #fff; border: 1px solid #fed7aa; border-radius: 6px; padding: 10px 12px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+            th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
+            th { background: #ffedd5; color: #7c2d12; }
+            .muted { color: #64748b; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="report-header">
+              <div class="brand">
+                <img src="${logoUrl}" alt="Logo Sorria Leste" />
+                <div>
+                  <h1>${escapeHtml(tituloCabecalho)}</h1>
+                  <div class="brand-text">Sorria Leste</div>
+                </div>
+              </div>
+              <div><strong>Nº:</strong> #${escapeHtml(String(atendimento.id))}</div>
+            </div>
+            <div><strong>Atendimento:</strong> #${escapeHtml(String(atendimento.id))}</div>
+            <div><strong>Status:</strong> ${escapeHtml(STATUS_CONFIG[atendimento.status as AtendimentoStatus]?.label || atendimento.status)}</div>
+            <div><strong>Data de abertura:</strong> ${formatarDataHora(atendimento.created_at)}</div>
+            <div><strong>Finalizado em:</strong> ${escapeHtml(formatarDataHora(atendimento.finalizado_at))}</div>
+            <div><strong>Cliente:</strong> ${escapeHtml(atendimento.cliente_nome)}</div>
+            <div><strong>CPF:</strong> ${escapeHtml(atendimento.cliente_cpf || '-')} <strong>Telefone:</strong> ${escapeHtml(atendimento.cliente_telefone || '-')}</div>
+            <div><strong>Email:</strong> ${escapeHtml(atendimento.cliente_email || '-')}</div>
+          </div>
+          <div class="summary">
+            <strong>Total do atendimento:</strong> ${formatarMoeda(totalGeral)}<br />
+            <strong>Total pago:</strong> ${formatarMoeda(pago)}<br />
+            <strong>Saldo pendente:</strong> ${formatarMoeda(saldoPendente)}
+          </div>
+
+          ${itensHtml ? `
+            <section>
+              <h2>Procedimentos realizados</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Procedimento</th>
+                    <th>Vendedor</th>
+                    <th>Executor</th>
+                    <th>Status</th>
+                    <th>Valor</th>
+                    <th>Dentes</th>
+                    <th>Valor pago</th>
+                  </tr>
+                </thead>
+                <tbody>${itensHtml}</tbody>
+              </table>
+            </section>
+          ` : ''}
+
+          <section>
+            <h2>Pagamentos</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Forma</th>
+                  <th>Valor</th>
+                  <th>Origem</th>
+                  <th>Recebido por</th>
+                  <th>Observações</th>
+                </tr>
+              </thead>
+              <tbody>${pagamentosHtml}</tbody>
+            </table>
+          </section>
+        </body>
+      </html>
+    `);
+    finalizarJanelaDeImpressao(janela);
+    return true;
+  };
+
   const podeEditarProcedimentosCompartilhados = Boolean(
     podeGerenciarEdicaoRecepcao
     && atendimento
@@ -962,6 +1109,7 @@ export default function AtendimentoDetalhePage({
       ...vendedores,
     ];
   };
+  const imprimindoAlgumDocumento = imprimindoAtendimento || imprimindoRecibos;
 
   const imprimirAtendimento = async () => {
     if (!atendimento) return;
@@ -982,137 +1130,38 @@ export default function AtendimentoDetalhePage({
             </tr>
           `).join('')
         : '<tr><td colspan="7" class="muted">Nenhum procedimento registrado</td></tr>';
+      const pagamentosHtml = renderizarTabelaPagamentosImpressao(pagamentos);
 
-      const pagamentosHtml = pagamentos.length
-        ? pagamentos.flatMap((pagamento) => {
-            if (!pagamento.formas?.length) {
-              return `<tr>
-                <td>${formatarDataHora(pagamento.created_at)}</td>
-                <td>${escapeHtml(getMetodoPagamentoLabel(''))}</td>
-                <td style="text-align:right;">${formatarMoeda(parseSafeNumber(pagamento.valor_total))}</td>
-                <td style="text-align:center">${pagamento.cancelado ? 'Cancelado' : 'Ativo'}</td>
-                <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
-                <td>${escapeHtml(pagamento.observacoes || '-')}</td>
-              </tr>`;
-            }
-
-            return pagamento.formas.map((forma) => `
-              <tr>
-                <td>${formatarDataHora(forma.created_at || pagamento.created_at)}</td>
-                <td>${escapeHtml(getMetodoPagamentoLabel(forma.metodo))}</td>
-                <td style="text-align:right;">${formatarMoeda(parseSafeNumber(forma.valor))}</td>
-                <td style="text-align:center">${(forma.cancelado || pagamento.cancelado) ? 'Cancelado' : 'Ativo'}</td>
-                <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
-                <td>${escapeHtml(forma.observacoes || pagamento.observacoes || '-')}</td>
-              </tr>
-            `);
-          }).join('')
-        : '<tr><td colspan="6" class="muted">Nenhum pagamento registrado</td></tr>';
-
-      const janela = window.open('', '_blank');
-      if (!janela) {
-        setError('Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-up está ativo.');
-        return;
-      }
-
-      const totalGeral = parseSafeNumber(atendimento.total);
-      const pago = parseSafeNumber(atendimento.total_pago);
-      const saldoPendente = Math.max(totalGeral - pago, 0);
-      const logoUrl = `${window.location.origin}/logo-sorria-leste-laranja-fundo-transparente.svg`;
-
-      janela.document.write(`
-        <!doctype html>
-        <html>
-          <head>
-            <meta charset="utf-8" />
-            <title>Relatório de Atendimento #${escapeHtml(String(atendimento.id))}</title>
-            <style>
-              :root { --sorria-orange: #ea580c; }
-              body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; font-size: 12px; background: #ffffff; }
-              h1 { font-size: 20px; margin: 0; color: #0f172a; letter-spacing: 0.2px; }
-              h2 { font-size: 14px; margin: 16px 0 8px; color: var(--sorria-orange); }
-              h3 { font-size: 12px; margin: 12px 0 6px; }
-              .header { border: 1px solid #fed7aa; padding: 14px 14px 12px; margin-bottom: 14px; background: #fff7ed; border-radius: 6px; }
-              .summary { margin: 12px 0; }
-              .report-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
-              .brand { display: flex; align-items: center; gap: 10px; }
-              .brand img { width: 40px; height: 40px; object-fit: contain; }
-              .brand-text { color: var(--sorria-orange); font-size: 12px; font-weight: 700; letter-spacing: 0.2px; }
-              .summary { background: #fff; border: 1px solid #fed7aa; border-radius: 6px; padding: 10px 12px; }
-              table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-              th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
-              th { background: #ffedd5; color: #7c2d12; }
-              .muted { color: #64748b; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <div class="report-header">
-                <div class="brand">
-                  <img src="${logoUrl}" alt="Logo Sorria Leste" />
-                  <div>
-                    <h1>Relatório de Atendimento</h1>
-                    <div class="brand-text">Sorria Leste</div>
-                  </div>
-                </div>
-                <div><strong>Nº:</strong> #${escapeHtml(String(atendimento.id))}</div>
-              </div>
-              <div><strong>Atendimento:</strong> #${escapeHtml(String(atendimento.id))}</div>
-              <div><strong>Status:</strong> ${escapeHtml(STATUS_CONFIG[atendimento.status as AtendimentoStatus]?.label || atendimento.status)}</div>
-              <div><strong>Data de abertura:</strong> ${formatarDataHora(atendimento.created_at)}</div>
-              <div><strong>Finalizado em:</strong> ${escapeHtml(formatarDataHora(atendimento.finalizado_at))}</div>
-              <div><strong>Cliente:</strong> ${escapeHtml(atendimento.cliente_nome)}</div>
-              <div><strong>CPF:</strong> ${escapeHtml(atendimento.cliente_cpf || '-')} <strong>Telefone:</strong> ${escapeHtml(atendimento.cliente_telefone || '-')}</div>
-              <div><strong>Email:</strong> ${escapeHtml(atendimento.cliente_email || '-')}</div>
-            </div>
-            <div class="summary">
-              <strong>Total do atendimento:</strong> ${formatarMoeda(totalGeral)}<br />
-              <strong>Total pago:</strong> ${formatarMoeda(pago)}<br />
-              <strong>Saldo pendente:</strong> ${formatarMoeda(saldoPendente)}
-            </div>
-
-            <section>
-              <h2>Procedimentos realizados</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Procedimento</th>
-                    <th>Vendedor</th>
-                    <th>Executor</th>
-                    <th>Status</th>
-                    <th>Valor</th>
-                    <th>Dentes</th>
-                    <th>Valor pago</th>
-                  </tr>
-                </thead>
-                <tbody>${itensHtml}</tbody>
-              </table>
-            </section>
-
-            <section>
-              <h2>Pagamentos</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Data</th>
-                    <th>Forma</th>
-                    <th>Valor</th>
-                    <th>Origem</th>
-                    <th>Recebido por</th>
-                    <th>Observações</th>
-                  </tr>
-                </thead>
-                <tbody>${pagamentosHtml}</tbody>
-              </table>
-            </section>
-          </body>
-        </html>
-      `);
-      finalizarJanelaDeImpressao(janela);
+      abrirRelatorioDeImpressao({
+        tituloDocumento: 'Relatório de Atendimento',
+        tituloCabecalho: 'Relatório de Atendimento',
+        pagamentosHtml,
+        itensHtml,
+      });
     } catch {
       setError('Erro ao carregar pagamentos do atendimento para impressão.');
     } finally {
       setImprimindoAtendimento(false);
+    }
+  };
+
+  const imprimirRecibos = async () => {
+    if (!atendimento) return;
+
+    try {
+      setImprimindoRecibos(true);
+      const pagamentos = await carregarPagamentosParaImpressao(atendimento.id);
+      const pagamentosHtml = renderizarTabelaPagamentosImpressao(pagamentos);
+
+      abrirRelatorioDeImpressao({
+        tituloDocumento: 'Recibos de Pagamento',
+        tituloCabecalho: 'Recibos de Pagamento',
+        pagamentosHtml,
+      });
+    } catch {
+      setError('Erro ao carregar pagamentos do atendimento para impressão.');
+    } finally {
+      setImprimindoRecibos(false);
     }
   };
 
@@ -1266,9 +1315,15 @@ export default function AtendimentoDetalhePage({
               </Button>
             )}
             {(atendimento.status === 'finalizado' || atendimento.status === 'encerrado') && (
-              <Button variant="secondary" onClick={imprimirAtendimento} disabled={imprimindoAtendimento}>
+              <Button variant="secondary" onClick={imprimirAtendimento} disabled={imprimindoAlgumDocumento}>
                 <Printer className="w-4 h-4 mr-1" />
                 {imprimindoAtendimento ? 'Preparando impressão...' : 'Imprimir atendimento'}
+              </Button>
+            )}
+            {(atendimento.status === 'finalizado' || atendimento.status === 'encerrado') && (
+              <Button variant="secondary" onClick={imprimirRecibos} disabled={imprimindoAlgumDocumento}>
+                <Printer className="w-4 h-4 mr-1" />
+                {imprimindoRecibos ? 'Preparando recibos...' : 'Imprimir recibos'}
               </Button>
             )}
             {atendimento.status === 'finalizado' && hasRole(['atendente', 'admin']) && (
