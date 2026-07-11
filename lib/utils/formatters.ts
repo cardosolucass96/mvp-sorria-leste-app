@@ -15,11 +15,58 @@ export function formatarMoeda(valor: number): string {
  */
 function parseSqliteDate(data: string | null | undefined): Date | null {
   if (!data) return null;
-  const s = data.trim();
-  // Só data "YYYY-MM-DD" → adiciona T00:00:00 para forçar horário local
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T00:00:00');
-  // Datetime "YYYY-MM-DD HH:MM:SS" → substitui espaço por T (sem Z = horário local)
-  return new Date(s.replace(' ', 'T'));
+  const texto = data.trim();
+  if (!texto) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    return new Date(`${texto}T00:00:00`);
+  }
+
+  const candidatos = new Set<string>();
+  const adicionar = (valor?: string | null): void => {
+    if (!valor) return;
+    const limpo = valor.trim();
+    if (limpo) candidatos.add(limpo);
+  };
+
+  const normalizarOffset = (valor: string): string => {
+    // Corrige offset sem dois-pontos: +0000 => +00:00
+    return valor.replace(/([+-]\d{2})(\d{2})(?!:)/g, '$1:$2');
+  };
+
+  const normalizarMicros = (valor: string): string => {
+    // Mantém apenas milissegundos (3 casas) para evitar parser estrito quebrar
+    return valor.replace(/(\.\d{3})\d+(?=(Z|[+-]\d{2}:?\d{2}|$))/, '$1');
+  };
+
+  const variantes = [
+    texto,
+    texto.replace(' ', 'T'),
+    normalizarOffset(texto),
+    normalizarOffset(texto.replace(' ', 'T')),
+    normalizarMicros(texto),
+    normalizarMicros(texto.replace(' ', 'T')),
+    normalizarMicros(normalizarOffset(texto)),
+    normalizarMicros(normalizarOffset(texto.replace(' ', 'T'))),
+  ];
+
+  for (const base of variantes) {
+    adicionar(base);
+    // Aceita offsets com espaço entre horário e UTC: "14:00:00 +0000"
+    adicionar(base.replace(/\s(?=[+-]\d{2}:?\d{2}$)/, ''));
+    // Versão sem timezone, útil para casos com formato não padrão
+    adicionar(base.replace(/[Zz]$/, ''));
+    adicionar(base.replace(/[Zz]$/, '').replace(/\s(?=[+-]\d{2}:?\d{2}$)/, ''));
+  }
+
+  for (const candidato of candidatos) {
+    const d = new Date(candidato);
+    if (!Number.isNaN(d.getTime())) {
+      return d;
+    }
+  }
+
+  return null;
 }
 
 /** Formata data como dd/mm/aaaa */
