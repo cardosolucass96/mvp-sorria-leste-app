@@ -30,6 +30,13 @@ interface Usuario {
   nome: string;
   role: string;
   roles?: string[];
+  ativo?: number;
+}
+
+function getRolesUsuario(usuario: Usuario) {
+  return Array.isArray(usuario.roles) && usuario.roles.length > 0
+    ? usuario.roles
+    : [usuario.role];
 }
 
 const METODOS_PAGAMENTO = [
@@ -50,6 +57,7 @@ interface ItemAtendimento {
   etapa_label: string | null;
   executor_id: number | null;
   executor_nome: string | null;
+  criado_por_id: number | null;
   criado_por_nome: string | null;
   valor: number;
   valor_original: number | null;
@@ -155,7 +163,9 @@ export default function AtendimentoDetalhePage({
   const { id } = use(params);
   const router = useRouter();
   const { hasRole, user, currentUnidade } = useAuth();
-  const podeGerenciarTriagem = hasRole(['atendente', 'admin']);
+  const podeGerenciarTriagem = Boolean(
+    user && getRolesUsuario(user).some((role) => ['admin', 'atendente'].includes(role))
+  );
   const { toast } = useToast();
   const unitFetch = useUnitFetch();
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
@@ -228,6 +238,10 @@ export default function AtendimentoDetalhePage({
   const [avaliadores, setAvaliadores] = useState<Usuario[]>([]);
   const [loadingAvaliadores, setLoadingAvaliadores] = useState(false);
   const [savingAvaliador, setSavingAvaliador] = useState(false);
+  const [vendedores, setVendedores] = useState<Usuario[]>([]);
+  const [loadingVendedores, setLoadingVendedores] = useState(false);
+  const [trocandoVendedor, setTrocandoVendedor] = useState<string | null>(null);
+  const [savingVendedorKey, setSavingVendedorKey] = useState<string | null>(null);
   const [editingValorId, setEditingValorId] = useState<number | null>(null);
   const [editingValorValue, setEditingValorValue] = useState('');
   const [savingValorId, setSavingValorId] = useState<number | null>(null);
@@ -328,6 +342,39 @@ export default function AtendimentoDetalhePage({
     }
   }, [atendimento?.status, carregarAvaliadores, podeGerenciarTriagem]);
 
+  const carregarVendedores = useCallback(async () => {
+    setLoadingVendedores(true);
+    try {
+      const params = new URLSearchParams();
+      if (currentUnidade) {
+        params.set('unidade_id', String(currentUnidade));
+      }
+
+      const url = params.toString() ? `/api/usuarios?${params.toString()}` : '/api/usuarios';
+      const res = await unitFetch(url);
+      if (!res.ok) {
+        throw new Error('Não foi possível carregar os vendedores');
+      }
+
+      const data = await res.json() as Usuario[];
+      setVendedores(data.filter((usuario) => {
+        const roles = getRolesUsuario(usuario);
+        return usuario.ativo !== 0 && roles.some((role) => ['admin', 'atendente', 'avaliador'].includes(role));
+      }));
+    } catch (loadError) {
+      console.error('Erro ao carregar vendedores:', loadError);
+      setError(loadError instanceof Error ? loadError.message : 'Erro ao carregar vendedores');
+    } finally {
+      setLoadingVendedores(false);
+    }
+  }, [currentUnidade, unitFetch]);
+
+  useEffect(() => {
+    if (atendimento?.status === 'triagem' && podeGerenciarTriagem) {
+      carregarVendedores();
+    }
+  }, [atendimento?.status, carregarVendedores, podeGerenciarTriagem]);
+
   const handleAtualizarAvaliador = useCallback(async (novoAvaliadorId: string) => {
     if (!atendimento) return;
 
@@ -361,6 +408,42 @@ export default function AtendimentoDetalhePage({
       setSavingAvaliador(false);
     }
   }, [atendimento, carregarAtendimento, id, toast, unitFetch]);
+
+  const handleAtualizarVendedor = useCallback(async (
+    key: string,
+    itemIds: number[],
+    novoVendedorId: number
+  ) => {
+    if (!novoVendedorId || itemIds.length === 0) return;
+
+    setSavingVendedorKey(key);
+    setError('');
+
+    try {
+      for (const itemId of itemIds) {
+        const response = await unitFetch(`/api/atendimentos/${id}/itens/${itemId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ criado_por_id: novoVendedorId }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao atualizar vendedor');
+        }
+      }
+
+      toast.success(itemIds.length > 1 ? 'Vendedor do grupo atualizado com sucesso' : 'Vendedor atualizado com sucesso');
+      await carregarAtendimento();
+    } catch (updateError) {
+      const message = updateError instanceof Error ? updateError.message : 'Erro ao atualizar vendedor';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSavingVendedorKey(null);
+      setTrocandoVendedor(null);
+    }
+  }, [carregarAtendimento, id, toast, unitFetch]);
 
   const handleAtualizarValor = useCallback(async (item: ItemAtendimento) => {
     if (savingValorId === item.id) return;
@@ -857,6 +940,11 @@ export default function AtendimentoDetalhePage({
     && atendimento
     && atendimento.status === 'triagem'
   );
+  const podEditarVendedor = Boolean(
+    podeGerenciarTriagem
+    && atendimento
+    && atendimento.status === 'triagem'
+  );
   const avaliadoresDisponiveis = (() => {
     if (!atendimento?.avaliador_id || !atendimento.avaliador_nome) return avaliadores;
     if (avaliadores.some((avaliador) => avaliador.id === atendimento.avaliador_id)) return avaliadores;
@@ -866,6 +954,16 @@ export default function AtendimentoDetalhePage({
       ...avaliadores,
     ];
   })();
+
+  const getVendedoresDisponiveis = (item: Pick<ItemAtendimento, 'criado_por_id' | 'criado_por_nome'>) => {
+    if (!item.criado_por_id || !item.criado_por_nome) return vendedores;
+    if (vendedores.some((vendedor) => vendedor.id === item.criado_por_id)) return vendedores;
+
+    return [
+      { id: item.criado_por_id, nome: `${item.criado_por_nome} (atual)`, role: 'avaliador' },
+      ...vendedores,
+    ];
+  };
 
   const imprimirAtendimento = async () => {
     if (!atendimento) return;
@@ -1087,6 +1185,68 @@ export default function AtendimentoDetalhePage({
           <Pencil className="w-3 h-3 text-muted-foreground" />
         </button>
       </div>
+    );
+  };
+
+  const renderVendedorCell = (
+    key: string,
+    itemIds: number[],
+    item: Pick<ItemAtendimento, 'id' | 'criado_por_id' | 'criado_por_nome' | 'procedimento_nome'>,
+    label: string
+  ) => {
+    if (!podEditarVendedor) {
+      return item.criado_por_nome || '-';
+    }
+
+    const emEdicao = trocandoVendedor === key;
+    const salvando = savingVendedorKey === key;
+    const vendedoresItem = getVendedoresDisponiveis(item);
+
+    if (emEdicao) {
+      return (
+        <select
+          autoFocus
+          aria-label={label}
+          className="field-control max-w-52 px-2 py-1 text-sm"
+          defaultValue={item.criado_por_id ?? ''}
+          disabled={loadingVendedores || salvando}
+          onChange={(e) => {
+            const novoId = Number(e.target.value);
+            if (Number.isFinite(novoId) && novoId > 0) {
+              void handleAtualizarVendedor(key, itemIds, novoId);
+            }
+          }}
+          onBlur={() => {
+            if (!salvando) {
+              setTrocandoVendedor(null);
+            }
+          }}
+        >
+          <option value="">
+            {loadingVendedores ? 'Carregando vendedores...' : 'Selecione um vendedor'}
+          </option>
+          {vendedoresItem.map((vendedor) => (
+            <option key={vendedor.id} value={vendedor.id}>
+              {vendedor.nome}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        aria-label={label}
+        onClick={() => {
+          void carregarVendedores();
+          setTrocandoVendedor(key);
+        }}
+        className="text-left hover:text-primary-600 hover:underline transition-colors"
+        title={itemIds.length > 1 ? 'Clique para trocar vendedor do grupo' : 'Clique para trocar vendedor'}
+      >
+        {item.criado_por_nome || <span className="text-muted italic">Sem vendedor</span>}
+      </button>
     );
   };
 
@@ -1389,7 +1549,14 @@ export default function AtendimentoDetalhePage({
                             <ProgressoEtapas etapas={item.progresso_etapas} />
                           )}
                         </td>
-                        <td className="px-4 py-3">{item.criado_por_nome || '-'}</td>
+                        <td className="px-4 py-3">
+                          {renderVendedorCell(
+                            `item:${item.id}`,
+                            [item.id],
+                            item,
+                            `Vendedor do item ${item.id}`
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           {podTrocarExecutor && ['pendente', 'pago'].includes(item.status) ? (
                             trocandoExecutor === item.id ? (
@@ -1458,7 +1625,14 @@ export default function AtendimentoDetalhePage({
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3">{primeiro.criado_por_nome || '-'}</td>
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          {renderVendedorCell(
+                            `group:${groupId}`,
+                            grupoItens.map((item) => item.id),
+                            primeiro,
+                            `Vendedor do grupo ${groupId}`
+                          )}
+                        </td>
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           {podTrocarExecutor && grupoItens.every(i => ['pendente', 'pago'].includes(i.status)) ? (
                             trocandoExecutor === primeiro.id ? (

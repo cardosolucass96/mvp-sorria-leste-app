@@ -1,7 +1,7 @@
 import React from 'react';
 import fs from 'fs';
 import path from 'path';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import AtendimentoDetalhePage from '@/app/atendimentos/[id]/page';
@@ -124,6 +124,7 @@ function makeAtendimento(status: string) {
         etapa_label: null,
         executor_id: null,
         executor_nome: null,
+        criado_por_id: 1,
         criado_por_nome: 'Lucas Cardoso',
         valor: 300,
         valor_original: 300,
@@ -151,6 +152,7 @@ function makeAtendimentoAgrupado() {
         etapa_label: null,
         executor_id: null,
         executor_nome: null,
+        criado_por_id: 1,
         criado_por_nome: 'Lucas Cardoso',
         valor: 300,
         valor_original: 300,
@@ -168,6 +170,7 @@ function makeAtendimentoAgrupado() {
         etapa_label: null,
         executor_id: null,
         executor_nome: null,
+        criado_por_id: 1,
         criado_por_nome: 'Lucas Cardoso',
         valor: 320,
         valor_original: 320,
@@ -219,11 +222,25 @@ async function renderPage(status: string, atendimentoData = makeAtendimento(stat
         { id: 3, nome: 'Dr. João Avaliador', role: 'avaliador', roles: ['avaliador'] },
       ]);
     }
+    if (url === '/api/usuarios?unidade_id=1') {
+      return mockJsonResponse([
+        { id: 1, nome: 'Lucas Cardoso', role: 'admin', roles: ['admin'], ativo: 1 },
+        { id: 2, nome: 'Ana Atendente', role: 'atendente', roles: ['atendente'], ativo: 1 },
+        { id: 3, nome: 'Dr. João Avaliador', role: 'avaliador', roles: ['avaliador'], ativo: 1 },
+      ]);
+    }
     throw new Error(`Unhandled request: ${url}`);
   });
 
   render(<AtendimentoDetalhePage params={Promise.resolve({ id: '10' })} />);
   await screen.findByRole('heading', { name: 'Atendimento #10' });
+
+  if (status === 'triagem') {
+    await waitFor(() => {
+      expect(mockUnitFetch).toHaveBeenCalledWith('/api/usuarios?unidade_id=1');
+    });
+    await act(async () => {});
+  }
 }
 
 describe('AtendimentoDetalhePage rollback seguro', () => {
@@ -260,6 +277,7 @@ describe('AtendimentoDetalhePage triagem editável', () => {
     expect(await screen.findByRole('combobox', { name: 'Avaliador' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Limpar avaliador' })).toBeDisabled();
     expect(screen.getByLabelText(/Editar valor de Restauração Estética/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Vendedor do item 101' })).toBeInTheDocument();
     expect(screen.getByTitle('Clique para trocar executor')).toBeInTheDocument();
     expect(screen.getByTitle('Remover')).toBeInTheDocument();
   });
@@ -279,6 +297,37 @@ describe('AtendimentoDetalhePage triagem editável', () => {
     fireEvent.click(screen.getByText('Restauração Estética'));
 
     expect(screen.getAllByLabelText(/Editar valor de Restauração Estética/i)).toHaveLength(2);
+  });
+
+  test('em triagem permite abrir o seletor de vendedor do item', async () => {
+    await renderPage('triagem');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vendedor do item 101' }));
+    expect(screen.getByRole('combobox', { name: 'Vendedor do item 101' })).toBeInTheDocument();
+  });
+
+  test('em triagem permite abrir o seletor de vendedor do grupo', async () => {
+    await renderPage('triagem', makeAtendimentoAgrupado());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vendedor do grupo grupo-restauracao' }));
+    expect(screen.getByRole('combobox', { name: 'Vendedor do grupo grupo-restauracao' })).toBeInTheDocument();
+  });
+
+  test('admin em modo dentista continua vendo controles administrativos da triagem', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 1, role: 'admin', roles: ['admin'] },
+      currentUnidade: 1,
+      hasRole: (roles: string | string[]) => {
+        const values = Array.isArray(roles) ? roles : [roles];
+        return values.some((role) => ['avaliador', 'executor', 'ortodontista'].includes(role));
+      },
+    });
+
+    await renderPage('triagem');
+
+    expect(await screen.findByRole('combobox', { name: 'Avaliador' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Editar valor de Restauração Estética/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Vendedor do item 101' })).toBeInTheDocument();
   });
 });
 

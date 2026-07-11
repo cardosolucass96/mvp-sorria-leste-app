@@ -619,6 +619,93 @@ describe('DELETE /api/atendimentos/[id]/itens', () => {
 // =============================================================================
 
 describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
+  it('atualiza vendedor em triagem para atendente', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('atendente'));
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 1 });
+    mockQueryResponse('select id, role from usuarios where id', { id: 2, role: 'atendente' });
+    mockQueryResponse('from itens_atendimento i', {
+      ...ITEM_LIMPEZA_PENDENTE,
+      atendimento_id: 1,
+      criado_por_id: 2,
+      procedimento_nome: 'Limpeza',
+      executor_nome: 'Dr. Carlos',
+      criado_por_nome: 'Ana Atendente',
+    });
+
+    const ctx = createRouteContext({ id: '1', itemId: '1' });
+    const { status } = await callRoute(updateItem, '/api/atendimentos/1/itens/1', {
+      method: 'PUT',
+      body: { criado_por_id: 2 },
+    }, ctx);
+
+    expect(status).toBe(200);
+
+    const queries = getExecutedQueries();
+    const update = queries.find(q => q.sql.includes('UPDATE itens_atendimento'));
+    expect(update!.sql).toContain('criado_por_id = ?');
+  });
+
+  it('rejeita vendedor inexistente em triagem', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('atendente'));
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 1 });
+
+    const ctx = createRouteContext({ id: '1', itemId: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/1/itens/1', {
+      method: 'PUT',
+      body: { criado_por_id: 999 },
+    }, ctx);
+
+    expect(status).toBe(404);
+    expect(data.error).toBe('Vendedor não encontrado');
+  });
+
+  it('rejeita vendedor com role inválida em triagem', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('atendente'));
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 1 });
+    mockQueryResponse('select id, role from usuarios where id', { id: 4, role: 'executor' });
+
+    const ctx = createRouteContext({ id: '1', itemId: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/1/itens/1', {
+      method: 'PUT',
+      body: { criado_por_id: 4 },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Usuário selecionado não pode ser vendedor');
+  });
+
+  it('rejeita edição de vendedor fora da triagem', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 2 });
+
+    const ctx = createRouteContext({ id: '2', itemId: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/2/itens/1', {
+      method: 'PUT',
+      body: { criado_por_id: 2 },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toContain('vendedor');
+  });
+
+  it('rejeita edição de vendedor em triagem por perfil sem permissão', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 1 });
+
+    const ctx = createRouteContext({ id: '1', itemId: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/1/itens/1', {
+      method: 'PUT',
+      body: { criado_por_id: 2 },
+    }, ctx);
+
+    expect(status).toBe(403);
+    expect(data.error).toContain('não autorizado');
+  });
+
   it('atualiza executor_id em triagem para atendente', async () => {
     mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('atendente'));
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);

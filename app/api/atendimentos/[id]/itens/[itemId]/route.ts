@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute, query } from '@/lib/db';
 import { gerarComissoesItem } from '@/lib/helpers/gerarComissoes';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
+import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 
 interface ItemAtendimento {
   id: number;
@@ -36,6 +37,7 @@ export const PUT = withUnit(async (
     const body = await request.json();
     const {
       executor_id,
+      criado_por_id,
       valor,
       valor_final,
       desconto_motivo,
@@ -118,7 +120,7 @@ export const PUT = withUnit(async (
     // Garante também valor >= 0 e valor >= valor_pago (sem criar excesso não tratado).
     const valorRecebido = valor_final !== undefined ? valor_final : valor;
     const triagemGerenciadaPorRecepcao = atendimento.status === 'triagem'
-      && (executor_id !== undefined || valorRecebido !== undefined);
+      && (executor_id !== undefined || criado_por_id !== undefined || valorRecebido !== undefined);
 
     if (triagemGerenciadaPorRecepcao && !userHasAnyRole(context.user, ['admin', 'atendente'])) {
       return NextResponse.json(
@@ -160,6 +162,42 @@ export const PUT = withUnit(async (
     if (executor_id !== undefined) {
       updates.push('executor_id = ?');
       updateParams.push(executor_id || null);
+    }
+
+    if (criado_por_id !== undefined) {
+      if (atendimento.status !== 'triagem') {
+        return NextResponse.json(
+          { error: 'Só é possível editar o vendedor durante a triagem' },
+          { status: 400 }
+        );
+      }
+
+      const vendedorId = Number(criado_por_id);
+      if (!Number.isFinite(vendedorId) || vendedorId <= 0) {
+        return NextResponse.json(
+          { error: 'Vendedor é obrigatório' },
+          { status: 400 }
+        );
+      }
+
+      const vendedorValido = await validarUsuarioPorRoles(vendedorId, ['atendente', 'avaliador'], null, { allowAdmin: true });
+
+      if (vendedorValido === 'not_found') {
+        return NextResponse.json(
+          { error: 'Vendedor não encontrado' },
+          { status: 404 }
+        );
+      }
+
+      if (vendedorValido !== 'ok') {
+        return NextResponse.json(
+          { error: 'Usuário selecionado não pode ser vendedor' },
+          { status: 400 }
+        );
+      }
+
+      updates.push('criado_por_id = ?');
+      updateParams.push(vendedorId);
     }
 
     // Edição per-etapa: body contém etapa_modelo_id + etapa_valor.
@@ -391,14 +429,16 @@ export const PUT = withUnit(async (
     }
 
     // Retorna item atualizado
-    const atualizado = await queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null }>(
+    const atualizado = await queryOne<ItemAtendimento & { procedimento_nome: string; executor_nome: string | null; criado_por_nome: string | null }>(
       `SELECT 
         i.*,
         p.nome as procedimento_nome,
-        u.nome as executor_nome
+        u.nome as executor_nome,
+        c.nome as criado_por_nome
       FROM itens_atendimento i
       INNER JOIN procedimentos p ON i.procedimento_id = p.id
       LEFT JOIN usuarios u ON i.executor_id = u.id
+      LEFT JOIN usuarios c ON i.criado_por_id = c.id
       WHERE i.id = ?`,
       [parseInt(itemId)]
     );
