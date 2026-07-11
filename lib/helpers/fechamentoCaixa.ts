@@ -982,6 +982,9 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
       row.usuario_nome ?? dentistaExistente?.nome ?? null,
       row.usuario_valor_diaria ?? dentistaExistente?.valor_diaria ?? null
     );
+    if (!dentistasMap.has(usuarioId)) {
+      return;
+    }
 
     const key = buildFechamentoProcedureKey(row.target_type, row.target_id);
     const current = avaliacoesPagasAgrupadas.get(key) ?? {
