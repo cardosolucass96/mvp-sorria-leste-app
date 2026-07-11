@@ -35,7 +35,7 @@ function isSignatureCaption(text: string) {
 }
 
 function isDataLine(text: string) {
-  return /^(Nome do Favorecido|CPF|Conta|Implantes \(dentes\)|Coroas sobre implantes|Protocolo sobre implante)/i.test(text);
+  return /^(Nome do Favorecido|CPF|Conta|Implantes \(dentes\)|Coroas sobre implantes|Protocolo sobre implante|Escolha do paciente|Observações)/i.test(text);
 }
 
 function shouldHighlightClause(text: string) {
@@ -311,6 +311,21 @@ const TERMO_PRINT_STYLES = `
   .termo-data-line {
     font-family: Arial, Helvetica, sans-serif;
     font-size: 9.8pt;
+  }
+
+  .termo-fill-line {
+    display: inline-block;
+    min-height: 1.1em;
+    vertical-align: baseline;
+    border-bottom: 1px solid #475569;
+  }
+
+  .termo-fill-line--medium {
+    min-width: 58mm;
+  }
+
+  .termo-fill-line--long {
+    min-width: 95mm;
   }
 
   .termo-list {

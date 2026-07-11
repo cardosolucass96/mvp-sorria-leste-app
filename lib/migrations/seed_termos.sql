@@ -40,7 +40,6 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
-<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -71,7 +70,6 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
-<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -124,7 +122,6 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
-<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -153,7 +150,6 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
-<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -190,7 +186,6 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
-<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -224,7 +219,6 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
-<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -258,7 +252,6 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
-<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -274,7 +267,8 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>Declaro ter sido informado que, na consulta inicial realizada em {{data_consulta_inicial}}, foram avaliados os elementos dentários e discutidas as opções de tratamento. Constatou-se a necessidade de extração de um ou mais dentes, sendo esclarecido que a confecção da prótese somente poderá ser iniciada após o período mínimo de cicatrização, estimado entre 30 e 90 dias a contar da data da extração, podendo esse prazo variar conforme a resposta biológica individual do paciente.</p>
 <p>Fui informado sobre as opções de prótese disponíveis e realizei minha escolha conforme indicação clínica do cirurgião-dentista:</p>
 <p>( ) Prótese Dentária Fixa (porcelana ou resina)    ( ) Coroa Dentária    ( ) Prótese Parcial Removível    ( ) Prótese Total    ( ) Prótese sobre Implante</p>
-<p>Escolha do paciente: {{escolha_protese}}    Observações: {{observacoes_protese}}</p>
+<p>Escolha do paciente: {{escolha_protese}}</p>
+<p>Observações: {{observacoes_protese}}</p>
 <p>Fui informado sobre as etapas do tratamento: 1ª) Extração e período de cicatrização (30 a 90 dias); 2ª) Moldagem para confecção da prótese; 3ª) Prova de cera para avaliação de estética e funcionalidade; 4ª) Prova final da peça protética; 5ª) Entrega da prótese; 6ª) Ajustes finais, caso necessários.</p>
 <p>Estou ciente dos possíveis riscos e complicações inerentes ao procedimento, incluindo, mas não se limitando a: afrouxamento ou fratura da prótese, necessidade de reembasamento ou substituição ao longo do tempo, reações gengivais ou ósseas, e, em casos excepcionais, impossibilidade de instalação da peça inicialmente planejada, com necessidade de novo planejamento.</p>
 <p>Estou ciente de que durante o procedimento poderão ocorrer situações não diagnosticadas neste momento ou imprevistas, sendo necessárias alterações no plano de tratamento. Poderá ser indicado o emprego de anestésico local, que apresenta os seguintes riscos: desmaio, dificuldade de respiração e reação alérgica. Além disso, poderão ocorrer desconforto, inchaço, equimose, infecção e dormência prolongada.</p>
@@ -294,7 +288,6 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
-<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -310,7 +303,8 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>Declaro ter sido informado que, na consulta inicial realizada em {{data_consulta_inicial}}, foram avaliados os elementos dentários e discutidas as opções de tratamento. O paciente foi orientado sobre as características, limitações e cuidados inerentes a cada modalidade protética, e optou pela alternativa mais adequada conforme necessidade clínica e recomendação do cirurgião-dentista.</p>
 <p>Fui informado sobre as opções de prótese disponíveis e realizei minha escolha conforme indicação clínica:</p>
 <p>( ) Prótese Dentária Fixa (porcelana ou resina)    ( ) Coroa Dentária    ( ) Prótese Parcial Removível    ( ) Prótese Total    ( ) Prótese sobre Implante</p>
-<p>Escolha do paciente: {{escolha_protese}}    Observações: {{observacoes_protese}}</p>
+<p>Escolha do paciente: {{escolha_protese}}</p>
+<p>Observações: {{observacoes_protese}}</p>
 <p>Fui informado sobre as etapas do tratamento: 1ª) Moldagem e ajuste inicial (o paciente será convocado em até 15 dias após a consulta inicial, com sub-etapas de moldagem, prova de cera e prova com os dentes); 2ª) Prova de cera, com possibilidade de ajustes estéticos e funcionais; 3ª) Prova final para verificação de todos os aspectos estéticos e funcionais; 4ª) Entrega da prótese/coroa; 5ª) Ajustes posteriores, caso necessários.</p>
 <p>Estou ciente dos possíveis riscos e complicações inerentes ao procedimento, incluindo, mas não se limitando a: afrouxamento, fratura ou lascamento da prótese, necessidade de reembasamento ou substituição ao longo do tempo, reações gengivais e, em casos excepcionais, necessidade de extração de elemento dentário subjacente.</p>
 <p>Estou ciente de que durante o procedimento poderão ocorrer situações não diagnosticadas neste momento ou imprevistas, sendo necessárias alterações no plano de tratamento. Poderá ser indicado o emprego de anestésico local, que apresenta os seguintes riscos: desmaio, dificuldade de respiração e reação alérgica. Além disso, poderão ocorrer desconforto, inchaço, equimose, infecção e dormência prolongada.</p>
@@ -330,7 +324,6 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
-<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,
@@ -364,7 +357,6 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 <p>___________________, _____ de _______________ de 20____.</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
 <p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
-<p>(Assinatura e carimbo CRO do profissional)</p>
 ',
   1,
   NULL,

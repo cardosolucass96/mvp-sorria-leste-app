@@ -40,4 +40,20 @@ describe('termosDocumento', () => {
     expect(documentHtml).toContain('<title>Termo Teste</title>');
     expect(documentHtml).toContain('termo-title');
   });
+
+  it('mantem linha de preenchimento para campos manuais de protese quando vazios', () => {
+    const { html } = renderTermoTemplate(
+      '<p>Escolha do paciente: {{escolha_protese}}</p><p>Observações: {{observacoes_protese}}</p>',
+      buildSampleTermoContext({
+        escolha_protese: '',
+        observacoes_protese: '',
+      })
+    );
+    const formatted = formatTermoHtmlContent(html);
+
+    expect(formatted).toContain('termo-fill-line termo-fill-line--medium');
+    expect(formatted).toContain('termo-fill-line termo-fill-line--long');
+    expect(formatted).toContain('Escolha do paciente:');
+    expect(formatted).toContain('Observações:');
+  });
 });

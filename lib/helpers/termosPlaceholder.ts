@@ -7,6 +7,10 @@ interface RenderConfig {
 }
 
 const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9._-]+)\s*\}\}/g;
+const FILLABLE_PLACEHOLDER_KEYS = new Set([
+  'escolha_protese',
+  'observacoes_protese',
+]);
 
 function escapeHtml(value: string) {
   return value
@@ -125,7 +129,7 @@ export function buildTermoContext(cliente: Cliente, overrides: RenderConfig = {}
   return base;
 }
 
-export function buildSampleTermoContext() {
+export function buildSampleTermoContext(overrides: RenderConfig = {}) {
   const clienteExemplo: Cliente = {
     id: 999,
     nome: 'Maria da Conceicao Andrade',
@@ -141,7 +145,10 @@ export function buildSampleTermoContext() {
     created_at: '2026-07-01 09:30:00',
   };
 
-  return buildTermoContext(clienteExemplo, SAMPLE_TERMO_OVERRIDES);
+  return buildTermoContext(clienteExemplo, {
+    ...SAMPLE_TERMO_OVERRIDES,
+    ...overrides,
+  });
 }
 
 export function renderTermoTemplate(html: string, context: Record<string, string>) {
@@ -154,7 +161,13 @@ export function renderTermoTemplate(html: string, context: Record<string, string
     }
 
     const value = context[chave] ?? '';
-    if (!value) return '';
+    if (!value) {
+      if (FILLABLE_PLACEHOLDER_KEYS.has(chave)) {
+        const variant = chave === 'observacoes_protese' ? 'long' : 'medium';
+        return `<span class="termo-fill-line termo-fill-line--${variant}" data-placeholder="${escapeHtml(chave)}"></span>`;
+      }
+      return '';
+    }
 
     return `<strong class="termo-variable">${escapeHtml(value)}</strong>`;
   });
