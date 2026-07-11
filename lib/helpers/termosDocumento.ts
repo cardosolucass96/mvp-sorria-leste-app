@@ -326,6 +326,11 @@ const TERMO_PRINT_STYLES = `
   strong {
     font-weight: 700;
   }
+
+  .termo-variable {
+    font-weight: 700;
+    color: #020617;
+  }
 `;
 
 export function buildTermoPrintableDocument(title: string, rawHtml: string) {

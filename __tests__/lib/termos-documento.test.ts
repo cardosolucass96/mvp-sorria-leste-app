@@ -21,6 +21,9 @@ describe('termosDocumento', () => {
     expect(formatted).toContain('class="termo-eyebrow"');
     expect(formatted).toContain('class="termo-title"');
     expect(formatted).toContain('<h2 class="termo-section-title">DADOS BANCARIOS PARA DEVOLUCAO:</h2>');
+    expect(formatted).toContain('<strong class="termo-variable">Maria da Conceicao Andrade</strong>');
+    expect(formatted).toContain('<strong class="termo-variable">123.456.789-10</strong>');
+    expect(formatted).toContain('<strong class="termo-variable">(85) 99876-5432</strong>');
     expect(formatted).toContain('termo-clause-label');
     expect(formatted).toContain('termo-date-line');
     expect(formatted).toContain('termo-signature-caption');

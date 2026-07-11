@@ -8,6 +8,15 @@ interface RenderConfig {
 
 const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9._-]+)\s*\}\}/g;
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export const TERMO_PLACEHOLDER_KEYS = [
   'cliente_nome',
   'cliente_id',
@@ -143,7 +152,11 @@ export function renderTermoTemplate(html: string, context: Record<string, string
       faltando.add(chave);
       return '';
     }
-    return context[chave] ?? '';
+
+    const value = context[chave] ?? '';
+    if (!value) return '';
+
+    return `<strong class="termo-variable">${escapeHtml(value)}</strong>`;
   });
 
   return {
