@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, UserCheck, UserX, MessageCircle, CalendarClock, X, RefreshCw, Plus, FileText, List, CalendarDays } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -22,6 +22,20 @@ import { apiFetch } from '@/lib/utils/apiFetch';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useAuth } from '@/contexts/AuthContext';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { isProfissionalAgenda } from '@/lib/utils/usuariosProfissionais';
+import {
+  type AgendaCalendarView,
+  endOfAgendaMonth,
+  endOfAgendaWeek,
+  formatAgendaDateKey,
+  formatAgendaRangeEnd,
+  formatAgendaRangeStart,
+  getAgendaDateKey,
+  isAgendaDateInRange,
+  parseAgendaDateKey,
+  startOfAgendaMonth,
+  startOfAgendaWeek,
+} from '@/lib/utils/agendaCalendar';
 
 interface Agendamento {
   id: number;
@@ -102,18 +116,8 @@ const FILTROS_RAPIDOS = [
   { id: 'semana', label: 'Esta semana' },
   { id: 'todos', label: 'Todos' },
 ] as const;
-
-const ROLES_DENTISTA_AGENDA = ['avaliador', 'executor', 'ortodontista'] as const;
-
-function getUsuarioRoles(usuario: Usuario) {
-  return Array.isArray(usuario.roles) && usuario.roles.length > 0 ? usuario.roles : [usuario.role];
-}
-
-function isProfissionalAgenda(usuario: Usuario) {
-  if (usuario.ativo === 0) return false;
-  const roles = getUsuarioRoles(usuario);
-  return roles.includes('admin') || roles.some((role) => ROLES_DENTISTA_AGENDA.includes(role as typeof ROLES_DENTISTA_AGENDA[number]));
-}
+const AGENDA_VIEW_MODE_STORAGE_KEY = 'agenda-view-mode';
+const AGENDA_CALENDAR_SUBVIEW_STORAGE_KEY = 'agenda-calendar-subview';
 
 function formatDate(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -172,24 +176,36 @@ export default function AgendaPage() {
 
   // View mode + calendar state
   const [viewMode, setViewMode] = useState<'lista' | 'calendario'>('lista');
-  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), 1);
-  });
+  const [calendarSubview, setCalendarSubview] = useState<AgendaCalendarView>('mes');
+  const [focusedDate, setFocusedDate] = useState<Date>(() => new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const previousCalendarRangeKeyRef = useRef<string | null>(null);
 
   // Persistir viewMode no localStorage
   useEffect(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('agenda-view-mode') : null;
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(AGENDA_VIEW_MODE_STORAGE_KEY) : null;
     if (saved === 'calendario' || saved === 'lista') {
       setViewMode(saved);
     }
   }, []);
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('agenda-view-mode', viewMode);
+      localStorage.setItem(AGENDA_VIEW_MODE_STORAGE_KEY, viewMode);
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(AGENDA_CALENDAR_SUBVIEW_STORAGE_KEY) : null;
+    if (saved === 'mes' || saved === 'semana') {
+      setCalendarSubview(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(AGENDA_CALENDAR_SUBVIEW_STORAGE_KEY, calendarSubview);
+    }
+  }, [calendarSubview]);
 
   // Profissionais da agenda (avaliadores/executores/ortodontistas)
   const [profissionaisAgenda, setProfissionaisAgenda] = useState<Usuario[]>([]);
@@ -246,6 +262,25 @@ export default function AgendaPage() {
   const [novoSalvando, setNovoSalvando] = useState(false);
   const [novoError, setNovoError] = useState('');
 
+  const calendarRange = useMemo(() => {
+    if (calendarSubview === 'semana') {
+      return {
+        start: startOfAgendaWeek(focusedDate),
+        end: endOfAgendaWeek(focusedDate),
+      };
+    }
+
+    return {
+      start: startOfAgendaMonth(focusedDate),
+      end: endOfAgendaMonth(focusedDate),
+    };
+  }, [calendarSubview, focusedDate]);
+
+  const calendarRangeKey = useMemo(
+    () => `${calendarSubview}_${formatAgendaDateKey(calendarRange.start)}_${formatAgendaDateKey(calendarRange.end)}`,
+    [calendarRange.end, calendarRange.start, calendarSubview]
+  );
+
   const carregarAgendamentos = useCallback(async () => {
     setLoading(true);
     try {
@@ -254,19 +289,15 @@ export default function AgendaPage() {
       if (busca) params.append('busca', busca);
 
       if (viewMode === 'calendario') {
-        // No modo calendário, data_inicio/fim são os limites do mês visível
-        const inicioMes = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
-        const fimMes = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
-        params.append('data_inicio', formatDate(inicioMes));
-        params.append('data_fim', formatDate(fimMes));
-        params.append('limit', '500');
+        params.append('data_inicio', formatAgendaRangeStart(calendarRange.start));
+        params.append('data_fim', formatAgendaRangeEnd(calendarRange.end));
       } else {
         if (dataInicio) params.append('data_inicio', dataInicio);
         if (dataFim) params.append('data_fim', dataFim);
         params.append('page', String(page));
         params.append('limit', String(LIMIT));
       }
-      params.append('order_by', 'cliente_nome');
+      params.append('order_by', viewMode === 'calendario' ? 'data_agendada' : 'cliente_nome');
       params.append('order_dir', 'asc');
 
       // Avaliador/executor: filtrar só seus agendamentos
@@ -300,7 +331,20 @@ export default function AgendaPage() {
     } finally {
       setLoading(false);
     }
-  }, [filtroStatus, busca, filtroDentista, dataInicio, dataFim, page, isDentista, user, unitFetch, viewMode, calendarMonth]);
+  }, [
+    filtroStatus,
+    busca,
+    filtroDentista,
+    dataInicio,
+    dataFim,
+    page,
+    isDentista,
+    user,
+    unitFetch,
+    viewMode,
+    calendarRange.end,
+    calendarRange.start,
+  ]);
 
   useEffect(() => {
     carregarAgendamentos();
@@ -511,6 +555,43 @@ export default function AgendaPage() {
   // Separar agendamentos com data e sem data
   const agrupadosComData = agrupados.filter(g => g.data_key !== 'sem-data');
   const agrupadosSemData = agrupados.filter(g => g.data_key === 'sem-data');
+
+  const visibleCalendarDayKeys = useMemo(() => {
+    if (viewMode !== 'calendario') return [];
+
+    const keys = new Set<string>();
+    for (const agendamento of agendamentos) {
+      const dateKey = getAgendaDateKey(agendamento.data_agendada);
+      if (!dateKey) continue;
+
+      const parsedDay = parseAgendaDateKey(dateKey);
+      if (!isAgendaDateInRange(parsedDay, calendarRange.start, calendarRange.end)) continue;
+      keys.add(dateKey);
+    }
+
+    return Array.from(keys).sort((left, right) => left.localeCompare(right));
+  }, [agendamentos, calendarRange.end, calendarRange.start, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== 'calendario') {
+      previousCalendarRangeKeyRef.current = null;
+      return;
+    }
+
+    const rangeChanged = previousCalendarRangeKeyRef.current !== calendarRangeKey;
+    previousCalendarRangeKeyRef.current = calendarRangeKey;
+
+    if (selectedDay && isAgendaDateInRange(selectedDay, calendarRange.start, calendarRange.end)) {
+      return;
+    }
+
+    if (!rangeChanged && selectedDay) {
+      return;
+    }
+
+    const nextDayKey = visibleCalendarDayKeys[0];
+    setSelectedDay(nextDayKey ? parseAgendaDateKey(nextDayKey) : null);
+  }, [calendarRange.end, calendarRange.start, calendarRangeKey, selectedDay, viewMode, visibleCalendarDayKeys]);
 
   // ─── Chegou ───────────────────────────────────────────────────
 
@@ -1052,8 +1133,10 @@ export default function AgendaPage() {
         <div className="grid gap-6 md:grid-cols-[1fr_minmax(0,420px)]">
           <AgendaCalendario
             agendamentos={agendamentos}
-            month={calendarMonth}
-            onMonthChange={(d) => { setCalendarMonth(d); setSelectedDay(null); }}
+            view={calendarSubview}
+            onViewChange={setCalendarSubview}
+            focusedDate={focusedDate}
+            onFocusedDateChange={setFocusedDate}
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
           />
@@ -1062,11 +1145,13 @@ export default function AgendaPage() {
               if (!selectedDay) {
                 return (
                   <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                    Selecione um dia no calendário para ver os agendamentos.
+                    {visibleCalendarDayKeys.length > 0
+                      ? 'Selecione um dia no calendário para ver os agendamentos.'
+                      : 'Nenhum agendamento no período exibido.'}
                   </div>
                 );
               }
-              const dayKey = `${selectedDay.getFullYear()}-${String(selectedDay.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.getDate()).padStart(2, '0')}`;
+              const dayKey = formatAgendaDateKey(selectedDay);
               const gruposDoDia = agrupadosComData.filter(g => g.data_key === dayKey);
               const label = selectedDay.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
               if (gruposDoDia.length === 0) {

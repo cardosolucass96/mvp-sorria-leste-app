@@ -3,6 +3,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import AgendaPage from '@/app/agenda/page';
+import {
+  endOfAgendaMonth,
+  endOfAgendaWeek,
+  formatAgendaRangeEnd,
+  formatAgendaRangeStart,
+  startOfAgendaMonth,
+  startOfAgendaWeek,
+} from '@/lib/utils/agendaCalendar';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -64,9 +72,22 @@ jest.mock('@/lib/utils/usePageTitle', () => jest.fn());
 jest.mock('@/components/domain', () => ({
   StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
   ProntuarioDrawer: () => null,
-  AgendaCalendario: ({ agendamentos }: { agendamentos: Array<{ id: number }> }) => {
-    mockAgendaCalendario(agendamentos);
-    return <div data-testid="agenda-calendario">{agendamentos.map((agendamento) => agendamento.id).join(',')}</div>;
+  AgendaCalendario: (props: {
+    agendamentos: Array<{ id: number }>;
+    view: 'mes' | 'semana';
+    onViewChange: (view: 'mes' | 'semana') => void;
+    onSelectDay: (date: Date | null) => void;
+  }) => {
+    mockAgendaCalendario(props);
+    return (
+      <div data-testid="agenda-calendario">
+        <div data-testid="agenda-calendario-view">{props.view}</div>
+        <button type="button" onClick={() => props.onViewChange('mes')}>Mês</button>
+        <button type="button" onClick={() => props.onViewChange('semana')}>Semana</button>
+        <button type="button" onClick={() => props.onSelectDay(new Date('2026-07-15T00:00:00'))}>Selecionar dia</button>
+        {props.agendamentos.map((agendamento) => agendamento.id).join(',')}
+      </div>
+    );
   },
   ViewModeToggle: ({
     options,
@@ -120,6 +141,17 @@ function makeAgendamento(overrides: Record<string, unknown> = {}) {
     atendimento_id: null,
     ...overrides,
   };
+}
+
+function getLastUnitFetchUrl(): string {
+  const lastCall = mockUnitFetch.mock.calls[mockUnitFetch.mock.calls.length - 1];
+  return String(lastCall?.[0] ?? '');
+}
+
+function getSearchParamsFromLastUnitFetch(): URLSearchParams {
+  const url = getLastUnitFetchUrl();
+  const query = url.split('?')[1] ?? '';
+  return new URLSearchParams(query);
 }
 
 beforeEach(() => {
@@ -207,7 +239,7 @@ describe('AgendaPage', () => {
     });
   });
 
-  test('mantém agendamentos no calendário quando a API retorna array simples', async () => {
+  test('mantém os cards operacionais na lateral quando seleciona um dia no calendário', async () => {
     localStorage.setItem('agenda-view-mode', 'calendario');
 
     mockUnitFetch.mockImplementation((url: string) => {
@@ -221,19 +253,118 @@ describe('AgendaPage', () => {
       }
 
       return mockJsonResponse([
-        makeAgendamento({ id: 7, cliente_nome: 'Carlos Lima', data_agendada: '2026-07-20T14:00' }),
+        makeAgendamento({ id: 7, cliente_nome: 'Carlos Lima', data_agendada: '2026-07-15T14:00' }),
       ]);
     });
 
     render(<AgendaPage />);
 
     expect(await screen.findByTestId('agenda-calendario')).toHaveTextContent('7');
-    expect(screen.getByText('1 cliente(s) · 1 agendamento(s)')).toBeInTheDocument();
-    expect(screen.getByText(/Selecione um dia no calendário/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Selecionar dia' }));
+
+    expect(await screen.findByText('Carlos Lima')).toBeInTheDocument();
+    expect(screen.getByText(/15 de julho de 2026/i)).toBeInTheDocument();
+  });
+
+  test('persiste o submodo semanal do calendário', async () => {
+    localStorage.setItem('agenda-view-mode', 'calendario');
+    localStorage.setItem('agenda-calendar-subview', 'semana');
+
+    mockUnitFetch.mockImplementation((url: string) => {
+      if (url.includes('page=')) {
+        return mockJsonResponse({
+          items: [],
+          total: 0,
+          page: 1,
+          pages: 1,
+        });
+      }
+
+      return mockJsonResponse([makeAgendamento({ id: 9 })]);
+    });
+
+    render(<AgendaPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('agenda-calendario-view')).toHaveTextContent('semana');
+    });
+
+    expect(localStorage.getItem('agenda-calendar-subview')).toBe('semana');
+    expect(mockAgendaCalendario).toHaveBeenCalledWith(
+      expect.objectContaining({ view: 'semana' })
+    );
+  });
+
+  test('altera o range consultado ao trocar de mês para semana no calendário', async () => {
+    localStorage.setItem('agenda-view-mode', 'calendario');
+
+    mockUnitFetch.mockImplementation((url: string) => {
+      if (url.includes('page=')) {
+        return mockJsonResponse({
+          items: [],
+          total: 0,
+          page: 1,
+          pages: 1,
+        });
+      }
+
+      return mockJsonResponse([makeAgendamento({ id: 15 })]);
+    });
+
+    render(<AgendaPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('agenda-calendario')).toBeInTheDocument();
+    });
+
+    const initialParams = getSearchParamsFromLastUnitFetch();
+    const today = new Date();
+    expect(initialParams.get('data_inicio')).toBe(formatAgendaRangeStart(startOfAgendaMonth(today)));
+    expect(initialParams.get('data_fim')).toBe(formatAgendaRangeEnd(endOfAgendaMonth(today)));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Semana' }));
+
+    await waitFor(() => {
+      const params = getSearchParamsFromLastUnitFetch();
+      expect(params.get('data_inicio')).toBe(formatAgendaRangeStart(startOfAgendaWeek(today)));
+      expect(params.get('data_fim')).toBe(formatAgendaRangeEnd(endOfAgendaWeek(today)));
+    });
+  });
+
+  test('mantém o filtro por dentista também no modo semanal', async () => {
+    localStorage.setItem('agenda-view-mode', 'calendario');
+    localStorage.setItem('agenda-calendar-subview', 'semana');
+
+    mockUnitFetch.mockImplementation((url: string) => {
+      if (url.includes('executor_id=10')) {
+        return mockJsonResponse([
+          makeAgendamento({ id: 10, executor_id: 10, executor_nome: 'Dra. Ana', cliente_nome: 'Paciente Filtrado' }),
+        ]);
+      }
+
+      return mockJsonResponse([
+        makeAgendamento({ id: 8, executor_id: 12, executor_nome: 'Dr. Caio', cliente_nome: 'Paciente Geral' }),
+      ]);
+    });
+
+    render(<AgendaPage />);
+
+    const dentistaSelect = await screen.findByLabelText(/Dentista/i);
+    fireEvent.change(dentistaSelect, { target: { value: '10' } });
+
+    await waitFor(() => {
+      const params = getSearchParamsFromLastUnitFetch();
+      expect(params.get('executor_id')).toBe('10');
+      expect(params.get('page')).toBeNull();
+      expect(params.get('data_inicio')).toBe(formatAgendaRangeStart(startOfAgendaWeek(new Date())));
+    });
 
     await waitFor(() => {
       expect(mockAgendaCalendario).toHaveBeenCalledWith(
-        expect.arrayContaining([expect.objectContaining({ id: 7, cliente_nome: 'Carlos Lima' })])
+        expect.objectContaining({
+          view: 'semana',
+          agendamentos: expect.arrayContaining([expect.objectContaining({ id: 10, cliente_nome: 'Paciente Filtrado' })]),
+        })
       );
     });
   });

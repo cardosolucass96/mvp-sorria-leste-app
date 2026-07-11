@@ -10,6 +10,25 @@ export {
 } from './formatters';
 
 export {
+  parseAgendaDateTime,
+  hasAgendaExplicitTime,
+  formatAgendaDateKey,
+  parseAgendaDateKey,
+  getAgendaDateKey,
+  getAgendaTimeLabel,
+  getAgendaHourNumber,
+  getAgendaSortMinutes,
+  startOfAgendaMonth,
+  endOfAgendaMonth,
+  startOfAgendaWeek,
+  endOfAgendaWeek,
+  isAgendaDateInRange,
+  formatAgendaRangeStart,
+  formatAgendaRangeEnd,
+} from './agendaCalendar';
+export type { AgendaCalendarView } from './agendaCalendar';
+
+export {
   validarCPF,
   validarEmail,
   validarTelefone,
