@@ -157,12 +157,12 @@ function CopyInlineButton({ label, onCopy, disabled = false }: CopyInlineButtonP
     <Button
       variant="ghost"
       size="icon-xs"
-      className="shrink-0 text-muted-foreground hover:text-foreground"
+      className="h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground"
       aria-label={label}
       title={label}
       disabled={disabled}
       onClick={onCopy}
-      icon={<Copy className="w-3.5 h-3.5" />}
+      icon={<Copy className="w-3 h-3" />}
     />
   );
 }
@@ -917,11 +917,11 @@ export default function FechamentoCaixaPage() {
         const cpfCliente = formatarCPF(item.cliente_cpf);
 
         return (
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5">
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-1">
               <Link
                 href={`/clientes/${item.cliente_id}`}
-                className="block w-fit font-medium text-info-600 transition-colors hover:text-info-800 hover:underline"
+                className="block w-fit leading-tight font-medium text-info-600 transition-colors hover:text-info-800 hover:underline"
               >
                 {nomeCliente}
               </Link>
@@ -933,8 +933,8 @@ export default function FechamentoCaixaPage() {
                 }}
               />
             </div>
-            <div className="flex items-center gap-1.5">
-              <p className="text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <p className="text-xs leading-tight text-muted-foreground">
                 Telefone: {telefoneCliente}
               </p>
               <CopyInlineButton
@@ -945,8 +945,8 @@ export default function FechamentoCaixaPage() {
                 }}
               />
             </div>
-            <div className="flex items-center gap-1.5">
-              <p className="text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <p className="text-xs leading-tight text-muted-foreground">
                 CPF: {cpfCliente}
               </p>
               <CopyInlineButton
@@ -1222,6 +1222,7 @@ export default function FechamentoCaixaPage() {
             keyExtractor={(item) => item.id}
             emptyMessage="Nenhum pagamento recebido nesse dia."
             caption="Pagamentos recebidos no dia"
+            className="[&_td]:py-2 [&_th]:py-2.5"
           />
         </Card>
 
