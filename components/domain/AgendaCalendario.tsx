@@ -346,9 +346,9 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
             }}
             weekStartsOn={0}
             showOutsideDays
-            className="mx-auto w-full [--cell-size:--spacing(10)] lg:[--cell-size:--spacing(12)]"
+            className="w-full min-w-0 [--cell-size:--spacing(12)]"
             classNames={{
-              root: 'w-full',
+              root: '!w-full',
               month: 'w-full gap-3',
               month_caption: 'hidden',
               table: 'w-full table-fixed border-separate border-spacing-x-2 border-spacing-y-2.5',
