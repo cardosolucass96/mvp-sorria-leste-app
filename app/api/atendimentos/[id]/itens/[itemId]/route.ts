@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute, query } from '@/lib/db';
 import { gerarComissoesItem } from '@/lib/helpers/gerarComissoes';
-import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
 
 interface ItemAtendimento {
   id: number;
@@ -117,10 +117,20 @@ export const PUT = withUnit(async (
     // Validação: edição de valor só em avaliacao ou aguardando_pagamento
     // Garante também valor >= 0 e valor >= valor_pago (sem criar excesso não tratado).
     const valorRecebido = valor_final !== undefined ? valor_final : valor;
+    const triagemGerenciadaPorRecepcao = atendimento.status === 'triagem'
+      && (executor_id !== undefined || valorRecebido !== undefined);
+
+    if (triagemGerenciadaPorRecepcao && !userHasAnyRole(context.user, ['admin', 'atendente'])) {
+      return NextResponse.json(
+        { error: 'Acesso não autorizado para este perfil' },
+        { status: 403 }
+      );
+    }
+
     if (valorRecebido !== undefined) {
-      if (!['avaliacao', 'aguardando_pagamento'].includes(atendimento.status)) {
+      if (!['triagem', 'avaliacao', 'aguardando_pagamento'].includes(atendimento.status)) {
         return NextResponse.json(
-          { error: 'Só é possível editar o valor durante a avaliação ou enquanto aguarda pagamento' },
+          { error: 'Só é possível editar o valor durante a triagem, avaliação ou enquanto aguarda pagamento' },
           { status: 400 }
         );
       }

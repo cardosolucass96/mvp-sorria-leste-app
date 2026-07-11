@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query, execute } from '@/lib/db';
-import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
 import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
 import { PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
+import { validarUsuarioPorRoles } from '../_helpers';
 
 interface Atendimento {
   id: number;
@@ -373,6 +374,38 @@ export const PUT = withUnit(async (request: NextRequest, context: UnitAuthentica
     }
     
     if (avaliador_id !== undefined) {
+      if (atendimento.status !== 'triagem') {
+        return NextResponse.json(
+          { error: 'Só é possível alterar o avaliador durante a triagem' },
+          { status: 400 }
+        );
+      }
+
+      if (!userHasAnyRole(context.user, ['admin', 'atendente'])) {
+        return NextResponse.json(
+          { error: 'Acesso não autorizado para este perfil' },
+          { status: 403 }
+        );
+      }
+
+      if (avaliador_id !== null) {
+        const avaliadorValido = await validarUsuarioPorRoles(Number(avaliador_id), ['avaliador'], null, { allowAdmin: true });
+
+        if (avaliadorValido === 'not_found') {
+          return NextResponse.json(
+            { error: 'Avaliador não encontrado' },
+            { status: 404 }
+          );
+        }
+
+        if (avaliadorValido !== 'ok') {
+          return NextResponse.json(
+            { error: 'Usuário selecionado não é avaliador' },
+            { status: 400 }
+          );
+        }
+      }
+
       updates.push('avaliador_id = ?');
       updateParams.push(avaliador_id || null);
     }

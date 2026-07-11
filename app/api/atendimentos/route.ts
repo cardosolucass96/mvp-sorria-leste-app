@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { validarUsuarioPorRoles } from './_helpers';
 
 interface Atendimento {
   id: number;
@@ -23,63 +24,6 @@ interface AtendimentoComCliente extends Atendimento {
 
 interface CountResult {
   count: number;
-}
-
-interface SumResult {
-  total: number;
-}
-
-async function carregarRolesUsuarioAtivo(usuarioId: number): Promise<string[] | null> {
-  const usuario = await queryOne<{ id: number; role: string }>(
-    'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
-    [usuarioId]
-  );
-
-  if (!usuario) return null;
-
-  let roles = [usuario.role];
-  try {
-    const rolesRows = await query<{ role: string }>(
-      'SELECT role FROM usuario_roles WHERE usuario_id = ?',
-      [usuarioId]
-    );
-    if (rolesRows.length > 0) {
-      roles = Array.from(new Set([usuario.role, ...rolesRows.map((row) => row.role)]));
-    }
-  } catch {
-    // Tabela usuario_roles ainda não existe — usa role primária.
-  }
-
-  return roles.filter((role) => role !== 'admin');
-}
-
-async function validarUsuarioPorRoles(
-  usuarioId: number,
-  rolesFallback: string[],
-  categoriaId: number | null = null
-): Promise<'not_found' | 'ok' | 'invalid'> {
-  const roles = await carregarRolesUsuarioAtivo(usuarioId);
-  if (!roles) return 'not_found';
-
-  if (categoriaId) {
-    try {
-      const categoriaRoles = await query<{ role: string }>(
-        'SELECT role FROM categoria_roles WHERE categoria_id = ?',
-        [categoriaId]
-      );
-      const allowedRoles = categoriaRoles
-        .map((row) => row.role)
-        .filter((role) => role !== 'admin');
-
-      if (allowedRoles.length > 0) {
-        return roles.some((role) => allowedRoles.includes(role)) ? 'ok' : 'invalid';
-      }
-    } catch {
-      // Tabela categoria_roles ainda não existe — usa fallback.
-    }
-  }
-
-  return roles.some((role) => rolesFallback.includes(role)) ? 'ok' : 'invalid';
 }
 
 // GET /api/atendimentos - Lista atendimentos da unidade atual
@@ -217,7 +161,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     // Verifica avaliador se fornecido (fluxo normal)
     if (avaliador_id && !tipo_orto) {
-      const avaliadorValido = await validarUsuarioPorRoles(avaliador_id, ['avaliador']);
+      const avaliadorValido = await validarUsuarioPorRoles(avaliador_id, ['avaliador'], null, { allowAdmin: true });
 
       if (avaliadorValido === 'not_found') {
         return NextResponse.json(

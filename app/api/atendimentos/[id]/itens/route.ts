@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { query, queryOne, execute } from '@/lib/db';
-import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
 
 interface ItemAtendimento {
   id: number;
@@ -41,6 +41,48 @@ type VerificarResult =
 type ValidarExecutorResult =
   | { kind: 'error'; response: NextResponse }
   | { kind: 'ok' };
+
+const DEPENDENCIAS_ITEM_UPDATE = [
+  {
+    table: 'agendamentos',
+    sql: 'UPDATE agendamentos SET item_atendimento_origem_id = NULL WHERE item_atendimento_origem_id = ?',
+  },
+] as const;
+
+const DEPENDENCIAS_ITEM_DELETE = [
+  {
+    table: 'movimentacoes_saldo',
+    sql: 'DELETE FROM movimentacoes_saldo WHERE item_atendimento_id = ?',
+  },
+  {
+    table: 'prontuarios',
+    sql: 'DELETE FROM prontuarios WHERE item_atendimento_id = ?',
+  },
+  {
+    table: 'anexos_execucao',
+    sql: 'DELETE FROM anexos_execucao WHERE item_atendimento_id = ?',
+  },
+  {
+    table: 'notas_execucao',
+    sql: 'DELETE FROM notas_execucao WHERE item_atendimento_id = ?',
+  },
+  {
+    table: 'comissoes',
+    sql: 'DELETE FROM comissoes WHERE item_atendimento_id = ?',
+  },
+  {
+    table: 'itens_atendimento_destinos',
+    sql: 'DELETE FROM itens_atendimento_destinos WHERE item_atendimento_id = ?',
+  },
+  {
+    table: 'pagamentos_alocacoes',
+    sql: 'DELETE FROM pagamentos_alocacoes WHERE item_atendimento_id = ?',
+  },
+  {
+    table: 'pagamentos_itens',
+    sql: 'DELETE FROM pagamentos_itens WHERE item_atendimento_id = ?',
+  },
+] as const;
 
 async function verificarAtendimentoUnidade(atendimentoId: number, unidadeId: number): Promise<VerificarResult> {
   const at = await queryOne<Atendimento>(
@@ -83,6 +125,11 @@ async function validarExecutorSelecionado(
   } catch {
     // Tabela usuario_roles ainda não existe — usar role primária.
   }
+
+  if (roles.includes('admin')) {
+    return { kind: 'ok' };
+  }
+
   const rolesEfetivas = roles.filter((role) => role !== 'admin');
 
   if (categoriaId) {
@@ -123,6 +170,41 @@ async function validarExecutorSelecionado(
       { status: 400 }
     ),
   };
+}
+
+async function tabelaExiste(
+  tableName: string,
+  cache: Map<string, boolean>
+): Promise<boolean> {
+  const cached = cache.get(tableName);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const tabela = await queryOne<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    [tableName]
+  );
+  const exists = !!tabela;
+  cache.set(tableName, exists);
+  return exists;
+}
+
+async function removerDependenciasItem(
+  itemId: number,
+  tabelasDisponiveis: Map<string, boolean>
+) {
+  for (const dependencia of DEPENDENCIAS_ITEM_UPDATE) {
+    if (await tabelaExiste(dependencia.table, tabelasDisponiveis)) {
+      await execute(dependencia.sql, [itemId]);
+    }
+  }
+
+  for (const dependencia of DEPENDENCIAS_ITEM_DELETE) {
+    if (await tabelaExiste(dependencia.table, tabelasDisponiveis)) {
+      await execute(dependencia.sql, [itemId]);
+    }
+  }
 }
 
 // GET /api/atendimentos/[id]/itens - Lista itens do atendimento
@@ -367,10 +449,17 @@ export const DELETE = withUnit(async (
     if (result.kind === 'error') return result.response;
     const atendimento = result.atendimento;
 
-    if (atendimento.status !== 'avaliacao') {
+    if (!['triagem', 'avaliacao'].includes(atendimento.status)) {
       return NextResponse.json(
-        { error: 'Só é possível remover procedimentos durante a avaliação' },
+        { error: 'Só é possível remover procedimentos durante a triagem ou avaliação' },
         { status: 400 }
+      );
+    }
+
+    if (atendimento.status === 'triagem' && !userHasAnyRole(context.user, ['admin', 'atendente'])) {
+      return NextResponse.json(
+        { error: 'Acesso não autorizado para este perfil' },
+        { status: 403 }
       );
     }
 
@@ -396,7 +485,10 @@ export const DELETE = withUnit(async (
       itensParaRemover = [item];
     }
 
+    const tabelasDisponiveis = new Map<string, boolean>();
+
     for (const item of itensParaRemover) {
+      await removerDependenciasItem(item.id, tabelasDisponiveis);
       await execute('DELETE FROM itens_atendimento WHERE id = ?', [item.id]);
     }
 

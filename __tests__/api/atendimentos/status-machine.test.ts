@@ -28,24 +28,39 @@ import {
 // Mock JWT para bypass de autenticação nos testes
 jest.mock('@/lib/auth/jwt', () => ({
   extractToken: jest.fn().mockReturnValue('mock-token'),
-  verifyToken: jest.fn().mockResolvedValue({
-    sub: 1,
-    email: 'admin@test.com',
-    role: 'admin',
-    nome: 'Admin Teste',
+  verifyToken: jest.fn(),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
+import { verifyToken } from '@/lib/auth/jwt';
+import { PUT as updateAtendimento } from '@/app/api/atendimentos/[id]/route';
+
+const mockVerifyToken = verifyToken as jest.MockedFunction<typeof verifyToken>;
+
+function makeAuthPayload(role: 'admin' | 'atendente' | 'avaliador' | 'executor' = 'admin') {
+  const idsByRole = {
+    admin: 1,
+    atendente: 2,
+    avaliador: 3,
+    executor: 4,
+  };
+
+  return {
+    sub: idsByRole[role],
+    email: `${role}@test.com`,
+    role,
+    nome: `${role} Teste`,
     unidade_ids: [1, 2],
     unidade_atual: 1,
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + 86400,
-  }),
-  generateToken: jest.fn().mockResolvedValue('mock-token'),
-}));
-
-import { PUT as updateAtendimento } from '@/app/api/atendimentos/[id]/route';
+  };
+}
 
 beforeEach(() => {
   resetMockDb();
   setupCloudflareContextMock();
+  mockVerifyToken.mockResolvedValue(makeAuthPayload('admin'));
 });
 
 afterEach(() => {
@@ -365,6 +380,7 @@ describe('PUT /api/atendimentos/[id] — outros', () => {
 
   it('atualiza avaliador_id', async () => {
     mockAtendimentoAndReturn(ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select id, role from usuarios where id', { id: 3, role: 'avaliador' });
 
     const ctx = createRouteContext({ id: '1' });
     const { status } = await callRoute(updateAtendimento, '/api/atendimentos/1', {
@@ -391,6 +407,60 @@ describe('PUT /api/atendimentos/[id] — outros', () => {
     const queries = getExecutedQueries();
     const updateQuery = queries.find(q => q.sql.includes('UPDATE atendimentos'));
     expect(updateQuery!.params).toContain(null);
+  });
+
+  it('rejeita avaliador inexistente', async () => {
+    mockAtendimentoAndReturn(ATENDIMENTO_TRIAGEM);
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateAtendimento, '/api/atendimentos/1', {
+      method: 'PUT',
+      body: { avaliador_id: 999 },
+    }, ctx);
+
+    expect(status).toBe(404);
+    expect(data.error).toBe('Avaliador não encontrado');
+  });
+
+  it('rejeita usuário sem role de avaliador', async () => {
+    mockAtendimentoAndReturn(ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select id, role from usuarios where id', { id: 4, role: 'executor' });
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateAtendimento, '/api/atendimentos/1', {
+      method: 'PUT',
+      body: { avaliador_id: 4 },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Usuário selecionado não é avaliador');
+  });
+
+  it('rejeita alteração de avaliador fora da triagem', async () => {
+    mockAtendimentoAndReturn(ATENDIMENTO_AVALIACAO);
+
+    const ctx = createRouteContext({ id: '2' });
+    const { status, data } = await callRoute<{ error: string }>(updateAtendimento, '/api/atendimentos/2', {
+      method: 'PUT',
+      body: { avaliador_id: 3 },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toContain('triagem');
+  });
+
+  it('rejeita alteração de avaliador em triagem por perfil sem permissão', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('avaliador'));
+    mockAtendimentoAndReturn(ATENDIMENTO_TRIAGEM);
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateAtendimento, '/api/atendimentos/1', {
+      method: 'PUT',
+      body: { avaliador_id: 3 },
+    }, ctx);
+
+    expect(status).toBe(403);
+    expect(data.error).toContain('não autorizado');
   });
 
   it('rejeita body vazio', async () => {

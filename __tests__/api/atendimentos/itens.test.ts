@@ -29,20 +29,40 @@ import {
 
 jest.mock('@/lib/auth/jwt', () => ({
   extractToken: jest.fn().mockReturnValue('mock-token'),
-  verifyToken: jest.fn().mockResolvedValue({
-    sub: 1, email: 'admin@test.com', role: 'admin', nome: 'Admin Teste',
-    unidade_ids: [1, 2], unidade_atual: 1,
-    iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 86400,
-  }),
+  verifyToken: jest.fn(),
   generateToken: jest.fn().mockResolvedValue('mock-token'),
 }));
 
+import { verifyToken } from '@/lib/auth/jwt';
 import { GET as listItens, POST as addItem, DELETE as removeItem } from '@/app/api/atendimentos/[id]/itens/route';
 import { PUT as updateItem } from '@/app/api/atendimentos/[id]/itens/[itemId]/route';
+
+const mockVerifyToken = verifyToken as jest.MockedFunction<typeof verifyToken>;
+
+function makeAuthPayload(role: 'admin' | 'atendente' | 'avaliador' | 'executor' = 'admin') {
+  const idsByRole = {
+    admin: 1,
+    atendente: 2,
+    avaliador: 3,
+    executor: 4,
+  };
+
+  return {
+    sub: idsByRole[role],
+    email: `${role}@test.com`,
+    role,
+    nome: `${role} Teste`,
+    unidade_ids: [1, 2],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  };
+}
 
 beforeEach(() => {
   resetMockDb();
   setupCloudflareContextMock();
+  mockVerifyToken.mockResolvedValue(makeAuthPayload('admin'));
 });
 
 afterEach(() => {
@@ -430,6 +450,52 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 // =============================================================================
 
 describe('DELETE /api/atendimentos/[id]/itens', () => {
+  it('remove item durante triagem para admin', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select id from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ message: string }>(removeItem, '/api/atendimentos/1/itens', {
+      method: 'DELETE',
+      searchParams: { item_id: '1' },
+    }, ctx);
+
+    expect(status).toBe(200);
+    expect(data.message).toBe('Item removido com sucesso');
+  });
+
+  it('limpa dependências antes de remover o item', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select id from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
+    mockQueryResponse('from sqlite_master', { name: 'qualquer_tabela' });
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status } = await callRoute(removeItem, '/api/atendimentos/1/itens', {
+      method: 'DELETE',
+      searchParams: { item_id: '1' },
+    }, ctx);
+
+    expect(status).toBe(200);
+
+    const queries = getExecutedQueries();
+    const sqls = queries.map((query) => query.sql);
+
+    expect(sqls).toContain('UPDATE agendamentos SET item_atendimento_origem_id = NULL WHERE item_atendimento_origem_id = ?');
+    expect(sqls).toContain('DELETE FROM movimentacoes_saldo WHERE item_atendimento_id = ?');
+    expect(sqls).toContain('DELETE FROM prontuarios WHERE item_atendimento_id = ?');
+    expect(sqls).toContain('DELETE FROM anexos_execucao WHERE item_atendimento_id = ?');
+    expect(sqls).toContain('DELETE FROM notas_execucao WHERE item_atendimento_id = ?');
+    expect(sqls).toContain('DELETE FROM comissoes WHERE item_atendimento_id = ?');
+    expect(sqls).toContain('DELETE FROM itens_atendimento_destinos WHERE item_atendimento_id = ?');
+    expect(sqls).toContain('DELETE FROM pagamentos_alocacoes WHERE item_atendimento_id = ?');
+    expect(sqls).toContain('DELETE FROM pagamentos_itens WHERE item_atendimento_id = ?');
+
+    const deleteItemIndex = sqls.findIndex((sql) => sql.includes('DELETE FROM itens_atendimento WHERE id = ?'));
+    const deletePagamentoItemIndex = sqls.findIndex((sql) => sql.includes('DELETE FROM pagamentos_itens WHERE item_atendimento_id = ?'));
+    expect(deletePagamentoItemIndex).toBeGreaterThan(-1);
+    expect(deleteItemIndex).toBeGreaterThan(deletePagamentoItemIndex);
+  });
+
   it('remove item durante avaliação', async () => {
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     mockQueryResponse('select id from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
@@ -448,7 +514,22 @@ describe('DELETE /api/atendimentos/[id]/itens', () => {
     expect(deleteQuery).toBeDefined();
   });
 
-  it('rejeita se atendimento não está em avaliação', async () => {
+  it('remove grupo durante triagem', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select id from itens_atendimento where group_id', [{ id: 11 }, { id: 12 }]);
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ message: string }>(removeItem, '/api/atendimentos/1/itens', {
+      method: 'DELETE',
+      searchParams: { group_id: 'grupo-1' },
+    }, ctx);
+
+    expect(status).toBe(200);
+    expect(data.message).toBe('2 itens do grupo removidos');
+  });
+
+  it('rejeita remoção em triagem por perfil sem permissão', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
 
     const ctx = createRouteContext({ id: '1' });
@@ -457,8 +538,21 @@ describe('DELETE /api/atendimentos/[id]/itens', () => {
       searchParams: { item_id: '1' },
     }, ctx);
 
+    expect(status).toBe(403);
+    expect(data.error).toContain('não autorizado');
+  });
+
+  it('rejeita se atendimento não está em triagem ou avaliação', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ error: string }>(removeItem, '/api/atendimentos/1/itens', {
+      method: 'DELETE',
+      searchParams: { item_id: '1' },
+    }, ctx);
+
     expect(status).toBe(400);
-    expect(data.error).toBe('Só é possível remover procedimentos durante a avaliação');
+    expect(data.error).toBe('Só é possível remover procedimentos durante a triagem ou avaliação');
   });
 
   it('rejeita se item_id não enviado', async () => {
@@ -525,6 +619,21 @@ describe('DELETE /api/atendimentos/[id]/itens', () => {
 // =============================================================================
 
 describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
+  it('atualiza executor_id em triagem para atendente', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('atendente'));
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 1 });
+    mockQueryResponse('from itens_atendimento i', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 1, procedimento_nome: 'Limpeza', executor_nome: 'Novo Executor' });
+
+    const ctx = createRouteContext({ id: '1', itemId: '1' });
+    const { status } = await callRoute(updateItem, '/api/atendimentos/1/itens/1', {
+      method: 'PUT',
+      body: { executor_id: 4 },
+    }, ctx);
+
+    expect(status).toBe(200);
+  });
+
   it('atualiza executor_id', async () => {
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_RESTAURACAO_PAGO);
@@ -541,6 +650,51 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
     const queries = getExecutedQueries();
     const update = queries.find(q => q.sql.includes('UPDATE itens_atendimento'));
     expect(update!.sql).toContain('executor_id = ?');
+  });
+
+  it('rejeita troca de executor em triagem por perfil sem permissão', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 1 });
+
+    const ctx = createRouteContext({ id: '1', itemId: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/1/itens/1', {
+      method: 'PUT',
+      body: { executor_id: 4 },
+    }, ctx);
+
+    expect(status).toBe(403);
+    expect(data.error).toContain('não autorizado');
+  });
+
+  it('atualiza valor do item em triagem', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('atendente'));
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 1 });
+    mockQueryResponse('from itens_atendimento i', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 1, valor: 120, valor_final: 120, procedimento_nome: 'Limpeza', executor_nome: 'Dr. Carlos' });
+
+    const ctx = createRouteContext({ id: '1', itemId: '1' });
+    const { status } = await callRoute(updateItem, '/api/atendimentos/1/itens/1', {
+      method: 'PUT',
+      body: { valor_final: 120 },
+    }, ctx);
+
+    expect(status).toBe(200);
+  });
+
+  it('rejeita edição de valor em triagem por perfil sem permissão', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
+    mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 1 });
+
+    const ctx = createRouteContext({ id: '1', itemId: '1' });
+    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/1/itens/1', {
+      method: 'PUT',
+      body: { valor_final: 120 },
+    }, ctx);
+
+    expect(status).toBe(403);
+    expect(data.error).toContain('não autorizado');
   });
 
   it('atualiza valor do item em aguardando_pagamento', async () => {
@@ -719,18 +873,18 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
     expect(status).toBe(200);
   });
 
-  it('valor: rejeita edição em triagem', async () => {
+  it('valor: permite edição em triagem', async () => {
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);
+    mockQueryResponse('from itens_atendimento i', { ...ITEM_LIMPEZA_PENDENTE, valor: 100, valor_final: 100, procedimento_nome: 'Limpeza', executor_nome: null });
 
     const ctx = createRouteContext({ id: '1', itemId: '1' });
-    const { status, data } = await callRoute<{ error: string }>(updateItem, '/api/atendimentos/1/itens/1', {
+    const { status } = await callRoute(updateItem, '/api/atendimentos/1/itens/1', {
       method: 'PUT',
       body: { valor: 100 },
     }, ctx);
 
-    expect(status).toBe(400);
-    expect(data.error).toContain('avaliação');
+    expect(status).toBe(200);
   });
 
   it('valor: rejeita edição em em_execucao', async () => {

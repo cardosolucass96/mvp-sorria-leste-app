@@ -8,7 +8,7 @@ import { formatarMoeda, formatarDataHora, tempoDecorrido, nomeProcedimentoItem, 
 import { STATUS_CONFIG, PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 import type { AtendimentoStatus, AtendimentoTipo } from '@/lib/types';
 import { StatusBadge, StatusPipeline } from '@/components/domain';
-import { ClipboardList, ChevronDown, ChevronRight, X, Trash2, CalendarPlus, Info, Printer } from 'lucide-react';
+import { ClipboardList, ChevronDown, ChevronRight, X, Trash2, CalendarPlus, Info, Pencil, Printer } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Button, Card, EmptyState, ConfirmDialog, Modal, Select, Input, Textarea, useToast } from '@/components/ui';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,6 +29,7 @@ interface Usuario {
   id: number;
   nome: string;
   role: string;
+  roles?: string[];
 }
 
 const METODOS_PAGAMENTO = [
@@ -51,6 +52,8 @@ interface ItemAtendimento {
   executor_nome: string | null;
   criado_por_nome: string | null;
   valor: number;
+  valor_original: number | null;
+  valor_final: number | null;
   valor_pago: number;
   status: string;
   group_id: string | null;
@@ -151,7 +154,8 @@ export default function AtendimentoDetalhePage({
   usePageTitle('Detalhes do Atendimento');
   const { id } = use(params);
   const router = useRouter();
-  const { hasRole, user } = useAuth();
+  const { hasRole, user, currentUnidade } = useAuth();
+  const podeGerenciarTriagem = hasRole(['atendente', 'admin']);
   const { toast } = useToast();
   const unitFetch = useUnitFetch();
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
@@ -221,6 +225,12 @@ export default function AtendimentoDetalhePage({
 
   // Trocar executor
   const [trocandoExecutor, setTrocandoExecutor] = useState<number | null>(null);
+  const [avaliadores, setAvaliadores] = useState<Usuario[]>([]);
+  const [loadingAvaliadores, setLoadingAvaliadores] = useState(false);
+  const [savingAvaliador, setSavingAvaliador] = useState(false);
+  const [editingValorId, setEditingValorId] = useState<number | null>(null);
+  const [editingValorValue, setEditingValorValue] = useState('');
+  const [savingValorId, setSavingValorId] = useState<number | null>(null);
 
   const carregarExecutores = async () => {
     if (executores.length > 0) return;
@@ -288,6 +298,114 @@ export default function AtendimentoDetalhePage({
   useEffect(() => {
     carregarAtendimento();
   }, [carregarAtendimento]);
+
+  const carregarAvaliadores = useCallback(async () => {
+    setLoadingAvaliadores(true);
+    try {
+      const params = new URLSearchParams({ role: 'avaliador' });
+      if (currentUnidade) {
+        params.set('unidade_id', String(currentUnidade));
+      }
+
+      const res = await unitFetch(`/api/usuarios?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error('Não foi possível carregar os avaliadores');
+      }
+
+      const data = await res.json() as Usuario[];
+      setAvaliadores(data);
+    } catch (loadError) {
+      console.error('Erro ao carregar avaliadores:', loadError);
+      setError(loadError instanceof Error ? loadError.message : 'Erro ao carregar avaliadores');
+    } finally {
+      setLoadingAvaliadores(false);
+    }
+  }, [currentUnidade, unitFetch]);
+
+  useEffect(() => {
+    if (atendimento?.status === 'triagem' && podeGerenciarTriagem) {
+      carregarAvaliadores();
+    }
+  }, [atendimento?.status, carregarAvaliadores, podeGerenciarTriagem]);
+
+  const handleAtualizarAvaliador = useCallback(async (novoAvaliadorId: string) => {
+    if (!atendimento) return;
+
+    const avaliadorAtual = atendimento.avaliador_id ? String(atendimento.avaliador_id) : '';
+    if (novoAvaliadorId === avaliadorAtual) return;
+
+    setSavingAvaliador(true);
+    setError('');
+
+    try {
+      const res = await unitFetch(`/api/atendimentos/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          avaliador_id: novoAvaliadorId ? parseInt(novoAvaliadorId) : null,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao atualizar avaliador');
+      }
+
+      toast.success(novoAvaliadorId ? 'Avaliador atualizado com sucesso' : 'Avaliador removido com sucesso');
+      await carregarAtendimento();
+    } catch (updateError) {
+      const message = updateError instanceof Error ? updateError.message : 'Erro ao atualizar avaliador';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSavingAvaliador(false);
+    }
+  }, [atendimento, carregarAtendimento, id, toast, unitFetch]);
+
+  const handleAtualizarValor = useCallback(async (item: ItemAtendimento) => {
+    if (savingValorId === item.id) return;
+
+    const valorNum = Number(editingValorValue);
+    const valorAtual = item.valor_final ?? item.valor;
+    if (!Number.isFinite(valorNum) || valorNum < 0) {
+      setError('Valor inválido');
+      toast.error('Valor inválido');
+      return;
+    }
+
+    if (Math.abs(valorNum - valorAtual) < 0.001) {
+      setEditingValorId(null);
+      setEditingValorValue('');
+      return;
+    }
+
+    setSavingValorId(item.id);
+    setError('');
+
+    try {
+      const res = await unitFetch(`/api/atendimentos/${id}/itens/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valor_final: Number(valorNum.toFixed(2)) }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao atualizar valor');
+      }
+
+      toast.success('Valor atualizado com sucesso');
+      setEditingValorId(null);
+      setEditingValorValue('');
+      await carregarAtendimento();
+    } catch (updateError) {
+      const message = updateError instanceof Error ? updateError.message : 'Erro ao atualizar valor';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSavingValorId(null);
+    }
+  }, [carregarAtendimento, editingValorValue, id, savingValorId, toast, unitFetch]);
 
   const handleMudarStatus = async (novoStatus: string) => {
     if (!atendimento) return;
@@ -676,6 +794,13 @@ export default function AtendimentoDetalhePage({
     return 'pendente';
   };
 
+  const getValorAtualItem = (item: ItemAtendimento) => item.valor_final ?? item.valor;
+  const getValorOriginalItem = (item: ItemAtendimento) => item.valor_original;
+  const itemTemDesconto = (item: ItemAtendimento) => {
+    const valorOriginal = getValorOriginalItem(item);
+    return valorOriginal != null && valorOriginal > getValorAtualItem(item);
+  };
+
   const carregarPagamentosParaImpressao = async (atendimentoId: number): Promise<PagamentoAgrupado[]> => {
     try {
       const resAgrupado = await fetch(`/api/atendimentos/${atendimentoId}/pagamentos?grouped=1`);
@@ -715,8 +840,32 @@ export default function AtendimentoDetalhePage({
     }));
   };
 
-  const podRemover = atendimento?.status === 'avaliacao';
-  const podTrocarExecutor = hasRole(['atendente', 'admin']) && atendimento && ['avaliacao', 'aguardando_pagamento', 'em_execucao'].includes(atendimento.status);
+  const podRemover = Boolean(
+    atendimento
+    && (
+      atendimento.status === 'avaliacao'
+      || (atendimento.status === 'triagem' && podeGerenciarTriagem)
+    )
+  );
+  const podTrocarExecutor = Boolean(
+    podeGerenciarTriagem
+    && atendimento
+    && ['triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao'].includes(atendimento.status)
+  );
+  const podEditarValor = Boolean(
+    podeGerenciarTriagem
+    && atendimento
+    && atendimento.status === 'triagem'
+  );
+  const avaliadoresDisponiveis = (() => {
+    if (!atendimento?.avaliador_id || !atendimento.avaliador_nome) return avaliadores;
+    if (avaliadores.some((avaliador) => avaliador.id === atendimento.avaliador_id)) return avaliadores;
+
+    return [
+      { id: atendimento.avaliador_id, nome: `${atendimento.avaliador_nome} (atual)`, role: 'avaliador' },
+      ...avaliadores,
+    ];
+  })();
 
   const imprimirAtendimento = async () => {
     if (!atendimento) return;
@@ -871,6 +1020,76 @@ export default function AtendimentoDetalhePage({
     }
   };
 
+  const renderValorCell = (item: ItemAtendimento, compact = false) => {
+    const valorAtual = getValorAtualItem(item);
+    const valorOriginal = getValorOriginalItem(item);
+    const emEdicao = editingValorId === item.id;
+    const salvando = savingValorId === item.id;
+    const descontoAtivo = itemTemDesconto(item);
+
+    if (!podEditarValor) {
+      return (
+        <div className={compact ? 'flex flex-col items-end gap-0.5' : 'flex flex-col items-end gap-1'}>
+          {descontoAtivo && (
+            <span className="text-xs text-muted-foreground line-through">
+              {formatarMoeda(valorOriginal!)}
+            </span>
+          )}
+          <span className={compact ? 'text-sm text-muted' : ''}>{formatarMoeda(valorAtual)}</span>
+        </div>
+      );
+    }
+
+    if (emEdicao) {
+      return (
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          autoFocus
+          value={editingValorValue}
+          disabled={salvando}
+          onChange={(e) => setEditingValorValue(e.target.value)}
+          onBlur={() => { void handleAtualizarValor(item); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              void handleAtualizarValor(item);
+            }
+            if (e.key === 'Escape') {
+              setEditingValorId(null);
+              setEditingValorValue('');
+            }
+          }}
+          className={`field-control w-28 px-2 py-1 text-right text-sm ${compact ? 'ml-auto' : ''}`}
+        />
+      );
+    }
+
+    return (
+      <div className={compact ? 'flex flex-col items-end gap-0.5' : 'flex flex-col items-end gap-1'}>
+        {descontoAtivo && (
+          <span className="text-xs text-muted-foreground line-through">
+            {formatarMoeda(valorOriginal!)}
+          </span>
+        )}
+        <button
+          onClick={() => {
+            setEditingValorId(item.id);
+            setEditingValorValue(String(valorAtual));
+          }}
+          className={`inline-flex items-center gap-1 font-medium hover:text-primary transition-colors ${
+            compact ? 'text-sm text-muted' : 'text-foreground'
+          }`}
+          title="Clique para editar valor"
+          aria-label={`Editar valor de ${nomeProcedimentoItem(item)}`}
+        >
+          {formatarMoeda(valorAtual)}
+          <Pencil className="w-3 h-3 text-muted-foreground" />
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -998,9 +1217,43 @@ export default function AtendimentoDetalhePage({
             </div>
             <div>
               <p className="text-sm text-muted">Avaliador</p>
-              <p className="font-medium">
-                {atendimento.avaliador_nome || 'Não definido'}
-              </p>
+              {atendimento.status === 'triagem' && podeGerenciarTriagem ? (
+                <div className="mt-1 space-y-2">
+                  <select
+                    aria-label="Avaliador"
+                    value={String(atendimento.avaliador_id ?? '')}
+                    disabled={loadingAvaliadores || savingAvaliador}
+                    onChange={(e) => { void handleAtualizarAvaliador(e.target.value); }}
+                    className="field-control w-full px-3 py-2 text-sm"
+                  >
+                    <option value="">
+                      {loadingAvaliadores ? 'Carregando avaliadores...' : 'Sem avaliador'}
+                    </option>
+                    {avaliadoresDisponiveis.map((avaliador) => (
+                      <option key={avaliador.id} value={avaliador.id}>
+                        {avaliador.nome}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => { void handleAtualizarAvaliador(''); }}
+                      disabled={!atendimento.avaliador_id || savingAvaliador}
+                    >
+                      Limpar avaliador
+                    </Button>
+                    {savingAvaliador && (
+                      <span className="text-xs text-muted">Salvando...</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="font-medium">
+                  {atendimento.avaliador_nome || 'Não definido'}
+                </p>
+              )}
             </div>
             <div>
               <p className="text-sm text-muted">Criado em</p>
@@ -1165,7 +1418,7 @@ export default function AtendimentoDetalhePage({
                             item.executor_nome || '-'
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right">{formatarMoeda(item.valor)}</td>
+                        <td className="px-4 py-3 text-right">{renderValorCell(item)}</td>
                         <td className="px-4 py-3 text-center"><StatusBadge type="item" status={item.status} /></td>
                         {podRemover && (
                           <td className="px-4 py-3 text-center">
@@ -1180,7 +1433,7 @@ export default function AtendimentoDetalhePage({
 
                   const { groupId, itens: grupoItens } = entry;
                   const expandido = gruposExpandidos.has(groupId);
-                  const totalGrupo = grupoItens.reduce((s, i) => s + i.valor, 0);
+                  const totalGrupo = grupoItens.reduce((s, i) => s + getValorAtualItem(i), 0);
                   const statusAgregado = getStatusAgregado(grupoItens);
                   const primeiro = grupoItens[0];
 
@@ -1262,7 +1515,7 @@ export default function AtendimentoDetalhePage({
                           </td>
                           <td className="px-4 py-2" />
                           <td className="px-4 py-2" />
-                          <td className="px-4 py-2 text-right text-muted">{formatarMoeda(item.valor)}</td>
+                          <td className="px-4 py-2 text-right">{renderValorCell(item, true)}</td>
                           <td className="px-4 py-2 text-center"><StatusBadge type="item" status={item.status} size="sm" /></td>
                           {podRemover && (
                             <td className="px-4 py-2 text-center">
