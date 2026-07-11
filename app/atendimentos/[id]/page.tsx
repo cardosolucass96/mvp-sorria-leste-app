@@ -10,6 +10,7 @@ import type { AtendimentoStatus, AtendimentoTipo } from '@/lib/types';
 import { StatusBadge, StatusPipeline } from '@/components/domain';
 import { ClipboardList, ChevronDown, ChevronRight, X, Trash2, CalendarPlus, Info, Pencil, Printer } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Button, Card, EmptyState, ConfirmDialog, Modal, Select, Input, Textarea, useToast } from '@/components/ui';
+import ElapsedTime from '@/components/ui/ElapsedTime';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
@@ -1438,7 +1439,7 @@ export default function AtendimentoDetalhePage({
             {!['finalizado', 'encerrado'].includes(atendimento.status) ? (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted">Aberto há:</span>
-                <span className="font-medium text-warning-600">{tempoDecorrido(atendimento.created_at)}</span>
+                <span className="font-medium text-warning-600"><ElapsedTime inicio={atendimento.created_at} /></span>
               </div>
             ) : (
               <div className="flex items-center gap-2 text-sm">
@@ -1449,7 +1450,7 @@ export default function AtendimentoDetalhePage({
             {atendimento.liberado_em && atendimento.status === 'em_execucao' && !atendimento.finalizado_at && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted">Em execução há:</span>
-                <span className="font-medium text-info-600">{tempoDecorrido(atendimento.liberado_em)}</span>
+                <span className="font-medium text-info-600"><ElapsedTime inicio={atendimento.liberado_em} /></span>
               </div>
             )}
             {atendimento.liberado_em && atendimento.finalizado_at && atendimento.status === 'finalizado' && (
@@ -1461,7 +1462,7 @@ export default function AtendimentoDetalhePage({
             {!atendimento.liberado_em && !['finalizado', 'encerrado'].includes(atendimento.status) && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted">Aguardando liberação há:</span>
-                <span className="font-medium text-warning-500">{tempoDecorrido(atendimento.created_at)}</span>
+                <span className="font-medium text-warning-500"><ElapsedTime inicio={atendimento.created_at} /></span>
               </div>
             )}
           </div>

@@ -11,9 +11,10 @@ import Table, { TableColumn } from '@/components/ui/Table';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import ElapsedTime from '@/components/ui/ElapsedTime';
 import { StatusBadge, ViewModeToggle } from '@/components/domain';
 import { STATUS_CONFIG, STATUS_ORDER } from '@/lib/constants/status';
-import { formatarDataHora, tempoDecorrido } from '@/lib/utils/formatters';
+import { formatarDataHora } from '@/lib/utils/formatters';
 import type { AtendimentoStatus } from '@/lib/types';
 
 interface Atendimento {
@@ -184,7 +185,7 @@ export default function AtendimentosPage() {
                             <span>#{atendimento.id}</span>
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
-                              {tempoDecorrido(inicioEtapa)}
+                              <ElapsedTime inicio={inicioEtapa} />
                             </span>
                           </div>
                         </Link>
