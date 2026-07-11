@@ -279,7 +279,15 @@ export default function AgendaPage() {
       const res = await unitFetch(`/api/agendamentos?${params}`);
       const data: Agendamento[] | AgendamentosPaginadosResponse = await res.json();
       if (!res.ok) {
-        const errorMessage = !Array.isArray(data) && 'error' in data ? data.error : null;
+        const errorMessage = (
+          !Array.isArray(data)
+          && typeof data === 'object'
+          && data !== null
+          && 'error' in data
+          && typeof data.error === 'string'
+        )
+          ? data.error
+          : null;
         setError(errorMessage || 'Erro ao carregar agendamentos');
         return;
       }
