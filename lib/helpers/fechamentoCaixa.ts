@@ -955,18 +955,92 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
     ensureDentista(profissional.id, profissional.nome, profissional.valor_diaria);
   });
 
+  const avaliacoesPagasAgrupadas = new Map<string, {
+    key: string;
+    usuario_id: number;
+    cliente_nome: string;
+    procedimento_nome: string;
+    procedimento_label: string;
+    origem: 'avaliacao' | 'acrescimo';
+    percentual: number;
+    valor_base: number;
+    valor_alocado_total: number;
+    pago_em: string | null;
+  }>();
+
+  avaliacoesPagasRows.forEach((row) => {
+    const usuarioId = Number(row.usuario_id || 0);
+    const percentual = Number(row.percentual || 0);
+    const valorBase = roundMoney(Number(row.valor_referencia || 0));
+    if (!usuarioId || !row.procedimento_nome || !row.origem || !(percentual > 0) || !(valorBase > 0)) {
+      return;
+    }
+
+    const dentistaExistente = dentistasMap.get(usuarioId);
+    ensureDentista(
+      usuarioId,
+      row.usuario_nome ?? dentistaExistente?.nome ?? null,
+      row.usuario_valor_diaria ?? dentistaExistente?.valor_diaria ?? null
+    );
+
+    const key = buildFechamentoProcedureKey(row.target_type, row.target_id);
+    const current = avaliacoesPagasAgrupadas.get(key) ?? {
+      key,
+      usuario_id: usuarioId,
+      cliente_nome: row.cliente_nome,
+      procedimento_nome: row.procedimento_nome,
+      procedimento_label: nomeProcedimentoItem({
+        procedimento_nome: row.procedimento_nome,
+        etapa_label: row.etapa_label,
+        dentes: row.dentes,
+        dente_unico: row.dente_unico,
+      }),
+      origem: row.origem,
+      percentual: roundMoney(percentual),
+      valor_base: valorBase,
+      valor_alocado_total: 0,
+      pago_em: row.pago_em,
+    };
+
+    current.valor_alocado_total = roundMoney(current.valor_alocado_total + Number(row.valor_alocado || 0));
+    if (row.pago_em && (!current.pago_em || row.pago_em.localeCompare(current.pago_em) > 0)) {
+      current.pago_em = row.pago_em;
+    }
+    avaliacoesPagasAgrupadas.set(key, current);
+  });
+
+  const avaliacoesPagasDia = Array.from(avaliacoesPagasAgrupadas.values())
+    .filter((row) => row.valor_alocado_total + 0.001 >= row.valor_base)
+    .filter((row) => row.pago_em?.slice(0, 10) === dataReferencia)
+    .map((row) => ({
+      key: row.key,
+      usuario_id: row.usuario_id,
+      cliente_nome: row.cliente_nome,
+      procedimento_nome: row.procedimento_nome,
+      procedimento_label: row.procedimento_label,
+      origem: row.origem,
+      percentual: row.percentual,
+      valor_base: row.valor_base,
+      valor_comissao: roundMoney(row.valor_base * (row.percentual / 100)),
+      pago_em: row.pago_em,
+      included: true,
+      manualmente_editado: false,
+      ajustes: [],
+    }))
+    .sort((a, b) => (b.pago_em || '').localeCompare(a.pago_em || '') || a.procedimento_label.localeCompare(b.procedimento_label, 'pt-BR'));
+
+  avaliacoesPagasDia.forEach((avaliacao) => {
+    const dentista = dentistasMap.get(avaliacao.usuario_id);
+    if (!dentista) return;
+    dentista.comissao_avaliacao = roundMoney(dentista.comissao_avaliacao + avaliacao.valor_comissao);
+  });
+
   const comissoesPorItem = new Map<number, ComissaoRow[]>();
   comissoesRows.forEach((comissao) => {
     ensureDentista(comissao.usuario_id, comissao.usuario_nome, comissao.usuario_valor_diaria);
     const current = comissoesPorItem.get(comissao.item_atendimento_id) ?? [];
     current.push(comissao);
     comissoesPorItem.set(comissao.item_atendimento_id, current);
-
-    const dentista = dentistasMap.get(comissao.usuario_id);
-    if (!dentista) return;
-    if (comissao.origem === 'avaliacao' || comissao.origem === 'acrescimo') {
-      dentista.comissao_avaliacao = roundMoney(dentista.comissao_avaliacao + Number(comissao.valor_comissao || 0));
-    }
   });
 
   procedimentosRows.forEach((row) => {
@@ -985,21 +1059,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
       ? buildAvaliacaoFallback(row, valorReferencia)
       : null;
 
-    if (avaliacaoFallback) {
-      const dentistaAvaliador = ensureDentista(
-        row.criado_por_id,
-        row.criado_por_nome,
-        row.criado_por_valor_diaria
-      );
-      if (dentistaAvaliador) {
-        dentistaAvaliador.comissao_avaliacao = roundMoney(
-          dentistaAvaliador.comissao_avaliacao + avaliacaoFallback.valor_comissao
-        );
-      }
-    }
-
     const procedimento: FechamentoCaixaProcedimento = {
-      key: `item:${row.item_id}`,
+      key: buildFechamentoProcedureKey('item', row.item_id),
       item_id: row.item_id,
       atendimento_id: row.atendimento_id,
       cliente_nome: row.cliente_nome,
@@ -1098,6 +1159,7 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
       ranking_executores: [],
     },
     dentistas,
+    avaliacoes_pagas_dia: avaliacoesPagasDia,
     lancamentos_manuais_gerais: [],
     pagamentos_recebidos_dia: agruparPagamentosRecebidos(pagamentosRecebidosRows),
   };
