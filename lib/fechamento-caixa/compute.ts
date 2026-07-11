@@ -80,6 +80,9 @@ export function applyFechamentoCaixaDraft(
 ): FechamentoCaixaVisao {
   const safeDraft = draft ?? createEmptyFechamentoCaixaDraft();
   const result = clone(base);
+  result.pagamentos_recebidos_dia = Array.isArray(result.pagamentos_recebidos_dia)
+    ? result.pagamentos_recebidos_dia
+    : [];
   const excludedUsers = new Set<number>();
 
   result.dentistas.forEach((dentista) => {

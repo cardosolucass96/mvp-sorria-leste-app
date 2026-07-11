@@ -67,6 +67,7 @@ function createResponseFixture(overrides: Partial<FechamentoCaixaResponse> = {})
       procedimentos_executados: [],
     }],
     lancamentos_manuais_gerais: [],
+    pagamentos_recebidos_dia: [],
   };
 
   return {

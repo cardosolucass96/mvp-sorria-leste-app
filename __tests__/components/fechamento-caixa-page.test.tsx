@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import FechamentoCaixaPage from '@/app/fechamento-caixa/page';
@@ -115,6 +115,67 @@ function createResponseFixture(): FechamentoCaixaResponse {
       }],
     }],
     lancamentos_manuais_gerais: [],
+    pagamentos_recebidos_dia: [{
+      id: 'grupo:1',
+      pagamento_grupo_id: 1,
+      pagamento_representante_id: 501,
+      atendimento_id: 1,
+      cliente_id: 77,
+      cliente_nome: 'Maria',
+      valor_total: 1200,
+      observacoes: 'Pagamento do dia conferido',
+      cancelado: false,
+      motivo_cancelamento: null,
+      created_at: '2026-06-07 09:20:00',
+      recebido_por_id: 12,
+      recebido_por_nome: 'Paula',
+      formas: [
+        {
+          id: 501,
+          valor: 700,
+          metodo: 'pix',
+          observacoes: 'Entrada principal',
+          cancelado: false,
+          motivo_cancelamento: null,
+          created_at: '2026-06-07 09:20:00',
+        },
+        {
+          id: 502,
+          valor: 500,
+          metodo: 'cartao_credito',
+          observacoes: null,
+          cancelado: false,
+          motivo_cancelamento: null,
+          created_at: '2026-06-07 09:21:00',
+        },
+      ],
+    },
+    {
+      id: 'grupo:2',
+      pagamento_grupo_id: 2,
+      pagamento_representante_id: 503,
+      atendimento_id: 2,
+      cliente_id: 88,
+      cliente_nome: 'João',
+      valor_total: 300,
+      observacoes: null,
+      cancelado: true,
+      motivo_cancelamento: 'Cliente desistiu da forma parcelada',
+      created_at: '2026-06-07 11:10:00',
+      recebido_por_id: 13,
+      recebido_por_nome: 'Carla',
+      formas: [
+        {
+          id: 503,
+          valor: 300,
+          metodo: 'crediario',
+          observacoes: 'Parcelado em acordo interno',
+          cancelado: true,
+          motivo_cancelamento: 'Cliente desistiu da forma parcelada',
+          created_at: '2026-06-07 11:10:00',
+        },
+      ],
+    }],
   };
 
   return {
@@ -190,11 +251,14 @@ describe('FechamentoCaixaPage', () => {
 
     expect(await screen.findByLabelText('Dia')).toBeInTheDocument();
     expect(screen.getByText('Histórico recente')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pagamentos recebidos no dia' })).toBeInTheDocument();
     expect(screen.getByText('Entradas por método')).toBeInTheDocument();
     expect(screen.getByText('Cancelamentos do dia')).toBeInTheDocument();
     expect(screen.getByText('Detalhamento por dentista')).toBeInTheDocument();
     expect(screen.getByText('Comissão avaliação + acréscimos')).toBeInTheDocument();
     expect(screen.getByText('Procedimentos executados no dia com comissão de avaliação ou acréscimo')).toBeInTheDocument();
+    expect(screen.getByText('Paula')).toBeInTheDocument();
+    expect(screen.getByText('Pagamento do dia conferido')).toBeInTheDocument();
     expect(screen.queryByText('Boas práticas')).not.toBeInTheDocument();
     expect(screen.queryByText('Comissão execução')).not.toBeInTheDocument();
 
@@ -217,5 +281,52 @@ describe('FechamentoCaixaPage', () => {
     expect(await screen.findByText('Fechamento de Caixa')).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
     expect(mockUnitFetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('inclui descritivo completo dos pagamentos no HTML do PDF', async () => {
+    jest.useFakeTimers();
+
+    const documentWrite = jest.fn();
+    const documentClose = jest.fn();
+    const focus = jest.fn();
+    const print = jest.fn();
+    const openSpy = jest.spyOn(window, 'open').mockReturnValue({
+      document: {
+        write: documentWrite,
+        close: documentClose,
+      },
+      focus,
+      print,
+    } as unknown as Window);
+
+    try {
+      render(<FechamentoCaixaPage />);
+
+      expect(await screen.findByText('Fechamento de Caixa')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Imprimir PDF/i }));
+
+      expect(openSpy).toHaveBeenCalledWith('', '_blank');
+      expect(documentWrite).toHaveBeenCalledTimes(1);
+      expect(documentClose).toHaveBeenCalledTimes(1);
+      expect(focus).toHaveBeenCalledTimes(1);
+
+      const html = documentWrite.mock.calls[0][0] as string;
+      expect(html).toContain('Pagamentos recebidos no dia');
+      expect(html).toContain('Descritivo');
+      expect(html).toContain('Pagamento do dia conferido');
+      expect(html).toContain('PIX: Entrada principal');
+      expect(html).toContain('Motivo do cancelamento: Cliente desistiu da forma parcelada');
+      expect(html).toContain('Crediário: Parcelado em acordo interno');
+
+      act(() => {
+        jest.runAllTimers();
+      });
+
+      expect(print).toHaveBeenCalledTimes(1);
+    } finally {
+      openSpy.mockRestore();
+      jest.useRealTimers();
+    }
   });
 });

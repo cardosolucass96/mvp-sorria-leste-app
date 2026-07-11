@@ -129,6 +129,33 @@ export interface FechamentoCaixaGraficos {
   }>;
 }
 
+export interface FechamentoCaixaPagamentoForma {
+  id: number;
+  valor: number;
+  metodo: string;
+  observacoes: string | null;
+  cancelado: boolean;
+  motivo_cancelamento: string | null;
+  created_at: string;
+}
+
+export interface FechamentoCaixaPagamentoRecebido {
+  id: string;
+  pagamento_grupo_id: number | null;
+  pagamento_representante_id: number;
+  atendimento_id: number;
+  cliente_id: number;
+  cliente_nome: string;
+  valor_total: number;
+  observacoes: string | null;
+  cancelado: boolean;
+  motivo_cancelamento: string | null;
+  created_at: string;
+  recebido_por_id: number | null;
+  recebido_por_nome: string | null;
+  formas: FechamentoCaixaPagamentoForma[];
+}
+
 export interface FechamentoCaixaVisao {
   data_referencia: string;
   unidade_id: number;
@@ -139,6 +166,7 @@ export interface FechamentoCaixaVisao {
   graficos: FechamentoCaixaGraficos;
   dentistas: FechamentoCaixaDentista[];
   lancamentos_manuais_gerais: FechamentoCaixaLancamentoManual[];
+  pagamentos_recebidos_dia: FechamentoCaixaPagamentoRecebido[];
 }
 
 export interface FechamentoCaixaMeta {

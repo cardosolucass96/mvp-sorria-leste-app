@@ -5,6 +5,7 @@ import type {
   FechamentoCaixaDraft,
   FechamentoCaixaEventoTipo,
   FechamentoCaixaMeta,
+  FechamentoCaixaPagamentoRecebido,
   FechamentoCaixaProcedimentoDraft,
   FechamentoCaixaProfissionalDraft,
   FechamentoCaixaProcedimento,
@@ -43,6 +44,27 @@ interface PagamentoMetodoRow {
 interface PagamentoCanceladoRow {
   quantidade: number;
   valor: number;
+}
+
+interface PagamentoRecebidoRow {
+  id: number;
+  atendimento_id: number;
+  cliente_id: number;
+  cliente_nome: string;
+  pagamento_grupo_id: number | null;
+  recebido_por_id: number | null;
+  recebido_por_nome: string | null;
+  valor: number;
+  metodo: string;
+  observacoes: string | null;
+  cancelado: number;
+  motivo_cancelamento: string | null;
+  created_at: string;
+  grupo_valor_total: number | null;
+  grupo_observacoes: string | null;
+  grupo_cancelado: number | null;
+  grupo_motivo_cancelamento: string | null;
+  grupo_created_at: string | null;
 }
 
 interface ProcedimentoRow {
@@ -163,8 +185,55 @@ function buildAvaliacaoFallback(row: ProcedimentoRow, valorReferencia: number): 
   };
 }
 
+function agruparPagamentosRecebidos(rows: PagamentoRecebidoRow[]): FechamentoCaixaPagamentoRecebido[] {
+  const grouped = new Map<string, FechamentoCaixaPagamentoRecebido>();
+
+  rows.forEach((row) => {
+    const key = row.pagamento_grupo_id ? `grupo:${row.pagamento_grupo_id}` : `pagamento:${row.id}`;
+
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        id: key,
+        pagamento_grupo_id: row.pagamento_grupo_id,
+        pagamento_representante_id: row.id,
+        atendimento_id: row.atendimento_id,
+        cliente_id: row.cliente_id,
+        cliente_nome: row.cliente_nome,
+        valor_total: roundMoney(row.grupo_valor_total ?? row.valor),
+        observacoes: row.grupo_observacoes ?? row.observacoes,
+        cancelado: Boolean(row.grupo_cancelado ?? row.cancelado),
+        motivo_cancelamento: row.grupo_motivo_cancelamento ?? row.motivo_cancelamento,
+        created_at: row.grupo_created_at ?? row.created_at,
+        recebido_por_id: row.recebido_por_id,
+        recebido_por_nome: row.recebido_por_nome,
+        formas: [],
+      });
+    }
+
+    grouped.get(key)!.formas.push({
+      id: row.id,
+      valor: roundMoney(row.valor),
+      metodo: row.metodo,
+      observacoes: row.observacoes,
+      cancelado: Boolean(row.cancelado),
+      motivo_cancelamento: row.motivo_cancelamento,
+      created_at: row.created_at,
+    });
+  });
+
+  return Array.from(grouped.values())
+    .map((pagamento) => ({
+      ...pagamento,
+      formas: [...pagamento.formas].sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    }))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
 function sanitizeFechamentoView(view: FechamentoCaixaVisao): FechamentoCaixaVisao {
   const sanitized = cloneJson(view);
+  sanitized.pagamentos_recebidos_dia = Array.isArray(sanitized.pagamentos_recebidos_dia)
+    ? sanitized.pagamentos_recebidos_dia
+    : [];
 
   sanitized.dentistas.forEach((dentista) => {
     dentista.comissao_execucao = 0;
@@ -672,6 +741,37 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
     [unidadeId, dataReferencia]
   );
 
+  const pagamentosRecebidosRows = await query<PagamentoRecebidoRow>(
+    `SELECT
+       p.id,
+       p.atendimento_id,
+       a.cliente_id,
+       c.nome as cliente_nome,
+       p.pagamento_grupo_id,
+       p.recebido_por_id,
+       u.nome as recebido_por_nome,
+       p.valor,
+       p.metodo,
+       p.observacoes,
+       p.cancelado,
+       p.motivo_cancelamento,
+       p.created_at,
+       pg.valor_total as grupo_valor_total,
+       pg.observacoes as grupo_observacoes,
+       pg.cancelado as grupo_cancelado,
+       pg.motivo_cancelamento as grupo_motivo_cancelamento,
+       pg.created_at as grupo_created_at
+     FROM pagamentos p
+     INNER JOIN atendimentos a ON a.id = p.atendimento_id
+     INNER JOIN clientes c ON c.id = a.cliente_id
+     LEFT JOIN usuarios u ON u.id = p.recebido_por_id
+     LEFT JOIN pagamentos_grupos pg ON pg.id = p.pagamento_grupo_id
+     WHERE a.unidade_id = ?
+       AND DATE(p.created_at) = ?
+     ORDER BY COALESCE(pg.created_at, p.created_at) DESC, p.created_at DESC, p.id DESC`,
+    [unidadeId, dataReferencia]
+  );
+
   const procedimentosRows = await query<ProcedimentoRow>(
     `SELECT
        i.id as item_id,
@@ -899,6 +999,7 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
     },
     dentistas,
     lancamentos_manuais_gerais: [],
+    pagamentos_recebidos_dia: agruparPagamentosRecebidos(pagamentosRecebidosRows),
   };
 
   return applyFechamentoCaixaDraft(base, createEmptyFechamentoCaixaDraft());

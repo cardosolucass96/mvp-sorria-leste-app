@@ -103,6 +103,34 @@ function createBaseVisao(): FechamentoCaixaVisao {
       },
     ],
     lancamentos_manuais_gerais: [],
+    pagamentos_recebidos_dia: [
+      {
+        id: 'grupo:1',
+        pagamento_grupo_id: 1,
+        pagamento_representante_id: 90,
+        atendimento_id: 10,
+        cliente_id: 100,
+        cliente_nome: 'Maria',
+        valor_total: 1000,
+        observacoes: 'Pagamento confirmado',
+        cancelado: false,
+        motivo_cancelamento: null,
+        created_at: '2026-06-07 08:30:00',
+        recebido_por_id: 5,
+        recebido_por_nome: 'Recepção',
+        formas: [
+          {
+            id: 90,
+            valor: 1000,
+            metodo: 'pix',
+            observacoes: null,
+            cancelado: false,
+            motivo_cancelamento: null,
+            created_at: '2026-06-07 08:30:00',
+          },
+        ],
+      },
+    ],
   };
 }
 
@@ -188,5 +216,6 @@ describe('fechamento-caixa compute', () => {
       { usuario_id: 1, nome: 'Dra. Ana', valor_gerado: 120, quantidade: 1 },
     ]);
     expect(result.lancamentos_manuais_gerais).toHaveLength(1);
+    expect(result.pagamentos_recebidos_dia).toHaveLength(1);
   });
 });

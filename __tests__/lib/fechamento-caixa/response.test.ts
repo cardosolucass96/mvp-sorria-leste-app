@@ -32,6 +32,7 @@ function mockCommonQueries() {
     { metodo: 'pix', total: 500, quantidade: 1 },
   ]);
   mockQueryResponse('p.cancelado = 1', { quantidade: 0, valor: 0 });
+  mockQueryResponse('pg.valor_total as grupo_valor_total', []);
   mockQueryResponse('from comissoes c', []);
 }
 
@@ -138,6 +139,93 @@ describe('obterFechamentoCaixaResponse', () => {
         valor_gerado: 300,
         valor_comissao: 36,
         origem: 'acrescimo',
+      },
+    ]);
+  });
+
+  it('inclui os pagamentos recebidos no dia agrupando múltiplas formas da mesma cobrança', async () => {
+    mockCommonQueries();
+    mockQueryResponse('from itens_atendimento i', []);
+    mockQueryResponse('pg.valor_total as grupo_valor_total', [
+      {
+        id: 501,
+        atendimento_id: 70,
+        cliente_id: 900,
+        cliente_nome: 'Paciente Financeiro',
+        pagamento_grupo_id: 12,
+        recebido_por_id: 44,
+        recebido_por_nome: 'Recepção 1',
+        valor: 300,
+        metodo: 'pix',
+        observacoes: 'Parcela PIX',
+        cancelado: 0,
+        motivo_cancelamento: null,
+        created_at: '2026-06-07 10:15:00',
+        grupo_valor_total: 500,
+        grupo_observacoes: 'Cobrança combinada',
+        grupo_cancelado: 0,
+        grupo_motivo_cancelamento: null,
+        grupo_created_at: '2026-06-07 10:15:00',
+      },
+      {
+        id: 502,
+        atendimento_id: 70,
+        cliente_id: 900,
+        cliente_nome: 'Paciente Financeiro',
+        pagamento_grupo_id: 12,
+        recebido_por_id: 44,
+        recebido_por_nome: 'Recepção 1',
+        valor: 200,
+        metodo: 'cartao_credito',
+        observacoes: null,
+        cancelado: 0,
+        motivo_cancelamento: null,
+        created_at: '2026-06-07 10:16:00',
+        grupo_valor_total: 500,
+        grupo_observacoes: 'Cobrança combinada',
+        grupo_cancelado: 0,
+        grupo_motivo_cancelamento: null,
+        grupo_created_at: '2026-06-07 10:15:00',
+      },
+    ]);
+
+    const response = await obterFechamentoCaixaResponse(1, '2026-06-07');
+
+    expect(response.resultado.pagamentos_recebidos_dia).toEqual([
+      {
+        id: 'grupo:12',
+        pagamento_grupo_id: 12,
+        pagamento_representante_id: 501,
+        atendimento_id: 70,
+        cliente_id: 900,
+        cliente_nome: 'Paciente Financeiro',
+        valor_total: 500,
+        observacoes: 'Cobrança combinada',
+        cancelado: false,
+        motivo_cancelamento: null,
+        created_at: '2026-06-07 10:15:00',
+        recebido_por_id: 44,
+        recebido_por_nome: 'Recepção 1',
+        formas: [
+          {
+            id: 502,
+            valor: 200,
+            metodo: 'cartao_credito',
+            observacoes: null,
+            cancelado: false,
+            motivo_cancelamento: null,
+            created_at: '2026-06-07 10:16:00',
+          },
+          {
+            id: 501,
+            valor: 300,
+            metodo: 'pix',
+            observacoes: 'Parcela PIX',
+            cancelado: false,
+            motivo_cancelamento: null,
+            created_at: '2026-06-07 10:15:00',
+          },
+        ],
       },
     ]);
   });

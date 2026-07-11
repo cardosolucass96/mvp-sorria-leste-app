@@ -106,6 +106,18 @@ function maxOrOne(values: number[]): number {
   return max > 0 ? max : 1;
 }
 
+function joinPrintLines(lines: Array<string | null | undefined>): string {
+  const filtered = lines
+    .map((line) => (typeof line === 'string' ? line.trim() : ''))
+    .filter(Boolean);
+
+  if (filtered.length === 0) {
+    return '-';
+  }
+
+  return filtered.map((line) => escapeHtml(line)).join('<br />');
+}
+
 interface EditProfessionalModalState {
   open: boolean;
   usuarioId: number | null;
@@ -152,6 +164,7 @@ interface AvaliacaoProcedimentoListItem {
 }
 
 type ProcedimentoExecutadoListItem = FechamentoCaixaVisao['dentistas'][number]['procedimentos_executados'][number];
+type PagamentoRecebidoListItem = FechamentoCaixaVisao['pagamentos_recebidos_dia'][number];
 
 function buildAvaliadosPorDentista(
   dentistas: FechamentoCaixaVisao['dentistas']
@@ -507,6 +520,29 @@ export default function FechamentoCaixaPage() {
         `).join('')
       : '<tr><td colspan="3" class="muted">Nenhuma entrada registrada</td></tr>';
 
+    const pagamentosRecebidosHtml = (resultado.pagamentos_recebidos_dia ?? []).length > 0
+      ? (resultado.pagamentos_recebidos_dia ?? []).map((item) => `
+          <tr>
+            <td>${escapeHtml(formatarDataHora(item.created_at))}</td>
+            <td>${escapeHtml(item.cliente_nome)}</td>
+            <td>${escapeHtml(`#${item.atendimento_id}`)}</td>
+            <td>${joinPrintLines(
+              item.formas.map((forma) => `${METODO_LABELS[forma.metodo] || forma.metodo}: ${formatarMoeda(forma.valor)}`)
+            )}</td>
+            <td>${escapeHtml(item.recebido_por_nome || '-')}</td>
+            <td>${joinPrintLines([
+              item.observacoes,
+              ...item.formas
+                .filter((forma) => Boolean(forma.observacoes?.trim()))
+                .map((forma) => `${METODO_LABELS[forma.metodo] || forma.metodo}: ${forma.observacoes}`),
+              item.cancelado && item.motivo_cancelamento ? `Motivo do cancelamento: ${item.motivo_cancelamento}` : null,
+            ])}</td>
+            <td style="text-align:right">${formatarMoeda(item.valor_total)}</td>
+            <td>${escapeHtml(item.cancelado ? `Cancelado${item.motivo_cancelamento ? ` - ${item.motivo_cancelamento}` : ''}` : 'Recebido')}</td>
+          </tr>
+        `).join('')
+      : '<tr><td colspan="8" class="muted">Nenhum pagamento recebido nesse dia</td></tr>';
+
     const rankingAvaliadoresHtml = resultado.graficos.ranking_avaliadores.length > 0
       ? resultado.graficos.ranking_avaliadores.map((item) => `
           <tr>
@@ -639,6 +675,8 @@ export default function FechamentoCaixaPage() {
             table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; }
             th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
             th { background: #ffedd5; color: var(--sorria-orange-dark); }
+            .compact-table th, .compact-table td { padding: 5px 6px; font-size: 11px; }
+            .multiline-cell { white-space: normal; }
             .muted { color: #64748b; }
             .section { margin-top: 20px; page-break-inside: avoid; }
             .status-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #ffedd5; color: var(--sorria-orange-dark); font-weight: 700; font-size: 11px; }
@@ -676,6 +714,25 @@ export default function FechamentoCaixaPage() {
             <div class="summary-card"><strong>Diárias</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_diarias)}</div></div>
             <div class="summary-card"><strong>Comissão avaliação + acréscimos</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_comissao_avaliacao)}</div></div>
           </div>
+
+          <section class="section">
+            <h2>Pagamentos recebidos no dia</h2>
+            <table class="compact-table">
+              <thead>
+                <tr>
+                  <th>Recebido em</th>
+                  <th>Cliente</th>
+                  <th>Atendimento</th>
+                  <th>Formas</th>
+                  <th>Recebido por</th>
+                  <th>Descritivo</th>
+                  <th>Valor</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>${pagamentosRecebidosHtml}</tbody>
+            </table>
+          </section>
 
           <section class="section">
             <h2>Entradas por método</h2>
@@ -768,6 +825,104 @@ export default function FechamentoCaixaPage() {
     () => maxOrOne((currentResultado?.graficos.ranking_executores ?? []).map((item) => item.valor_gerado)),
     [currentResultado]
   );
+  const pagamentosRecebidos = useMemo(
+    () => currentResultado?.pagamentos_recebidos_dia ?? [],
+    [currentResultado]
+  );
+  const pagamentosRecebidosAtivos = useMemo(
+    () => pagamentosRecebidos.filter((item) => !item.cancelado),
+    [pagamentosRecebidos]
+  );
+  const pagamentosRecebidosCancelados = useMemo(
+    () => pagamentosRecebidos.filter((item) => item.cancelado),
+    [pagamentosRecebidos]
+  );
+
+  const pagamentosRecebidosColumns: TableColumn<PagamentoRecebidoListItem>[] = [
+    {
+      key: 'created_at',
+      label: 'Recebido em',
+      render: (item) => (
+        <div className="space-y-1">
+          <p className="font-medium">{formatarDataHora(item.created_at)}</p>
+          <p className="text-xs text-muted-foreground">
+            {item.formas.length} forma(s)
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: 'cliente',
+      label: 'Cliente',
+      render: (item) => (
+        <div className="space-y-1">
+          <p className="font-medium">{item.cliente_nome}</p>
+          <p className="text-xs text-muted-foreground">
+            Atendimento #{item.atendimento_id}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: 'formas',
+      label: 'Formas de pagamento',
+      render: (item) => (
+        <div className="space-y-2">
+          {item.formas.map((forma) => (
+            <div key={forma.id} className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-medium">{METODO_LABELS[forma.metodo] || forma.metodo}</p>
+                {forma.observacoes && (
+                  <p className="text-xs text-muted-foreground">{forma.observacoes}</p>
+                )}
+              </div>
+              <span className={forma.cancelado ? 'font-semibold text-error-600' : 'font-semibold'}>
+                {formatarMoeda(forma.valor)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    {
+      key: 'recebido_por_nome',
+      label: 'Recebido por',
+      render: (item) => (
+        <span className="text-sm text-muted-foreground">{item.recebido_por_nome || '-'}</span>
+      ),
+    },
+    {
+      key: 'observacoes',
+      label: 'Observações',
+      render: (item) => (
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">{item.observacoes || '-'}</p>
+          {item.cancelado && item.motivo_cancelamento && (
+            <p className="text-xs text-error-600">Motivo: {item.motivo_cancelamento}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'valor_total',
+      label: 'Total',
+      align: 'right',
+      render: (item) => (
+        <span className={item.cancelado ? 'font-semibold text-error-600' : 'font-semibold text-success-700'}>
+          {formatarMoeda(item.valor_total)}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (item) => (
+        <Badge color={item.cancelado ? 'red' : 'green'} size="sm">
+          {item.cancelado ? 'Cancelado' : 'Recebido'}
+        </Badge>
+      ),
+    },
+  ];
 
   if (authLoading || !user || !canAccess) {
     return null;
@@ -945,6 +1100,32 @@ export default function FechamentoCaixaPage() {
           <StatCard icon={<Lock className="w-6 h-6" />} label="Diárias" value={formatarMoeda(resultado.resumo.total_diarias)} color="border-warning-500" />
           <StatCard icon={<ShieldCheck className="w-6 h-6" />} label="Comissão avaliação + acréscimos" value={formatarMoeda(resultado.resumo.total_comissao_avaliacao)} color="border-success-500" />
         </div>
+
+        <Card className="space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">Pagamentos recebidos no dia</h2>
+              <p className="text-sm text-muted-foreground">
+                Conferência detalhada de tudo que entrou no caixa no dia, incluindo multi-formas e cancelamentos.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge color="blue">{pagamentosRecebidos.length} registro(s)</Badge>
+              <Badge color="green">{pagamentosRecebidosAtivos.length} ativo(s)</Badge>
+              <Badge color={pagamentosRecebidosCancelados.length > 0 ? 'red' : 'gray'}>
+                {pagamentosRecebidosCancelados.length} cancelado(s)
+              </Badge>
+            </div>
+          </div>
+
+          <Table
+            columns={pagamentosRecebidosColumns}
+            data={pagamentosRecebidos}
+            keyExtractor={(item) => item.id}
+            emptyMessage="Nenhum pagamento recebido nesse dia."
+            caption="Pagamentos recebidos no dia"
+          />
+        </Card>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <Card>
