@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  Copy,
   Lock,
   Pencil,
   Plus,
@@ -117,6 +118,53 @@ function joinPrintLines(lines: Array<string | null | undefined>): string {
   }
 
   return filtered.map((line) => escapeHtml(line)).join('<br />');
+}
+
+async function copyTextToClipboard(value: string): Promise<void> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  if (typeof document === 'undefined') {
+    throw new Error('Clipboard indisponível');
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'absolute';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error('Falha ao copiar');
+  }
+}
+
+interface CopyInlineButtonProps {
+  label: string;
+  onCopy: () => void;
+  disabled?: boolean;
+}
+
+function CopyInlineButton({ label, onCopy, disabled = false }: CopyInlineButtonProps) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="shrink-0 text-muted-foreground hover:text-foreground"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onCopy}
+      icon={<Copy className="w-3.5 h-3.5" />}
+    />
+  );
 }
 
 interface EditProfessionalModalState {
@@ -831,6 +879,21 @@ export default function FechamentoCaixaPage() {
     () => pagamentosRecebidos.filter((item) => item.cancelado),
     [pagamentosRecebidos]
   );
+  const handleCopyField = useCallback(async (label: string, value: string) => {
+    const normalizedValue = value.trim();
+    if (!normalizedValue || normalizedValue === '-') {
+      toast.warning(`${label} indisponível para copiar.`);
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(normalizedValue);
+      toast.success(`${label} copiado.`);
+    } catch (copyError) {
+      console.error(`Erro ao copiar ${label.toLowerCase()}:`, copyError);
+      toast.error(`Não foi possível copiar ${label.toLowerCase()}.`);
+    }
+  }, [toast]);
 
   const pagamentosRecebidosColumns: TableColumn<PagamentoRecebidoListItem>[] = [
     {
@@ -848,22 +911,55 @@ export default function FechamentoCaixaPage() {
     {
       key: 'cliente',
       label: 'Cliente',
-      render: (item) => (
-        <div className="space-y-1">
-          <Link
-            href={`/clientes/${item.cliente_id}`}
-            className="block w-fit font-medium text-info-600 transition-colors hover:text-info-800 hover:underline"
-          >
-            {item.cliente_nome}
-          </Link>
-          <p className="text-xs text-muted-foreground">
-            Telefone: {formatarTelefone(item.cliente_telefone)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            CPF: {formatarCPF(item.cliente_cpf)}
-          </p>
-        </div>
-      ),
+      render: (item) => {
+        const nomeCliente = item.cliente_nome?.trim() || '-';
+        const telefoneCliente = formatarTelefone(item.cliente_telefone);
+        const cpfCliente = formatarCPF(item.cliente_cpf);
+
+        return (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <Link
+                href={`/clientes/${item.cliente_id}`}
+                className="block w-fit font-medium text-info-600 transition-colors hover:text-info-800 hover:underline"
+              >
+                {nomeCliente}
+              </Link>
+              <CopyInlineButton
+                label={`Copiar nome de ${nomeCliente}`}
+                disabled={nomeCliente === '-'}
+                onCopy={() => {
+                  void handleCopyField('Nome', nomeCliente);
+                }}
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs text-muted-foreground">
+                Telefone: {telefoneCliente}
+              </p>
+              <CopyInlineButton
+                label={`Copiar telefone de ${nomeCliente}`}
+                disabled={telefoneCliente === '-'}
+                onCopy={() => {
+                  void handleCopyField('Telefone', telefoneCliente);
+                }}
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs text-muted-foreground">
+                CPF: {cpfCliente}
+              </p>
+              <CopyInlineButton
+                label={`Copiar CPF de ${nomeCliente}`}
+                disabled={cpfCliente === '-'}
+                onCopy={() => {
+                  void handleCopyField('CPF', cpfCliente);
+                }}
+              />
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: 'formas',

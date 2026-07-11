@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import FechamentoCaixaPage from '@/app/fechamento-caixa/page';
@@ -8,6 +8,7 @@ import type { FechamentoCaixaResponse } from '@/lib/fechamento-caixa/types';
 const mockPush = jest.fn();
 const mockUnitFetch = jest.fn();
 const mockUseAuth = jest.fn();
+const mockClipboardWriteText = jest.fn();
 const mockToast = {
   success: jest.fn(),
   error: jest.fn(),
@@ -239,6 +240,13 @@ function createResponseFixture(): FechamentoCaixaResponse {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockClipboardWriteText.mockResolvedValue(undefined);
+  Object.defineProperty(window.navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: mockClipboardWriteText,
+    },
+  });
 
   mockUseAuth.mockReturnValue({
     user: { id: 99, role: 'admin', roles: ['admin'] },
@@ -291,6 +299,25 @@ describe('FechamentoCaixaPage', () => {
     expect(screen.queryByText('Comissão execução')).not.toBeInTheDocument();
 
     expect((await screen.findAllByText('Dra. Alice')).length).toBeGreaterThan(0);
+  });
+
+  test('permite copiar nome, telefone e cpf do cliente', async () => {
+    render(<FechamentoCaixaPage />);
+
+    expect(await screen.findByText('Fechamento de Caixa')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar nome de Maria' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar telefone de Maria' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar CPF de Maria' }));
+
+    await waitFor(() => {
+      expect(mockClipboardWriteText).toHaveBeenNthCalledWith(1, 'Maria');
+      expect(mockClipboardWriteText).toHaveBeenNthCalledWith(2, '(11) 99876-5432');
+      expect(mockClipboardWriteText).toHaveBeenNthCalledWith(3, '123.456.789-01');
+      expect(mockToast.success).toHaveBeenNthCalledWith(1, 'Nome copiado.');
+      expect(mockToast.success).toHaveBeenNthCalledWith(2, 'Telefone copiado.');
+      expect(mockToast.success).toHaveBeenNthCalledWith(3, 'CPF copiado.');
+    });
   });
 
   test('permite acesso para atendente sem redirecionar', async () => {
