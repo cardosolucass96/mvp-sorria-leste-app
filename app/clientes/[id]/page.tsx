@@ -126,6 +126,12 @@ interface Movimentacao {
   saldo_novo: number;
 }
 
+interface ClienteTermoLista {
+  id: number;
+  slug: string;
+  titulo: string;
+}
+
 interface FichaData {
   atendimentos: Atendimento[];
   procedimentos: ItemProcedimento[];
@@ -215,6 +221,11 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const [transferResultados, setTransferResultados] = useState<{ id: number; nome: string; cpf: string | null }[]>([]);
   const [transferBuscando, setTransferBuscando] = useState(false);
   const [estornandoItemId, setEstornandoItemId] = useState<number | null>(null);
+  const [termos, setTermos] = useState<ClienteTermoLista[]>([]);
+  const [isLoadingTermos, setIsLoadingTermos] = useState(false);
+  const [isAbrindoTermo, setIsAbrindoTermo] = useState(false);
+  const [modalTermoAberto, setModalTermoAberto] = useState(false);
+  const [termoSelecionado, setTermoSelecionado] = useState('');
 
   const router = useRouter();
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -242,6 +253,23 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     if (res.ok) {
       const data = await res.json();
       setSaldo({ saldo: data.saldo ?? 0, saldo_calculado: data.saldo_calculado ?? 0 });
+    }
+  }, [id]);
+
+  const carregarTermosCliente = useCallback(async () => {
+    setIsLoadingTermos(true);
+    try {
+      const res = await fetch(`/api/clientes/${id}/termos`);
+      if (res.ok) {
+        const data = await res.json() as ClienteTermoLista[];
+        setTermos(data);
+      } else {
+        setTermos([]);
+      }
+    } catch {
+      setTermos([]);
+    } finally {
+      setIsLoadingTermos(false);
     }
   }, [id]);
 
@@ -346,7 +374,13 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           setFicha(fichaData);
           await carregarAnexos(fichaData.prontuarios);
         }
-        await Promise.all([loadVinculos(), carregarSaldo(), carregarAgendamentos(), carregarFollowups()]);
+        await Promise.all([
+          carregarTermosCliente(),
+          loadVinculos(),
+          carregarSaldo(),
+          carregarAgendamentos(),
+          carregarFollowups(),
+        ]);
       } catch {
         setError('Erro ao carregar cliente');
       } finally {
@@ -354,7 +388,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       }
     };
     load();
-  }, [id, router, loadVinculos, carregarSaldo, carregarAgendamentos, carregarFollowups, carregarAnexos]);
+  }, [id, router, loadVinculos, carregarSaldo, carregarAgendamentos, carregarFollowups, carregarAnexos, carregarTermosCliente]);
 
   useEffect(() => {
     if (!vinculoBusca.trim()) { setVinculoBuscaResultados([]); return; }
@@ -467,6 +501,70 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  };
+
+  const abrirModalGerarTermo = async () => {
+    if (termos.length === 0 && !isLoadingTermos) {
+      await carregarTermosCliente();
+    }
+    setTermoSelecionado('');
+    setModalTermoAberto(true);
+  };
+
+  const gerarTermo = async () => {
+    if (!cliente) return;
+    if (!termoSelecionado) {
+      setError('Selecione um termo para gerar.');
+      return;
+    }
+
+    setIsAbrindoTermo(true);
+    try {
+      const res = await fetch(`/api/clientes/${id}/termos/${encodeURIComponent(termoSelecionado)}/render`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data?.error || 'Erro ao gerar termo.');
+        return;
+      }
+
+      const html = String(data.html || '').trim();
+      if (!html) {
+        setError('Termo vazio.');
+        return;
+      }
+
+      const titulo = String(data.titulo || 'Termo');
+      const janela = window.open('', '_blank');
+      if (!janela) {
+        setError('Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-up está ativo.');
+        return;
+      }
+
+      janela.document.write(`
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>${escapeHtml(titulo)}</title>
+            <style>
+              body { font-family: Arial, Helvetica, sans-serif; margin: 20mm; color: #0f172a; }
+              img { max-width: 100%; }
+            </style>
+          </head>
+          <body>${html}</body>
+        </html>
+      `);
+      finalizarJanelaDeImpressao(janela);
+      setModalTermoAberto(false);
+      setSuccess('Termo pronto para impressão.');
+    } catch {
+      setError('Erro ao gerar termo.');
+    } finally {
+      setIsAbrindoTermo(false);
+    }
   };
 
   const toggleSelecionarAtendimento = (atendimentoId: number) => {
@@ -889,6 +987,14 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         actions={
           !isEditing ? (
             <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={abrirModalGerarTermo}
+                loading={isLoadingTermos}
+                disabled={isLoadingTermos}
+              >
+                Gerar termo
+              </Button>
               <Link href={`/atendimentos/novo?cliente=${id}`}>
                 <Button variant="secondary">Novo Atendimento</Button>
               </Link>
@@ -1836,6 +1942,53 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           </div>
         </Modal>
       )}
+
+      <Modal
+        isOpen={modalTermoAberto}
+        onClose={() => {
+          setModalTermoAberto(false);
+          setTermoSelecionado('');
+        }}
+        title="Gerar termo"
+        size="md"
+        footer={
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={() => {
+              setModalTermoAberto(false);
+              setTermoSelecionado('');
+            }}>
+              Fechar
+            </Button>
+            <Button onClick={gerarTermo} disabled={isAbrindoTermo || !termoSelecionado}>
+              {isAbrindoTermo ? 'Gerando...' : 'Gerar e abrir'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">Selecione um termo abaixo para gerar a versão do cliente em PDF.</p>
+          {termos.length === 0 && !isLoadingTermos ? (
+            <p className="text-sm text-muted">Nenhum termo ativo disponível no momento.</p>
+          ) : (
+            <label className="block">
+              <span className="block text-sm font-medium mb-1">Termo</span>
+              <select
+                value={termoSelecionado}
+                onChange={(e) => setTermoSelecionado(e.target.value)}
+                className="field-control w-full"
+                required
+              >
+                <option value="">Selecione...</option>
+                {termos.map((termo) => (
+                  <option key={termo.id} value={termo.slug}>
+                    {termo.titulo}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      </Modal>
 
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}

@@ -243,6 +243,18 @@ export interface PagamentoGrupo {
   created_at: string;
 }
 
+export interface TermoTemplate {
+  id: number;
+  slug: string;
+  titulo: string;
+  conteudo_html: string;
+  ativo: number;
+  created_by: number | null;
+  updated_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Tipos com joins para exibição
 export interface AtendimentoCompleto extends Atendimento {
   cliente_nome: string;
