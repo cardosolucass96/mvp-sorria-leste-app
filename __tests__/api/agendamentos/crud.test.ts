@@ -2,7 +2,7 @@
  * Testes E2E — /api/agendamentos
  *
  * Cobre: GET (listar, filtros, paginação), POST (criar procedimento e avaliação),
- *        GET [id], PUT [id] (reagendar, faltou, cancelar, trocar executor),
+ *        GET [id], PUT [id] (reagendar, editar, faltou, cancelar, trocar executor),
  *        POST [id]/chegou (avaliação e procedimento)
  */
 
@@ -241,7 +241,7 @@ describe('POST /api/agendamentos', () => {
           cliente_id: 1,
           procedimento_id: 1,
           executor_id: 4,
-          data_agendada: '2026-04-10T14:00',
+          data_agendada: '2027-04-10T14:00',
         },
       }
     );
@@ -269,7 +269,7 @@ describe('POST /api/agendamentos', () => {
         body: {
           cliente_id: 3,
           tipo: 'avaliacao',
-          data_agendada: '2026-04-12T09:00',
+          data_agendada: '2027-04-12T09:00',
           observacoes: 'Primeira avaliação',
         },
       }
@@ -404,7 +404,7 @@ describe('PUT /api/agendamentos/[id]', () => {
       updateAgendamento, '/api/agendamentos/1', {
         method: 'PUT',
         headers: { Authorization: 'Bearer test.jwt.token' },
-        body: { data_agendada: '2026-04-15T10:00' },
+        body: { data_agendada: '2027-04-15T10:00' },
       }, ctx
     );
 
@@ -427,14 +427,37 @@ describe('PUT /api/agendamentos/[id]', () => {
       updateAgendamento, '/api/agendamentos/3', {
         method: 'PUT',
         headers: { Authorization: 'Bearer test.jwt.token' },
-        body: { data_agendada: '2026-04-20T11:00' },
+        body: { data_agendada: '2027-04-20T11:00' },
       }, ctx
     );
 
     expect(status).toBe(200);
     const queries = getExecutedQueries();
     const update = queries.find(q => q.sql.includes('UPDATE agendamentos'));
-    expect(update!.params).toContain('2026-04-20T11:00');
+    expect(update!.params).toContain('2027-04-20T11:00');
+  });
+
+  it('remove a data e volta o status para pendente quando nao recebe status explicito', async () => {
+    mockQueryResponse('select * from agendamentos where id', {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      status: 'agendado',
+    });
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status } = await callRoute(
+      updateAgendamento, '/api/agendamentos/1', {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+        body: { data_agendada: null },
+      }, ctx
+    );
+
+    expect(status).toBe(200);
+    const queries = getExecutedQueries();
+    const update = queries.find(q => q.sql.includes('UPDATE agendamentos'));
+    expect(update!.sql).toContain('data_agendada = ?');
+    expect(update!.sql).toContain("status = 'pendente'");
+    expect(update!.params).toContain(null);
   });
 
   it('marca como faltou', async () => {

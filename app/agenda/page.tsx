@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Calendar, UserCheck, UserX, MessageCircle, CalendarClock, X, RefreshCw, Plus, FileText, List, CalendarDays } from 'lucide-react';
+import { Calendar, UserCheck, UserX, MessageCircle, CalendarClock, X, Plus, FileText, List, CalendarDays, Pencil } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingState from '@/components/ui/LoadingState';
 import Alert from '@/components/ui/Alert';
@@ -16,7 +16,7 @@ import Modal from '@/components/ui/Modal';
 import Textarea from '@/components/ui/Textarea';
 import { StatusBadge, ProntuarioDrawer, AgendaCalendario, ViewModeToggle } from '@/components/domain';
 import { useToast } from '@/components/ui/Toast';
-import { formatarDataAgendada, formatarTelefone } from '@/lib/utils/formatters';
+import { formatarDataAgendada, formatarTelefone, toDateTimeLocal } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
@@ -51,6 +51,7 @@ interface Agendamento {
   cliente_telefone: string | null;
   procedimento_nome: string;
   etapa_modelo_nome: string | null;
+  observacoes?: string | null;
   pago: number;
   atendimento_status: string | null;
   atendimento_id: number | null;
@@ -118,6 +119,11 @@ const FILTROS_RAPIDOS = [
 ] as const;
 const AGENDA_VIEW_MODE_STORAGE_KEY = 'agenda-view-mode';
 const AGENDA_CALENDAR_SUBVIEW_STORAGE_KEY = 'agenda-calendar-subview';
+const GROUP_EXECUTOR_CLEAR_VALUE = '__clear__';
+
+function isAgendamentoAtivo(status: string) {
+  return status === 'pendente' || status === 'agendado';
+}
 
 function formatDate(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -227,12 +233,14 @@ export default function AgendaPage() {
     novaData: string;
   }>({ isOpen: false, grupo: null, novaData: '' });
 
-  // Dialog de reagendar direto (sem faltou)
+  // Dialog de edição em lote do grupo
   const [reagendarDiretoDialog, setReagendarDiretoDialog] = useState<{
     isOpen: boolean;
     grupo: GrupoCliente | null;
     novaData: string;
-  }>({ isOpen: false, grupo: null, novaData: '' });
+    executorId: string;
+    error: string;
+  }>({ isOpen: false, grupo: null, novaData: '', executorId: '', error: '' });
 
   // Dialog de cancelar
   const [cancelarDialog, setCancelarDialog] = useState<{
@@ -247,6 +255,24 @@ export default function AgendaPage() {
     agendamento: Agendamento | null;
     executorId: string;
   }>({ isOpen: false, agendamento: null, executorId: '' });
+
+  const [editarAgendamentoDialog, setEditarAgendamentoDialog] = useState<{
+    isOpen: boolean;
+    agendamento: Agendamento | null;
+    executorId: string;
+    data: string;
+    observacoes: string;
+    salvando: boolean;
+    error: string;
+  }>({
+    isOpen: false,
+    agendamento: null,
+    executorId: '',
+    data: '',
+    observacoes: '',
+    salvando: false,
+    error: '',
+  });
 
   // Modal novo agendamento
   const [novoDialog, setNovoDialog] = useState(false);
@@ -448,6 +474,32 @@ export default function AgendaPage() {
     } catch {}
   };
 
+  const abrirEditarAgendamento = async (agendamento: Agendamento) => {
+    if (!isAdminOrAtendente || !isAgendamentoAtivo(agendamento.status)) return;
+    await carregarProfissionaisAgenda();
+    setEditarAgendamentoDialog({
+      isOpen: true,
+      agendamento,
+      executorId: agendamento.executor_id ? String(agendamento.executor_id) : '',
+      data: toDateTimeLocal(agendamento.data_agendada),
+      observacoes: agendamento.observacoes ?? '',
+      salvando: false,
+      error: '',
+    });
+  };
+
+  const abrirEditarGrupo = async (grupo: GrupoCliente) => {
+    if (!isAdminOrAtendente) return;
+    await carregarProfissionaisAgenda();
+    setReagendarDiretoDialog({
+      isOpen: true,
+      grupo,
+      novaData: '',
+      executorId: '',
+      error: '',
+    });
+  };
+
   const handleCriarAgendamento = async () => {
     if (!novoClienteSelecionado) {
       setNovoError('Selecione um cliente');
@@ -487,6 +539,61 @@ export default function AgendaPage() {
       setNovoError(err instanceof Error ? err.message : 'Erro ao criar agendamento');
     } finally {
       setNovoSalvando(false);
+    }
+  };
+
+  const handleSalvarEdicaoAgendamento = async () => {
+    const { agendamento, executorId, data, observacoes } = editarAgendamentoDialog;
+    if (!agendamento) return;
+
+    const body: Record<string, unknown> = {};
+    const executorAtual = agendamento.executor_id ? String(agendamento.executor_id) : '';
+    const dataAtual = toDateTimeLocal(agendamento.data_agendada);
+    const observacoesAtuais = agendamento.observacoes ?? '';
+
+    if (executorId !== executorAtual) {
+      body.executor_id = executorId ? parseInt(executorId, 10) : null;
+    }
+    if (data !== dataAtual) {
+      body.data_agendada = data || null;
+    }
+    if (observacoes !== observacoesAtuais) {
+      body.observacoes = observacoes || null;
+    }
+
+    if (Object.keys(body).length === 0) {
+      setEditarAgendamentoDialog((prev) => ({ ...prev, error: 'Nenhuma alteração para salvar.' }));
+      return;
+    }
+
+    setEditarAgendamentoDialog((prev) => ({ ...prev, salvando: true, error: '' }));
+    try {
+      const res = await unitFetch(`/api/agendamentos/${agendamento.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const responseData = await res.json();
+      if (!res.ok) {
+        throw new Error(responseData.error || 'Erro ao atualizar agendamento');
+      }
+      toast.success('Agendamento atualizado com sucesso');
+      setEditarAgendamentoDialog({
+        isOpen: false,
+        agendamento: null,
+        executorId: '',
+        data: '',
+        observacoes: '',
+        salvando: false,
+        error: '',
+      });
+      await carregarAgendamentos();
+    } catch (err) {
+      setEditarAgendamentoDialog((prev) => ({
+        ...prev,
+        salvando: false,
+        error: err instanceof Error ? err.message : 'Erro ao atualizar agendamento',
+      }));
     }
   };
 
@@ -700,32 +807,57 @@ export default function AgendaPage() {
 
   // ─── Reagendar direto (sem faltou) ───────────────────────────
 
-  const handleReagendarDireto = async () => {
-    const { grupo, novaData } = reagendarDiretoDialog;
-    if (!grupo || !novaData) return;
+  const handleEditarGrupo = async () => {
+    const { grupo, novaData, executorId } = reagendarDiretoDialog;
+    if (!grupo) return;
+
+    const bodyBase: Record<string, unknown> = {};
+    if (novaData) {
+      bodyBase.data_agendada = novaData;
+    }
+    if (executorId) {
+      bodyBase.executor_id = executorId === GROUP_EXECUTOR_CLEAR_VALUE ? null : parseInt(executorId, 10);
+    }
+
+    if (Object.keys(bodyBase).length === 0) {
+      setReagendarDiretoDialog((prev) => ({
+        ...prev,
+        error: 'Informe ao menos uma alteração para aplicar ao grupo.',
+      }));
+      return;
+    }
 
     const key = `${grupo.cliente_id}_${grupo.data_key}`;
     setGrupoLoading(key);
     try {
       const ativos = grupo.agendamentos.filter(
-        ag => ag.status === 'pendente' || ag.status === 'agendado'
+        ag => isAgendamentoAtivo(ag.status)
       );
       await Promise.all(
-        ativos.map(ag =>
-          unitFetch(`/api/agendamentos/${ag.id}`, {
+        ativos.map(async (ag) => {
+          const res = await unitFetch(`/api/agendamentos/${ag.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data_agendada: novaData }),
-          })
-        )
+            body: JSON.stringify(bodyBase),
+          });
+          if (!res.ok) {
+            const responseData = await res.json();
+            throw new Error(responseData.error || 'Erro ao atualizar grupo');
+          }
+        })
       );
-      toast.success('Reagendado com sucesso');
-      carregarAgendamentos();
-    } catch {
-      toast.error('Erro ao reagendar');
+      toast.success('Grupo atualizado com sucesso');
+      setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '', executorId: '', error: '' });
+      await carregarAgendamentos();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao atualizar grupo';
+      toast.error(message);
+      setReagendarDiretoDialog((prev) => ({
+        ...prev,
+        error: message,
+      }));
     } finally {
       setGrupoLoading(null);
-      setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '' });
     }
   };
 
@@ -808,7 +940,7 @@ export default function AgendaPage() {
     const key = `${grupo.cliente_id}_${grupo.data_key}`;
     const isLoading = grupoLoading === key;
     const temAtivo = grupo.agendamentos.some(
-      ag => ag.status === 'pendente' || ag.status === 'agendado'
+      ag => isAgendamentoAtivo(ag.status)
     );
     const dataGrupo = grupo.agendamentos[0]?.data_agendada;
 
@@ -928,12 +1060,12 @@ export default function AgendaPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setReagendarDiretoDialog({ isOpen: true, grupo, novaData: '' })}
+                  onClick={() => { void abrirEditarGrupo(grupo); }}
                   disabled={isLoading}
-                  title="Alterar data do agendamento"
+                  title="Editar data e executor do grupo"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 mr-1" />
-                  Reagendar
+                  <Pencil className="w-3.5 h-3.5 mr-1" />
+                  Editar grupo
                 </Button>
                 <Button
                   variant="secondary"
@@ -974,7 +1106,8 @@ export default function AgendaPage() {
         {/* Lista de procedimentos */}
         <div className="divide-y divide-border">
           {grupo.agendamentos.map((ag) => {
-            const podTrocar = isAdminOrAtendente && (ag.status === 'pendente' || ag.status === 'agendado');
+            const podTrocar = isAdminOrAtendente && isAgendamentoAtivo(ag.status);
+            const podEditar = isAdminOrAtendente && isAgendamentoAtivo(ag.status);
             return (
               <div key={ag.id} className="flex items-center gap-3 px-4 py-2.5">
                 <div className="flex-1 min-w-0">
@@ -1010,12 +1143,28 @@ export default function AgendaPage() {
                     ) : null;
                   })()}
                 </div>
-                {ag.tipo !== 'avaliacao' && (
-                  ag.pago ? <Badge color="green" size="sm">Pago</Badge> : <Badge color="gray" size="sm">A pagar</Badge>
-                )}
-                {ag.status !== 'realizado' && (
-                  <StatusBadge type="agendamento" status={ag.status} size="sm" />
-                )}
+                <div className="flex items-center gap-2">
+                  {ag.tipo !== 'avaliacao' && (
+                    ag.pago ? <Badge color="green" size="sm">Pago</Badge> : <Badge color="gray" size="sm">A pagar</Badge>
+                  )}
+                  {podEditar && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void abrirEditarAgendamento(ag);
+                      }}
+                      title="Editar este agendamento"
+                    >
+                      <Pencil className="w-3 h-3 mr-1" />
+                      Editar
+                    </Button>
+                  )}
+                  {ag.status !== 'realizado' && (
+                    <StatusBadge type="agendamento" status={ag.status} size="sm" />
+                  )}
+                </div>
               </div>
             );
           })}
@@ -1283,15 +1432,27 @@ export default function AgendaPage() {
         </Modal>
       )}
 
-      {/* Reagendar direto (sem faltou) */}
+      {/* Editar grupo */}
       {reagendarDiretoDialog.isOpen && reagendarDiretoDialog.grupo && (
-        <Modal isOpen onClose={() => setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '' })} title="Reagendar">
+        <Modal
+          isOpen
+          onClose={() => setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '', executorId: '', error: '' })}
+          title="Editar grupo de agendamentos"
+        >
+          {reagendarDiretoDialog.error && (
+            <Alert type="error" dismissible onDismiss={() => setReagendarDiretoDialog((prev) => ({ ...prev, error: '' }))}>
+              {reagendarDiretoDialog.error}
+            </Alert>
+          )}
+          <p className="mb-1 text-sm text-muted-foreground">
+            Atualizar as sessões ativas de <strong>{reagendarDiretoDialog.grupo.cliente_nome}</strong>.
+          </p>
           <p className="mb-4 text-sm text-muted-foreground">
-            Alterar a data de agendamento de <strong>{reagendarDiretoDialog.grupo.cliente_nome}</strong>:
+            Você pode alterar a data/hora, o executor, ou os dois campos ao mesmo tempo.
           </p>
           <ul className="mb-4 space-y-1">
             {reagendarDiretoDialog.grupo.agendamentos
-              .filter(ag => ag.status === 'pendente' || ag.status === 'agendado')
+              .filter(ag => isAgendamentoAtivo(ag.status))
               .map(ag => (
                 <li key={ag.id} className="text-sm text-foreground flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
@@ -1300,26 +1461,142 @@ export default function AgendaPage() {
               ))}
           </ul>
           <div className="mb-5">
-            <label className="block text-sm font-medium text-foreground mb-1">Nova data</label>
-            <input
+            <Input
+              label="Nova data e hora (opcional)"
+              name="editar_grupo_data_agendada"
               type="datetime-local"
-              min={new Date().toISOString().slice(0, 16)}
               value={reagendarDiretoDialog.novaData}
-              onChange={e => setReagendarDiretoDialog(prev => ({ ...prev, novaData: e.target.value }))}
-              className="field-control w-full px-3 py-2 text-sm"
+              onChange={(value) => setReagendarDiretoDialog(prev => ({ ...prev, novaData: value, error: '' }))}
+              hint="Deixe em branco para manter os horários atuais."
+            />
+          </div>
+          <div className="mb-5">
+            <Select
+              label="Executor para todas (opcional)"
+              name="editar_grupo_executor_id"
+              value={reagendarDiretoDialog.executorId}
+              onChange={(value) => setReagendarDiretoDialog(prev => ({ ...prev, executorId: value, error: '' }))}
+              options={[
+                { value: GROUP_EXECUTOR_CLEAR_VALUE, label: 'Remover executor de todas' },
+                ...profissionaisAgenda.map((profissional) => ({
+                  value: String(profissional.id),
+                  label: profissional.nome,
+                })),
+              ]}
+              placeholder="Manter executores atuais"
+              hint="Escolha um profissional para aplicar em todas as sessões ativas."
             />
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '' })}>
+            <Button
+              variant="ghost"
+              onClick={() => setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '', executorId: '', error: '' })}
+            >
               Voltar
             </Button>
             <Button
               variant="primary"
-              disabled={!reagendarDiretoDialog.novaData}
+              disabled={!reagendarDiretoDialog.novaData && !reagendarDiretoDialog.executorId}
               loading={grupoLoading === `${reagendarDiretoDialog.grupo.cliente_id}_${reagendarDiretoDialog.grupo.data_key}`}
-              onClick={handleReagendarDireto}
+              onClick={handleEditarGrupo}
             >
-              Reagendar
+              Salvar alterações
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Editar agendamento individual */}
+      {editarAgendamentoDialog.isOpen && editarAgendamentoDialog.agendamento && (
+        <Modal
+          isOpen
+          onClose={() => setEditarAgendamentoDialog({
+            isOpen: false,
+            agendamento: null,
+            executorId: '',
+            data: '',
+            observacoes: '',
+            salvando: false,
+            error: '',
+          })}
+          title="Editar Agendamento"
+          size="md"
+        >
+          {editarAgendamentoDialog.error && (
+            <Alert
+              type="error"
+              dismissible
+              onDismiss={() => setEditarAgendamentoDialog((prev) => ({ ...prev, error: '' }))}
+            >
+              {editarAgendamentoDialog.error}
+            </Alert>
+          )}
+
+          <div className="mb-4 rounded-lg bg-surface-secondary px-3 py-2 text-sm">
+            <p className="font-medium text-foreground">{editarAgendamentoDialog.agendamento.cliente_nome}</p>
+            <p className="text-muted-foreground">
+              {editarAgendamentoDialog.agendamento.tipo === 'avaliacao' ? 'Avaliação' : editarAgendamentoDialog.agendamento.procedimento_nome}
+              {editarAgendamentoDialog.agendamento.etapa_modelo_nome ? ` — ${editarAgendamentoDialog.agendamento.etapa_modelo_nome}` : ''}
+            </p>
+          </div>
+
+          {isAdminOrAtendente ? (
+            <Select
+              label={editarAgendamentoDialog.agendamento.tipo === 'avaliacao' ? 'Avaliador (opcional)' : 'Executor (opcional)'}
+              name="editar_agendamento_executor_id"
+              value={editarAgendamentoDialog.executorId}
+              onChange={(value) => setEditarAgendamentoDialog((prev) => ({ ...prev, executorId: value, error: '' }))}
+              options={profissionaisAgenda.map((profissional) => ({
+                value: String(profissional.id),
+                label: profissional.nome,
+              }))}
+              placeholder={editarAgendamentoDialog.agendamento.tipo === 'avaliacao' ? 'Sem avaliador' : 'Sem executor'}
+            />
+          ) : null}
+
+          <div className="mt-4">
+            <Input
+              label="Data e hora (opcional)"
+              name="editar_agendamento_data_agendada"
+              type="datetime-local"
+              value={editarAgendamentoDialog.data}
+              onChange={(value) => setEditarAgendamentoDialog((prev) => ({ ...prev, data: value, error: '' }))}
+              hint="Deixe em branco para deixar o agendamento sem data."
+            />
+          </div>
+
+          <div className="mt-4">
+            <Textarea
+              label="Observações (opcional)"
+              name="editar_agendamento_observacoes"
+              value={editarAgendamentoDialog.observacoes}
+              onChange={(value) => setEditarAgendamentoDialog((prev) => ({ ...prev, observacoes: value, error: '' }))}
+              placeholder="Observações..."
+              rows={3}
+            />
+          </div>
+
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setEditarAgendamentoDialog({
+                isOpen: false,
+                agendamento: null,
+                executorId: '',
+                data: '',
+                observacoes: '',
+                salvando: false,
+                error: '',
+              })}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSalvarEdicaoAgendamento}
+              loading={editarAgendamentoDialog.salvando}
+            >
+              Salvar alterações
             </Button>
           </div>
         </Modal>

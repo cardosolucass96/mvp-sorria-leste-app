@@ -136,6 +136,7 @@ function makeAgendamento(overrides: Record<string, unknown> = {}) {
     cliente_telefone: '85999990000',
     procedimento_nome: 'Limpeza',
     etapa_modelo_nome: null,
+    observacoes: null,
     pago: 0,
     atendimento_status: null,
     atendimento_id: null,
@@ -152,6 +153,12 @@ function getSearchParamsFromLastUnitFetch(): URLSearchParams {
   const url = getLastUnitFetchUrl();
   const query = url.split('?')[1] ?? '';
   return new URLSearchParams(query);
+}
+
+function getUnitFetchCallsMatching(
+  predicate: (url: string, init: RequestInit | undefined) => boolean
+) {
+  return mockUnitFetch.mock.calls.filter(([url, init]) => predicate(String(url), init as RequestInit | undefined));
 }
 
 beforeEach(() => {
@@ -367,5 +374,113 @@ describe('AgendaPage', () => {
         })
       );
     });
+  });
+
+  test('permite editar um agendamento individual e salvar observações, executor e horário', async () => {
+    mockUnitFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/agendamentos/1' && init?.method === 'PUT') {
+        return mockJsonResponse({
+          ...makeAgendamento(),
+          executor_id: 12,
+          executor_nome: 'Dr. Caio',
+          data_agendada: '2026-07-16T10:30',
+          observacoes: 'Levar exames',
+        });
+      }
+
+      return mockJsonResponse({
+        items: [makeAgendamento()],
+        total: 1,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    render(<AgendaPage />);
+
+    expect(await screen.findByText('Maria Silva')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+
+    expect(await screen.findByText('Editar Agendamento')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Executor (opcional)'), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText('Data e hora (opcional)'), { target: { value: '2026-07-16T10:30' } });
+    fireEvent.change(screen.getByLabelText('Observações (opcional)'), { target: { value: 'Levar exames' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+
+    await waitFor(() => {
+      const putCalls = getUnitFetchCallsMatching((url, init) => url === '/api/agendamentos/1' && init?.method === 'PUT');
+      expect(putCalls).toHaveLength(1);
+    });
+
+    const putCall = getUnitFetchCallsMatching((url, init) => url === '/api/agendamentos/1' && init?.method === 'PUT')[0];
+    const requestBody = JSON.parse(String((putCall[1] as RequestInit).body));
+
+    expect(requestBody).toEqual({
+      executor_id: 12,
+      data_agendada: '2026-07-16T10:30',
+      observacoes: 'Levar exames',
+    });
+  });
+
+  test('permite editar em lote apenas os agendamentos ativos do grupo', async () => {
+    mockUnitFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if ((url === '/api/agendamentos/1' || url === '/api/agendamentos/2') && init?.method === 'PUT') {
+        return mockJsonResponse({
+          ...makeAgendamento(),
+          id: url.endsWith('/2') ? 2 : 1,
+          executor_id: 12,
+          executor_nome: 'Dr. Caio',
+          data_agendada: '2026-07-18T11:00',
+        });
+      }
+
+      return mockJsonResponse({
+        items: [
+          makeAgendamento({ id: 1, procedimento_nome: 'Limpeza', data_agendada: '2026-07-15T09:00', status: 'agendado' }),
+          makeAgendamento({ id: 2, procedimento_nome: 'Canal', data_agendada: '2026-07-15T09:30', status: 'pendente' }),
+          makeAgendamento({ id: 3, procedimento_nome: 'Raio X', data_agendada: '2026-07-15T10:00', status: 'realizado' }),
+        ],
+        total: 3,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    render(<AgendaPage />);
+
+    expect(await screen.findByText('Maria Silva')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Editar grupo' }));
+
+    expect(await screen.findByText('Editar grupo de agendamentos')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Nova data e hora (opcional)'), { target: { value: '2026-07-18T11:00' } });
+    fireEvent.change(screen.getByLabelText('Executor para todas (opcional)'), { target: { value: '12' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+
+    await waitFor(() => {
+      const putCalls = getUnitFetchCallsMatching(
+        (url, init) => url.startsWith('/api/agendamentos/') && init?.method === 'PUT'
+      );
+      expect(putCalls).toHaveLength(2);
+    });
+
+    const putCalls = getUnitFetchCallsMatching(
+      (url, init) => url.startsWith('/api/agendamentos/') && init?.method === 'PUT'
+    );
+
+    expect(putCalls.map(([url]) => String(url))).toEqual(
+      expect.arrayContaining(['/api/agendamentos/1', '/api/agendamentos/2'])
+    );
+    expect(putCalls.map(([url]) => String(url))).not.toContain('/api/agendamentos/3');
+
+    for (const [, init] of putCalls) {
+      expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+        data_agendada: '2026-07-18T11:00',
+        executor_id: 12,
+      });
+    }
   });
 });

@@ -70,9 +70,9 @@ export const PUT = withUnit(async (
       updates.push('data_agendada = ?');
       params.push(body.data_agendada);
 
-      // Se tem data, status vira 'agendado' (a menos que outro status seja explicitamente enviado)
-      if (!body.status) {
-        updates.push("status = 'agendado'");
+      // Sem status explícito, sincroniza o status com a presença de data.
+      if (body.status === undefined) {
+        updates.push(body.data_agendada ? "status = 'agendado'" : "status = 'pendente'");
       }
     }
 
