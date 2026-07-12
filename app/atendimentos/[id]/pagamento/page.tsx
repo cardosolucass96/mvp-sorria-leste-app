@@ -10,6 +10,7 @@ import usePageTitle from '@/lib/utils/usePageTitle';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import { getExecutorDestinoInicial } from '@/lib/utils/destinoExecutor';
 import { isExecutorDisponivel } from '@/lib/utils/usuariosProfissionais';
+import { roundMoney } from '@/lib/helpers/pagamentoFlow';
 import type { Usuario } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
 import Alert from '@/components/ui/Alert';
@@ -827,6 +828,15 @@ export default function PagamentoPage({
   const podeGerenciarDestinos = atendimento.status === 'aguardando_pagamento';
   const podeRegistrarCobranca = !modoSomenteHistorico;
   const temItensHojePlanejados = resumoDestinos.fazer_hoje > 0;
+  const resumoFinanceiro = useMemo(() => {
+    const total = roundMoney(atendimento.total);
+    const pago = roundMoney(atendimento.total_pago);
+    return {
+      total,
+      pago,
+      pendente: roundMoney(Math.max(0, total - pago)),
+    };
+  }, [atendimento.total, atendimento.total_pago]);
   const descricaoCabecalho = modoSomenteHistorico
     ? 'Atendimento em revisão financeira. Consulte cobranças registradas e, se necessário, cancele o grupo com motivo.'
     : podeGerenciarDestinos
@@ -861,16 +871,18 @@ export default function PagamentoPage({
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-border bg-muted/40 p-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Total</p>
-              <p className="mt-1 text-lg font-semibold">{formatarMoeda(atendimento.total)}</p>
+              <p className="mt-1 text-2xl font-semibold leading-tight text-foreground md:text-3xl">{formatarMoeda(resumoFinanceiro.total)}</p>
             </div>
             <div className="rounded-xl border border-border bg-success-500/10 p-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Pago</p>
-              <p className="mt-1 text-lg font-semibold text-success-600">{formatarMoeda(atendimento.total_pago)}</p>
+              <p className="mt-1 text-2xl font-semibold leading-tight text-success-600 md:text-3xl">
+                {formatarMoeda(resumoFinanceiro.pago)}
+              </p>
             </div>
             <div className="rounded-xl border border-border bg-warning-500/10 p-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Pendente</p>
-              <p className="mt-1 text-lg font-semibold text-warning-600">
-                {formatarMoeda(Math.max(0, atendimento.total - atendimento.total_pago))}
+              <p className="mt-1 text-2xl font-semibold leading-tight text-warning-600 md:text-3xl">
+                {formatarMoeda(resumoFinanceiro.pendente)}
               </p>
             </div>
           </div>
