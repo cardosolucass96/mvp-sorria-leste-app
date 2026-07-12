@@ -210,6 +210,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const [anexosLoading, setAnexosLoading] = useState(false);
   const [anexosUploading, setAnexosUploading] = useState(false);
   const [selectedAtendimentos, setSelectedAtendimentos] = useState<number[]>([]);
+  const [selectedPagamentos, setSelectedPagamentos] = useState<number[]>([]);
 
   // Saldo
   const [saldo, setSaldo] = useState({ saldo: 0, saldo_calculado: 0 });
@@ -420,6 +421,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     }
     const idsValidos = new Set(ficha.atendimentos.map((a) => a.id));
     setSelectedAtendimentos((prev) => prev.filter((id) => idsValidos.has(id)));
+    const pagamentosValidos = new Set(ficha.pagamentos.map((pagamento) => pagamento.id));
+    setSelectedPagamentos((prev) => prev.filter((id) => pagamentosValidos.has(id)));
   }, [ficha]);
 
   useEffect(() => {
@@ -572,6 +575,84 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
 
   const getMetodoPagamentoLabel = (metodo: string) => METODOS_LABEL[metodo] || metodo;
 
+  const abrirRelatorioClienteImpressao = ({
+    tituloDocumento,
+    tituloCabecalho,
+    contadorLabel,
+    contadorValor,
+    resumoHtml,
+    conteudoHtml,
+  }: {
+    tituloDocumento: string;
+    tituloCabecalho: string;
+    contadorLabel: string;
+    contadorValor: number | string;
+    resumoHtml: string;
+    conteudoHtml: string;
+  }) => {
+    if (!cliente) return;
+
+    const janela = window.open('', '_blank');
+    if (!janela) {
+      setError('Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-up está ativo.');
+      return;
+    }
+
+    const logoUrl = `${window.location.origin}/logo-sorria-leste-laranja-fundo-transparente.svg`;
+
+    janela.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset=\"utf-8\" />
+          <title>${escapeHtml(tituloDocumento)} - ${escapeHtml(cliente.nome)}</title>
+          <style>
+            :root { --sorria-orange: #ea580c; }
+            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; font-size: 12px; background: #ffffff; }
+            h1 { font-size: 20px; margin: 0; color: #0f172a; letter-spacing: 0.2px; }
+            h2 { font-size: 14px; margin: 16px 0 8px; color: var(--sorria-orange); }
+            h3 { font-size: 12px; margin: 12px 0 6px; }
+            .section { margin-top: 16px; border-top: 1px solid #cbd5e1; padding-top: 12px; page-break-inside: avoid; }
+            .header { border: 1px solid #fed7aa; padding: 14px 14px 12px; margin-bottom: 14px; background: #fff7ed; border-radius: 6px; }
+            .summary { margin: 12px 0; background: #fff; border: 1px solid #fed7aa; border-radius: 6px; padding: 10px 12px; }
+            .report-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+            .brand { display: flex; align-items: center; gap: 10px; }
+            .brand img { width: 40px; height: 40px; object-fit: contain; }
+            .brand-text { color: var(--sorria-orange); font-size: 12px; font-weight: 700; letter-spacing: 0.2px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+            th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
+            th { background: #ffedd5; color: #7c2d12; }
+            ul { padding-left: 16px; margin: 0; }
+            .muted { color: #64748b; }
+          </style>
+        </head>
+        <body>
+          <div class=\"header\">
+            <div class=\"report-header\">
+              <div class=\"brand\">
+                <img src="${logoUrl}" alt="Logo Sorria Leste" />
+                <div>
+                  <h1>${escapeHtml(tituloCabecalho)}</h1>
+                  <div class="brand-text">Sorria Leste</div>
+                </div>
+              </div>
+              <div><strong>${escapeHtml(contadorLabel)}:</strong> ${escapeHtml(contadorValor)}</div>
+            </div>
+            <div><strong>Cliente:</strong> ${escapeHtml(cliente.nome)}</div>
+            <div><strong>CPF:</strong> ${escapeHtml(formatarCPF(cliente.cpf))} <strong>Telefone:</strong> ${escapeHtml(formatarTelefone(cliente.telefone))}</div>
+            <div><strong>Email:</strong> ${escapeHtml(cliente.email || '-')} <strong>Plano:</strong> ${escapeHtml(cliente.plano_odontologico || '-')}</div>
+            <div><strong>Sexo:</strong> ${escapeHtml(cliente.sexo ? cliente.sexo.charAt(0).toUpperCase() + cliente.sexo.slice(1) : '-')} <strong>Data nascimento:</strong> ${escapeHtml(cliente.data_nascimento ? formatarData(cliente.data_nascimento) : '-')}</div>
+            <div><strong>Endereço:</strong> ${escapeHtml(cliente.endereco || '-')}</div>
+            <div><strong>Cadastro:</strong> ${formatarDataHora(cliente.created_at)}</div>
+          </div>
+          <div class=\"summary\">${resumoHtml}</div>
+          ${conteudoHtml}
+        </body>
+      </html>
+    `);
+    finalizarJanelaDeImpressao(janela);
+  };
+
   const imprimirAtendimentosSelecionados = () => {
     if (!ficha || !cliente || selectedAtendimentos.length === 0) return;
 
@@ -686,69 +767,107 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       `;
     }).join('');
 
-    const janela = window.open('', '_blank');
-    if (!janela) {
-      setError('Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-up está ativo.');
+    abrirRelatorioClienteImpressao({
+      tituloDocumento: 'Relatório de Atendimentos',
+      tituloCabecalho: 'Relatório de Atendimentos',
+      contadorLabel: 'Atendimentos',
+      contadorValor: atendimentosSelecionadosList.length,
+      resumoHtml: `
+        <strong>Total dos atendimentos selecionados:</strong> ${formatarMoeda(totalSelecionado)}<br />
+        <strong>Total pago:</strong> ${formatarMoeda(totalPagoSelecionado)}<br />
+        <strong>Saldo pendente:</strong> ${formatarMoeda(pendenciaSelecionada)}
+      `,
+      conteudoHtml: atendimentoSections,
+    });
+  };
+
+  const toggleSelecionarPagamento = (pagamentoId: number) => {
+    setSelectedPagamentos((prev) =>
+      prev.includes(pagamentoId) ? prev.filter((id) => id !== pagamentoId) : [...prev, pagamentoId]
+    );
+  };
+
+  const selecionarTodosPagamentos = () => {
+    if (!ficha?.pagamentos.length) return;
+    if (selectedPagamentos.length === ficha.pagamentos.length) {
+      setSelectedPagamentos([]);
       return;
     }
+    setSelectedPagamentos(ficha.pagamentos.map((pagamento) => pagamento.id));
+  };
 
-    const logoUrl = `${window.location.origin}/logo-sorria-leste-laranja-fundo-transparente.svg`;
+  const imprimirPagamentosSelecionados = () => {
+    if (!ficha || !cliente || selectedPagamentos.length === 0) return;
 
-    janela.document.write(`
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset=\"utf-8\" />
-          <title>Relatório de Atendimentos - ${escapeHtml(cliente.nome)}</title>
-          <style>
-            :root { --sorria-orange: #ea580c; }
-            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; font-size: 12px; background: #ffffff; }
-            h1 { font-size: 20px; margin: 0; color: #0f172a; letter-spacing: 0.2px; }
-            h2 { font-size: 14px; margin: 16px 0 8px; color: var(--sorria-orange); }
-            h3 { font-size: 12px; margin: 12px 0 6px; }
-            .section { margin-top: 16px; border-top: 1px solid #cbd5e1; padding-top: 12px; page-break-inside: avoid; }
-            .header { border: 1px solid #fed7aa; padding: 14px 14px 12px; margin-bottom: 14px; background: #fff7ed; border-radius: 6px; }
-            .summary { margin: 12px 0; background: #fff; border: 1px solid #fed7aa; border-radius: 6px; padding: 10px 12px; }
-            .report-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
-            .brand { display: flex; align-items: center; gap: 10px; }
-            .brand img { width: 40px; height: 40px; object-fit: contain; }
-            .brand-text { color: var(--sorria-orange); font-size: 12px; font-weight: 700; letter-spacing: 0.2px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-            th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
-            th { background: #ffedd5; color: #7c2d12; }
-            ul { padding-left: 16px; margin: 0; }
-            .muted { color: #64748b; }
-          </style>
-        </head>
-        <body>
-          <div class=\"header\">
-            <div class=\"report-header\">
-              <div class=\"brand\">
-                <img src="${logoUrl}" alt="Logo Sorria Leste" />
-                <div>
-                  <h1>Relatório de Atendimentos</h1>
-                  <div class="brand-text">Sorria Leste</div>
-                </div>
-              </div>
-              <div><strong>Atendimentos:</strong> ${escapeHtml(atendimentosSelecionadosList.length)}</div>
-            </div>
-            <div><strong>Cliente:</strong> ${escapeHtml(cliente.nome)}</div>
-            <div><strong>CPF:</strong> ${escapeHtml(formatarCPF(cliente.cpf))} <strong>Telefone:</strong> ${escapeHtml(formatarTelefone(cliente.telefone))}</div>
-            <div><strong>Email:</strong> ${escapeHtml(cliente.email || '-')} <strong>Plano:</strong> ${escapeHtml(cliente.plano_odontologico || '-')}</div>
-            <div><strong>Sexo:</strong> ${escapeHtml(cliente.sexo ? cliente.sexo.charAt(0).toUpperCase() + cliente.sexo.slice(1) : '-')} <strong>Data nascimento:</strong> ${escapeHtml(cliente.data_nascimento ? formatarData(cliente.data_nascimento) : '-')}</div>
-            <div><strong>Endereço:</strong> ${escapeHtml(cliente.endereco || '-')}</div>
-            <div><strong>Cadastro:</strong> ${formatarDataHora(cliente.created_at)}</div>
-          </div>
-          <div class=\"summary\">
-            <strong>Total dos atendimentos selecionados:</strong> ${formatarMoeda(totalSelecionado)}<br />
-            <strong>Total pago:</strong> ${formatarMoeda(totalPagoSelecionado)}<br />
-            <strong>Saldo pendente:</strong> ${formatarMoeda(pendenciaSelecionada)}
-          </div>
-          ${atendimentoSections}
-        </body>
-      </html>
-    `);
-    finalizarJanelaDeImpressao(janela);
+    const pagamentoSet = new Set(selectedPagamentos);
+    const pagamentosSelecionadosList = ficha.pagamentos.filter((pagamento) => pagamentoSet.has(pagamento.id));
+    if (pagamentosSelecionadosList.length === 0) return;
+
+    const atendimentosMap = new Map(ficha.atendimentos.map((atendimento) => [atendimento.id, atendimento]));
+    const formatMetodo = (metodo: string) => escapeHtml(getMetodoPagamentoLabel(metodo));
+
+    const totalSelecionado = pagamentosSelecionadosList.reduce((acc, pagamento) => acc + parseSafeNumber(pagamento.valor), 0);
+    const totalAtivo = pagamentosSelecionadosList
+      .filter((pagamento) => !pagamento.cancelado)
+      .reduce((acc, pagamento) => acc + parseSafeNumber(pagamento.valor), 0);
+    const totalCancelado = pagamentosSelecionadosList
+      .filter((pagamento) => pagamento.cancelado)
+      .reduce((acc, pagamento) => acc + parseSafeNumber(pagamento.valor), 0);
+
+    const pagamentosHtml = pagamentosSelecionadosList.map((pagamento) => {
+      const atendimento = atendimentosMap.get(pagamento.atendimento_id);
+      const detalhesObservacao = [
+        pagamento.observacoes || null,
+        pagamento.cancelado && pagamento.motivo_cancelamento
+          ? `Motivo do cancelamento: ${pagamento.motivo_cancelamento}`
+          : null,
+      ].filter((valor): valor is string => Boolean(valor));
+
+      return `
+        <tr>
+          <td>${formatarDataHora(pagamento.created_at)}</td>
+          <td>#${escapeHtml(pagamento.atendimento_id)}</td>
+          <td>${escapeHtml(atendimento?.status || '-')}</td>
+          <td>${formatMetodo(pagamento.metodo)}</td>
+          <td style=\"text-align:right;\">${formatarMoeda(parseSafeNumber(pagamento.valor))}</td>
+          <td style=\"text-align:center;\">${pagamento.cancelado ? 'Cancelado' : 'Ativo'}</td>
+          <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
+          <td>${escapeHtml(detalhesObservacao.join(' | ') || '-')}</td>
+        </tr>
+      `;
+    }).join('');
+
+    abrirRelatorioClienteImpressao({
+      tituloDocumento: 'Relatório de Pagamentos',
+      tituloCabecalho: 'Relatório de Pagamentos',
+      contadorLabel: 'Pagamentos',
+      contadorValor: pagamentosSelecionadosList.length,
+      resumoHtml: `
+        <strong>Total dos pagamentos selecionados:</strong> ${formatarMoeda(totalSelecionado)}<br />
+        <strong>Total ativo:</strong> ${formatarMoeda(totalAtivo)}<br />
+        <strong>Total cancelado:</strong> ${formatarMoeda(totalCancelado)}
+      `,
+      conteudoHtml: `
+        <section class=\"section\">
+          <h2>Pagamentos selecionados</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Atendimento</th>
+                <th>Status do atendimento</th>
+                <th>Forma</th>
+                <th>Valor</th>
+                <th>Situação</th>
+                <th>Recebido por</th>
+                <th>Observações</th>
+              </tr>
+            </thead>
+            <tbody>${pagamentosHtml}</tbody>
+          </table>
+        </section>
+      `,
+    });
   };
 
   const handleUploadAnexo = async ({ file, titulo, descricao }: { file: File; titulo?: string; descricao?: string }) => {
@@ -1230,13 +1349,29 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       {abaAtiva === 'pagamentos' && (
         <div className="space-y-6">
           <Card>
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <CreditCard className="w-5 h-5" /> Pagamentos
               </h2>
-              <span className="text-sm font-semibold text-success-700 dark:text-success-300">
-                Total: {formatarMoeda(totalGasto)}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-muted">
+                  {selectedPagamentos.length} pagamento(s) selecionado(s)
+                </span>
+                <Button variant="secondary" onClick={selecionarTodosPagamentos}>
+                  Selecionar todos
+                </Button>
+                <Button
+                  onClick={imprimirPagamentosSelecionados}
+                  disabled={selectedPagamentos.length === 0}
+                  variant="secondary"
+                >
+                  <Printer className="w-4 h-4 mr-1.5" />
+                  Imprimir PDF
+                </Button>
+                <span className="text-sm font-semibold text-success-700 dark:text-success-300">
+                  Total: {formatarMoeda(totalGasto)}
+                </span>
+              </div>
             </div>
             {!ficha?.pagamentos.length ? (
               <p className="text-center py-8 text-muted">Nenhum pagamento registrado</p>
@@ -1244,6 +1379,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <table className="detail-table">
                 <thead>
                   <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Selecionar</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Atend.</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Método</th>
@@ -1255,6 +1391,14 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 <tbody>
                   {ficha.pagamentos.map(p => (
                     <tr key={p.id} className={p.cancelado ? 'bg-muted/35 opacity-50' : undefined}>
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          aria-label={`Selecionar pagamento ${p.id}`}
+                          checked={selectedPagamentos.includes(p.id)}
+                          onChange={() => toggleSelecionarPagamento(p.id)}
+                        />
+                      </td>
                       <td className="px-4 py-3 text-sm">{formatarDataHora(p.created_at)}</td>
                       <td className="px-4 py-3 text-sm">
                         <Link href={`/atendimentos/${p.atendimento_id}`} className="text-info-600 hover:text-info-800">#{p.atendimento_id}</Link>

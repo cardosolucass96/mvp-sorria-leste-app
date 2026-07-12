@@ -7,6 +7,13 @@ describe('relatorios de impressao', () => {
     const source = fs.readFileSync(pagePath, 'utf-8');
 
     expect(source).toContain("formatarDentes(item.dentes) || '-'");
+    expect(source).toContain('selectedPagamentos');
+    expect(source).toContain('toggleSelecionarPagamento');
+    expect(source).toContain('selecionarTodosPagamentos');
+    expect(source).toContain('imprimirPagamentosSelecionados');
+    expect(source).toContain('Relatório de Pagamentos');
+    expect(source).toContain('Pagamentos selecionados');
+    expect(source).toContain('Motivo do cancelamento:');
     expect(source).toContain('logo-sorria-leste-laranja-fundo-transparente.svg');
     expect(source).toContain('finalizarJanelaDeImpressao(janela)');
   });
