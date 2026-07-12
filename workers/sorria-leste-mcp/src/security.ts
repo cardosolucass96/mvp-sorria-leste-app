@@ -139,8 +139,9 @@ export async function verifyPassword(plainPassword: string, storedPassword: stri
     false,
     ['deriveBits'],
   );
+  const saltBuffer = Uint8Array.from(salt).buffer as ArrayBuffer;
   const derived = new Uint8Array(await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as unknown as BufferSource, iterations },
+    { name: 'PBKDF2', hash: 'SHA-256', salt: saltBuffer, iterations },
     keyMaterial,
     expectedHash.byteLength * 8,
   ));

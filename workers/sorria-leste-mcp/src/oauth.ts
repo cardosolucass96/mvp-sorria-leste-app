@@ -2,9 +2,9 @@ import { getOAuthApi, OAuthProvider, type AuthRequest, type ClientInfo, type OAu
 import { createMcpHandler } from 'agents/mcp';
 import { createServer } from './mcp';
 import { grantedReadScope, isMcpAdministrator, safeEqual, verifyPassword } from './security';
-import type { AppUser, Env } from './types';
+import type { AppUser, Env, WorkerExecutionContext } from './types';
 
-type PropsExecutionContext = ExecutionContext & { props?: Record<string, unknown> };
+type PropsExecutionContext = WorkerExecutionContext & { props?: Record<string, unknown> };
 
 function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
@@ -74,12 +74,13 @@ async function authenticate(env: Env, email: string, password: string): Promise<
 }
 
 const apiHandler = {
-  async fetch(request: Request, env: Env, context: ExecutionContext) {
-    const props = (context as PropsExecutionContext).props ?? {};
+  async fetch(request: Request, env: Env, context: WorkerExecutionContext) {
+    const contextProps = (context as PropsExecutionContext).props;
+    const props = contextProps && typeof contextProps === 'object' ? contextProps : {};
     return createMcpHandler(createServer(env, props), {
       route: '/mcp',
       authContext: { props },
-    })(request, env, context);
+    })(request, env, context as never);
   },
 };
 

@@ -1,4 +1,4 @@
-import type { AppUser, Env, Identity, OAuthProps } from './types';
+import type { AppUser, D1PreparedStatement, Env, Identity, OAuthProps } from './types';
 import { hasReadScope, isForbiddenFollowupType, isMcpAdministrator, maskCpf, maskEmail, maskNullableText, maskPhone, parseOAuthProps } from './security';
 
 type QueryResult<T> = { results: T[] };
