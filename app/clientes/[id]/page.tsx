@@ -37,6 +37,8 @@ const METODOS_LABEL: Record<string, string> = {
   pix: 'PIX',
   cartao_debito: 'Cartão Débito',
   cartao_credito: 'Cartão Crédito',
+  crediario: 'Crediário',
+  afins_sorria: 'Afins Sorria',
 };
 
 const HISTORICO_CONFIG: Record<string, { label: string; cor: string }> = {
@@ -57,6 +59,9 @@ interface Atendimento {
   id: number;
   status: string;
   avaliador_nome: string | null;
+  unidade_nome: string | null;
+  unidade_endereco: string | null;
+  unidade_telefone: string | null;
   created_at: string;
   finalizado_at: string | null;
   total: number;
@@ -89,6 +94,10 @@ interface Pagamento {
   cancelado: number;
   motivo_cancelamento: string | null;
   recebido_por_nome: string | null;
+  unidade_id: number | null;
+  unidade_nome: string | null;
+  unidade_endereco: string | null;
+  unidade_telefone: string | null;
   created_at: string;
 }
 
@@ -158,6 +167,13 @@ interface FichaData {
   historico: EventoHistorico[];
   prontuarios: ItemProntuario[];
   movimentacoes: Movimentacao[];
+}
+
+interface UnidadeImpressao {
+  nome: string | null;
+  endereco: string | null;
+  telefone: string | null;
+  multipla: boolean;
 }
 
 interface AnexoClienteApi {
@@ -673,6 +689,116 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     finalizarJanelaDeImpressao(janela);
   };
 
+  const resolverUnidadeImpressaoPagamentos = (pagamentosSelecionadosList: Pagamento[]): UnidadeImpressao => {
+    const unidades = new Map<string, UnidadeImpressao>();
+
+    for (const pagamento of pagamentosSelecionadosList) {
+      const key = [
+        pagamento.unidade_nome || '',
+        pagamento.unidade_endereco || '',
+        pagamento.unidade_telefone || '',
+      ].join('|');
+
+      if (!unidades.has(key)) {
+        unidades.set(key, {
+          nome: pagamento.unidade_nome,
+          endereco: pagamento.unidade_endereco,
+          telefone: pagamento.unidade_telefone,
+          multipla: false,
+        });
+      }
+    }
+
+    if (unidades.size === 1) {
+      return Array.from(unidades.values())[0];
+    }
+
+    return {
+      nome: 'múltiplas unidades',
+      endereco: null,
+      telefone: null,
+      multipla: true,
+    };
+  };
+
+  const abrirReciboPagamentosClienteImpressao = ({
+    unidade,
+    quantidadePagamentos,
+    totalPagamentos,
+    conteudoHtml,
+  }: {
+    unidade: UnidadeImpressao;
+    quantidadePagamentos: number;
+    totalPagamentos: number;
+    conteudoHtml: string;
+  }) => {
+    if (!cliente) return;
+
+    const janela = window.open('', '_blank');
+    if (!janela) {
+      setError('Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-up está ativo.');
+      return;
+    }
+
+    const emitidoEm = new Date().toLocaleString('pt-BR');
+    const empresaTitulo = unidade.nome ? `Sorria Leste - ${unidade.nome}` : 'Sorria Leste';
+    const empresaEndereco = unidade.multipla ? 'Endereço conforme unidade do pagamento' : (unidade.endereco || 'Endereço não informado');
+    const empresaTelefone = unidade.multipla ? 'Telefone conforme unidade do pagamento' : (unidade.telefone || 'Telefone não informado');
+
+    janela.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Recibo de Pagamento - ${escapeHtml(cliente.nome)}</title>
+          <style>
+            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; font-size: 12px; background: #ffffff; }
+            h2 { font-size: 14px; margin: 16px 0 8px; color: #ea580c; }
+            .receipt-page { max-width: 980px; margin: 0 auto; }
+            .coupon-header { border: 1px dashed #94a3b8; padding: 12px; text-align: center; font-family: "Courier New", Courier, monospace; line-height: 1.35; }
+            .coupon-company { font-size: 15px; font-weight: 700; text-transform: uppercase; }
+            .coupon-title { margin-top: 6px; font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+            .coupon-separator { border-top: 1px dashed #94a3b8; margin: 8px 0; }
+            .customer-box { border: 1px dashed #cbd5e1; border-top: 0; padding: 10px 12px; font-family: "Courier New", Courier, monospace; }
+            .summary { margin: 12px 0; background: #fff; border: 1px dashed #94a3b8; border-radius: 6px; padding: 10px 12px; }
+            .summary-row { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; font-family: "Courier New", Courier, monospace; }
+            .summary-row.total { border-top: 1px dashed #94a3b8; margin-top: 6px; padding-top: 8px; font-size: 14px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+            th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
+            th { background: #ffedd5; color: #7c2d12; }
+            ul { padding-left: 16px; margin: 0; }
+            .compact-list { padding-left: 14px; margin: 0; }
+            .compact-list li { margin-bottom: 3px; }
+            .muted { color: #64748b; }
+          </style>
+        </head>
+        <body>
+          <main class="receipt-page">
+            <div class="coupon-header">
+              <div class="coupon-company">${escapeHtml(empresaTitulo)}</div>
+              <div>${escapeHtml(empresaEndereco)}</div>
+              <div>Telefone: ${escapeHtml(empresaTelefone)}</div>
+              <div class="coupon-separator"></div>
+              <div class="coupon-title">RECIBO DE PAGAMENTO</div>
+              <div class="muted">Documento não fiscal</div>
+              <div>Emissão: ${escapeHtml(emitidoEm)}</div>
+            </div>
+            <div class="customer-box">
+              <div><strong>Cliente:</strong> ${escapeHtml(cliente.nome)}</div>
+              <div><strong>CPF:</strong> ${escapeHtml(formatarCPF(cliente.cpf))}</div>
+            </div>
+            <div class="summary">
+              <div class="summary-row"><span>Pagamentos</span><strong>${escapeHtml(String(quantidadePagamentos))}</strong></div>
+              <div class="summary-row total"><span>Total recebido</span><strong>${formatarMoeda(totalPagamentos)}</strong></div>
+            </div>
+            ${conteudoHtml}
+          </main>
+        </body>
+      </html>
+    `);
+    finalizarJanelaDeImpressao(janela);
+  };
+
   const imprimirAtendimentosSelecionados = () => {
     if (!ficha || !cliente || selectedAtendimentos.length === 0) return;
 
@@ -861,7 +987,11 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       `;
     };
 
-    const totalSelecionado = pagamentosSelecionadosList.reduce((acc, pagamento) => acc + parseSafeNumber(pagamento.valor), 0);
+    const unidadeImpressao = resolverUnidadeImpressaoPagamentos(pagamentosSelecionadosList);
+    const mostrarColunaUnidade = unidadeImpressao.multipla;
+    const totalSelecionado = pagamentosSelecionadosList.reduce((acc, pagamento) => (
+      pagamento.cancelado ? acc : acc + parseSafeNumber(pagamento.valor)
+    ), 0);
 
     const pagamentosHtml = pagamentosSelecionadosList.map((pagamento) => {
       const detalhesObservacao = [
@@ -875,6 +1005,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         <tr>
           <td>${formatarDataHora(pagamento.created_at)}</td>
           <td>#${escapeHtml(pagamento.atendimento_id)}</td>
+          ${mostrarColunaUnidade ? `<td>${escapeHtml(pagamento.unidade_nome || '-')}</td>` : ''}
           <td>${formatarReferenciasPagamento(pagamento.id)}</td>
           <td>${formatMetodo(pagamento.metodo)}</td>
           <td style=\"text-align:right;\">${formatarMoeda(parseSafeNumber(pagamento.valor))}</td>
@@ -884,14 +1015,10 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       `;
     }).join('');
 
-    abrirRelatorioClienteImpressao({
-      tituloDocumento: 'Relatório de Pagamentos',
-      tituloCabecalho: 'Relatório de Pagamentos',
-      contadorLabel: 'Pagamentos',
-      contadorValor: pagamentosSelecionadosList.length,
-      resumoHtml: `
-        <strong>Total dos pagamentos selecionados:</strong> ${formatarMoeda(totalSelecionado)}
-      `,
+    abrirReciboPagamentosClienteImpressao({
+      unidade: unidadeImpressao,
+      quantidadePagamentos: pagamentosSelecionadosList.filter((pagamento) => !pagamento.cancelado).length,
+      totalPagamentos: totalSelecionado,
       conteudoHtml: `
         <section class=\"section\">
           <h2>Pagamentos selecionados</h2>
@@ -900,6 +1027,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <tr>
                 <th>Data</th>
                 <th>Atendimento</th>
+                ${mostrarColunaUnidade ? '<th>Unidade</th>' : ''}
                 <th>Referente a</th>
                 <th>Forma</th>
                 <th>Valor</th>

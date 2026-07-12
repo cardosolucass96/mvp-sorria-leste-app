@@ -4,7 +4,7 @@ import React, { useState, useEffect, use, useCallback } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatarMoeda, formatarDataHora, tempoDecorrido, nomeProcedimentoItem, formatarDenteUnicoComFaces, formatarDentes } from '@/lib/utils/formatters';
+import { formatarMoeda, formatarDataHora, tempoDecorrido, nomeProcedimentoItem, formatarDenteUnicoComFaces, formatarDentes, formatarCPF } from '@/lib/utils/formatters';
 import { STATUS_CONFIG, PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 import type { AtendimentoStatus, AtendimentoTipo } from '@/lib/types';
 import { StatusBadge, StatusPipeline } from '@/components/domain';
@@ -74,10 +74,14 @@ interface ItemAtendimento {
 interface Atendimento {
   id: number;
   cliente_id: number;
+  unidade_id: number | null;
   cliente_nome: string;
   cliente_cpf: string | null;
   cliente_telefone: string | null;
   cliente_email: string | null;
+  unidade_nome: string | null;
+  unidade_endereco: string | null;
+  unidade_telefone: string | null;
   avaliador_id: number | null;
   avaliador_nome: string | null;
   liberado_por_nome: string | null;
@@ -110,6 +114,23 @@ interface PagamentoForma {
   cancelado: number;
   motivo_cancelamento: string | null;
   created_at: string;
+  alocacoes?: PagamentoAlocacaoImpressao[];
+}
+
+interface PagamentoAlocacaoImpressao {
+  id: number;
+  pagamento_id: number;
+  item_atendimento_id: number | null;
+  agendamento_id: number | null;
+  etapa_modelo_id: number | null;
+  valor_alocado: number;
+  procedimento_nome: string;
+  etapa_label: string | null;
+  dentes: string | null;
+  dente_unico: string | null;
+  quantidade: number | null;
+  data_agendada: string | null;
+  agendamento_status: string | null;
 }
 
 interface PagamentoAgrupado {
@@ -120,6 +141,7 @@ interface PagamentoAgrupado {
   motivo_cancelamento: string | null;
   created_at: string;
   recebido_por_nome: string | null;
+  alocacoes?: PagamentoAlocacaoImpressao[];
   formas: PagamentoForma[];
 }
 
@@ -132,6 +154,7 @@ interface PagamentoSimples {
   motivo_cancelamento: string | null;
   created_at: string;
   recebido_por_nome: string | null;
+  alocacoes?: PagamentoAlocacaoImpressao[];
 }
 
 function ProgressoEtapas({ etapas }: { etapas: ProgressoEtapa[] }) {
@@ -916,6 +939,7 @@ export default function AtendimentoDetalhePage({
       motivo_cancelamento: pagamento.motivo_cancelamento,
       created_at: pagamento.created_at,
       recebido_por_nome: pagamento.recebido_por_nome,
+      alocacoes: pagamento.alocacoes ?? [],
       formas: [
         {
           id: pagamento.id,
@@ -925,37 +949,95 @@ export default function AtendimentoDetalhePage({
           cancelado: pagamento.cancelado,
           motivo_cancelamento: pagamento.motivo_cancelamento,
           created_at: pagamento.created_at,
+          alocacoes: pagamento.alocacoes ?? [],
         },
       ],
     }));
   };
 
-  const renderizarTabelaPagamentosImpressao = (pagamentos: PagamentoAgrupado[]) => {
-    return pagamentos.length
-      ? pagamentos.flatMap((pagamento) => {
-          if (!pagamento.formas?.length) {
-            return `<tr>
-              <td>${formatarDataHora(pagamento.created_at)}</td>
-              <td>${escapeHtml(getMetodoPagamentoLabel(''))}</td>
-              <td style="text-align:right;">${formatarMoeda(parseSafeNumber(pagamento.valor_total))}</td>
-              <td style="text-align:center">${pagamento.cancelado ? 'Cancelado' : 'Ativo'}</td>
-              <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
-              <td>${escapeHtml(pagamento.observacoes || '-')}</td>
-            </tr>`;
-          }
+  const formatarReferenciasPagamentoImpressao = (alocacoes?: PagamentoAlocacaoImpressao[]) => {
+    if (!alocacoes?.length) {
+      return '<span class="muted">Não informado</span>';
+    }
 
-          return pagamento.formas.map((forma) => `
-            <tr>
-              <td>${formatarDataHora(forma.created_at || pagamento.created_at)}</td>
-              <td>${escapeHtml(getMetodoPagamentoLabel(forma.metodo))}</td>
-              <td style="text-align:right;">${formatarMoeda(parseSafeNumber(forma.valor))}</td>
-              <td style="text-align:center">${(forma.cancelado || pagamento.cancelado) ? 'Cancelado' : 'Ativo'}</td>
-              <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
-              <td>${escapeHtml(forma.observacoes || pagamento.observacoes || '-')}</td>
-            </tr>
-          `);
-        }).join('')
-      : '<tr><td colspan="6" class="muted">Nenhum pagamento registrado</td></tr>';
+    return `
+      <ul class="compact-list">
+        ${alocacoes.map((alocacao) => {
+          const nome = nomeProcedimentoItem({
+            procedimento_nome: alocacao.procedimento_nome || 'Procedimento',
+            etapa_label: alocacao.etapa_label,
+            dentes: alocacao.dentes,
+            dente_unico: alocacao.dente_unico,
+          });
+          const complemento = alocacao.agendamento_id && alocacao.data_agendada
+            ? ` · agendado para ${formatarDataHora(alocacao.data_agendada)}`
+            : '';
+
+          return `
+            <li>
+              <strong>${escapeHtml(nome)}</strong>
+              <span class="muted"> · ${formatarMoeda(parseSafeNumber(alocacao.valor_alocado))}${escapeHtml(complemento)}</span>
+            </li>
+          `;
+        }).join('')}
+      </ul>
+    `;
+  };
+
+  const formatarObservacoesPagamentoImpressao = ({
+    observacoes,
+    cancelado,
+    motivo_cancelamento,
+  }: {
+    observacoes: string | null;
+    cancelado: number;
+    motivo_cancelamento: string | null;
+  }) => {
+    const detalhes = [
+      observacoes || null,
+      cancelado && motivo_cancelamento ? `Cancelado: ${motivo_cancelamento}` : null,
+    ].filter((valor): valor is string => Boolean(valor));
+
+    return detalhes.length ? escapeHtml(detalhes.join(' | ')) : '-';
+  };
+
+  const renderizarTabelaPagamentosImpressao = (pagamentos: PagamentoAgrupado[]) => {
+    if (!pagamentos.length) {
+      return '<tr><td colspan="7" class="muted">Nenhum pagamento registrado</td></tr>';
+    }
+
+    return pagamentos.flatMap((pagamento) => {
+      if (!pagamento.formas?.length) {
+        return `<tr>
+          <td>${formatarDataHora(pagamento.created_at)}</td>
+          <td>#${escapeHtml(String(atendimento?.id ?? '-'))}</td>
+          <td>${formatarReferenciasPagamentoImpressao(pagamento.alocacoes)}</td>
+          <td>-</td>
+          <td style="text-align:right;">${formatarMoeda(parseSafeNumber(pagamento.valor_total))}</td>
+          <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
+          <td>${formatarObservacoesPagamentoImpressao(pagamento)}</td>
+        </tr>`;
+      }
+
+      return pagamento.formas.map((forma) => {
+        const alocacoes = forma.alocacoes?.length ? forma.alocacoes : pagamento.alocacoes;
+        return `
+          <tr>
+            <td>${formatarDataHora(forma.created_at || pagamento.created_at)}</td>
+            <td>#${escapeHtml(String(atendimento?.id ?? '-'))}</td>
+            <td>${formatarReferenciasPagamentoImpressao(alocacoes)}</td>
+            <td>${escapeHtml(getMetodoPagamentoLabel(forma.metodo) || '-')}</td>
+            <td style="text-align:right;">${formatarMoeda(parseSafeNumber(forma.valor))}</td>
+            <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
+            <td>${formatarObservacoesPagamentoImpressao({
+              observacoes: forma.observacoes || pagamento.observacoes,
+              cancelado: forma.cancelado || pagamento.cancelado,
+              motivo_cancelamento: forma.motivo_cancelamento || pagamento.motivo_cancelamento,
+            })}</td>
+          </tr>
+        `;
+      });
+    }).join('');
   };
 
   const abrirRelatorioDeImpressao = ({
@@ -963,11 +1045,17 @@ export default function AtendimentoDetalhePage({
     tituloCabecalho,
     pagamentosHtml,
     itensHtml,
+    modoRecibo = false,
+    quantidadePagamentos,
+    totalPagamentos,
   }: {
     tituloDocumento: string;
     tituloCabecalho: string;
     pagamentosHtml: string;
     itensHtml?: string;
+    modoRecibo?: boolean;
+    quantidadePagamentos?: number;
+    totalPagamentos?: number;
   }) => {
     if (!atendimento) return false;
 
@@ -981,6 +1069,61 @@ export default function AtendimentoDetalhePage({
     const pago = parseSafeNumber(atendimento.total_pago);
     const saldoPendente = Math.max(totalGeral - pago, 0);
     const logoUrl = `${window.location.origin}/logo-sorria-leste-laranja-fundo-transparente.svg`;
+    const emitidoEm = new Date().toLocaleString('pt-BR');
+    const empresaTitulo = atendimento.unidade_nome
+      ? `Sorria Leste - ${atendimento.unidade_nome}`
+      : 'Sorria Leste';
+    const empresaEndereco = atendimento.unidade_endereco || 'Endereço não informado';
+    const empresaTelefone = atendimento.unidade_telefone || 'Telefone não informado';
+    const resumoHtml = modoRecibo
+      ? `
+        <div class="summary-row"><span>Pagamentos</span><strong>${escapeHtml(String(quantidadePagamentos ?? 0))}</strong></div>
+        <div class="summary-row total"><span>Total recebido</span><strong>${formatarMoeda(parseSafeNumber(totalPagamentos ?? pago))}</strong></div>
+      `
+      : `
+        <strong>Total do atendimento:</strong> ${formatarMoeda(totalGeral)}<br />
+        <strong>Total pago:</strong> ${formatarMoeda(pago)}<br />
+        <strong>Saldo pendente:</strong> ${formatarMoeda(saldoPendente)}
+      `;
+    const cabecalhoHtml = modoRecibo
+      ? `
+        <div class="coupon-header">
+          <div class="coupon-company">${escapeHtml(empresaTitulo)}</div>
+          <div>${escapeHtml(empresaEndereco)}</div>
+          <div>Telefone: ${escapeHtml(empresaTelefone)}</div>
+          <div class="coupon-separator"></div>
+          <div class="coupon-title">RECIBO DE PAGAMENTO</div>
+          <div class="muted">Documento não fiscal</div>
+          <div>Emissão: ${escapeHtml(emitidoEm)}</div>
+          <div>Atendimento: #${escapeHtml(String(atendimento.id))}</div>
+        </div>
+        <div class="customer-box">
+          <div><strong>Cliente:</strong> ${escapeHtml(atendimento.cliente_nome)}</div>
+          <div><strong>CPF:</strong> ${escapeHtml(formatarCPF(atendimento.cliente_cpf))}</div>
+        </div>
+      `
+      : `
+        <div class="header">
+          <div class="report-header">
+            <div class="brand">
+              <img src="${logoUrl}" alt="Logo Sorria Leste" />
+              <div>
+                <h1>${escapeHtml(tituloCabecalho)}</h1>
+                <div class="brand-text">${escapeHtml(empresaTitulo)}</div>
+              </div>
+            </div>
+            <div><strong>Nº:</strong> #${escapeHtml(String(atendimento.id))}</div>
+          </div>
+          <div><strong>Unidade:</strong> ${escapeHtml(atendimento.unidade_nome || '-')}</div>
+          <div><strong>Atendimento:</strong> #${escapeHtml(String(atendimento.id))}</div>
+          <div><strong>Status:</strong> ${escapeHtml(STATUS_CONFIG[atendimento.status as AtendimentoStatus]?.label || atendimento.status)}</div>
+          <div><strong>Data de abertura:</strong> ${formatarDataHora(atendimento.created_at)}</div>
+          <div><strong>Finalizado em:</strong> ${escapeHtml(formatarDataHora(atendimento.finalizado_at))}</div>
+          <div><strong>Cliente:</strong> ${escapeHtml(atendimento.cliente_nome)}</div>
+          <div><strong>CPF:</strong> ${escapeHtml(formatarCPF(atendimento.cliente_cpf))} <strong>Telefone:</strong> ${escapeHtml(atendimento.cliente_telefone || '-')}</div>
+          <div><strong>Email:</strong> ${escapeHtml(atendimento.cliente_email || '-')}</div>
+        </div>
+      `;
 
     janela.document.write(`
       <!doctype html>
@@ -994,6 +1137,7 @@ export default function AtendimentoDetalhePage({
             h1 { font-size: 20px; margin: 0; color: #0f172a; letter-spacing: 0.2px; }
             h2 { font-size: 14px; margin: 16px 0 8px; color: var(--sorria-orange); }
             h3 { font-size: 12px; margin: 12px 0 6px; }
+            .receipt-page { max-width: 980px; margin: 0 auto; }
             .header { border: 1px solid #fed7aa; padding: 14px 14px 12px; margin-bottom: 14px; background: #fff7ed; border-radius: 6px; }
             .summary { margin: 12px 0; }
             .report-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
@@ -1001,37 +1145,26 @@ export default function AtendimentoDetalhePage({
             .brand img { width: 40px; height: 40px; object-fit: contain; }
             .brand-text { color: var(--sorria-orange); font-size: 12px; font-weight: 700; letter-spacing: 0.2px; }
             .summary { background: #fff; border: 1px solid #fed7aa; border-radius: 6px; padding: 10px 12px; }
+            .coupon-header { border: 1px dashed #94a3b8; padding: 12px; text-align: center; font-family: "Courier New", Courier, monospace; line-height: 1.35; }
+            .coupon-company { font-size: 15px; font-weight: 700; text-transform: uppercase; }
+            .coupon-title { margin-top: 6px; font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+            .coupon-separator { border-top: 1px dashed #94a3b8; margin: 8px 0; }
+            .customer-box { border: 1px dashed #cbd5e1; border-top: 0; padding: 10px 12px; font-family: "Courier New", Courier, monospace; }
+            .summary-row { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; font-family: "Courier New", Courier, monospace; }
+            .summary-row.total { border-top: 1px dashed #94a3b8; margin-top: 6px; padding-top: 8px; font-size: 14px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
             th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
             th { background: #ffedd5; color: #7c2d12; }
+            ul { padding-left: 16px; margin: 0; }
+            .compact-list { padding-left: 14px; margin: 0; }
+            .compact-list li { margin-bottom: 3px; }
             .muted { color: #64748b; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="report-header">
-              <div class="brand">
-                <img src="${logoUrl}" alt="Logo Sorria Leste" />
-                <div>
-                  <h1>${escapeHtml(tituloCabecalho)}</h1>
-                  <div class="brand-text">Sorria Leste</div>
-                </div>
-              </div>
-              <div><strong>Nº:</strong> #${escapeHtml(String(atendimento.id))}</div>
-            </div>
-            <div><strong>Atendimento:</strong> #${escapeHtml(String(atendimento.id))}</div>
-            <div><strong>Status:</strong> ${escapeHtml(STATUS_CONFIG[atendimento.status as AtendimentoStatus]?.label || atendimento.status)}</div>
-            <div><strong>Data de abertura:</strong> ${formatarDataHora(atendimento.created_at)}</div>
-            <div><strong>Finalizado em:</strong> ${escapeHtml(formatarDataHora(atendimento.finalizado_at))}</div>
-            <div><strong>Cliente:</strong> ${escapeHtml(atendimento.cliente_nome)}</div>
-            <div><strong>CPF:</strong> ${escapeHtml(atendimento.cliente_cpf || '-')} <strong>Telefone:</strong> ${escapeHtml(atendimento.cliente_telefone || '-')}</div>
-            <div><strong>Email:</strong> ${escapeHtml(atendimento.cliente_email || '-')}</div>
-          </div>
-          <div class="summary">
-            <strong>Total do atendimento:</strong> ${formatarMoeda(totalGeral)}<br />
-            <strong>Total pago:</strong> ${formatarMoeda(pago)}<br />
-            <strong>Saldo pendente:</strong> ${formatarMoeda(saldoPendente)}
-          </div>
+          <main class="receipt-page">
+          ${cabecalhoHtml}
+          <div class="summary">${resumoHtml}</div>
 
           ${itensHtml ? `
             <section>
@@ -1059,9 +1192,10 @@ export default function AtendimentoDetalhePage({
               <thead>
                 <tr>
                   <th>Data</th>
+                  <th>Atendimento</th>
+                  <th>Referente a</th>
                   <th>Forma</th>
                   <th>Valor</th>
-                  <th>Origem</th>
                   <th>Recebido por</th>
                   <th>Observações</th>
                 </tr>
@@ -1069,6 +1203,7 @@ export default function AtendimentoDetalhePage({
               <tbody>${pagamentosHtml}</tbody>
             </table>
           </section>
+          </main>
         </body>
       </html>
     `);
@@ -1157,11 +1292,17 @@ export default function AtendimentoDetalhePage({
       setImprimindoRecibos(true);
       const pagamentos = await carregarPagamentosParaImpressao(atendimento.id);
       const pagamentosHtml = renderizarTabelaPagamentosImpressao(pagamentos);
+      const totalPagamentos = pagamentos.reduce((acc, pagamento) => (
+        pagamento.cancelado ? acc : acc + parseSafeNumber(pagamento.valor_total)
+      ), 0);
 
       abrirRelatorioDeImpressao({
-        tituloDocumento: 'Recibos de Pagamento',
-        tituloCabecalho: 'Recibos de Pagamento',
+        tituloDocumento: 'Recibo de Pagamento',
+        tituloCabecalho: 'Recibo de Pagamento',
         pagamentosHtml,
+        modoRecibo: true,
+        quantidadePagamentos: pagamentos.filter((pagamento) => !pagamento.cancelado).length,
+        totalPagamentos,
       });
     } catch {
       setError('Erro ao carregar pagamentos do atendimento para impressão.');

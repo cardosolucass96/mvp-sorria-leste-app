@@ -55,6 +55,22 @@ interface PagamentoAgrupadoRow extends Pagamento {
   grupo_created_at: string | null;
 }
 
+interface PagamentoAlocacaoResponse {
+  id: number;
+  pagamento_id: number;
+  item_atendimento_id: number | null;
+  agendamento_id: number | null;
+  etapa_modelo_id: number | null;
+  valor_alocado: number;
+  procedimento_nome: string;
+  etapa_label: string | null;
+  dentes: string | null;
+  dente_unico: string | null;
+  quantidade: number | null;
+  data_agendada: string | null;
+  agendamento_status: string | null;
+}
+
 interface PagamentoAgrupadoResponse {
   id: string;
   pagamento_grupo_id: number | null;
@@ -65,6 +81,7 @@ interface PagamentoAgrupadoResponse {
   motivo_cancelamento: string | null;
   created_at: string;
   recebido_por_nome: string | null;
+  alocacoes: PagamentoAlocacaoResponse[];
   formas: Array<{
     id: number;
     valor: number;
@@ -73,6 +90,7 @@ interface PagamentoAgrupadoResponse {
     cancelado: number;
     motivo_cancelamento: string | null;
     created_at: string;
+    alocacoes: PagamentoAlocacaoResponse[];
   }>;
 }
 
@@ -102,7 +120,47 @@ function normalizarAlocacoes(alocacoes: AlocacaoPagamentoInput[]): NormalizedAlo
   }));
 }
 
-function agruparPagamentos(rows: PagamentoAgrupadoRow[]): PagamentoAgrupadoResponse[] {
+async function buscarAlocacoesPagamentos(atendimentoId: number) {
+  const alocacoes = await query<PagamentoAlocacaoResponse>(
+    `SELECT
+       pa.id,
+       pa.pagamento_id,
+       pa.item_atendimento_id,
+       pa.agendamento_id,
+       pa.etapa_modelo_id,
+       pa.valor_alocado,
+       COALESCE(p_item.nome, p_ag.nome, 'Procedimento') as procedimento_nome,
+       COALESCE(etapa.nome, i.etapa_label) as etapa_label,
+       i.dentes,
+       i.dente_unico,
+       i.quantidade,
+       ag.data_agendada,
+       ag.status as agendamento_status
+     FROM pagamentos_alocacoes pa
+     INNER JOIN pagamentos pg ON pg.id = pa.pagamento_id
+     LEFT JOIN itens_atendimento i ON i.id = pa.item_atendimento_id
+     LEFT JOIN procedimentos p_item ON p_item.id = i.procedimento_id
+     LEFT JOIN agendamentos ag ON ag.id = pa.agendamento_id
+     LEFT JOIN procedimentos p_ag ON p_ag.id = ag.procedimento_id
+     LEFT JOIN procedimento_etapas_modelo etapa ON etapa.id = COALESCE(pa.etapa_modelo_id, ag.etapa_modelo_id, i.etapa_modelo_id)
+     WHERE pg.atendimento_id = ?
+     ORDER BY pa.created_at ASC, pa.id ASC`,
+    [atendimentoId]
+  );
+
+  const porPagamento = new Map<number, PagamentoAlocacaoResponse[]>();
+  for (const alocacao of alocacoes) {
+    const lista = porPagamento.get(alocacao.pagamento_id) ?? [];
+    lista.push(alocacao);
+    porPagamento.set(alocacao.pagamento_id, lista);
+  }
+  return porPagamento;
+}
+
+function agruparPagamentos(
+  rows: PagamentoAgrupadoRow[],
+  alocacoesPorPagamento = new Map<number, PagamentoAlocacaoResponse[]>()
+): PagamentoAgrupadoResponse[] {
   const grupos = new Map<string, PagamentoAgrupadoResponse>();
 
   for (const row of rows) {
@@ -120,10 +178,14 @@ function agruparPagamentos(rows: PagamentoAgrupadoRow[]): PagamentoAgrupadoRespo
         motivo_cancelamento: row.grupo_motivo_cancelamento ?? row.motivo_cancelamento,
         created_at: row.grupo_created_at ?? row.created_at,
         recebido_por_nome: row.recebido_por_nome,
+        alocacoes: [],
         formas: [],
       });
     }
 
+    const alocacoes = alocacoesPorPagamento.get(row.id) ?? [];
+    const grupo = grupos.get(key)!;
+    grupo.alocacoes.push(...alocacoes);
     grupos.get(key)!.formas.push({
       id: row.id,
       valor: row.valor,
@@ -132,6 +194,7 @@ function agruparPagamentos(rows: PagamentoAgrupadoRow[]): PagamentoAgrupadoRespo
       cancelado: row.cancelado,
       motivo_cancelamento: row.motivo_cancelamento,
       created_at: row.created_at,
+      alocacoes,
     });
   }
 
@@ -322,7 +385,8 @@ export const GET = withUnit(async (
     }
 
     if (!grouped) {
-      const pagamentos = await query(
+      const alocacoesPorPagamento = await buscarAlocacoesPagamentos(atendimentoId);
+      const pagamentos = await query<Pagamento & { recebido_por_nome: string | null }>(
         `SELECT p.*, u.nome as recebido_por_nome
          FROM pagamentos p
          LEFT JOIN usuarios u ON p.recebido_por_id = u.id
@@ -331,7 +395,10 @@ export const GET = withUnit(async (
         [atendimentoId]
       );
 
-      return NextResponse.json(pagamentos);
+      return NextResponse.json(pagamentos.map((pagamento) => ({
+        ...pagamento,
+        alocacoes: alocacoesPorPagamento.get(pagamento.id) ?? [],
+      })));
     }
 
     const pagamentos = await query<PagamentoAgrupadoRow>(
@@ -351,7 +418,8 @@ export const GET = withUnit(async (
       [atendimentoId]
     );
 
-    return NextResponse.json(agruparPagamentos(pagamentos));
+    const alocacoesPorPagamento = await buscarAlocacoesPagamentos(atendimentoId);
+    return NextResponse.json(agruparPagamentos(pagamentos, alocacoesPorPagamento));
   } catch (error) {
     console.error('Erro ao buscar pagamentos:', error);
     return NextResponse.json(

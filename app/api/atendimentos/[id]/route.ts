@@ -4,10 +4,12 @@ import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/m
 import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
 import { PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 import { validarUsuarioPorRoles } from '../_helpers';
+import { garantirCamposEmpresaUnidades } from '@/lib/helpers/unidadesEmpresa';
 
 interface Atendimento {
   id: number;
   cliente_id: number;
+  unidade_id: number | null;
   avaliador_id: number | null;
   status: string;
   created_at: string;
@@ -19,6 +21,14 @@ interface AtendimentoComCliente extends Atendimento {
   cliente_cpf: string | null;
   cliente_telefone: string | null;
   cliente_email: string | null;
+  unidade_nome: string | null;
+  unidade_razao_social: string | null;
+  unidade_cnpj: string | null;
+  unidade_endereco: string | null;
+  unidade_telefone: string | null;
+  unidade_email: string | null;
+  unidade_responsavel: string | null;
+  unidade_recibo_rodape: string | null;
   avaliador_nome: string | null;
 }
 
@@ -108,6 +118,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
   try {
     const params = await context.params!;
     const id = params.id as string;
+    await garantirCamposEmpresaUnidades();
 
     // Busca atendimento com dados do cliente (verificando unidade)
     const atendimento = await queryOne<AtendimentoComCliente>(
@@ -117,10 +128,19 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         c.cpf as cliente_cpf,
         c.telefone as cliente_telefone,
         c.email as cliente_email,
+        un.nome as unidade_nome,
+        un.razao_social as unidade_razao_social,
+        un.cnpj as unidade_cnpj,
+        un.endereco as unidade_endereco,
+        un.telefone as unidade_telefone,
+        un.email as unidade_email,
+        un.responsavel as unidade_responsavel,
+        un.recibo_rodape as unidade_recibo_rodape,
         u.nome as avaliador_nome,
         u2.nome as liberado_por_nome
       FROM atendimentos a
       INNER JOIN clientes c ON a.cliente_id = c.id
+      LEFT JOIN unidades un ON a.unidade_id = un.id
       LEFT JOIN usuarios u ON a.avaliador_id = u.id
       LEFT JOIN usuarios u2 ON a.liberado_por_id = u2.id
       WHERE a.id = ? AND a.unidade_id = ?`,

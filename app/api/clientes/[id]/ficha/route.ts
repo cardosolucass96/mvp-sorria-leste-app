@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { withAuth } from '@/lib/auth/middleware';
+import { garantirCamposEmpresaUnidades } from '@/lib/helpers/unidadesEmpresa';
 
 // GET /api/clientes/[id]/ficha - Retorna dados completos do cliente para a ficha
 export const GET = withAuth(async (_request, context) => {
@@ -8,6 +9,7 @@ export const GET = withAuth(async (_request, context) => {
     const params = await context.params!;
     const id = params.id as string;
     const clienteId = parseInt(id);
+    await garantirCamposEmpresaUnidades();
 
     const cliente = await queryOne('SELECT id FROM clientes WHERE id = ?', [clienteId]);
     if (!cliente) {
@@ -19,6 +21,13 @@ export const GET = withAuth(async (_request, context) => {
       `SELECT a.*,
               u.nome as avaliador_nome,
               un.nome as unidade_nome,
+              un.razao_social as unidade_razao_social,
+              un.cnpj as unidade_cnpj,
+              un.endereco as unidade_endereco,
+              un.telefone as unidade_telefone,
+              un.email as unidade_email,
+              un.responsavel as unidade_responsavel,
+              un.recibo_rodape as unidade_recibo_rodape,
               COALESCE(SUM(i.valor), 0) as total,
               COALESCE(SUM(i.valor_pago), 0) as total_pago
        FROM atendimentos a
@@ -53,9 +62,19 @@ export const GET = withAuth(async (_request, context) => {
     const pagamentos = await query(
       `SELECT pg.id, pg.atendimento_id, pg.valor, pg.metodo, pg.observacoes,
               pg.cancelado, pg.motivo_cancelamento, pg.created_at,
+              a.unidade_id,
+              un.nome as unidade_nome,
+              un.razao_social as unidade_razao_social,
+              un.cnpj as unidade_cnpj,
+              un.endereco as unidade_endereco,
+              un.telefone as unidade_telefone,
+              un.email as unidade_email,
+              un.responsavel as unidade_responsavel,
+              un.recibo_rodape as unidade_recibo_rodape,
               u.nome as recebido_por_nome
        FROM pagamentos pg
        INNER JOIN atendimentos a ON pg.atendimento_id = a.id
+       LEFT JOIN unidades un ON a.unidade_id = un.id
        LEFT JOIN usuarios u ON pg.recebido_por_id = u.id
        WHERE a.cliente_id = ?
        ORDER BY pg.created_at DESC`,

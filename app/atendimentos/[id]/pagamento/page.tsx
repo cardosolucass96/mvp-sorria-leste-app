@@ -858,28 +858,28 @@ export default function PagamentoPage({
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
       <Card noPadding>
-        <CardContent className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
-          <div className="flex flex-col gap-1">
+        <CardContent className="flex flex-col gap-5 p-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0 flex flex-1 flex-col gap-1">
             <p className="text-sm text-muted-foreground">Atendimento #{atendimento.id}</p>
             <h1 className="text-3xl font-semibold">{atendimento.cliente_nome}</h1>
             <p className="text-sm text-muted-foreground">
               {descricaoCabecalho}
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-border bg-muted/40 p-3">
+          <div className="grid w-full gap-3 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))] xl:max-w-[620px] xl:flex-none">
+            <div className="min-w-0 rounded-xl border border-border bg-muted/40 p-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Total</p>
-              <p className="mt-1 text-2xl font-semibold leading-tight text-foreground md:text-3xl">{formatarMoeda(resumoFinanceiro.total)}</p>
+              <p className="mt-1 text-xl font-semibold leading-tight text-foreground sm:text-2xl 2xl:text-3xl">{formatarMoeda(resumoFinanceiro.total)}</p>
             </div>
-            <div className="rounded-xl border border-border bg-success-500/10 p-3">
+            <div className="min-w-0 rounded-xl border border-border bg-success-500/10 p-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Pago</p>
-              <p className="mt-1 text-2xl font-semibold leading-tight text-success-600 md:text-3xl">
+              <p className="mt-1 text-xl font-semibold leading-tight text-success-600 sm:text-2xl 2xl:text-3xl">
                 {formatarMoeda(resumoFinanceiro.pago)}
               </p>
             </div>
-            <div className="rounded-xl border border-border bg-warning-500/10 p-3">
+            <div className="min-w-0 rounded-xl border border-border bg-warning-500/10 p-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Pendente</p>
-              <p className="mt-1 text-2xl font-semibold leading-tight text-warning-600 md:text-3xl">
+              <p className="mt-1 text-xl font-semibold leading-tight text-warning-600 sm:text-2xl 2xl:text-3xl">
                 {formatarMoeda(resumoFinanceiro.pendente)}
               </p>
             </div>

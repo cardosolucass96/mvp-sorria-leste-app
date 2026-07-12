@@ -257,6 +257,13 @@ describe('Sprint 4: atendimentos/[id]/pagamento/page.tsx', () => {
     expect(src).toContain('Salvar destinos e finalizar atendimento');
   });
 
+  test('header financeiro usa layout responsivo para evitar sobreposição dos totais', () => {
+    expect(src).toContain('[grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]');
+    expect(src).toContain('xl:max-w-[620px]');
+    expect(src).not.toContain('lg:grid-cols-[minmax(0,1fr)_360px]');
+    expect(src).not.toContain('sm:grid-cols-3');
+  });
+
   test('histórico financeiro fica sempre visível para cancelamento', () => {
     expect(src).toContain('Pagamentos registrados');
     expect(src).not.toContain('historicoAberto');

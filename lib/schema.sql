@@ -160,6 +160,7 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
   origem_agendamento_id INTEGER, -- Qual agendamento originou este item
   etapa_modelo_id INTEGER, -- Etapa específica do procedimento (quando tem_etapas=1 e é uma sessão)
   etapa_label TEXT,        -- Label da(s) etapa(s) desta sessão ex: "Etapa 1" ou "Etapa 1, Etapa 2"
+  etapas_valores TEXT,     -- JSON com overrides de valor por etapa_modelo_id
   status TEXT NOT NULL DEFAULT 'pendente'
     CHECK (status IN ('pendente', 'pago', 'executando', 'concluido')),
   adicionado_em_execucao INTEGER NOT NULL DEFAULT 0, -- 1 se foi adicionado pelo executor durante a execução (pode ser concluído antes do pagamento)
@@ -471,8 +472,13 @@ CREATE TABLE IF NOT EXISTS vinculos_clientes (
 CREATE TABLE IF NOT EXISTS unidades (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nome TEXT NOT NULL,
+  razao_social TEXT,
+  cnpj TEXT,
   endereco TEXT,
   telefone TEXT,
+  email TEXT,
+  responsavel TEXT,
+  recibo_rodape TEXT,
   ativo INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );

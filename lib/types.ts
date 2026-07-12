@@ -129,8 +129,13 @@ export interface Procedimento {
 export interface Unidade {
   id: number;
   nome: string;
+  razao_social: string | null;
+  cnpj: string | null;
   endereco: string | null;
   telefone: string | null;
+  email: string | null;
+  responsavel: string | null;
+  recibo_rodape: string | null;
   ativo: number;
   created_at: string;
 }
