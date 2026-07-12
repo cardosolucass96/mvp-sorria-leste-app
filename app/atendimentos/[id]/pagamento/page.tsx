@@ -828,15 +828,13 @@ export default function PagamentoPage({
   const podeGerenciarDestinos = atendimento.status === 'aguardando_pagamento';
   const podeRegistrarCobranca = !modoSomenteHistorico;
   const temItensHojePlanejados = resumoDestinos.fazer_hoje > 0;
-  const resumoFinanceiro = useMemo(() => {
-    const total = roundMoney(atendimento.total);
-    const pago = roundMoney(atendimento.total_pago);
-    return {
-      total,
-      pago,
-      pendente: roundMoney(Math.max(0, total - pago)),
-    };
-  }, [atendimento.total, atendimento.total_pago]);
+  const totalFinanceiro = roundMoney(atendimento.total);
+  const pagoFinanceiro = roundMoney(atendimento.total_pago);
+  const resumoFinanceiro = {
+    total: totalFinanceiro,
+    pago: pagoFinanceiro,
+    pendente: roundMoney(Math.max(0, totalFinanceiro - pagoFinanceiro)),
+  };
   const descricaoCabecalho = modoSomenteHistorico
     ? 'Atendimento em revisão financeira. Consulte cobranças registradas e, se necessário, cancele o grupo com motivo.'
     : podeGerenciarDestinos
