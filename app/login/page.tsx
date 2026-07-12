@@ -10,6 +10,7 @@ import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import { UserRole } from '@/lib/types';
 
 export default function LoginPage() {
   usePageTitle('Login');
@@ -17,7 +18,7 @@ export default function LoginPage() {
   const [senha, setSenha] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, devQuickLogin } = useAuth();
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const isDarkMode = resolvedTheme === 'dark';
@@ -38,12 +39,10 @@ export default function LoginPage() {
     setIsLoading(false);
   };
 
-  const loginRapido = async (emailDev: string) => {
+  const loginRapido = async (role: UserRole) => {
     setError('');
     setIsLoading(true);
-    setEmail(emailDev);
-    setSenha('Sorria@123');
-    const result = await login(emailDev, 'Sorria@123');
+    const result = await devQuickLogin(role);
     if (result.success) {
       router.push('/');
     } else {
@@ -53,11 +52,11 @@ export default function LoginPage() {
   };
 
   const DEV_USERS = [
-    { label: 'Admin',     email: 'admin@sorrialeste.com' },
-    { label: 'Atendente', email: 'maria@sorrialeste.com' },
-    { label: 'Avaliador', email: 'dr.carlos@sorrialeste.com' },
-    { label: 'Executor',  email: 'dr.pedro@sorrialeste.com' },
-  ];
+    { label: 'Admin',     role: 'admin' },
+    { label: 'Atendente', role: 'atendente' },
+    { label: 'Avaliador', role: 'avaliador' },
+    { label: 'Executor',  role: 'executor' },
+  ] satisfies Array<{ label: string; role: UserRole }>;
 
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#fed7aa_0%,#fb923c_24%,#ea580c_56%,#7c2d12_100%)] dark:bg-[radial-gradient(circle_at_top,#5b3a21_0%,#2f1605_22%,#171210_72%,#0f0a08_100%)]">
@@ -138,13 +137,13 @@ export default function LoginPage() {
         {/* Atalhos de dev — visíveis apenas em localhost */}
         {process.env.NODE_ENV === 'development' && (
           <div className="mt-4 rounded-xl border border-white/[0.20] bg-white/[0.16] p-4 text-sm text-white shadow-lg backdrop-blur dark:border-white/[0.10] dark:bg-black/[0.20]">
-            <p className="mb-3 text-center text-primary-50/90">Clique para entrar (senha: Sorria@123):</p>
+            <p className="mb-3 text-center text-primary-50/90">Clique para entrar com um usuário ativo do banco local:</p>
             <div className="grid grid-cols-4 gap-2">
               {DEV_USERS.map((u) => (
                 <Button
-                  key={u.email}
+                  key={u.role}
                   type="button"
-                  onClick={() => loginRapido(u.email)}
+                  onClick={() => loginRapido(u.role)}
                   disabled={isLoading}
                   className="text-xs shadow-none"
                   variant="secondary"

@@ -15,6 +15,7 @@ interface AuthContextType {
   user: UsuarioComUnidades | null;
   isLoading: boolean;
   login: (email: string, senha: string) => Promise<{ success: boolean; error?: string }>;
+  devQuickLogin: (role: UserRole) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
   viewMode: ViewMode;
@@ -62,28 +63,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Carregar usuário e viewMode do localStorage ao iniciar
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setUser(parsed);
-        // Restaurar unidade do localStorage ou do user
-        const storedUnit = localStorage.getItem(UNIT_KEY);
-        if (storedUnit) {
-          setCurrentUnidade(parseInt(storedUnit));
-        } else if (parsed.unidade_atual) {
-          setCurrentUnidade(parsed.unidade_atual);
+    const frame = window.requestAnimationFrame(() => {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setUser(parsed);
+          // Restaurar unidade do localStorage ou do user
+          const storedUnit = localStorage.getItem(UNIT_KEY);
+          if (storedUnit) {
+            setCurrentUnidade(parseInt(storedUnit));
+          } else if (parsed.unidade_atual) {
+            setCurrentUnidade(parsed.unidade_atual);
+          }
+          fetchUnidadeNomes();
+        } catch {
+          localStorage.removeItem(STORAGE_KEY);
         }
-        fetchUnidadeNomes();
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
       }
-    }
-    const storedViewMode = localStorage.getItem(VIEW_MODE_KEY);
-    if (storedViewMode === 'dentista') {
-      setViewMode('dentista');
-    }
-    setIsLoading(false);
+      const storedViewMode = localStorage.getItem(VIEW_MODE_KEY);
+      if (storedViewMode === 'dentista') {
+        setViewMode('dentista');
+      }
+      setIsLoading(false);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   // Escutar evento global de sessão expirada (401 em qualquer API)
@@ -101,6 +106,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('auth:expired', handleExpired);
   }, []);
 
+  const aplicarUsuarioAutenticado = (usuario: UsuarioComUnidades) => {
+    setUser(usuario);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(usuario));
+
+    const unidadeInicial = usuario.unidade_atual || usuario.unidade_ids?.[0] || 1;
+    setCurrentUnidade(unidadeInicial);
+    localStorage.setItem(UNIT_KEY, String(unidadeInicial));
+    fetchUnidadeNomes();
+
+    if (usuario.role === 'admin') {
+      setViewMode('admin');
+      localStorage.setItem(VIEW_MODE_KEY, 'admin');
+    }
+  };
+
   // Login: autentica usuário com email e senha
   const login = async (email: string, senha: string): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -116,18 +136,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: data.error || 'Erro ao fazer login' };
       }
 
-      setUser(data.user);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user));
-      // Setar unidade
-      const unidadeInicial = data.user.unidade_atual || (data.user.unidade_ids?.[0]) || 1;
-      setCurrentUnidade(unidadeInicial);
-      localStorage.setItem(UNIT_KEY, String(unidadeInicial));
-      fetchUnidadeNomes();
-      // Admin entra em modo admin por padrão
-      if (data.user.role === 'admin') {
-        setViewMode('admin');
-        localStorage.setItem(VIEW_MODE_KEY, 'admin');
+      aplicarUsuarioAutenticado(data.user);
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Erro de conexão' };
+    }
+  };
+
+  const devQuickLogin = async (role: UserRole): Promise<{ success: boolean; error?: string }> => {
+    if (process.env.NODE_ENV !== 'development') {
+      return { success: false, error: 'Acesso rápido disponível apenas em desenvolvimento' };
+    }
+
+    try {
+      const response = await fetch('/api/auth/dev-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Erro ao fazer login rápido' };
       }
+
+      aplicarUsuarioAutenticado(data.user);
       return { success: true };
     } catch {
       return { success: false, error: 'Erro de conexão' };
@@ -197,7 +231,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, isLoading, login, logout, hasRole,
+      user, isLoading, login, devQuickLogin, logout, hasRole,
       viewMode, toggleViewMode, effectiveRole, isAdmin,
       currentUnidade, availableUnidades, unidadeNomes, switchUnit
     }}>
