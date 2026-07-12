@@ -352,17 +352,35 @@ describe('AtendimentoDetalhePage financeiro', () => {
 });
 
 describe('AtendimentoDetalhePage impressão', () => {
-  test('em finalizado exibe botão "Imprimir recibos"', async () => {
-    await renderPage('finalizado');
+  test('em aguardando_pagamento com valor pago exibe botão "Imprimir recibos"', async () => {
+    await renderPage('aguardando_pagamento', {
+      ...makeAtendimento('aguardando_pagamento'),
+      total_pago: 150,
+    });
 
     expect(screen.getByRole('button', { name: 'Imprimir recibos' })).toBeInTheDocument();
   });
 
+  test('não exibe botão de recibos quando ainda não há pagamento', async () => {
+    await renderPage('aguardando_pagamento', {
+      ...makeAtendimento('aguardando_pagamento'),
+      total_pago: 0,
+      itens: [
+        {
+          ...makeAtendimento('aguardando_pagamento').itens[0],
+          valor_pago: 0,
+          status: 'pendente',
+        },
+      ],
+    });
+
+    expect(screen.queryByRole('button', { name: 'Imprimir recibos' })).not.toBeInTheDocument();
+  });
+
   test('imprime recibos somente com a seção de pagamentos', async () => {
-    await renderPage('finalizado', {
-      ...makeAtendimento('finalizado'),
+    await renderPage('aguardando_pagamento', {
+      ...makeAtendimento('aguardando_pagamento'),
       total_pago: 300,
-      finalizado_at: '2026-06-05 15:00:00',
     });
 
     const printWindow = makePrintWindow();

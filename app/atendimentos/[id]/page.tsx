@@ -843,6 +843,7 @@ export default function AtendimentoDetalhePage({
   const statusAnterior = STATUS_ANTERIOR[atendimento.status as AtendimentoStatus];
   const podeAcessarFinanceiro = ['aguardando_pagamento', 'em_execucao', 'finalizado', 'encerrado'].includes(atendimento.status);
   const labelAcessoFinanceiro = atendimento.status === 'aguardando_pagamento' ? '💳 Ir para Pagamento' : '💳 Ver Financeiro';
+  const podeImprimirRecibos = podeAcessarFinanceiro && parseSafeNumber(atendimento.total_pago) > 0;
   const atendimentoEhContinuacao = atendimento.motivo_saida === 'continuacao';
 
   // Agrupar itens por group_id
@@ -1324,7 +1325,7 @@ export default function AtendimentoDetalhePage({
                 {imprimindoAtendimento ? 'Preparando impressão...' : 'Imprimir atendimento'}
               </Button>
             )}
-            {(atendimento.status === 'finalizado' || atendimento.status === 'encerrado') && (
+            {podeImprimirRecibos && (
               <Button variant="secondary" onClick={imprimirRecibos} disabled={imprimindoAlgumDocumento}>
                 <Printer className="w-4 h-4 mr-1" />
                 {imprimindoRecibos ? 'Preparando recibos...' : 'Imprimir recibos'}
