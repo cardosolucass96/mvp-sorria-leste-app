@@ -3,6 +3,14 @@ import { queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento, AgendamentoCompleto } from '@/lib/types';
 
+interface AtualizarAgendamentoBody {
+  data_agendada?: string | null;
+  executor_id?: number | null;
+  observacoes?: string | null;
+  status?: 'faltou' | 'cancelado' | 'agendado';
+  motivo_cancelamento?: string | null;
+}
+
 const DETAIL_SQL = `
   SELECT
     a.*,
@@ -45,7 +53,7 @@ export const PUT = withUnit(async (
   try {
     const { id } = await context.params!;
     const agendamentoId = parseInt(id as string);
-    const body = await request.json();
+    const body = await request.json() as AtualizarAgendamentoBody;
 
     const agendamento = await queryOne<Agendamento>(
       'SELECT * FROM agendamentos WHERE id = ? AND unidade_id = ?',

@@ -3,6 +3,19 @@ import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { AgendamentoCompleto } from '@/lib/types';
 
+interface CriarAgendamentoBody {
+  cliente_id?: number;
+  atendimento_origem_id?: number | null;
+  procedimento_id?: number | null;
+  item_atendimento_origem_id?: number | null;
+  executor_id?: number | null;
+  data_agendada?: string | null;
+  observacoes?: string | null;
+  reagendado_de_id?: number | null;
+  pago?: boolean | number | null;
+  tipo?: 'avaliacao' | 'procedimento' | string;
+}
+
 // Mapeamento seguro de campos para ORDER BY
 const SORT_FIELDS: Record<string, string> = {
   cliente_nome:        'c.nome',
@@ -134,7 +147,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 // POST /api/agendamentos - Cria agendamento
 export const POST = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
-    const body = await request.json();
+    const body = await request.json() as CriarAgendamentoBody;
     let {
       cliente_id,
       atendimento_origem_id,

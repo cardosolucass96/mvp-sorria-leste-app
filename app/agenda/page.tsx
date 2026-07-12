@@ -420,7 +420,7 @@ export default function AgendaPage() {
     if (novoProcedimentos.length === 0) {
       try {
         const res = await apiFetch('/api/procedimentos');
-        setNovoProcedimentos(await res.json());
+        setNovoProcedimentos(await res.json() as Procedimento[]);
       } catch {}
     }
 
@@ -428,7 +428,7 @@ export default function AgendaPage() {
       try {
         const res = await apiFetch(`/api/clientes/${clienteId}`);
         if (res.ok) {
-          const cliente = await res.json();
+          const cliente = await res.json() as ClienteBusca;
           setNovoClienteSelecionado({
             id: cliente.id,
             nome: cliente.nome,
@@ -469,7 +469,7 @@ export default function AgendaPage() {
     if (termo.length < 2) { setNovoClientes([]); return; }
     try {
       const res = await apiFetch(`/api/clientes?busca=${encodeURIComponent(termo)}&limit=8`);
-      const data = await res.json();
+      const data = await res.json() as { clientes?: ClienteBusca[] };
       setNovoClientes(data.clientes ?? []);
     } catch {}
   };
@@ -529,7 +529,7 @@ export default function AgendaPage() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json() as { error?: string };
         throw new Error(data.error || 'Erro ao criar agendamento');
       }
       toast.success('Agendamento criado com sucesso');
@@ -573,7 +573,7 @@ export default function AgendaPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const responseData = await res.json();
+      const responseData = await res.json() as { error?: string };
       if (!res.ok) {
         throw new Error(responseData.error || 'Erro ao atualizar agendamento');
       }
@@ -712,13 +712,22 @@ export default function AgendaPage() {
     setGrupoLoading(key);
     try {
       const res = await unitFetch(`/api/agendamentos/${gatilho.id}/chegou`, { method: 'POST' });
-      const data = await res.json();
+      const data = await res.json() as {
+        id?: number;
+        agendamentos_agrupados?: number;
+        atendimento_existente_id?: number;
+        error?: string;
+      };
 
       if (res.status === 201) {
-        if (data.agendamentos_agrupados > 1) {
-          toast.success(`${data.agendamentos_agrupados} procedimentos agrupados em 1 atendimento`);
+        const agendamentosAgrupados = data.agendamentos_agrupados ?? 0;
+        if (agendamentosAgrupados > 1) {
+          toast.success(`${agendamentosAgrupados} procedimentos agrupados em 1 atendimento`);
         }
         if (isAdminOrAtendente) {
+          if (typeof data.id !== 'number') {
+            throw new Error('Resposta inválida ao registrar chegada.');
+          }
           router.push(`/atendimentos/${data.id}`);
         } else {
           toast.success('Chegada registrada');
@@ -841,7 +850,7 @@ export default function AgendaPage() {
             body: JSON.stringify(bodyBase),
           });
           if (!res.ok) {
-            const responseData = await res.json();
+            const responseData = await res.json() as { error?: string };
             throw new Error(responseData.error || 'Erro ao atualizar grupo');
           }
         })
@@ -907,7 +916,7 @@ export default function AgendaPage() {
         body: JSON.stringify({ executor_id: executorId ? parseInt(executorId) : null }),
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json() as { error?: string };
         toast.error(data.error || 'Erro ao atualizar executor');
         return;
       }
