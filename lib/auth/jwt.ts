@@ -8,13 +8,16 @@
 const JWT_EXPIRATION_HOURS = 24;
 
 /**
- * JWTs nunca devem ter uma chave de fallback: se a configuração de produção
+ * JWTs nunca devem ter uma chave hardcoded: se a configuração de produção
  * estiver incompleta, emitir tokens previsíveis é pior do que falhar cedo.
+ *
+ * JWT_SECRET é o nome preferido. BETTER_AUTH_SECRET é aceito como fallback
+ * porque já existe como secret real no ambiente Cloudflare do projeto.
  */
 function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
+  const secret = process.env.JWT_SECRET || process.env.BETTER_AUTH_SECRET;
   if (!secret) {
-    throw new Error('JWT_SECRET não configurado');
+    throw new Error('JWT_SECRET ou BETTER_AUTH_SECRET não configurado');
   }
   return secret;
 }
