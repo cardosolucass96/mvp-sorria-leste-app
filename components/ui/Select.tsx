@@ -8,10 +8,19 @@ export interface SelectOption {
   label: string;
 }
 
+export interface SelectOptionGroup {
+  label: string;
+  options: SelectOption[];
+}
+
+function isOptionGroup(option: SelectOption | SelectOptionGroup): option is SelectOptionGroup {
+  return 'options' in option;
+}
+
 export interface SelectProps {
   label: string;
   name: string;
-  options: SelectOption[];
+  options: Array<SelectOption | SelectOptionGroup>;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -68,11 +77,25 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
             )}
           >
             <option value="">{placeholder}</option>
-            {options.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
+            {options.map((opt) => {
+              if (isOptionGroup(opt)) {
+                return (
+                  <optgroup key={opt.label} label={opt.label}>
+                    {opt.options.map((groupOption) => (
+                      <option key={groupOption.value} value={groupOption.value}>
+                        {groupOption.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              }
+
+              return (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              );
+            })}
           </select>
           <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" aria-hidden="true">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

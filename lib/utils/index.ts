@@ -4,6 +4,7 @@ export {
   formatarDataHora,
   formatarDataCompleta,
   formatarCPF,
+  formatarCNPJ,
   formatarTelefone,
   formatarPorcentagem,
   obterIniciais,

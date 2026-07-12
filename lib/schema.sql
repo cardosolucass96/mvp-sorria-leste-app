@@ -190,14 +190,47 @@ CREATE TABLE IF NOT EXISTS pagamentos_grupos (
   FOREIGN KEY (recebido_por_id) REFERENCES usuarios(id)
 );
 
+CREATE TABLE IF NOT EXISTS formas_pagamento (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  unidade_id INTEGER NOT NULL,
+  grupo TEXT NOT NULL,
+  subgrupo TEXT NOT NULL DEFAULT '',
+  metodo_base TEXT NOT NULL CHECK (metodo_base IN ('dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'crediario', 'afins_sorria')),
+  ativo INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (unidade_id) REFERENCES unidades(id),
+  UNIQUE (unidade_id, grupo, subgrupo)
+);
+
+CREATE TABLE IF NOT EXISTS formas_pagamento_historico (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  forma_pagamento_id INTEGER NOT NULL,
+  taxa_percentual REAL NOT NULL DEFAULT 0,
+  taxa_fixa REAL NOT NULL DEFAULT 0,
+  vigente_de TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  vigente_ate TEXT,
+  alterado_por_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (forma_pagamento_id) REFERENCES formas_pagamento(id) ON DELETE CASCADE,
+  FOREIGN KEY (alterado_por_id) REFERENCES usuarios(id)
+);
+
 -- Pagamentos
 CREATE TABLE IF NOT EXISTS pagamentos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   atendimento_id INTEGER NOT NULL,
   pagamento_grupo_id INTEGER REFERENCES pagamentos_grupos(id),
+  forma_pagamento_id INTEGER REFERENCES formas_pagamento(id),
   recebido_por_id INTEGER NOT NULL,
   valor REAL NOT NULL,
   metodo TEXT NOT NULL CHECK (metodo IN ('dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'crediario', 'afins_sorria')),
+  forma_pagamento_grupo_snapshot TEXT,
+  forma_pagamento_subgrupo_snapshot TEXT NOT NULL DEFAULT '',
+  taxa_percentual_snapshot REAL,
+  taxa_fixa_snapshot REAL,
+  valor_taxa REAL,
+  valor_liquido REAL,
   observacoes TEXT,
   cancelado INTEGER DEFAULT 0,
   motivo_cancelamento TEXT,
@@ -226,6 +259,10 @@ CREATE TABLE IF NOT EXISTS pagamentos_alocacoes (
 
 CREATE INDEX IF NOT EXISTS idx_pagamentos_grupos_atendimento ON pagamentos_grupos(atendimento_id);
 CREATE INDEX IF NOT EXISTS idx_pagamentos_pagamento_grupo ON pagamentos(pagamento_grupo_id);
+CREATE INDEX IF NOT EXISTS idx_formas_pagamento_unidade ON formas_pagamento(unidade_id);
+CREATE INDEX IF NOT EXISTS idx_formas_pagamento_ativo ON formas_pagamento(unidade_id, ativo);
+CREATE INDEX IF NOT EXISTS idx_formas_pagamento_historico_forma ON formas_pagamento_historico(forma_pagamento_id, vigente_ate, vigente_de);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_forma_pagamento_id ON pagamentos(forma_pagamento_id);
 
 CREATE TABLE IF NOT EXISTS itens_atendimento_destinos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

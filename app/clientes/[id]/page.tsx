@@ -31,6 +31,7 @@ import { FOLLOWUP_STATUS_LABELS, FOLLOWUP_TIPO_CONFIG } from '@/lib/constants/fo
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { buildTermoPrintableDocument } from '@/lib/helpers/termosDocumento';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import { getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 
 const METODOS_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -95,6 +96,13 @@ interface Pagamento {
   atendimento_id: number;
   valor: number;
   metodo: string;
+  forma_pagamento_id: number | null;
+  forma_pagamento_grupo_snapshot: string | null;
+  forma_pagamento_subgrupo_snapshot: string | null;
+  taxa_percentual_snapshot: number | null;
+  taxa_fixa_snapshot: number | null;
+  valor_taxa: number | null;
+  valor_liquido: number | null;
   observacoes: string | null;
   cancelado: number;
   motivo_cancelamento: string | null;
@@ -622,7 +630,15 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     setSelectedAtendimentos(ficha.atendimentos.map((a) => a.id));
   };
 
-  const getMetodoPagamentoLabel = (metodo: string) => METODOS_LABEL[metodo] || metodo;
+  const getMetodoPagamentoLabel = (pagamento: {
+    metodo: string;
+    forma_pagamento_grupo_snapshot?: string | null;
+    forma_pagamento_subgrupo_snapshot?: string | null;
+  }) => getFormaPagamentoSnapshotLabel({
+    metodo: pagamento.metodo,
+    forma_pagamento_grupo_snapshot: pagamento.forma_pagamento_grupo_snapshot ?? null,
+    forma_pagamento_subgrupo_snapshot: pagamento.forma_pagamento_subgrupo_snapshot ?? null,
+  }) || METODOS_LABEL[pagamento.metodo] || pagamento.metodo;
 
   const abrirRelatorioClienteImpressao = ({
     tituloDocumento,
@@ -801,48 +817,59 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           <meta charset="utf-8" />
           <title>Recibo de Pagamento - ${escapeHtml(cliente.nome)}</title>
           <style>
-            :root { --sorria-orange: #ea580c; --ink: #111827; --muted: #64748b; --line: #e2e8f0; --soft: #fff7ed; }
-            @page { size: A4; margin: 14mm; }
+            :root { --sorria-orange: #ea580c; --ink: #111827; --muted: #475569; --label: #334155; --line: #d8dee8; --soft: #fff7ed; }
+            @page { size: A4; margin: 12mm; }
             * { box-sizing: border-box; }
-            body { font-family: Arial, Helvetica, sans-serif; padding: 0; color: var(--ink); font-size: 12px; background: #ffffff; }
-            h1 { font-size: 25px; margin: 0; color: var(--ink); letter-spacing: -0.4px; }
-            h2 { font-size: 12px; margin: 0 0 10px; color: var(--sorria-orange); text-transform: uppercase; letter-spacing: 0.8px; }
-            .receipt-page { max-width: 980px; margin: 0 auto; }
-            .document-hero { display: flex; justify-content: space-between; gap: 18px; align-items: stretch; padding: 18px 20px; border: 1px solid #fed7aa; border-radius: 16px; background: linear-gradient(135deg, #fff7ed 0%, #ffffff 52%, #ffedd5 100%); box-shadow: 0 10px 26px rgba(234, 88, 12, 0.08); }
-            .hero-brand { display: flex; align-items: center; gap: 14px; }
-            .hero-brand img { width: 58px; height: 58px; object-fit: contain; }
-            .hero-kicker { color: var(--sorria-orange); font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; font-size: 11px; }
-            .hero-brand p { margin: 4px 0 0; color: var(--muted); font-weight: 700; }
-            .hero-meta { min-width: 190px; display: grid; gap: 8px; }
-            .hero-meta div { border: 1px solid #fdba74; border-radius: 12px; background: rgba(255,255,255,0.78); padding: 9px 11px; }
-            .hero-meta span, .info-line span, .summary-item span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.55px; }
-            .hero-meta strong { display: block; margin-top: 2px; font-size: 13px; }
-            .info-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; margin-top: 14px; }
-            .info-card { border: 1px solid var(--line); border-radius: 14px; padding: 13px 14px; background: #fff; page-break-inside: avoid; }
-            .company-card { background: linear-gradient(180deg, #ffffff 0%, #fffaf5 100%); }
-            .info-line { display: grid; grid-template-columns: 104px 1fr; gap: 10px; padding: 4px 0; border-bottom: 1px solid #f1f5f9; }
+            html { background: #ffffff; }
+            body { font-family: Arial, Helvetica, sans-serif; padding: 0; margin: 0; color: var(--ink); font-size: 11.5px; line-height: 1.42; background: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            h1 { font-size: 22px; line-height: 1.08; margin: 0; color: var(--ink); letter-spacing: -0.35px; }
+            h2 { font-size: 11px; margin: 0 0 8px; color: #9a3412; text-transform: uppercase; letter-spacing: 0.7px; }
+            .receipt-page { width: 186mm; max-width: 100%; margin: 0 auto; }
+            .document-hero { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 12px 14px; border: 1px solid #fdba74; border-radius: 12px; background: linear-gradient(135deg, #fff7ed 0%, #ffffff 58%, #ffedd5 100%); }
+            .hero-brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+            .hero-brand img { width: 46px; height: 46px; object-fit: contain; flex: 0 0 auto; }
+            .hero-kicker { color: #c2410c; font-weight: 800; letter-spacing: 0.75px; text-transform: uppercase; font-size: 10px; }
+            .hero-brand p { margin: 2px 0 0; color: var(--label); font-weight: 700; }
+            .hero-meta { min-width: 174px; display: grid; grid-template-columns: 1fr; gap: 6px; }
+            .hero-meta div { border: 1px solid #fed7aa; border-radius: 9px; background: rgba(255,255,255,0.9); padding: 7px 9px; }
+            .hero-meta span, .info-line span, .summary-item span { display: block; color: var(--label); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.45px; font-weight: 700; }
+            .hero-meta strong { display: block; margin-top: 1px; font-size: 12px; color: var(--ink); }
+            .info-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; align-items: stretch; }
+            .info-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+            .company-card { background: #fffaf5; }
+            .info-line { display: grid; grid-template-columns: 92px 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px solid #edf2f7; }
             .info-line:last-child { border-bottom: 0; }
             .info-line strong { font-weight: 700; overflow-wrap: anywhere; }
-            .summary { margin: 12px 0; border: 1px solid #fdba74; background: #fff7ed; border-radius: 6px; padding: 10px 12px; }
-            .summary-grid { display: grid; grid-template-columns: 1fr 1.25fr; gap: 12px; }
-            .summary-item { border-radius: 12px; background: #fff; border: 1px solid #fed7aa; padding: 12px 14px; }
-            .summary-item strong { display: block; margin-top: 4px; font-size: 18px; }
-            .summary-item.total { background: #ea580c; color: #fff; border-color: #ea580c; }
-            .summary-item.total span { color: rgba(255,255,255,0.78); }
-            table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-            th, td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
-            th { background: #fff7ed; color: #7c2d12; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .summary { margin: 10px 0; border: 1px solid #fdba74; background: #fff7ed; border-radius: 6px; padding: 10px 12px; break-inside: avoid; page-break-inside: avoid; }
+            .summary-grid { display: grid; grid-template-columns: 1fr 1.35fr; gap: 9px; }
+            .summary-item { border-radius: 10px; background: #fff; border: 1px solid #fed7aa; padding: 9px 11px; }
+            .summary-item strong { display: block; margin-top: 2px; font-size: 16px; line-height: 1.15; }
+            .summary-item.total { background: #c2410c; color: #fff; border-color: #c2410c; }
+            .summary-item.total span { color: #fff7ed; }
+            section { break-inside: avoid; page-break-inside: avoid; }
+            table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            tr { break-inside: avoid; page-break-inside: avoid; }
+            th, td { border-bottom: 1px solid var(--line); padding: 6px 7px; text-align: left; vertical-align: top; }
+            th { background: #fff2e6; color: #7c2d12; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 800; }
             td { background: #fff; }
             tr:last-child td { border-bottom: 0; }
             ul { padding-left: 16px; margin: 0; }
             .compact-list { padding-left: 14px; margin: 0; }
             .compact-list li { margin-bottom: 3px; }
-            .receipt-footer { margin-top: 28px; color: var(--muted); page-break-inside: avoid; }
-            .receipt-footer p { margin: 0 0 28px; padding: 10px 12px; border-left: 3px solid var(--sorria-orange); background: #fff7ed; }
-            .signature-row { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 30px; }
-            .signature-row span { display: block; border-top: 1px solid #94a3b8; margin-bottom: 7px; }
+            .receipt-footer { margin-top: 22px; color: var(--label); break-inside: avoid; page-break-inside: avoid; }
+            .receipt-footer p { margin: 0 0 24px; padding: 9px 11px; border-left: 3px solid #c2410c; background: #fff7ed; color: #334155; }
+            .signature-row { display: grid; grid-template-columns: 1fr 1fr; gap: 42px; margin-top: 26px; }
+            .signature-row span { display: block; border-top: 1px solid #64748b; margin-bottom: 7px; }
             .signature-row strong { display: block; text-align: center; color: var(--ink); font-weight: 700; }
             .muted { color: var(--muted); }
+            @media print {
+              .receipt-page { width: 100%; max-width: none; }
+              .document-hero, .info-card, .summary, table { box-shadow: none !important; }
+              .document-hero { border-color: #f97316; }
+              a { color: inherit; text-decoration: none; }
+            }
           </style>
         </head>
         <body>
@@ -914,7 +941,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     const atendimentosSelecionadosList = ficha.atendimentos.filter((a) => atendimentoSet.has(a.id));
     if (atendimentosSelecionadosList.length === 0) return;
 
-    const formatMetodo = (metodo: string) => escapeHtml(getMetodoPagamentoLabel(metodo));
+    const formatMetodo = (pagamento: Pagamento) => escapeHtml(getMetodoPagamentoLabel(pagamento));
 
     const totalSelecionado = atendimentosSelecionadosList.reduce((acc, item) => acc + parseSafeNumber(item.total), 0);
     const totalPagoSelecionado = atendimentosSelecionadosList.reduce((acc, item) => acc + parseSafeNumber(item.total_pago), 0);
@@ -948,7 +975,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         ? pagamentos.map((pagamento) => `
           <tr>
             <td>${formatarDataHora(pagamento.created_at)}</td>
-            <td>${formatMetodo(pagamento.metodo)}</td>
+            <td>${formatMetodo(pagamento)}</td>
             <td style=\"text-align:right;\">${formatarMoeda(parseSafeNumber(pagamento.valor))}</td>
             <td style=\"text-align:right;\">${pagamento.cancelado ? 'Cancelado' : 'Ativo'}</td>
             <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
@@ -1057,7 +1084,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     const pagamentosSelecionadosList = ficha.pagamentos.filter((pagamento) => pagamentoSet.has(pagamento.id));
     if (pagamentosSelecionadosList.length === 0) return;
 
-    const formatMetodo = (metodo: string) => escapeHtml(getMetodoPagamentoLabel(metodo));
+    const formatMetodo = (pagamento: Pagamento) => escapeHtml(getMetodoPagamentoLabel(pagamento));
     const alocacoesPorPagamento = new Map<number, PagamentoAlocacao[]>();
     for (const alocacao of ficha.pagamentos_alocacoes ?? []) {
       const lista = alocacoesPorPagamento.get(alocacao.pagamento_id) ?? [];
@@ -1115,7 +1142,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           <td>#${escapeHtml(pagamento.atendimento_id)}</td>
           ${mostrarColunaUnidade ? `<td>${escapeHtml(pagamento.unidade_nome || '-')}</td>` : ''}
           <td>${formatarReferenciasPagamento(pagamento.id)}</td>
-          <td>${formatMetodo(pagamento.metodo)}</td>
+          <td>${formatMetodo(pagamento)}</td>
           <td style=\"text-align:right;\">${formatarMoeda(parseSafeNumber(pagamento.valor))}</td>
           <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
           <td>${escapeHtml(detalhesObservacao.join(' | ') || '-')}</td>
@@ -1683,7 +1710,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                       <td className="px-4 py-3 text-sm">
                         <Link href={`/atendimentos/${p.atendimento_id}`} className="text-info-600 hover:text-info-800">#{p.atendimento_id}</Link>
                       </td>
-                      <td className="px-4 py-3 text-sm">{METODOS_LABEL[p.metodo] || p.metodo}</td>
+                      <td className="px-4 py-3 text-sm">{getMetodoPagamentoLabel(p)}</td>
                       <td className={`px-4 py-3 text-right font-medium ${p.cancelado ? 'text-muted-foreground line-through' : 'text-success-600 dark:text-success-300'}`}>
                         {formatarMoeda(p.valor)}
                       </td>
@@ -2331,7 +2358,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               </div>
               <div>
                 <p className="text-xs text-muted uppercase tracking-wide">Método</p>
-                <p className="font-medium">{METODOS_LABEL[modalPagamento.metodo] || modalPagamento.metodo}</p>
+                <p className="font-medium">{getMetodoPagamentoLabel(modalPagamento)}</p>
               </div>
               {modalPagamento.recebido_por_nome && (
                 <div>

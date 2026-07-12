@@ -2,14 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { execute, query, queryOne } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { buscarEtapasComValor, recalcularFinanceiroItens, roundMoney } from '@/lib/helpers/pagamentoFlow';
+import {
+  buscarFormaPagamentoDaUnidade,
+  calcularValorLiquido,
+  calcularValorTaxa,
+  garantirEsquemaFormasPagamento,
+  isMetodoPagamentoValido,
+} from '@/lib/helpers/formasPagamento';
 import { garantirEsquemaPagamentosGrupos } from '@/lib/helpers/pagamentosGrupos';
 
 interface Pagamento {
   id: number;
   atendimento_id: number;
   pagamento_grupo_id: number | null;
+  forma_pagamento_id: number | null;
   valor: number;
   metodo: string;
+  forma_pagamento_grupo_snapshot: string | null;
+  forma_pagamento_subgrupo_snapshot: string | null;
+  taxa_percentual_snapshot: number | null;
+  taxa_fixa_snapshot: number | null;
+  valor_taxa: number | null;
+  valor_liquido: number | null;
   observacoes: string | null;
   cancelado: number;
   motivo_cancelamento: string | null;
@@ -29,8 +43,21 @@ interface AlocacaoPagamentoInput {
 }
 
 interface PagamentoFormaInput {
+  forma_pagamento_id?: number;
+  metodo?: string;
+  valor: number;
+}
+
+interface PagamentoFormaResolvedInput {
+  forma_pagamento_id: number | null;
   metodo: string;
   valor: number;
+  forma_pagamento_grupo_snapshot: string | null;
+  forma_pagamento_subgrupo_snapshot: string | null;
+  taxa_percentual_snapshot: number;
+  taxa_fixa_snapshot: number;
+  valor_taxa: number;
+  valor_liquido: number;
 }
 
 interface ItemPagamentoRow {
@@ -76,6 +103,8 @@ interface PagamentoAgrupadoResponse {
   pagamento_grupo_id: number | null;
   pagamento_representante_id: number;
   valor_total: number;
+  valor_taxa_total: number;
+  valor_liquido_total: number;
   observacoes: string | null;
   cancelado: number;
   motivo_cancelamento: string | null;
@@ -86,6 +115,13 @@ interface PagamentoAgrupadoResponse {
     id: number;
     valor: number;
     metodo: string;
+    forma_pagamento_id: number | null;
+    forma_pagamento_grupo_snapshot: string | null;
+    forma_pagamento_subgrupo_snapshot: string | null;
+    taxa_percentual_snapshot: number | null;
+    taxa_fixa_snapshot: number | null;
+    valor_taxa: number | null;
+    valor_liquido: number | null;
     observacoes: string | null;
     cancelado: number;
     motivo_cancelamento: string | null;
@@ -99,8 +135,6 @@ interface NormalizedAlocacao {
   etapa_modelo_id: number | null;
   valor: number;
 }
-
-const METODOS_VALIDOS = ['dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'crediario', 'afins_sorria'];
 
 async function verificarAtendimentoUnidade(atendimentoId: number, unidadeId: number) {
   const at = await queryOne<Atendimento>(
@@ -118,6 +152,71 @@ function normalizarAlocacoes(alocacoes: AlocacaoPagamentoInput[]): NormalizedAlo
     etapa_modelo_id: alocacao.etapa_modelo_id ? Number(alocacao.etapa_modelo_id) : null,
     valor: roundMoney(Number(alocacao.valor || 0)),
   }));
+}
+
+async function normalizarFormasPagamento(
+  formas: PagamentoFormaInput[],
+  unidadeId: number
+): Promise<{ formas?: PagamentoFormaResolvedInput[]; error?: Response }> {
+  const formasNormalizadas: PagamentoFormaResolvedInput[] = [];
+
+  for (const forma of formas) {
+    const valor = roundMoney(Number(forma.valor || 0));
+    if (!Number.isFinite(valor) || valor <= 0) {
+      return {
+        error: NextResponse.json(
+          { error: 'Cada forma de pagamento deve ter valor maior que zero' },
+          { status: 400 }
+        ),
+      };
+    }
+
+    const formaPagamentoId = Number(forma.forma_pagamento_id ?? 0);
+    if (Number.isFinite(formaPagamentoId) && formaPagamentoId > 0) {
+      const configuracao = await buscarFormaPagamentoDaUnidade(formaPagamentoId, unidadeId);
+      if (!configuracao || !configuracao.ativo) {
+        return {
+          error: NextResponse.json(
+            { error: 'Forma de pagamento inválida, inativa ou de outra unidade' },
+            { status: 400 }
+          ),
+        };
+      }
+
+      formasNormalizadas.push({
+        forma_pagamento_id: configuracao.id,
+        metodo: configuracao.metodo_base,
+        valor,
+        forma_pagamento_grupo_snapshot: configuracao.grupo,
+        forma_pagamento_subgrupo_snapshot: configuracao.subgrupo,
+        taxa_percentual_snapshot: roundMoney(Number(configuracao.taxa_percentual ?? 0)),
+        taxa_fixa_snapshot: roundMoney(Number(configuracao.taxa_fixa ?? 0)),
+        valor_taxa: calcularValorTaxa(valor, configuracao.taxa_percentual, configuracao.taxa_fixa),
+        valor_liquido: calcularValorLiquido(valor, configuracao.taxa_percentual, configuracao.taxa_fixa),
+      });
+      continue;
+    }
+
+    if (!isMetodoPagamentoValido(forma.metodo)) {
+      return {
+        error: NextResponse.json({ error: 'Método de pagamento inválido' }, { status: 400 }),
+      };
+    }
+
+    formasNormalizadas.push({
+      forma_pagamento_id: null,
+      metodo: forma.metodo,
+      valor,
+      forma_pagamento_grupo_snapshot: null,
+      forma_pagamento_subgrupo_snapshot: '',
+      taxa_percentual_snapshot: 0,
+      taxa_fixa_snapshot: 0,
+      valor_taxa: 0,
+      valor_liquido: valor,
+    });
+  }
+
+  return { formas: formasNormalizadas };
 }
 
 async function buscarAlocacoesPagamentos(atendimentoId: number) {
@@ -173,6 +272,8 @@ function agruparPagamentos(
         pagamento_grupo_id: row.pagamento_grupo_id,
         pagamento_representante_id: row.id,
         valor_total: roundMoney(row.grupo_valor_total ?? row.valor),
+        valor_taxa_total: 0,
+        valor_liquido_total: 0,
         observacoes: row.grupo_observacoes ?? row.observacoes,
         cancelado: row.grupo_cancelado ?? row.cancelado,
         motivo_cancelamento: row.grupo_motivo_cancelamento ?? row.motivo_cancelamento,
@@ -186,10 +287,19 @@ function agruparPagamentos(
     const alocacoes = alocacoesPorPagamento.get(row.id) ?? [];
     const grupo = grupos.get(key)!;
     grupo.alocacoes.push(...alocacoes);
+    grupo.valor_taxa_total = roundMoney(grupo.valor_taxa_total + Number(row.valor_taxa ?? 0));
+    grupo.valor_liquido_total = roundMoney(grupo.valor_liquido_total + Number(row.valor_liquido ?? row.valor));
     grupos.get(key)!.formas.push({
       id: row.id,
       valor: row.valor,
       metodo: row.metodo,
+      forma_pagamento_id: row.forma_pagamento_id,
+      forma_pagamento_grupo_snapshot: row.forma_pagamento_grupo_snapshot,
+      forma_pagamento_subgrupo_snapshot: row.forma_pagamento_subgrupo_snapshot,
+      taxa_percentual_snapshot: row.taxa_percentual_snapshot,
+      taxa_fixa_snapshot: row.taxa_fixa_snapshot,
+      valor_taxa: row.valor_taxa,
+      valor_liquido: row.valor_liquido,
       observacoes: row.observacoes,
       cancelado: row.cancelado,
       motivo_cancelamento: row.motivo_cancelamento,
@@ -267,7 +377,7 @@ async function criarGrupoDePagamentos({
   recebidoPorId: number;
   observacoes: string | null;
   valorTotal: number;
-  formas: PagamentoFormaInput[];
+  formas: PagamentoFormaResolvedInput[];
   alocacoes: NormalizedAlocacao[];
   itensMap: Map<number, ItemPagamentoRow>;
 }) {
@@ -294,17 +404,31 @@ async function criarGrupoDePagamentos({
       `INSERT INTO pagamentos (
         atendimento_id,
         pagamento_grupo_id,
+        forma_pagamento_id,
         recebido_por_id,
         valor,
         metodo,
+        forma_pagamento_grupo_snapshot,
+        forma_pagamento_subgrupo_snapshot,
+        taxa_percentual_snapshot,
+        taxa_fixa_snapshot,
+        valor_taxa,
+        valor_liquido,
         observacoes
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         atendimentoId,
         pagamentoGrupoId,
+        forma.forma_pagamento_id,
         recebidoPorId,
         roundMoney(forma.valor),
         forma.metodo,
+        forma.forma_pagamento_grupo_snapshot,
+        forma.forma_pagamento_subgrupo_snapshot,
+        forma.taxa_percentual_snapshot,
+        forma.taxa_fixa_snapshot,
+        forma.valor_taxa,
+        forma.valor_liquido,
         observacoes,
       ]
     );
@@ -376,13 +500,12 @@ export const GET = withUnit(async (
   try {
     const { id } = await context.params!;
     const atendimentoId = parseInt(id as string);
+    await garantirEsquemaPagamentosGrupos();
+    await garantirEsquemaFormasPagamento();
     const result = await verificarAtendimentoUnidade(atendimentoId, context.unidadeId);
     if ('error' in result) return result.error;
 
     const grouped = request.nextUrl.searchParams.get('grouped') === '1';
-    if (grouped) {
-      await garantirEsquemaPagamentosGrupos();
-    }
 
     if (!grouped) {
       const alocacoesPorPagamento = await buscarAlocacoesPagamentos(atendimentoId);
@@ -441,6 +564,7 @@ export const POST = withUnit(async (
     const {
       valor,
       metodo,
+      forma_pagamento_id: formaPagamentoIdSimples,
       observacoes,
       alocacoes,
       valor_total: valorTotalComposto,
@@ -448,6 +572,7 @@ export const POST = withUnit(async (
     } = body as {
       valor?: number;
       metodo?: string;
+      forma_pagamento_id?: number;
       observacoes?: string | null;
       alocacoes?: AlocacaoPagamentoInput[];
       valor_total?: number;
@@ -469,9 +594,9 @@ export const POST = withUnit(async (
     const recebidoPorId = context.user.sub;
     const modoComposto = Array.isArray(formas);
 
-    if (modoComposto && metodo) {
+    if (modoComposto && (metodo || formaPagamentoIdSimples)) {
       return NextResponse.json(
-        { error: 'Envie metodo/valor simples ou formas[]/valor_total, mas não os dois formatos ao mesmo tempo' },
+        { error: 'Envie a forma simples ou formas[]/valor_total, mas não os dois formatos ao mesmo tempo' },
         { status: 400 }
       );
     }
@@ -492,23 +617,12 @@ export const POST = withUnit(async (
         );
       }
 
-      const formasNormalizadas = formas.map((forma) => ({
-        metodo: forma.metodo,
-        valor: roundMoney(Number(forma.valor || 0)),
-      }));
+      await garantirEsquemaPagamentosGrupos();
+      await garantirEsquemaFormasPagamento();
 
-      for (const forma of formasNormalizadas) {
-        if (!METODOS_VALIDOS.includes(forma.metodo)) {
-          return NextResponse.json({ error: 'Método de pagamento inválido' }, { status: 400 });
-        }
-
-        if (!Number.isFinite(forma.valor) || forma.valor <= 0) {
-          return NextResponse.json(
-            { error: 'Cada forma de pagamento deve ter valor maior que zero' },
-            { status: 400 }
-          );
-        }
-      }
+      const formasResolvidas = await normalizarFormasPagamento(formas, context.unidadeId);
+      if (formasResolvidas.error) return formasResolvidas.error;
+      const formasNormalizadas = formasResolvidas.formas ?? [];
 
       const validacaoAlocacoes = await validarAlocacoes(atendimentoId, alocacoesNormalizadas);
       if ('error' in validacaoAlocacoes) return validacaoAlocacoes.error;
@@ -528,8 +642,6 @@ export const POST = withUnit(async (
           { status: 400 }
         );
       }
-
-      await garantirEsquemaPagamentosGrupos();
 
       const { pagamentoRepresentanteId } = await criarGrupoDePagamentos({
         atendimentoId,
@@ -558,13 +670,6 @@ export const POST = withUnit(async (
       );
     }
 
-    if (!metodo || !METODOS_VALIDOS.includes(metodo)) {
-      return NextResponse.json(
-        { error: 'Método de pagamento inválido' },
-        { status: 400 }
-      );
-    }
-
     const validacaoAlocacoes = await validarAlocacoes(atendimentoId, alocacoesNormalizadas);
     if ('error' in validacaoAlocacoes) return validacaoAlocacoes.error;
     const somaAlocacoes = roundMoney(alocacoesNormalizadas.reduce((sum, alocacao) => sum + alocacao.valor, 0));
@@ -577,14 +682,23 @@ export const POST = withUnit(async (
       );
     }
 
+    const formaSimplesInput: PagamentoFormaInput = formaPagamentoIdSimples
+      ? { forma_pagamento_id: Number(formaPagamentoIdSimples), valor: valorNormalizado }
+      : { metodo, valor: valorNormalizado };
+
     await garantirEsquemaPagamentosGrupos();
+    await garantirEsquemaFormasPagamento();
+
+    const formasResolvidas = await normalizarFormasPagamento([formaSimplesInput], context.unidadeId);
+    if (formasResolvidas.error) return formasResolvidas.error;
+    const formasNormalizadas = formasResolvidas.formas ?? [];
 
     const { pagamentoRepresentanteId } = await criarGrupoDePagamentos({
       atendimentoId,
       recebidoPorId,
       observacoes: observacoes || null,
       valorTotal: valorNormalizado,
-      formas: [{ metodo, valor: valorNormalizado }],
+      formas: formasNormalizadas,
       alocacoes: alocacoesNormalizadas,
       itensMap: validacaoAlocacoes.itensMap,
     });

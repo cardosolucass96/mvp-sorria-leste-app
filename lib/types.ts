@@ -28,6 +28,16 @@ export type MetodoPagamento =
   | 'crediario'
   | 'afins_sorria';
 
+export interface PagamentoFormaSnapshot {
+  forma_pagamento_id: number | null;
+  forma_pagamento_grupo_snapshot: string | null;
+  forma_pagamento_subgrupo_snapshot: string | null;
+  taxa_percentual_snapshot: number | null;
+  taxa_fixa_snapshot: number | null;
+  valor_taxa: number | null;
+  valor_liquido: number | null;
+}
+
 export type AgendamentoStatus =
   | 'pendente'    // gerado, sem data definida
   | 'agendado'    // tem data_agendada
@@ -206,6 +216,8 @@ export interface Pagamento {
   created_at: string;
 }
 
+export interface PagamentoComSnapshot extends Pagamento, PagamentoFormaSnapshot {}
+
 export interface PagamentoAlocacao {
   id: number;
   pagamento_id: number;
@@ -233,8 +245,50 @@ export interface PagamentoCompleto extends Pagamento {
 }
 
 export interface PagamentoFormaInput {
-  metodo: MetodoPagamento;
+  metodo?: MetodoPagamento;
+  forma_pagamento_id?: number;
   valor: number;
+}
+
+export interface FormaPagamento {
+  id: number;
+  unidade_id: number;
+  grupo: string;
+  subgrupo: string;
+  metodo_base: MetodoPagamento;
+  ativo: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FormaPagamentoHistorico {
+  id: number;
+  forma_pagamento_id: number;
+  taxa_percentual: number;
+  taxa_fixa: number;
+  vigente_de: string;
+  vigente_ate: string | null;
+  alterado_por_id: number | null;
+  created_at: string;
+}
+
+export interface FormaPagamentoComTaxa extends FormaPagamento {
+  taxa_percentual: number;
+  taxa_fixa: number;
+  vigente_de: string | null;
+  vigente_ate: string | null;
+}
+
+export interface FormaPagamentoOption {
+  value: string;
+  label: string;
+  forma_pagamento_id: number;
+  grupo: string;
+  subgrupo: string;
+  metodo_base: MetodoPagamento;
+  taxa_percentual: number;
+  taxa_fixa: number;
+  ativo: number;
 }
 
 export interface PagamentoGrupo {

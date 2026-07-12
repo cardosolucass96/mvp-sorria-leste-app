@@ -5,6 +5,7 @@ import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatarMoeda, formatarDataHora, nomeProcedimentoItem } from '@/lib/utils/formatters';
+import { getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 import { StatusBadge } from '@/components/domain';
 import { Alert, LoadingState, PageHeader, Card, Button, Textarea } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
@@ -27,6 +28,8 @@ interface Pagamento {
   id: number;
   valor: number;
   metodo: string;
+  forma_pagamento_grupo_snapshot?: string | null;
+  forma_pagamento_subgrupo_snapshot?: string | null;
   recebido_por_nome?: string;
   cancelado: number;
   created_at: string;
@@ -52,6 +55,10 @@ const METODO_LABELS: Record<string, string> = {
   crediario: 'Crediário',
   afins_sorria: 'Afins Sorria',
 };
+
+function getPagamentoLabel(pagamento: Pagamento) {
+  return getFormaPagamentoSnapshotLabel(pagamento) || METODO_LABELS[pagamento.metodo] || pagamento.metodo;
+}
 
 
 function nomeProcedimento(item: ItemAtendimento): string {
@@ -219,7 +226,7 @@ export default function EncerrarAtendimentoPage({
               <div key={pag.id} className="flex items-center justify-between py-2.5">
                 <div>
                   <p className="text-sm font-medium">
-                    {METODO_LABELS[pag.metodo] ?? pag.metodo}
+                    {getPagamentoLabel(pag)}
                   </p>
                   {pag.recebido_por_nome && (
                     <p className="text-xs text-muted">Recebido por {pag.recebido_por_nome} · {formatarDataHora(pag.created_at)}</p>

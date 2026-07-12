@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { withAuth } from '@/lib/auth/middleware';
+import { garantirEsquemaFormasPagamento } from '@/lib/helpers/formasPagamento';
 import { garantirCamposEmpresaUnidades } from '@/lib/helpers/unidadesEmpresa';
 
 // GET /api/clientes/[id]/ficha - Retorna dados completos do cliente para a ficha
@@ -10,6 +11,7 @@ export const GET = withAuth(async (_request, context) => {
     const id = params.id as string;
     const clienteId = parseInt(id);
     await garantirCamposEmpresaUnidades();
+    await garantirEsquemaFormasPagamento();
 
     const cliente = await queryOne('SELECT id FROM clientes WHERE id = ?', [clienteId]);
     if (!cliente) {
@@ -62,6 +64,13 @@ export const GET = withAuth(async (_request, context) => {
     const pagamentos = await query(
       `SELECT pg.id, pg.atendimento_id, pg.valor, pg.metodo, pg.observacoes,
               pg.cancelado, pg.motivo_cancelamento, pg.created_at,
+              pg.forma_pagamento_id,
+              pg.forma_pagamento_grupo_snapshot,
+              pg.forma_pagamento_subgrupo_snapshot,
+              pg.taxa_percentual_snapshot,
+              pg.taxa_fixa_snapshot,
+              pg.valor_taxa,
+              pg.valor_liquido,
               a.unidade_id,
               un.nome as unidade_nome,
               un.razao_social as unidade_razao_social,
