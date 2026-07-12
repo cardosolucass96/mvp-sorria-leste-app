@@ -14,13 +14,15 @@ function createBaseVisao(): FechamentoCaixaVisao {
     ajustes_count: 0,
     resumo: {
       faturamento_dia: 1000,
+      total_bruto: 1000,
+      total_liquido: 970,
       faturamento_por_metodo: [{ metodo: 'pix', total: 1000, quantidade: 1 }],
       procedimentos_executados: 2,
       total_diarias: 300,
       total_comissao_avaliacao: 70,
       total_comissao_execucao: 0,
       ajustes_manuais: 0,
-      total_final: 630,
+      total_final: 600,
       pagamentos_cancelados_dia: {
         quantidade: 1,
         valor: 50,
@@ -157,6 +159,11 @@ function createBaseVisao(): FechamentoCaixaVisao {
             id: 90,
             valor: 1000,
             metodo: 'pix',
+            forma_pagamento_id: 1,
+            forma_pagamento_grupo_snapshot: 'pix',
+            forma_pagamento_subgrupo_snapshot: null,
+            valor_taxa: 30,
+            valor_liquido: 970,
             observacoes: null,
             cancelado: false,
             motivo_cancelamento: null,
@@ -235,11 +242,13 @@ describe('fechamento-caixa compute', () => {
     expect(result.dentistas[1].included).toBe(false);
 
     expect(result.resumo.procedimentos_executados).toBe(1);
+    expect(result.resumo.total_bruto).toBe(1000);
+    expect(result.resumo.total_liquido).toBe(970);
     expect(result.resumo.total_diarias).toBe(150);
     expect(result.resumo.total_comissao_avaliacao).toBe(60);
     expect(result.resumo.total_comissao_execucao).toBe(0);
     expect(result.resumo.ajustes_manuais).toBe(40);
-    expect(result.resumo.total_final).toBe(830);
+    expect(result.resumo.total_final).toBe(800);
 
     expect(result.graficos.procedimentos_por_quantidade).toEqual([
       { nome: 'Limpeza', quantidade: 1, valor_total: 120 },

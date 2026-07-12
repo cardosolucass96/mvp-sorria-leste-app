@@ -25,6 +25,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import { getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 import { formatarCPF, formatarData, formatarDataHora, formatarMoeda, formatarTelefone } from '@/lib/utils/formatters';
 import {
   Alert,
@@ -44,6 +45,8 @@ import {
 } from '@/components/ui';
 import {
   applyFechamentoCaixaDraft,
+  calculateFechamentoFormaLiquido,
+  calculateFechamentoPagamentoTotais,
   createEmptyFechamentoCaixaDraft,
 } from '@/lib/fechamento-caixa/compute';
 import type {
@@ -63,6 +66,14 @@ const METODO_LABELS: Record<string, string> = {
   crediario: 'Crediário',
   afins_sorria: 'Afins Sorria',
 };
+
+function getPagamentoFormaLabel(forma: {
+  metodo: string;
+  forma_pagamento_grupo_snapshot?: string | null;
+  forma_pagamento_subgrupo_snapshot?: string | null;
+}) {
+  return getFormaPagamentoSnapshotLabel(forma) || METODO_LABELS[forma.metodo] || forma.metodo;
+}
 
 function todayIso(): string {
   const now = new Date();
@@ -559,27 +570,31 @@ export default function FechamentoCaixaPage() {
       : '<tr><td colspan="3" class="muted">Nenhuma entrada registrada</td></tr>';
 
     const pagamentosRecebidosHtml = (resultado.pagamentos_recebidos_dia ?? []).length > 0
-      ? (resultado.pagamentos_recebidos_dia ?? []).map((item) => `
-          <tr>
-            <td>${escapeHtml(formatarDataHora(item.created_at))}</td>
-            <td>${joinPrintLines([
-              item.cliente_nome,
-              `Telefone: ${formatarTelefone(item.cliente_telefone)}`,
-              `CPF: ${formatarCPF(item.cliente_cpf)}`,
-            ])}</td>
-            <td>${joinPrintLines(
-              item.formas.map((forma) => `${METODO_LABELS[forma.metodo] || forma.metodo}: ${formatarMoeda(forma.valor)}`)
-            )}</td>
-            <td>${escapeHtml(item.recebido_por_nome || '-')}</td>
-            <td>${joinPrintLines([
-              item.observacoes,
-              item.cancelado && item.motivo_cancelamento ? `Motivo do cancelamento: ${item.motivo_cancelamento}` : null,
-            ])}</td>
-            <td style="text-align:right">${formatarMoeda(item.valor_total)}</td>
-            <td>${escapeHtml(item.cancelado ? `Cancelado${item.motivo_cancelamento ? ` - ${item.motivo_cancelamento}` : ''}` : 'Recebido')}</td>
-          </tr>
-        `).join('')
-      : '<tr><td colspan="7" class="muted">Nenhum pagamento recebido nesse dia</td></tr>';
+      ? (resultado.pagamentos_recebidos_dia ?? []).map((item) => {
+          const totais = calculateFechamentoPagamentoTotais(item);
+          return `
+            <tr>
+              <td>${escapeHtml(formatarDataHora(item.created_at))}</td>
+              <td>${joinPrintLines([
+                item.cliente_nome,
+                `Telefone: ${formatarTelefone(item.cliente_telefone)}`,
+                `CPF: ${formatarCPF(item.cliente_cpf)}`,
+              ])}</td>
+              <td>${joinPrintLines(
+                item.formas.map((forma) => `${getPagamentoFormaLabel(forma)}: ${formatarMoeda(forma.valor)}`)
+              )}</td>
+              <td>${escapeHtml(item.recebido_por_nome || '-')}</td>
+              <td>${joinPrintLines([
+                item.observacoes,
+                item.cancelado && item.motivo_cancelamento ? `Motivo do cancelamento: ${item.motivo_cancelamento}` : null,
+              ])}</td>
+              <td style="text-align:right">${formatarMoeda(totais.bruto)}</td>
+              <td style="text-align:right">${formatarMoeda(totais.liquido)}</td>
+              <td>${escapeHtml(item.cancelado ? `Cancelado${item.motivo_cancelamento ? ` - ${item.motivo_cancelamento}` : ''}` : 'Recebido')}</td>
+            </tr>
+          `;
+        }).join('')
+      : '<tr><td colspan="8" class="muted">Nenhum pagamento recebido nesse dia</td></tr>';
 
     const rankingAvaliadoresHtml = resultado.graficos.ranking_avaliadores.length > 0
       ? resultado.graficos.ranking_avaliadores.map((item) => `
@@ -748,9 +763,10 @@ export default function FechamentoCaixaPage() {
           </div>
 
           <div class="summary-grid">
-            <div class="summary-card"><strong>Faturamento do dia</strong><div class="summary-value">${formatarMoeda(resultado.resumo.faturamento_dia)}</div></div>
+            <div class="summary-card"><strong>Total bruto</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_bruto)}</div></div>
+            <div class="summary-card"><strong>Total líquido</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_liquido)}</div></div>
             <div class="summary-card"><strong>Procedimentos executados</strong><div class="summary-value">${resultado.resumo.procedimentos_executados}</div></div>
-            <div class="summary-card"><strong>Total final</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_final)}</div></div>
+            <div class="summary-card"><strong>Resultado final</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_final)}</div></div>
             <div class="summary-card"><strong>Diárias</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_diarias)}</div></div>
             <div class="summary-card"><strong>Comissão avaliação + acréscimos</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_comissao_avaliacao)}</div></div>
           </div>
@@ -765,7 +781,8 @@ export default function FechamentoCaixaPage() {
                   <th>Formas</th>
                   <th>Recebido por</th>
                   <th>Descritivo</th>
-                  <th>Valor</th>
+                  <th>Total bruto</th>
+                  <th>Total líquido</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -965,7 +982,12 @@ export default function FechamentoCaixaPage() {
         <div className="space-y-1">
           {item.formas.map((forma) => (
             <div key={forma.id} className="flex items-center justify-between gap-3">
-              <p className="font-medium">{METODO_LABELS[forma.metodo] || forma.metodo}</p>
+              <div>
+                <p className="font-medium">{getPagamentoFormaLabel(forma)}</p>
+                <p className="text-xs text-muted-foreground">
+                  Líquido {formatarMoeda(calculateFechamentoFormaLiquido(forma))}
+                </p>
+              </div>
               <span className={forma.cancelado ? 'font-semibold text-error-600' : 'font-semibold'}>
                 {formatarMoeda(forma.valor)}
               </span>
@@ -995,13 +1017,29 @@ export default function FechamentoCaixaPage() {
     },
     {
       key: 'valor_total',
-      label: 'Total',
+      label: 'Total bruto',
       align: 'right',
-      render: (item) => (
-        <span className={item.cancelado ? 'font-semibold text-error-600' : 'font-semibold text-success-700'}>
-          {formatarMoeda(item.valor_total)}
-        </span>
-      ),
+      render: (item) => {
+        const totais = calculateFechamentoPagamentoTotais(item);
+        return (
+          <span className={item.cancelado ? 'font-semibold text-error-600' : 'font-semibold text-success-700'}>
+            {formatarMoeda(totais.bruto)}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'valor_liquido',
+      label: 'Total líquido',
+      align: 'right',
+      render: (item) => {
+        const totais = calculateFechamentoPagamentoTotais(item);
+        return (
+          <span className={item.cancelado ? 'font-semibold text-error-600' : 'font-semibold text-primary-700'}>
+            {formatarMoeda(totais.liquido)}
+          </span>
+        );
+      },
     },
     {
       key: 'status',
@@ -1183,10 +1221,11 @@ export default function FechamentoCaixaPage() {
           </Card>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-          <StatCard icon={<Banknote className="w-6 h-6" />} label="Faturamento do dia" value={formatarMoeda(resultado.resumo.faturamento_dia)} color="border-success-500" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4">
+          <StatCard icon={<Banknote className="w-6 h-6" />} label="Total bruto" value={formatarMoeda(resultado.resumo.total_bruto)} color="border-success-500" />
+          <StatCard icon={<Wallet className="w-6 h-6" />} label="Total líquido" value={formatarMoeda(resultado.resumo.total_liquido)} color="border-info-500" />
           <StatCard icon={<ClipboardList className="w-6 h-6" />} label="Procedimentos executados" value={resultado.resumo.procedimentos_executados} color="border-primary-500" />
-          <StatCard icon={<Wallet className="w-6 h-6" />} label="Total final" value={formatarMoeda(resultado.resumo.total_final)} color="border-evaluation-500" />
+          <StatCard icon={<Wallet className="w-6 h-6" />} label="Resultado final" value={formatarMoeda(resultado.resumo.total_final)} color="border-evaluation-500" />
           <StatCard icon={<Lock className="w-6 h-6" />} label="Diárias" value={formatarMoeda(resultado.resumo.total_diarias)} color="border-warning-500" />
           <StatCard icon={<ShieldCheck className="w-6 h-6" />} label="Comissão avaliação + acréscimos" value={formatarMoeda(resultado.resumo.total_comissao_avaliacao)} color="border-success-500" />
         </div>
@@ -1214,7 +1253,7 @@ export default function FechamentoCaixaPage() {
             keyExtractor={(item) => item.id}
             emptyMessage="Nenhum pagamento recebido nesse dia."
             caption="Pagamentos recebidos no dia"
-            className="[&_td]:py-2 [&_th]:py-2.5"
+            className="[&_table]:min-w-[1100px] [&_td]:py-2 [&_th]:py-2.5"
           />
         </Card>
 

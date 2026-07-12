@@ -61,13 +61,15 @@ function createResponseFixture(): FechamentoCaixaResponse {
     ajustes_count: 2,
     resumo: {
       faturamento_dia: 1200,
+      total_bruto: 1200,
+      total_liquido: 1175,
       faturamento_por_metodo: [{ metodo: 'pix', total: 1200, quantidade: 2 }],
       procedimentos_executados: 1,
       total_diarias: 120,
       total_comissao_avaliacao: 30,
       total_comissao_execucao: 0,
       ajustes_manuais: 15,
-      total_final: 1065,
+      total_final: 1040,
       pagamentos_cancelados_dia: { quantidade: 1, valor: 80 },
     },
     graficos: {
@@ -158,6 +160,11 @@ function createResponseFixture(): FechamentoCaixaResponse {
           id: 501,
           valor: 700,
           metodo: 'pix',
+          forma_pagamento_id: 1,
+          forma_pagamento_grupo_snapshot: 'pix',
+          forma_pagamento_subgrupo_snapshot: null,
+          valor_taxa: 0,
+          valor_liquido: 700,
           observacoes: 'Entrada principal',
           cancelado: false,
           motivo_cancelamento: null,
@@ -167,6 +174,11 @@ function createResponseFixture(): FechamentoCaixaResponse {
           id: 502,
           valor: 500,
           metodo: 'cartao_credito',
+          forma_pagamento_id: 2,
+          forma_pagamento_grupo_snapshot: 'cartao',
+          forma_pagamento_subgrupo_snapshot: 'credito',
+          valor_taxa: 25,
+          valor_liquido: 475,
           observacoes: null,
           cancelado: false,
           motivo_cancelamento: null,
@@ -195,6 +207,11 @@ function createResponseFixture(): FechamentoCaixaResponse {
           id: 503,
           valor: 300,
           metodo: 'crediario',
+          forma_pagamento_id: 3,
+          forma_pagamento_grupo_snapshot: 'crediario',
+          forma_pagamento_subgrupo_snapshot: null,
+          valor_taxa: 0,
+          valor_liquido: 300,
           observacoes: 'Parcelado em acordo interno',
           cancelado: true,
           motivo_cancelamento: 'Cliente desistiu da forma parcelada',
@@ -288,6 +305,8 @@ describe('FechamentoCaixaPage', () => {
     expect(screen.getByText('Entradas por método')).toBeInTheDocument();
     expect(screen.getByText('Cancelamentos do dia')).toBeInTheDocument();
     expect(screen.getByText('Detalhamento por dentista')).toBeInTheDocument();
+    expect(screen.getAllByText('Total bruto').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Total líquido').length).toBeGreaterThan(0);
     expect(screen.getByText('Comissão avaliação + acréscimos')).toBeInTheDocument();
     expect(screen.getByText('Procedimentos pagos no dia com comissão de avaliação ou acréscimo')).toBeInTheDocument();
     expect(screen.getByText('Paula')).toBeInTheDocument();
@@ -369,6 +388,8 @@ describe('FechamentoCaixaPage', () => {
       const html = documentWrite.mock.calls[0][0] as string;
       expect(html).toContain('Pagamentos recebidos no dia');
       expect(html).toContain('Descritivo');
+      expect(html).toContain('Total bruto');
+      expect(html).toContain('Total líquido');
       expect(html).toContain('Pagamento do dia conferido');
       expect(html).toContain('Telefone: (11) 99876-5432');
       expect(html).toContain('CPF: 123.456.789-01');

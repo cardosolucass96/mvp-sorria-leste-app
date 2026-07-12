@@ -108,6 +108,8 @@ export interface FechamentoCaixaDentista {
 
 export interface FechamentoCaixaResumo {
   faturamento_dia: number;
+  total_bruto: number;
+  total_liquido: number;
   faturamento_por_metodo: Array<{
     metodo: string;
     total: number;
@@ -149,6 +151,11 @@ export interface FechamentoCaixaPagamentoForma {
   id: number;
   valor: number;
   metodo: string;
+  forma_pagamento_id: number | null;
+  forma_pagamento_grupo_snapshot: string | null;
+  forma_pagamento_subgrupo_snapshot: string | null;
+  valor_taxa: number | null;
+  valor_liquido: number | null;
   observacoes: string | null;
   cancelado: boolean;
   motivo_cancelamento: string | null;

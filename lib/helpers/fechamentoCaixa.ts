@@ -1,6 +1,12 @@
 import { execute, query, queryOne } from '@/lib/db';
 import { nomeProcedimentoItem } from '@/lib/utils/formatters';
-import { applyFechamentoCaixaDraft, countFechamentoCaixaAdjustments, createEmptyFechamentoCaixaDraft } from '@/lib/fechamento-caixa/compute';
+import {
+  applyFechamentoCaixaDraft,
+  calculateFechamentoResumoPagamentos,
+  countFechamentoCaixaAdjustments,
+  createEmptyFechamentoCaixaDraft,
+} from '@/lib/fechamento-caixa/compute';
+import { garantirEsquemaFormasPagamento } from './formasPagamento';
 import type {
   FechamentoCaixaDraft,
   FechamentoCaixaEventoTipo,
@@ -59,6 +65,11 @@ interface PagamentoRecebidoRow {
   recebido_por_nome: string | null;
   valor: number;
   metodo: string;
+  forma_pagamento_id: number | null;
+  forma_pagamento_grupo_snapshot: string | null;
+  forma_pagamento_subgrupo_snapshot: string | null;
+  valor_taxa: number | null;
+  valor_liquido: number | null;
   observacoes: string | null;
   cancelado: number;
   motivo_cancelamento: string | null;
@@ -242,6 +253,11 @@ function agruparPagamentosRecebidos(rows: PagamentoRecebidoRow[]): FechamentoCai
       id: row.id,
       valor: roundMoney(row.valor),
       metodo: row.metodo,
+      forma_pagamento_id: row.forma_pagamento_id,
+      forma_pagamento_grupo_snapshot: row.forma_pagamento_grupo_snapshot,
+      forma_pagamento_subgrupo_snapshot: row.forma_pagamento_subgrupo_snapshot,
+      valor_taxa: row.valor_taxa,
+      valor_liquido: row.valor_liquido,
       observacoes: row.observacoes,
       cancelado: Boolean(row.cancelado),
       motivo_cancelamento: row.motivo_cancelamento,
@@ -287,7 +303,22 @@ function sanitizeFechamentoView(view: FechamentoCaixaVisao): FechamentoCaixaVisa
     (sum, dentista) => sum + dentista.lancamentos_manuais.reduce((inner, item) => inner + item.valor, 0),
     0
   );
+  const totaisRecebimentos = calculateFechamentoResumoPagamentos(sanitized.pagamentos_recebidos_dia);
+  const hasPaymentRows = sanitized.pagamentos_recebidos_dia.length > 0;
+  const totalBruto = roundMoney(
+    hasPaymentRows
+      ? totaisRecebimentos.bruto
+      : sanitized.resumo.total_bruto ?? sanitized.resumo.faturamento_dia ?? totaisRecebimentos.bruto
+  );
+  const totalLiquido = roundMoney(
+    hasPaymentRows
+      ? totaisRecebimentos.liquido
+      : sanitized.resumo.total_liquido ?? totaisRecebimentos.liquido ?? totalBruto
+  );
 
+  sanitized.resumo.faturamento_dia = totalBruto;
+  sanitized.resumo.total_bruto = totalBruto;
+  sanitized.resumo.total_liquido = totalLiquido;
   sanitized.resumo.procedimentos_executados = visibleProcedimentos.length;
   sanitized.resumo.total_diarias = roundMoney(visibleDentistas.reduce((sum, dentista) => sum + dentista.valor_diaria, 0));
   sanitized.resumo.total_comissao_avaliacao = roundMoney(
@@ -296,7 +327,7 @@ function sanitizeFechamentoView(view: FechamentoCaixaVisao): FechamentoCaixaVisa
   sanitized.resumo.total_comissao_execucao = 0;
   sanitized.resumo.ajustes_manuais = roundMoney(ajustesGerais + ajustesProfissionais);
   sanitized.resumo.total_final = roundMoney(
-    sanitized.resumo.faturamento_dia
+    sanitized.resumo.total_liquido
     - sanitized.resumo.total_diarias
     - sanitized.resumo.total_comissao_avaliacao
     + sanitized.resumo.ajustes_manuais
@@ -715,6 +746,7 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
   await garantirSchemaFechamentoCaixa();
   await garantirSchemaComissoesOrigem();
   await garantirEsquemaPagamentosGrupos();
+  await garantirEsquemaFormasPagamento();
   await garantirSchemaUsuariosValorDiaria();
 
   const unidade = await queryOne<UnidadeRow>(
@@ -791,6 +823,11 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
        u.nome as recebido_por_nome,
        p.valor,
        p.metodo,
+       p.forma_pagamento_id,
+        p.forma_pagamento_grupo_snapshot,
+        p.forma_pagamento_subgrupo_snapshot,
+        p.valor_taxa,
+        p.valor_liquido,
        p.observacoes,
        p.cancelado,
        p.motivo_cancelamento,
@@ -1131,6 +1168,11 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
   const totalComissaoAvaliacao = roundMoney(dentistas.reduce((sum, dentista) => sum + dentista.comissao_avaliacao, 0));
   const procedimentosExecutados = dentistas.reduce((sum, dentista) => sum + dentista.procedimentos_executados.length, 0);
   const faturamentoDia = roundMoney(Number(faturamentoRow?.total || 0));
+  const pagamentosRecebidosDia = agruparPagamentosRecebidos(pagamentosRecebidosRows);
+  const totaisRecebimentos = calculateFechamentoResumoPagamentos(pagamentosRecebidosDia);
+  const hasPaymentRows = pagamentosRecebidosDia.length > 0;
+  const totalBruto = hasPaymentRows ? totaisRecebimentos.bruto : faturamentoDia;
+  const totalLiquido = hasPaymentRows ? totaisRecebimentos.liquido : totalBruto;
 
   const base: FechamentoCaixaVisao = {
     data_referencia: dataReferencia,
@@ -1139,7 +1181,9 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
     editado_manual: false,
     ajustes_count: 0,
     resumo: {
-      faturamento_dia: faturamentoDia,
+      faturamento_dia: totalBruto,
+      total_bruto: totalBruto,
+      total_liquido: totalLiquido,
       faturamento_por_metodo: faturamentoPorMetodo.map((row) => ({
         metodo: row.metodo,
         total: roundMoney(Number(row.total || 0)),
@@ -1150,7 +1194,7 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
       total_comissao_avaliacao: totalComissaoAvaliacao,
       total_comissao_execucao: 0,
       ajustes_manuais: 0,
-      total_final: roundMoney(faturamentoDia - totalDiarias - totalComissaoAvaliacao),
+      total_final: roundMoney(totalLiquido - totalDiarias - totalComissaoAvaliacao),
       pagamentos_cancelados_dia: {
         quantidade: Number(canceladosRow?.quantidade || 0),
         valor: roundMoney(Number(canceladosRow?.valor || 0)),
@@ -1164,7 +1208,7 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
     dentistas,
     avaliacoes_pagas_dia: avaliacoesPagasDia,
     lancamentos_manuais_gerais: [],
-    pagamentos_recebidos_dia: agruparPagamentosRecebidos(pagamentosRecebidosRows),
+    pagamentos_recebidos_dia: pagamentosRecebidosDia,
   };
 
   return applyFechamentoCaixaDraft(base, createEmptyFechamentoCaixaDraft());
@@ -1379,6 +1423,8 @@ export async function fecharFechamentoCaixa(params: {
     depoisJson: JSON.stringify({
       status: 'fechado',
       ajustes_count: snapshot.ajustes_count,
+      total_bruto: snapshot.resumo.total_bruto,
+      total_liquido: snapshot.resumo.total_liquido,
       total_final: snapshot.resumo.total_final,
     }),
     usuarioId: params.usuarioId,

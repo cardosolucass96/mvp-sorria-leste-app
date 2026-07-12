@@ -4,6 +4,8 @@ import type {
   FechamentoCaixaDentista,
   FechamentoCaixaDraft,
   FechamentoCaixaLancamentoManual,
+  FechamentoCaixaPagamentoForma,
+  FechamentoCaixaPagamentoRecebido,
   FechamentoCaixaProcedimento,
   FechamentoCaixaVisao,
 } from './types';
@@ -14,6 +16,11 @@ function clone<T>(value: T): T {
 
 function roundMoney(value: number): number {
   return Number((value || 0).toFixed(2));
+}
+
+function toFiniteNumber(value: unknown): number {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : 0;
 }
 
 function toKey(id: number | string): string {
@@ -85,6 +92,53 @@ function sortAvaliacoesPagas(avaliacoes: FechamentoCaixaAvaliacaoPagaDia[]) {
   });
 }
 
+export function calculateFechamentoFormaLiquido(
+  forma: Pick<FechamentoCaixaPagamentoForma, 'valor' | 'valor_liquido'>
+): number {
+  const valorBruto = roundMoney(toFiniteNumber(forma.valor));
+  if (forma.valor_liquido == null) {
+    return valorBruto;
+  }
+  return roundMoney(toFiniteNumber(forma.valor_liquido));
+}
+
+export function calculateFechamentoPagamentoTotais(
+  pagamento: Pick<FechamentoCaixaPagamentoRecebido, 'cancelado' | 'valor_total' | 'formas'>
+): { bruto: number; liquido: number } {
+  const formasAtivas = Array.isArray(pagamento.formas)
+    ? pagamento.formas.filter((forma) => !forma.cancelado)
+    : [];
+
+  if (formasAtivas.length > 0) {
+    return {
+      bruto: roundMoney(formasAtivas.reduce((sum, forma) => sum + toFiniteNumber(forma.valor), 0)),
+      liquido: roundMoney(formasAtivas.reduce((sum, forma) => sum + calculateFechamentoFormaLiquido(forma), 0)),
+    };
+  }
+
+  if (pagamento.cancelado) {
+    return { bruto: 0, liquido: 0 };
+  }
+
+  const bruto = roundMoney(toFiniteNumber(pagamento.valor_total));
+  return { bruto, liquido: bruto };
+}
+
+export function calculateFechamentoResumoPagamentos(
+  pagamentos: FechamentoCaixaPagamentoRecebido[] | null | undefined
+): { bruto: number; liquido: number } {
+  return (pagamentos ?? []).reduce(
+    (totals, pagamento) => {
+      const itemTotals = calculateFechamentoPagamentoTotais(pagamento);
+      return {
+        bruto: roundMoney(totals.bruto + itemTotals.bruto),
+        liquido: roundMoney(totals.liquido + itemTotals.liquido),
+      };
+    },
+    { bruto: 0, liquido: 0 }
+  );
+}
+
 export function applyFechamentoCaixaDraft(
   base: FechamentoCaixaVisao,
   draft: FechamentoCaixaDraft | null | undefined
@@ -118,6 +172,21 @@ export function applyFechamentoCaixaDraft(
   });
 
   result.lancamentos_manuais_gerais = [];
+  const totaisRecebimentos = calculateFechamentoResumoPagamentos(result.pagamentos_recebidos_dia);
+  const hasPaymentRows = result.pagamentos_recebidos_dia.length > 0;
+  const totalBrutoBase = roundMoney(
+    hasPaymentRows
+      ? totaisRecebimentos.bruto
+      : result.resumo.total_bruto ?? result.resumo.faturamento_dia ?? totaisRecebimentos.bruto
+  );
+  const totalLiquidoBase = roundMoney(
+    hasPaymentRows
+      ? totaisRecebimentos.liquido
+      : result.resumo.total_liquido ?? totaisRecebimentos.liquido ?? totalBrutoBase
+  );
+  result.resumo.faturamento_dia = totalBrutoBase;
+  result.resumo.total_bruto = totalBrutoBase;
+  result.resumo.total_liquido = totalLiquidoBase;
 
   result.dentistas.forEach((dentista) => {
     const entry = safeDraft.profissionais[toKey(dentista.usuario_id)];
@@ -318,7 +387,7 @@ export function applyFechamentoCaixaDraft(
     )
   );
   result.resumo.total_final = roundMoney(
-    result.resumo.faturamento_dia
+    result.resumo.total_liquido
     - result.resumo.total_diarias
     - result.resumo.total_comissao_avaliacao
     + result.resumo.ajustes_manuais

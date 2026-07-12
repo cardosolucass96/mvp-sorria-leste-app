@@ -38,13 +38,15 @@ function createResponseFixture(overrides: Partial<FechamentoCaixaResponse> = {})
     ajustes_count: 0,
     resumo: {
       faturamento_dia: 1000,
+      total_bruto: 1000,
+      total_liquido: 960,
       faturamento_por_metodo: [{ metodo: 'pix', total: 1000, quantidade: 1 }],
       procedimentos_executados: 1,
       total_diarias: 100,
       total_comissao_avaliacao: 20,
       total_comissao_execucao: 0,
       ajustes_manuais: 0,
-      total_final: 880,
+      total_final: 840,
       pagamentos_cancelados_dia: { quantidade: 0, valor: 0 },
     },
     graficos: {
@@ -141,6 +143,7 @@ describe('GET /api/fechamento-caixa', () => {
   it('rejeita quando não há autenticação', async () => {
     const { status, data } = await callRoute<{ error: string }>(GET, '/api/fechamento-caixa', {
       searchParams: { data: '2026-06-07' },
+      headers: { Authorization: '' },
     });
 
     expect(status).toBe(401);
