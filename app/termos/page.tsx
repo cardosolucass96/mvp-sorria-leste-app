@@ -265,7 +265,7 @@ export default function TermosPage() {
         title="Termos"
         icon={<FileText className="w-7 h-7" />}
         description="Modelos em HTML para impressão de termos. Admins podem editar e salvar placeholders automaticamente."
-        actions={<Button onClick={handleNovo} icon={<Plus className="w-4 h-4" />}>+ Novo termo</Button>}
+        actions={<Button onClick={handleNovo} icon={<Plus className="w-4 h-4" />}>Novo termo</Button>}
       />
 
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
