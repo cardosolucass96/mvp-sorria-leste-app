@@ -167,6 +167,14 @@ describe('formatarDentes', () => {
   test('formata dente com múltiplas faces em ordem fixa', () => {
     expect(formatarDentes('[{"dente":"11","faces":[{"nome":"D"},{"nome":"V"}]}]')).toBe('11(V,D)');
   });
+
+  test('mostra palatina em dentes superiores sem mudar o código salvo', () => {
+    expect(formatarDentes('[{"dente":"17","faces":[{"nome":"L"}]}]')).toBe('17P');
+  });
+
+  test('mostra incisal em dentes anteriores sem mudar o código salvo', () => {
+    expect(formatarDentes('[{"dente":"11","faces":[{"nome":"O"}]}]')).toBe('11I');
+  });
 });
 
 describe('parseDentesLabels', () => {

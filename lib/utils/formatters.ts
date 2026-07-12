@@ -3,6 +3,8 @@
  * Substitui as 11+ cópias espalhadas pelas páginas.
  */
 
+import { getFaceDisplay, type FaceNome } from '@/lib/utils/denteFaces';
+
 /** Formata número como moeda brasileira (R$ 1.234,56) */
 export function formatarMoeda(valor: number): string {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -134,7 +136,13 @@ export function formatarCPF(cpf: string | null): string {
   return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
 }
 
-type FaceNome = 'V' | 'L' | 'M' | 'D' | 'O';
+/** Formata CNPJ: 12.345.678/0001-90 */
+export function formatarCNPJ(cnpj: string | null | undefined): string {
+  if (!cnpj) return '-';
+  const digits = cnpj.replace(/\D/g, '');
+  if (digits.length !== 14) return cnpj;
+  return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+}
 
 interface DenteFaceLike {
   dente?: string | number | null;
@@ -170,10 +178,11 @@ function formatarEntradaDente(item: string | number | DenteFaceLike | null): str
       .map(normalizarFace)
       .filter((face): face is FaceNome => face !== null)
   );
+  const facesDisplay = faces.map((face) => getFaceDisplay(face, dente).sigla);
 
-  if (faces.length === 0) return dente;
-  if (faces.length === 1) return `${dente}${faces[0]}`;
-  return `${dente}(${faces.join(',')})`;
+  if (facesDisplay.length === 0) return dente;
+  if (facesDisplay.length === 1) return `${dente}${facesDisplay[0]}`;
+  return `${dente}(${facesDisplay.join(',')})`;
 }
 
 export function parseDentesLabels(raw: string | null | undefined): string[] {

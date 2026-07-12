@@ -14,6 +14,7 @@ import { Alert, LoadingState, Modal, PageHeader, Card, Button, EmptyState, Confi
 import { useToast } from '@/components/ui/Toast';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { getFaceDisplay } from '@/lib/utils/denteFaces';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,14 +85,6 @@ interface Prontuario {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MIN_CHARS = 10;
-
-const FACE_LABELS: Record<string, string> = {
-  V: 'Vestibular',
-  L: 'Lingual/Palatina',
-  M: 'Mesial',
-  D: 'Distal',
-  O: 'Oclusal/Incisal',
-};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -423,6 +416,7 @@ export default function ExecucaoProcedimentoPage() {
     const aberta = etapaAberta === etapa.id;
     const descricao = etapaDescricao[etapa.id] ?? '';
     const salvando = salvandoEtapa === etapa.id;
+    const faceDisplay = getFaceDisplay(etapa.face, etapa.dente);
 
     return (
       <div key={etapa.id} className={`rounded-lg border transition-colors ${
@@ -444,8 +438,8 @@ export default function ExecucaoProcedimentoPage() {
           }
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold">{etapa.face}</span>
-              <span className="text-sm text-muted">— {FACE_LABELS[etapa.face] ?? etapa.face}</span>
+              <span className="text-sm font-semibold">{faceDisplay.sigla}</span>
+              <span className="text-sm text-muted">— {faceDisplay.label}</span>
             </div>
             {concluida && etapa.concluido_por_nome && (
               <p className="text-xs text-muted mt-0.5">

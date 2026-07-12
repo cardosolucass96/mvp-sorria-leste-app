@@ -1,22 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Checkbox from '@/components/ui/Checkbox';
+import { getFaceDisplay, type FaceNome } from '@/lib/utils/denteFaces';
 
-export type FaceNome = 'V' | 'L' | 'M' | 'D' | 'O';
+export type { FaceNome } from '@/lib/utils/denteFaces';
 
 export interface DenteFaceInput {
   dente: string;
   faces: FaceNome[];
 }
 
-const FACES: { nome: FaceNome; label: string }[] = [
-  { nome: 'V', label: 'Vestibular' },
-  { nome: 'L', label: 'Lingual/Palatina' },
-  { nome: 'M', label: 'Mesial' },
-  { nome: 'D', label: 'Distal' },
-  { nome: 'O', label: 'Oclusal/Incisal' },
-];
+const FACES: FaceNome[] = ['V', 'L', 'M', 'D', 'O'];
 
 const DENTES_PERMANENTES: Record<string, string[]> = {
   'Quadrante Superior Direito (1)': ['18', '17', '16', '15', '14', '13', '12', '11'],
@@ -52,17 +47,13 @@ export default function SeletorDentes({
   expandidoInicial = false,
 }: SeletorDentesProps) {
   const [expandido, setExpandido] = useState(expandidoInicial);
-  const [mostrarDeciduos, setMostrarDeciduos] = useState(
+  const [mostrarDeciduosManual, setMostrarDeciduosManual] = useState(
     valor.some((item) => TODOS_DENTES_DECIDUOS.includes(item.dente))
   );
 
   const dentesSelecionados = valor.map(d => d.dente);
-
-  useEffect(() => {
-    if (valor.some((item) => TODOS_DENTES_DECIDUOS.includes(item.dente))) {
-      setMostrarDeciduos(true);
-    }
-  }, [valor]);
+  const mostrarDeciduos = mostrarDeciduosManual ||
+    valor.some((item) => TODOS_DENTES_DECIDUOS.includes(item.dente));
 
   const toggleDente = (dente: string) => {
     if (disabled) return;
@@ -104,7 +95,7 @@ export default function SeletorDentes({
 
   const toggleMostrarDeciduos = (checked: boolean) => {
     if (disabled) return;
-    setMostrarDeciduos(checked);
+    setMostrarDeciduosManual(checked);
     if (!checked) {
       onChange(valor.filter((item) => !TODOS_DENTES_DECIDUOS.includes(item.dente)));
     }
@@ -230,14 +221,15 @@ export default function SeletorDentes({
                   </span>
                   <div className="flex gap-1.5 flex-wrap flex-1">
                     {FACES.map(face => {
-                      const ativa = item.faces.includes(face.nome);
+                      const ativa = item.faces.includes(face);
+                      const faceDisplay = getFaceDisplay(face, item.dente);
                       return (
                         <button
-                          key={face.nome}
+                          key={face}
                           type="button"
-                          onClick={() => toggleFace(item.dente, face.nome)}
+                          onClick={() => toggleFace(item.dente, face)}
                           disabled={disabled}
-                          title={face.label}
+                          title={faceDisplay.label}
                           className={`px-2 py-1 text-xs font-semibold rounded transition-all
                             ${ativa
                               ? 'bg-info-600 text-white'
@@ -245,7 +237,7 @@ export default function SeletorDentes({
                             }
                             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                         >
-                          {face.nome}
+                          {faceDisplay.sigla}
                         </button>
                       );
                     })}
@@ -256,9 +248,10 @@ export default function SeletorDentes({
                 </div>
               ))}
           </div>
-          <p className="text-xs text-muted-foreground">
-            V = Vestibular · L = Lingual/Palatina · M = Mesial · D = Distal · O = Oclusal/Incisal
-          </p>
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p>V = Vestibular · M = Mesial · D = Distal</p>
+            <p>Superiores: P = Palatina · Inferiores: L = Lingual · Anteriores: I = Incisal · Posteriores: O = Oclusal</p>
+          </div>
         </div>
       )}
     </div>
