@@ -119,7 +119,48 @@ function makePrintWindow() {
   } as unknown as Window;
 }
 
-function makeAtendimento(status: string) {
+interface MockItemAtendimento {
+  id: number;
+  procedimento_nome: string;
+  etapa_label: string | null;
+  executor_id: number | null;
+  executor_nome: string | null;
+  criado_por_id: number | null;
+  criado_por_nome: string | null;
+  valor: number;
+  valor_original: number | null;
+  valor_final: number | null;
+  valor_pago: number;
+  status: string;
+  group_id: string | null;
+  dentes: string | null;
+  dente_unico: string | null;
+  progresso_etapas: Array<{ nome: string; status: string }> | null;
+}
+
+interface MockAtendimento {
+  id: number;
+  cliente_id: number;
+  cliente_nome: string;
+  cliente_cpf: string | null;
+  cliente_telefone: string | null;
+  cliente_email: string | null;
+  avaliador_id: number | null;
+  avaliador_nome: string | null;
+  liberado_por_nome: string | null;
+  status: string;
+  tipo: string | null;
+  categoria_id: number | null;
+  motivo_saida: string | null;
+  created_at: string;
+  liberado_em: string | null;
+  finalizado_at: string | null;
+  itens: MockItemAtendimento[];
+  total: number;
+  total_pago: number;
+}
+
+function makeAtendimento(status: string): MockAtendimento {
   return {
     id: 10,
     cliente_id: 1,
@@ -133,6 +174,7 @@ function makeAtendimento(status: string) {
     status,
     tipo: 'normal',
     categoria_id: 1,
+    motivo_saida: null,
     created_at: '2026-06-04 20:00:00',
     liberado_em: null,
     finalizado_at: null,
@@ -161,7 +203,7 @@ function makeAtendimento(status: string) {
   };
 }
 
-function makeAtendimentoAgrupado(status = 'triagem') {
+function makeAtendimentoAgrupado(status = 'triagem'): MockAtendimento {
   return {
     ...makeAtendimento(status),
     itens: [
@@ -231,7 +273,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-async function renderPage(status: string, atendimentoData = makeAtendimento(status)) {
+async function renderPage(status: string, atendimentoData: MockAtendimento = makeAtendimento(status)) {
   mockUnitFetch.mockImplementation((url: string) => {
     if (url === '/api/atendimentos/10') {
       return mockJsonResponse(atendimentoData);
@@ -287,6 +329,26 @@ describe('AtendimentoDetalhePage rollback seguro', () => {
       });
     }
   );
+});
+
+describe('AtendimentoDetalhePage financeiro', () => {
+  test('em em_execucao exibe acesso ao financeiro', async () => {
+    await renderPage('em_execucao');
+
+    expect(screen.getAllByRole('button', { name: '💳 Ver Financeiro' }).length).toBeGreaterThan(0);
+  });
+
+  test('em finalizado por continuacao sinaliza o retorno e mantém acesso financeiro', async () => {
+    await renderPage('finalizado', {
+      ...makeAtendimento('finalizado'),
+      motivo_saida: 'continuacao',
+      finalizado_at: '2026-06-05 15:00:00',
+    });
+
+    expect(screen.getByText(/finalizado como continuação\/retorno/i)).toBeInTheDocument();
+    expect(screen.getByText('Continuação / retorno agendado')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '💳 Ver Financeiro' }).length).toBeGreaterThan(0);
+  });
 });
 
 describe('AtendimentoDetalhePage impressão', () => {

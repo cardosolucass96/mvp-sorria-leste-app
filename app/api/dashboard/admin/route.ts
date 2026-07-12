@@ -176,7 +176,9 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         SELECT a.id, SUM(i.valor) as total_atend
         FROM atendimentos a
         INNER JOIN itens_atendimento i ON i.atendimento_id = a.id
-        WHERE a.status IN ('finalizado', 'encerrado') AND a.unidade_id = ?
+        WHERE a.status IN ('finalizado', 'encerrado')
+          AND a.unidade_id = ?
+          AND COALESCE(a.motivo_saida, '') != 'continuacao'
         GROUP BY a.id
       )
     `;
@@ -218,7 +220,9 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const finalizadosQuery = `
       SELECT COUNT(*) as count
       FROM atendimentos a
-      WHERE status IN ('finalizado', 'encerrado') AND a.unidade_id = ? ${filtroData}
+      WHERE status IN ('finalizado', 'encerrado')
+        AND a.unidade_id = ?
+        AND COALESCE(a.motivo_saida, '') != 'continuacao' ${filtroData}
     `;
     const finalizados = await queryOne<CountResult>(finalizadosQuery, [uid, ...params]);
     const taxaConversao = totalAtendimentos?.count

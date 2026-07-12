@@ -366,17 +366,12 @@ describe('GET /api/dashboard/admin — métricas derivadas', () => {
     const queries = getExecutedQueries();
     const ticketQuery = queries.find(q => q.sql.includes('AVG(total_atend)'));
     expect(ticketQuery!.sql).toContain("'finalizado'");
+    expect(ticketQuery!.sql).toContain("COALESCE(a.motivo_saida, '') != 'continuacao'");
   });
 
   it('taxaConversao = (finalizados / total) * 100', async () => {
-    // Ambas queries usam "from atendimentos a" — a de finalizados adiciona WHERE status = 'finalizado'.
-    // O mock substring match retorna o PRIMEIRO match. Precisamos registrar o mais específico primeiro.
-    // finalizados: query contém "status = 'finalizado'" — registrar primeiro
-    mockQueryResponse("in ('finalizado', 'encerrado') and a.unidade_id", [{ count: 40 }]);
-    // totalAtendimentos: query without status filter, uses "FROM atendimentos a WHERE a.unidade_id = ?"
-    // finalizados: query with "status IN ('finalizado', 'encerrado')"
-    // The more specific mock (with 'finalizado') matches finalizados query.
-    // The generic mock matches totalAtendimentos query.
+    // Registrar primeiro o mock mais específico da query de finalizados para não ser capturado pelo total.
+    mockQueryResponse("coalesce(a.motivo_saida, '') != 'continuacao'", [{ count: 40 }]);
     mockQueryResponse("count(*) as count\n      from atendimentos a\n      where a.unidade_id", [{ count: 100 }]);
 
     const { data } = await callRoute<AdminDashboard>(
@@ -387,6 +382,12 @@ describe('GET /api/dashboard/admin — métricas derivadas', () => {
     expect(data.resumo.totalAtendimentos).toBe(100);
     expect(data.resumo.atendimentosFinalizados).toBe(40);
     expect(data.resumo.taxaConversao).toBe(40.0);
+
+    const queries = getExecutedQueries();
+    const finalizadosQuery = queries.find((query) =>
+      query.sql.includes("status IN ('finalizado', 'encerrado')")
+    );
+    expect(finalizadosQuery?.sql).toContain("COALESCE(a.motivo_saida, '') != 'continuacao'");
   });
 
   it('taxaConversao = 0 quando não há atendimentos', async () => {
@@ -547,11 +548,10 @@ describe('GET /api/dashboard/admin — performance', () => {
     await callRoute(getAdminDashboard, '/api/dashboard/admin');
 
     const queries = getExecutedQueries();
-    // Rota deve executar um número fixo de queries (não proporcional aos dados)
-    // São ~14 queries fixas (faturamento, aReceber, vencidas, porStatus, porCanal,
-    // topProcedimentos, mensal, totalAtendimentos, totalClientes, ticketMedio,
-    // topVendedores, topExecutores, finalizados, comissoesTotal)
-    expect(queries.length).toBeLessThanOrEqual(15);
-    expect(queries.length).toBeGreaterThanOrEqual(10);
+    // Rota deve executar um número fixo de queries (não proporcional aos dados).
+    // No mock atual, queryOne sem resultado registra `first()` e depois `all()`,
+    // então o total fica maior do que em produção, mas ainda constante.
+    expect(queries.length).toBeLessThanOrEqual(22);
+    expect(queries.length).toBeGreaterThanOrEqual(14);
   });
 });

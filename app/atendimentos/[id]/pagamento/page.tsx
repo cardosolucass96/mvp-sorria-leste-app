@@ -104,9 +104,20 @@ interface Atendimento {
   cliente_id: number;
   cliente_nome: string;
   status: string;
+  motivo_saida: string | null;
   itens: ItemAtendimento[];
   total: number;
   total_pago: number;
+}
+
+interface SelecionarHojeResponse {
+  agendamentos_criados: number;
+  itens_hoje: number;
+  status_final: string;
+}
+
+interface ApiErrorResponse {
+  error?: string;
 }
 
 interface LinhaCobranca {
@@ -268,7 +279,6 @@ export default function PagamentoPage({
   const [valorSessaoEditando, setValorSessaoEditando] = useState<Record<string, string>>({});
   const [salvandoSessaoId, setSalvandoSessaoId] = useState<string | null>(null);
   const [errosSessao, setErrosSessao] = useState<Record<string, string>>({});
-  const [historicoAberto, setHistoricoAberto] = useState(false);
 
   const carregarExecutores = useCallback(async () => {
     try {
@@ -539,7 +549,7 @@ export default function PagamentoPage({
         body: JSON.stringify({ valor_final: valorFinal, desconto_motivo: dados.motivo || null }),
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json() as ApiErrorResponse;
         throw new Error(data.error || 'Erro ao salvar desconto');
       }
       await carregarDados();
@@ -601,7 +611,7 @@ export default function PagamentoPage({
         }),
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json() as ApiErrorResponse;
         throw new Error(data.error || 'Erro ao salvar valor da sessão');
       }
       cancelarEdicaoSessao(linha.key);
@@ -703,7 +713,7 @@ export default function PagamentoPage({
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json() as ApiErrorResponse;
         throw new Error(data.error || 'Erro ao registrar pagamento');
       }
       setObservacoesPagamento('');
@@ -721,7 +731,7 @@ export default function PagamentoPage({
   };
 
   const handleSalvarDestinos = async () => {
-    if (!atendimento) return;
+    if (!atendimento || atendimento.status !== 'aguardando_pagamento') return;
     for (const linha of linhas) {
       const statusAcao = getDestinoStatusSeguro(linha, destinos[linha.key]?.status ?? (linha.saldo > 0 ? 'agendar' : 'fazer_hoje'));
       if (statusAcao === 'agendar' && !destinos[linha.key]?.data?.trim()) {
@@ -740,6 +750,7 @@ export default function PagamentoPage({
       data_agendada: destinos[linha.key]?.data || null,
       executor_id: destinos[linha.key]?.executorId ? Number(destinos[linha.key].executorId) : null,
     }));
+    const acaoFinal = resumoDestinos.fazer_hoje > 0 ? 'liberar_execucao' : 'finalizar_continuacao';
 
     setSalvandoDestinos(true);
     setError('');
@@ -747,11 +758,18 @@ export default function PagamentoPage({
       const resSelecao = await unitFetch(`/api/atendimentos/${id}/selecionar-hoje`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ destinos: payload }),
+        body: JSON.stringify({ destinos: payload, acao_final: acaoFinal }),
       });
+      const dataSelecao = await resSelecao.json() as SelecionarHojeResponse | ApiErrorResponse;
       if (!resSelecao.ok) {
-        const data = await resSelecao.json();
-        throw new Error(data.error || 'Erro ao salvar destinos');
+        const mensagemErro = 'error' in dataSelecao ? dataSelecao.error : undefined;
+        throw new Error(mensagemErro || 'Erro ao salvar destinos');
+      }
+
+      const statusFinal = 'status_final' in dataSelecao ? dataSelecao.status_final : null;
+      if (acaoFinal === 'finalizar_continuacao' || statusFinal === 'finalizado') {
+        router.push(`/atendimentos/${id}`);
+        return;
       }
 
       const resStatus = await unitFetch(`/api/atendimentos/${id}`, {
@@ -760,7 +778,7 @@ export default function PagamentoPage({
         body: JSON.stringify({ status: 'em_execucao' }),
       });
       if (!resStatus.ok) {
-        const data = await resStatus.json();
+        const data = await resStatus.json() as ApiErrorResponse;
         throw new Error(data.error || 'Erro ao liberar execução');
       }
 
@@ -781,7 +799,7 @@ export default function PagamentoPage({
         body: JSON.stringify({ motivo: motivoCancelamento }),
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json() as ApiErrorResponse;
         throw new Error(data.error || 'Erro ao cancelar pagamento');
       }
       setCancelandoId(null);
@@ -805,6 +823,22 @@ export default function PagamentoPage({
     );
   }
 
+  const modoSomenteHistorico = ['finalizado', 'encerrado'].includes(atendimento.status);
+  const podeGerenciarDestinos = atendimento.status === 'aguardando_pagamento';
+  const podeRegistrarCobranca = !modoSomenteHistorico;
+  const temItensHojePlanejados = resumoDestinos.fazer_hoje > 0;
+  const descricaoCabecalho = modoSomenteHistorico
+    ? 'Atendimento em revisão financeira. Consulte cobranças registradas e, se necessário, cancele o grupo com motivo.'
+    : podeGerenciarDestinos
+      ? 'Agrupe a cobrança por procedimento e defina o destino operacional antes de liberar a execução.'
+      : 'Revise as cobranças do atendimento e registre ajustes financeiros, se necessário.';
+  const labelAcaoDestinos = temItensHojePlanejados
+    ? 'Salvar destinos e liberar execução'
+    : 'Salvar destinos e finalizar atendimento';
+  const mensagemModoHistorico = atendimento.motivo_saida === 'continuacao'
+    ? 'Este atendimento foi finalizado como continuação/retorno. Os procedimentos seguiram para agenda ou ficaram sem data, e esta tela permanece apenas para revisão e cancelamento de cobranças.'
+    : 'Este atendimento está em modo de revisão financeira. Novas cobranças e liberações operacionais ficam desativadas, mas o histórico e o cancelamento continuam disponíveis.';
+
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -821,7 +855,7 @@ export default function PagamentoPage({
             <p className="text-sm text-muted-foreground">Atendimento #{atendimento.id}</p>
             <h1 className="text-3xl font-semibold">{atendimento.cliente_nome}</h1>
             <p className="text-sm text-muted-foreground">
-              Agrupe a cobrança por procedimento e defina o destino operacional antes de liberar a execução.
+              {descricaoCabecalho}
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -843,7 +877,12 @@ export default function PagamentoPage({
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {modoSomenteHistorico && (
+        <Alert type="info">{mensagemModoHistorico}</Alert>
+      )}
+
+      {podeRegistrarCobranca && (
+      <div className={cn('grid gap-6', podeGerenciarDestinos ? 'lg:grid-cols-2' : 'lg:grid-cols-1')}>
         <Card noPadding className="overflow-hidden">
           <CardHeader>
             <CardTitle>Pagamento</CardTitle>
@@ -1266,6 +1305,7 @@ export default function PagamentoPage({
           </CardFooter>
         </Card>
 
+        {podeGerenciarDestinos && (
         <Card noPadding className="overflow-hidden">
           <CardHeader>
             <CardTitle>Destino</CardTitle>
@@ -1419,106 +1459,97 @@ export default function PagamentoPage({
             </div>
 
             <Button className="w-full" onClick={() => void handleSalvarDestinos()} loading={salvandoDestinos}>
-              Salvar destinos e liberar execução
+              {labelAcaoDestinos}
             </Button>
           </CardFooter>
         </Card>
+        )}
       </div>
+      )}
 
       <Card noPadding>
         <CardHeader>
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-4 text-left"
-            onClick={() => setHistoricoAberto((prev) => !prev)}
-          >
-            <div className="flex flex-col gap-1">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Histórico</p>
-              <CardTitle>Pagamentos registrados</CardTitle>
-              <CardDescription>
-                Abra para revisar as cobranças já feitas e, se necessário, cancelar o grupo inteiro.
-              </CardDescription>
-            </div>
-            <span className="text-sm font-medium text-primary">
-              {historicoAberto ? 'Ocultar' : 'Mostrar'}
-            </span>
-          </button>
+          <div className="flex flex-col gap-1">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Histórico</p>
+            <CardTitle>Pagamentos registrados</CardTitle>
+            <CardDescription>
+              Revise as cobranças já feitas e, se necessário, cancele o grupo inteiro.
+            </CardDescription>
+          </div>
         </CardHeader>
 
-        {historicoAberto && (
-          <CardContent className="flex flex-col gap-3 pt-0">
-            {pagamentos.length === 0 && <p className="text-sm text-muted-foreground">Nenhum pagamento registrado.</p>}
-            {pagamentos.map((pagamento) => (
-              <div key={pagamento.id} className="flex flex-col gap-3 rounded-lg border border-border p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium">{formatarMoeda(pagamento.valor_total)}</p>
-                      <Badge color={pagamento.cancelado ? 'red' : 'green'} size="sm">
-                        {pagamento.cancelado ? 'Cancelado' : pagamento.formas.length > 1 ? 'Cobrança composta' : getMetodoLabel(pagamento.formas[0]?.metodo ?? '')}
-                      </Badge>
-                      {pagamento.formas.length > 1 && (
-                        <Badge color="gray" size="sm">{pagamento.formas.length} formas</Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {formatarDataHora(pagamento.created_at)}
-                      {pagamento.recebido_por_nome ? ` · ${pagamento.recebido_por_nome}` : ''}
-                    </p>
+        <CardContent className="flex flex-col gap-3 pt-0">
+          {pagamentos.length === 0 && <p className="text-sm text-muted-foreground">Nenhum pagamento registrado.</p>}
+          {pagamentos.map((pagamento) => (
+            <div key={pagamento.id} className="flex flex-col gap-3 rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{formatarMoeda(pagamento.valor_total)}</p>
+                    <Badge color={pagamento.cancelado ? 'red' : 'green'} size="sm">
+                      {pagamento.cancelado ? 'Cancelado' : pagamento.formas.length > 1 ? 'Cobrança composta' : getMetodoLabel(pagamento.formas[0]?.metodo ?? '')}
+                    </Badge>
+                    {pagamento.formas.length > 1 && (
+                      <Badge color="gray" size="sm">{pagamento.formas.length} formas</Badge>
+                    )}
                   </div>
-                  <Badge color={pagamento.cancelado ? 'red' : 'green'} size="sm">
-                    {pagamento.cancelado ? 'Inativo' : 'Ativo'}
-                  </Badge>
+                  <p className="text-sm text-muted-foreground">
+                    {formatarDataHora(pagamento.created_at)}
+                    {pagamento.recebido_por_nome ? ` · ${pagamento.recebido_por_nome}` : ''}
+                  </p>
                 </div>
-
-                {pagamento.formas.length > 0 && (
-                  <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-3">
-                    {pagamento.formas.map((forma) => (
-                      <div key={forma.id} className="flex items-center justify-between gap-3 text-sm">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge color={forma.cancelado ? 'red' : 'gray'} size="sm">
-                            {getMetodoLabel(forma.metodo)}
-                          </Badge>
-                          <span className="text-muted-foreground">{formatarDataHora(forma.created_at)}</span>
-                        </div>
-                        <span className="font-medium">{formatarMoeda(forma.valor)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {pagamento.observacoes && <p className="text-sm text-muted-foreground">{pagamento.observacoes}</p>}
-                {!pagamento.cancelado && (
-                  cancelandoId === pagamento.pagamento_representante_id ? (
-                    <div className="space-y-2">
-                      <Input
-                        label="Motivo do cancelamento do grupo"
-                        name={`motivo-cancelamento-${pagamento.pagamento_representante_id}`}
-                        value={motivoCancelamento}
-                        onChange={setMotivoCancelamento}
-                      />
-                      <div className="flex gap-2">
-                        <Button variant="danger" onClick={() => void handleCancelarPagamento(pagamento.pagamento_representante_id)}>
-                          Confirmar cancelamento
-                        </Button>
-                        <Button variant="secondary" onClick={() => { setCancelandoId(null); setMotivoCancelamento(''); }}>
-                          Fechar
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <Button variant="secondary" onClick={() => setCancelandoId(pagamento.pagamento_representante_id)}>
-                      Cancelar cobrança
-                    </Button>
-                  )
-                )}
-                {Boolean(pagamento.cancelado) && pagamento.motivo_cancelamento && (
-                  <p className="text-sm text-muted-foreground">Motivo: {pagamento.motivo_cancelamento}</p>
-                )}
+                <Badge color={pagamento.cancelado ? 'red' : 'green'} size="sm">
+                  {pagamento.cancelado ? 'Inativo' : 'Ativo'}
+                </Badge>
               </div>
-            ))}
-          </CardContent>
-        )}
+
+              {pagamento.formas.length > 0 && (
+                <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-3">
+                  {pagamento.formas.map((forma) => (
+                    <div key={forma.id} className="flex items-center justify-between gap-3 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge color={forma.cancelado ? 'red' : 'gray'} size="sm">
+                          {getMetodoLabel(forma.metodo)}
+                        </Badge>
+                        <span className="text-muted-foreground">{formatarDataHora(forma.created_at)}</span>
+                      </div>
+                      <span className="font-medium">{formatarMoeda(forma.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {pagamento.observacoes && <p className="text-sm text-muted-foreground">{pagamento.observacoes}</p>}
+              {!pagamento.cancelado && (
+                cancelandoId === pagamento.pagamento_representante_id ? (
+                  <div className="space-y-2">
+                    <Input
+                      label="Motivo do cancelamento do grupo"
+                      name={`motivo-cancelamento-${pagamento.pagamento_representante_id}`}
+                      value={motivoCancelamento}
+                      onChange={setMotivoCancelamento}
+                    />
+                    <div className="flex gap-2">
+                      <Button variant="danger" onClick={() => void handleCancelarPagamento(pagamento.pagamento_representante_id)}>
+                        Confirmar cancelamento
+                      </Button>
+                      <Button variant="secondary" onClick={() => { setCancelandoId(null); setMotivoCancelamento(''); }}>
+                        Fechar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button variant="secondary" onClick={() => setCancelandoId(pagamento.pagamento_representante_id)}>
+                    Cancelar cobrança
+                  </Button>
+                )
+              )}
+              {Boolean(pagamento.cancelado) && pagamento.motivo_cancelamento && (
+                <p className="text-sm text-muted-foreground">Motivo: {pagamento.motivo_cancelamento}</p>
+              )}
+            </div>
+          ))}
+        </CardContent>
       </Card>
     </div>
   );

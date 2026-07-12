@@ -254,6 +254,12 @@ describe('Sprint 4: atendimentos/[id]/pagamento/page.tsx', () => {
 
   test('mantem o CTA de destino separado da cobranca', () => {
     expect(src).toContain('Salvar destinos e liberar execução');
+    expect(src).toContain('Salvar destinos e finalizar atendimento');
+  });
+
+  test('histórico financeiro fica sempre visível para cancelamento', () => {
+    expect(src).toContain('Pagamentos registrados');
+    expect(src).not.toContain('historicoAberto');
   });
 });
 

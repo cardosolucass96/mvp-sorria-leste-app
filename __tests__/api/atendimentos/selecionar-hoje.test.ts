@@ -5,6 +5,7 @@ import {
   resetMockDb,
   mockQueryResponse,
   getExecutedQueries,
+  setLastInsertId,
 } from '../../helpers/db-mock';
 import {
   ATENDIMENTO_AGUARDANDO_PGTO,
@@ -46,7 +47,7 @@ describe('POST /api/atendimentos/[id]/selecionar-hoje', () => {
     ]);
 
     const ctx = createRouteContext({ id: '3' });
-    const { status, data } = await callRoute<{ agendamentos_criados: number; itens_hoje: number }>(
+    const { status, data } = await callRoute<{ agendamentos_criados: number; itens_hoje: number; status_final: string }>(
       selecionarHoje,
       '/api/atendimentos/3/selecionar-hoje',
       {
@@ -66,7 +67,7 @@ describe('POST /api/atendimentos/[id]/selecionar-hoje', () => {
     );
 
     expect(status).toBe(200);
-    expect(data).toEqual({ agendamentos_criados: 0, itens_hoje: 1 });
+    expect(data).toEqual({ agendamentos_criados: 0, itens_hoje: 1, status_final: 'aguardando_pagamento' });
 
     const queries = getExecutedQueries();
     const updateExecutorQuery = queries.find((query) => query.sql.includes('UPDATE itens_atendimento SET executor_id = ? WHERE id = ?'));
@@ -116,6 +117,7 @@ describe('POST /api/atendimentos/[id]/selecionar-hoje', () => {
     mockQueryResponse('select * from itens_atendimento where atendimento_id', [
       { ...ITEM_LIMPEZA_PENDENTE, executor_id: 4 },
     ]);
+    setLastInsertId(55);
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(
@@ -185,5 +187,120 @@ describe('POST /api/atendimentos/[id]/selecionar-hoje', () => {
 
     expect(insertItemQuery).toBeDefined();
     expect(insertItemQuery?.params[2]).toBeNull();
+  });
+
+  it('finaliza como continuacao quando tudo segue para agendamento com data', async () => {
+    mockQueryResponse('select id, cliente_id, unidade_id, categoria_id, status from atendimentos', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select * from itens_atendimento where atendimento_id', [
+      { ...ITEM_LIMPEZA_PENDENTE, executor_id: 4 },
+    ]);
+    setLastInsertId(88);
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status, data } = await callRoute<{ agendamentos_criados: number; itens_hoje: number; status_final: string }>(
+      selecionarHoje,
+      '/api/atendimentos/3/selecionar-hoje',
+      {
+        method: 'POST',
+        body: {
+          acao_final: 'finalizar_continuacao',
+          destinos: [
+            {
+              item_id: 1,
+              etapa_modelo_id: null,
+              destino_status: 'agendar',
+              data_agendada: '2026-07-20',
+              executor_id: null,
+            },
+          ],
+        },
+      },
+      ctx
+    );
+
+    expect(status).toBe(200);
+    expect(data).toEqual({ agendamentos_criados: 1, itens_hoje: 0, status_final: 'finalizado' });
+
+    const queries = getExecutedQueries();
+    const finalizarQuery = queries.find((query) =>
+      query.sql.includes("SET status = 'finalizado'") && query.sql.includes("motivo_saida = 'continuacao'")
+    );
+
+    expect(finalizarQuery).toBeDefined();
+  });
+
+  it('finaliza como continuacao e gera agendamento pendente quando ficar sem data', async () => {
+    mockQueryResponse('select id, cliente_id, unidade_id, categoria_id, status from atendimentos', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select * from itens_atendimento where atendimento_id', [
+      { ...ITEM_LIMPEZA_PENDENTE, executor_id: 4 },
+    ]);
+    setLastInsertId(89);
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status, data } = await callRoute<{ agendamentos_criados: number; itens_hoje: number; status_final: string }>(
+      selecionarHoje,
+      '/api/atendimentos/3/selecionar-hoje',
+      {
+        method: 'POST',
+        body: {
+          acao_final: 'finalizar_continuacao',
+          destinos: [
+            {
+              item_id: 1,
+              etapa_modelo_id: null,
+              destino_status: 'nao_pago_sem_data',
+              executor_id: null,
+            },
+          ],
+        },
+      },
+      ctx
+    );
+
+    expect(status).toBe(200);
+    expect(data).toEqual({ agendamentos_criados: 1, itens_hoje: 0, status_final: 'finalizado' });
+
+    const queries = getExecutedQueries();
+    const insertAgendamentoQuery = queries.find((query) => query.sql.includes('INSERT INTO agendamentos'));
+
+    expect(insertAgendamentoQuery).toBeDefined();
+    expect(insertAgendamentoQuery?.params[4]).toBeNull();
+    expect(insertAgendamentoQuery?.params[5]).toBe('pendente');
+  });
+
+  it('rejeita finalizar como continuacao quando houver procedimento para hoje', async () => {
+    mockQueryResponse('select id, cliente_id, unidade_id, categoria_id, status from atendimentos', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select id, role from usuarios where id', { id: 4, role: 'executor' });
+    mockQueryResponse('select * from itens_atendimento where atendimento_id', [
+      { ...ITEM_LIMPEZA_PENDENTE, executor_id: 4 },
+    ]);
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status, data } = await callRoute<{ error: string }>(
+      selecionarHoje,
+      '/api/atendimentos/3/selecionar-hoje',
+      {
+        method: 'POST',
+        body: {
+          acao_final: 'finalizar_continuacao',
+          destinos: [
+            {
+              item_id: 1,
+              etapa_modelo_id: null,
+              destino_status: 'fazer_hoje',
+              executor_id: 4,
+            },
+          ],
+        },
+      },
+      ctx
+    );
+
+    expect(status).toBe(400);
+    expect(data.error).toContain('Não é possível finalizar como continuação');
+
+    const queries = getExecutedQueries();
+    const finalizarQuery = queries.find((query) => query.sql.includes("SET status = 'finalizado'"));
+    expect(finalizarQuery).toBeUndefined();
   });
 });

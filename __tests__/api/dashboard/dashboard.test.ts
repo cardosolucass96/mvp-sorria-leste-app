@@ -108,10 +108,16 @@ describe('GET /api/dashboard — stats gerais', () => {
   });
 
   it('finalizadosHoje conta finalizados do dia', async () => {
-    mockQueryResponse("in ('finalizado', 'encerrado') and date(finalizado_at)", [{ count: 3 }]);
+    mockQueryResponse("coalesce(motivo_saida, '') != 'continuacao'", [{ count: 3 }]);
 
     const { data } = await callRoute<DashboardStats>(getDashboard, '/api/dashboard');
     expect(data.finalizadosHoje).toBe(3);
+
+    const queries = getExecutedQueries();
+    const finalizadosQuery = queries.find((query) =>
+      query.sql.includes("COALESCE(motivo_saida, '') != 'continuacao'")
+    );
+    expect(finalizadosQuery).toBeDefined();
   });
 
   it('emExecucao conta status em_execucao', async () => {

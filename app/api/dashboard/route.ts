@@ -43,7 +43,10 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 
     const finalizadosHoje = (await query<{ count: number }>(
       `SELECT COUNT(*) as count FROM atendimentos
-       WHERE status IN ('finalizado', 'encerrado') AND DATE(finalizado_at) = DATE('now', 'localtime') AND unidade_id = ?`,
+       WHERE status IN ('finalizado', 'encerrado')
+         AND unidade_id = ?
+         AND COALESCE(motivo_saida, '') != 'continuacao'
+         AND DATE(finalizado_at) = DATE('now', 'localtime')`,
       [uid]
     ))[0]?.count || 0;
 

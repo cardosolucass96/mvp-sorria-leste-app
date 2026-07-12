@@ -84,6 +84,7 @@ interface Atendimento {
   status: string;
   tipo: string | null;
   categoria_id: number | null;
+  motivo_saida: string | null;
   created_at: string;
   liberado_em: string | null;
   finalizado_at: string | null;
@@ -840,6 +841,9 @@ export default function AtendimentoDetalhePage({
   const statusConfig = STATUS_CONFIG[atendimento.status as AtendimentoStatus];
   const proximoStatus = PROXIMOS_STATUS[atendimento.status as AtendimentoStatus];
   const statusAnterior = STATUS_ANTERIOR[atendimento.status as AtendimentoStatus];
+  const podeAcessarFinanceiro = ['aguardando_pagamento', 'em_execucao', 'finalizado', 'encerrado'].includes(atendimento.status);
+  const labelAcessoFinanceiro = atendimento.status === 'aguardando_pagamento' ? '💳 Ir para Pagamento' : '💳 Ver Financeiro';
+  const atendimentoEhContinuacao = atendimento.motivo_saida === 'continuacao';
 
   // Agrupar itens por group_id
   type GrupoOuItem =
@@ -1343,10 +1347,10 @@ export default function AtendimentoDetalhePage({
                 {mudandoStatus ? 'Processando...' : `Avançar para ${STATUS_CONFIG[proximoStatus].label}`}
               </Button>
             )}
-            {atendimento.status === 'aguardando_pagamento' && (
+            {podeAcessarFinanceiro && (
               <Link href={`/atendimentos/${id}/pagamento`}>
-                <Button variant="primary">
-                  💳 Ir para Pagamento
+                <Button variant={atendimento.status === 'aguardando_pagamento' ? 'primary' : 'secondary'}>
+                  {labelAcessoFinanceiro}
                 </Button>
               </Link>
             )}
@@ -1364,6 +1368,12 @@ export default function AtendimentoDetalhePage({
       </Card>
 
       {error && <Alert type="error">{error}</Alert>}
+
+      {atendimentoEhContinuacao && ['finalizado', 'encerrado'].includes(atendimento.status) && (
+        <Alert type="info">
+          Este atendimento foi finalizado como continuação/retorno. Os procedimentos seguiram para agenda ou ficaram sem data, então este finalizado não representa tratamento concluído.
+        </Alert>
+      )}
 
       {/* Banner de sessão de continuação */}
       {atendimento.tipo === 'sessao' && (
@@ -1487,6 +1497,12 @@ export default function AtendimentoDetalhePage({
                 <p className="font-medium">{formatarDataHora(atendimento.finalizado_at)}</p>
               </div>
             )}
+            {atendimentoEhContinuacao && (
+              <div>
+                <p className="text-sm text-muted">Motivo do finalizado</p>
+                <p className="font-medium">Continuação / retorno agendado</p>
+              </div>
+            )}
           </div>
 
           {/* Métricas de tempo */}
@@ -1550,11 +1566,11 @@ export default function AtendimentoDetalhePage({
               </p>
             </div>
           </div>
-          {atendimento.status === 'aguardando_pagamento' && (
+          {podeAcessarFinanceiro && (
             <div className="mt-4 pt-4 border-t">
               <Link href={`/atendimentos/${id}/pagamento`} className="block">
                 <Button variant="secondary" className="w-full justify-center">
-                  💳 Ir para Pagamento
+                  {labelAcessoFinanceiro}
                 </Button>
               </Link>
             </div>

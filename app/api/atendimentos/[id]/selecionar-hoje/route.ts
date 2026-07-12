@@ -5,6 +5,7 @@ import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@
 import { resolverExecutorDestinoId } from '@/lib/utils/destinoExecutor';
 
 type DestinoStatus = 'fazer_hoje' | 'agendar' | 'pago_sem_data' | 'nao_pago_sem_data';
+type AcaoFinal = 'liberar_execucao' | 'finalizar_continuacao';
 
 interface AtendimentoRow {
   id: number;
@@ -39,6 +40,10 @@ interface DestinoInput {
   destino_status: DestinoStatus;
   data_agendada?: string | null;
   executor_id?: number | null;
+}
+
+interface ItensHojeProjetadosResult {
+  itensHoje: number;
 }
 
 function inferirStatusAgendamento(destino: DestinoStatus, dataAgendada?: string | null) {
@@ -146,9 +151,14 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     const atendimentoId = parseInt(params!.id as string);
     const body = await request.json();
     const destinos = (body.destinos ?? []) as DestinoInput[];
+    const acaoFinal = (body.acao_final ?? 'liberar_execucao') as AcaoFinal;
 
     if (!Array.isArray(destinos) || destinos.length === 0) {
       return NextResponse.json({ error: 'destinos é obrigatório' }, { status: 400 });
+    }
+
+    if (!['liberar_execucao', 'finalizar_continuacao'].includes(acaoFinal)) {
+      return NextResponse.json({ error: 'acao_final inválida' }, { status: 400 });
     }
 
     const atendimento = await queryOne<AtendimentoRow>(
@@ -207,6 +217,55 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       const atual = destinosPorItem.get(destino.item_id) ?? [];
       atual.push(destino);
       destinosPorItem.set(destino.item_id, atual);
+    }
+
+    const calcularItensHojeProjetados = async (): Promise<ItensHojeProjetadosResult> => {
+      let itensHojeProjetados = 0;
+
+      for (const item of itens) {
+        const destinosItem = destinosPorItem.get(item.id) ?? [];
+        const temEtapas = !!(await queryOne<{ count: number }>(
+          'SELECT COUNT(*) as count FROM procedimento_etapas_modelo WHERE procedimento_id = ?',
+          [item.procedimento_id]
+        ))?.count;
+
+        if (!temEtapas) {
+          const destino = destinosItem[0];
+          if (!destino || destino.destino_status === 'fazer_hoje') {
+            itensHojeProjetados += 1;
+          }
+          continue;
+        }
+
+        const etapas = await buscarEtapasComValor(item);
+        if (etapas.length === 0) {
+          itensHojeProjetados += 1;
+          continue;
+        }
+
+        const destinoPorEtapa = new Map<number, DestinoInput>(
+          destinosItem
+            .filter((destino) => destino.etapa_modelo_id != null)
+            .map((destino) => [Number(destino.etapa_modelo_id), destino])
+        );
+
+        for (const etapa of etapas) {
+          const destino = destinoPorEtapa.get(etapa.id);
+          if (!destino || destino.destino_status === 'fazer_hoje') {
+            itensHojeProjetados += 1;
+          }
+        }
+      }
+
+      return { itensHoje: itensHojeProjetados };
+    };
+
+    const { itensHoje: itensHojeProjetados } = await calcularItensHojeProjetados();
+    if (acaoFinal === 'finalizar_continuacao' && itensHojeProjetados > 0) {
+      return NextResponse.json(
+        { error: 'Não é possível finalizar como continuação enquanto houver procedimento previsto para hoje' },
+        { status: 400 }
+      );
     }
 
     let agendamentosCriados = 0;
@@ -331,7 +390,24 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       await execute('DELETE FROM itens_atendimento WHERE id = ?', [item.id]);
     }
 
-    return NextResponse.json({ agendamentos_criados: agendamentosCriados, itens_hoje: itensHoje });
+    if (acaoFinal === 'finalizar_continuacao') {
+      await execute(
+        `UPDATE atendimentos
+         SET status = 'finalizado',
+             finalizado_at = datetime('now', 'localtime'),
+             motivo_saida = 'continuacao',
+             liberado_por_id = NULL,
+             liberado_em = NULL
+         WHERE id = ? AND unidade_id = ?`,
+        [atendimentoId, context.unidadeId]
+      );
+    }
+
+    return NextResponse.json({
+      agendamentos_criados: agendamentosCriados,
+      itens_hoje: itensHoje,
+      status_final: acaoFinal === 'finalizar_continuacao' ? 'finalizado' : atendimento.status,
+    });
   } catch (error) {
     console.error('Erro ao selecionar procedimentos:', error);
     const msg = error instanceof Error ? error.message : String(error);
