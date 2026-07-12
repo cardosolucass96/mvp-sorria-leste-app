@@ -80,8 +80,13 @@ interface Atendimento {
   cliente_telefone: string | null;
   cliente_email: string | null;
   unidade_nome: string | null;
+  unidade_razao_social: string | null;
+  unidade_cnpj: string | null;
   unidade_endereco: string | null;
   unidade_telefone: string | null;
+  unidade_email: string | null;
+  unidade_responsavel: string | null;
+  unidade_recibo_rodape: string | null;
   avaliador_id: number | null;
   avaliador_nome: string | null;
   liberado_por_nome: string | null;
@@ -1073,12 +1078,39 @@ export default function AtendimentoDetalhePage({
     const empresaTitulo = atendimento.unidade_nome
       ? `Sorria Leste - ${atendimento.unidade_nome}`
       : 'Sorria Leste';
-    const empresaEndereco = atendimento.unidade_endereco || 'Endereço não informado';
-    const empresaTelefone = atendimento.unidade_telefone || 'Telefone não informado';
+    const empresaNome = atendimento.unidade_razao_social || 'Sorria Leste';
+    const unidadeNome = atendimento.unidade_nome || 'Unidade não informada';
+    const empresaEndereco = atendimento.unidade_endereco || null;
+    const empresaTelefone = atendimento.unidade_telefone || null;
+    const empresaEmail = atendimento.unidade_email || null;
+    const empresaResponsavel = atendimento.unidade_responsavel || null;
+    const empresaCnpj = atendimento.unidade_cnpj ? formatarCNPJ(atendimento.unidade_cnpj) : null;
+    const rodapeRecibo = atendimento.unidade_recibo_rodape
+      || 'Este recibo comprova o recebimento dos valores descritos e não substitui documento fiscal.';
+    const renderInfoLine = (label: string, value: string | null) => value
+      ? `<div class="info-line"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`
+      : '';
+    const dadosEmpresaHtml = [
+      renderInfoLine('Razão social', empresaNome),
+      renderInfoLine('Unidade', unidadeNome),
+      renderInfoLine('CNPJ', empresaCnpj),
+      renderInfoLine('Endereço', empresaEndereco),
+      renderInfoLine('Telefone', empresaTelefone),
+      renderInfoLine('E-mail', empresaEmail),
+      renderInfoLine('Responsável', empresaResponsavel),
+    ].join('');
     const resumoHtml = modoRecibo
       ? `
-        <div class="summary-row"><span>Pagamentos</span><strong>${escapeHtml(String(quantidadePagamentos ?? 0))}</strong></div>
-        <div class="summary-row total"><span>Total recebido</span><strong>${formatarMoeda(parseSafeNumber(totalPagamentos ?? pago))}</strong></div>
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span>Pagamentos</span>
+            <strong>${escapeHtml(String(quantidadePagamentos ?? 0))}</strong>
+          </div>
+          <div class="summary-item total">
+            <span>Total recebido</span>
+            <strong>${formatarMoeda(parseSafeNumber(totalPagamentos ?? pago))}</strong>
+          </div>
+        </div>
       `
       : `
         <strong>Total do atendimento:</strong> ${formatarMoeda(totalGeral)}<br />
@@ -1087,19 +1119,31 @@ export default function AtendimentoDetalhePage({
       `;
     const cabecalhoHtml = modoRecibo
       ? `
-        <div class="coupon-header">
-          <div class="coupon-company">${escapeHtml(empresaTitulo)}</div>
-          <div>${escapeHtml(empresaEndereco)}</div>
-          <div>Telefone: ${escapeHtml(empresaTelefone)}</div>
-          <div class="coupon-separator"></div>
-          <div class="coupon-title">RECIBO DE PAGAMENTO</div>
-          <div class="muted">Documento não fiscal</div>
-          <div>Emissão: ${escapeHtml(emitidoEm)}</div>
-          <div>Atendimento: #${escapeHtml(String(atendimento.id))}</div>
+        <div class="document-hero">
+          <div class="hero-brand">
+            <img src="${logoUrl}" alt="Logo Sorria Leste" />
+            <div>
+              <div class="hero-kicker">Sorria Leste</div>
+              <h1>Recibo de Pagamento</h1>
+              <p>Documento não fiscal</p>
+            </div>
+          </div>
+          <div class="hero-meta">
+            <div><span>Atendimento</span><strong>#${escapeHtml(String(atendimento.id))}</strong></div>
+            <div><span>Emissão</span><strong>${escapeHtml(emitidoEm)}</strong></div>
+          </div>
         </div>
-        <div class="customer-box">
-          <div><strong>Cliente:</strong> ${escapeHtml(atendimento.cliente_nome)}</div>
-          <div><strong>CPF:</strong> ${escapeHtml(formatarCPF(atendimento.cliente_cpf))}</div>
+
+        <div class="info-grid">
+          <section class="info-card company-card">
+            <h2>Dados da empresa</h2>
+            ${dadosEmpresaHtml}
+          </section>
+          <section class="info-card">
+            <h2>Dados do cliente</h2>
+            <div class="info-line"><span>Nome</span><strong>${escapeHtml(atendimento.cliente_nome)}</strong></div>
+            <div class="info-line"><span>CPF</span><strong>${escapeHtml(formatarCPF(atendimento.cliente_cpf))}</strong></div>
+          </section>
         </div>
       `
       : `
@@ -1124,6 +1168,23 @@ export default function AtendimentoDetalhePage({
           <div><strong>Email:</strong> ${escapeHtml(atendimento.cliente_email || '-')}</div>
         </div>
       `;
+    const rodapeHtml = modoRecibo
+      ? `
+        <footer class="receipt-footer">
+          <p>${escapeHtml(rodapeRecibo)}</p>
+          <div class="signature-row">
+            <div>
+              <span></span>
+              <strong>${escapeHtml(empresaResponsavel || 'Responsável pela unidade')}</strong>
+            </div>
+            <div>
+              <span></span>
+              <strong>${escapeHtml(atendimento.cliente_nome)}</strong>
+            </div>
+          </div>
+        </footer>
+      `
+      : '';
 
     janela.document.write(`
       <!doctype html>
@@ -1132,10 +1193,12 @@ export default function AtendimentoDetalhePage({
           <meta charset="utf-8" />
           <title>${escapeHtml(tituloDocumento)} #${escapeHtml(String(atendimento.id))}</title>
           <style>
-            :root { --sorria-orange: #ea580c; }
-            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; font-size: 12px; background: #ffffff; }
-            h1 { font-size: 20px; margin: 0; color: #0f172a; letter-spacing: 0.2px; }
-            h2 { font-size: 14px; margin: 16px 0 8px; color: var(--sorria-orange); }
+            :root { --sorria-orange: #ea580c; --ink: #111827; --muted: #64748b; --line: #e2e8f0; --soft: #fff7ed; }
+            @page { size: A4; margin: 14mm; }
+            * { box-sizing: border-box; }
+            body { font-family: Arial, Helvetica, sans-serif; padding: 0; color: var(--ink); font-size: 12px; background: #ffffff; }
+            h1 { font-size: 25px; margin: 0; color: var(--ink); letter-spacing: -0.4px; }
+            h2 { font-size: 12px; margin: 0 0 10px; color: var(--sorria-orange); text-transform: uppercase; letter-spacing: 0.8px; }
             h3 { font-size: 12px; margin: 12px 0 6px; }
             .receipt-page { max-width: 980px; margin: 0 auto; }
             .header { border: 1px solid #fed7aa; padding: 14px 14px 12px; margin-bottom: 14px; background: #fff7ed; border-radius: 6px; }
@@ -1145,20 +1208,41 @@ export default function AtendimentoDetalhePage({
             .brand img { width: 40px; height: 40px; object-fit: contain; }
             .brand-text { color: var(--sorria-orange); font-size: 12px; font-weight: 700; letter-spacing: 0.2px; }
             .summary { background: #fff; border: 1px solid #fed7aa; border-radius: 6px; padding: 10px 12px; }
-            .coupon-header { border: 1px dashed #94a3b8; padding: 12px; text-align: center; font-family: "Courier New", Courier, monospace; line-height: 1.35; }
-            .coupon-company { font-size: 15px; font-weight: 700; text-transform: uppercase; }
-            .coupon-title { margin-top: 6px; font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
-            .coupon-separator { border-top: 1px dashed #94a3b8; margin: 8px 0; }
-            .customer-box { border: 1px dashed #cbd5e1; border-top: 0; padding: 10px 12px; font-family: "Courier New", Courier, monospace; }
-            .summary-row { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; font-family: "Courier New", Courier, monospace; }
-            .summary-row.total { border-top: 1px dashed #94a3b8; margin-top: 6px; padding-top: 8px; font-size: 14px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-            th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
-            th { background: #ffedd5; color: #7c2d12; }
+            .document-hero { display: flex; justify-content: space-between; gap: 18px; align-items: stretch; padding: 18px 20px; border: 1px solid #fed7aa; border-radius: 16px; background: linear-gradient(135deg, #fff7ed 0%, #ffffff 52%, #ffedd5 100%); box-shadow: 0 10px 26px rgba(234, 88, 12, 0.08); }
+            .hero-brand { display: flex; align-items: center; gap: 14px; }
+            .hero-brand img { width: 58px; height: 58px; object-fit: contain; }
+            .hero-kicker { color: var(--sorria-orange); font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; font-size: 11px; }
+            .hero-brand p { margin: 4px 0 0; color: var(--muted); font-weight: 700; }
+            .hero-meta { min-width: 190px; display: grid; gap: 8px; }
+            .hero-meta div { border: 1px solid #fdba74; border-radius: 12px; background: rgba(255,255,255,0.78); padding: 9px 11px; }
+            .hero-meta span, .info-line span, .summary-item span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.55px; }
+            .hero-meta strong { display: block; margin-top: 2px; font-size: 13px; }
+            .info-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; margin-top: 14px; }
+            .info-card { border: 1px solid var(--line); border-radius: 14px; padding: 13px 14px; background: #fff; page-break-inside: avoid; }
+            .company-card { background: linear-gradient(180deg, #ffffff 0%, #fffaf5 100%); }
+            .info-line { display: grid; grid-template-columns: 104px 1fr; gap: 10px; padding: 4px 0; border-bottom: 1px solid #f1f5f9; }
+            .info-line:last-child { border-bottom: 0; }
+            .info-line strong { font-weight: 700; overflow-wrap: anywhere; }
+            .summary { border-color: #fdba74; background: #fff7ed; }
+            .summary-grid { display: grid; grid-template-columns: 1fr 1.25fr; gap: 12px; }
+            .summary-item { border-radius: 12px; background: #fff; border: 1px solid #fed7aa; padding: 12px 14px; }
+            .summary-item strong { display: block; margin-top: 4px; font-size: 18px; }
+            .summary-item.total { background: #ea580c; color: #fff; border-color: #ea580c; }
+            .summary-item.total span { color: rgba(255,255,255,0.78); }
+            table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+            th, td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
+            th { background: #fff7ed; color: #7c2d12; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+            td { background: #fff; }
+            tr:last-child td { border-bottom: 0; }
             ul { padding-left: 16px; margin: 0; }
             .compact-list { padding-left: 14px; margin: 0; }
             .compact-list li { margin-bottom: 3px; }
-            .muted { color: #64748b; }
+            .receipt-footer { margin-top: 28px; color: var(--muted); page-break-inside: avoid; }
+            .receipt-footer p { margin: 0 0 28px; padding: 10px 12px; border-left: 3px solid var(--sorria-orange); background: #fff7ed; }
+            .signature-row { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 30px; }
+            .signature-row span { display: block; border-top: 1px solid #94a3b8; margin-bottom: 7px; }
+            .signature-row strong { display: block; text-align: center; color: var(--ink); font-weight: 700; }
+            .muted { color: var(--muted); }
           </style>
         </head>
         <body>
@@ -1203,6 +1287,7 @@ export default function AtendimentoDetalhePage({
               <tbody>${pagamentosHtml}</tbody>
             </table>
           </section>
+          ${rodapeHtml}
           </main>
         </body>
       </html>
