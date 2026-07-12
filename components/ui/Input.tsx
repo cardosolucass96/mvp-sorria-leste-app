@@ -2,7 +2,7 @@
 
 import { useId, forwardRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { maskCPF, maskTelefone, maskMoeda } from '@/lib/utils/masks';
+import { maskCPF, maskCNPJ, maskTelefone, maskMoeda } from '@/lib/utils/masks';
 
 export interface InputProps {
   label: string;
@@ -15,7 +15,7 @@ export interface InputProps {
   hint?: string;
   required?: boolean;
   disabled?: boolean;
-  mask?: 'cpf' | 'telefone' | 'moeda';
+  mask?: 'cpf' | 'cnpj' | 'telefone' | 'moeda';
   icon?: React.ReactNode;
   autoFocus?: boolean;
   className?: string;
@@ -26,6 +26,7 @@ export interface InputProps {
 
 const maskFns: Record<string, (v: string) => string> = {
   cpf: maskCPF,
+  cnpj: maskCNPJ,
   telefone: maskTelefone,
   moeda: maskMoeda,
 };

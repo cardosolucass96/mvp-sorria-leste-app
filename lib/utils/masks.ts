@@ -11,6 +11,16 @@ export function maskCPF(value: string): string {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
 }
 
+/** Aplica máscara de CNPJ: 12.345.678/0001-90 */
+export function maskCNPJ(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 14);
+  return digits
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+}
+
 /** Aplica máscara de telefone: (11) 91234-5678 */
 export function maskTelefone(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -24,7 +34,7 @@ export function maskTelefone(value: string): string {
 /** Aplica máscara de moeda: R$ 1.234,56 */
 export function maskMoeda(value: string): string {
   // Remove tudo que não é dígito
-  let digits = value.replace(/\D/g, '');
+  const digits = value.replace(/\D/g, '');
   if (!digits) return '';
 
   // Converte para centavos
