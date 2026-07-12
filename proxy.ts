@@ -1,0 +1,30 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { extractToken, verifyToken } from '@/lib/auth/jwt';
+
+/**
+ * Barreira de rede para rotas de API.
+ *
+ * A autorização por papel/unidade continua nos route handlers. Esta Proxy
+ * impede que handlers legados sem wrapper fiquem acessíveis publicamente.
+ */
+const PUBLIC_API_PATHS = new Set(['/api/auth/login']);
+
+export async function proxy(request: NextRequest): Promise<NextResponse> {
+  if (PUBLIC_API_PATHS.has(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
+  const token = extractToken(request);
+  if (!token || !(await verifyToken(token))) {
+    return NextResponse.json(
+      { error: 'Autenticação necessária' },
+      { status: 401 },
+    );
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/api/:path*'],
+};

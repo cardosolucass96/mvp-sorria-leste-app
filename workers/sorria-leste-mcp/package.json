@@ -1,0 +1,28 @@
+{
+  "name": "sorria-leste-mcp",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "precheck": "npm run cf-typegen",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "cf-typegen": "wrangler types src/env.d.ts",
+    "deploy:dry-run": "wrangler deploy --dry-run --env=\"\"",
+    "deploy:dry-run:staging": "wrangler deploy --dry-run --env staging"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "^0.8.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "agents": "^0.17.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.4",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.60.0"
+  }
+}

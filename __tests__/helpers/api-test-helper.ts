@@ -7,6 +7,8 @@
 
 import { NextRequest } from 'next/server';
 
+const TEST_AUTHORIZATION = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsImVtYWlsIjoiYWRtaW5AdGVzdC5sb2NhbCIsInJvbGUiOiJhZG1pbiIsInJvbGVzIjpbImFkbWluIl0sIm5vbWUiOiJBZG1pbiBkZSBUZXN0ZSIsInVuaWRhZGVfaWRzIjpbMV0sInVuaWRhZGVfYXR1YWwiOjEsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo0MTAyNDQ0ODAwfQ.-YQuOTFDQat1Znf1AD2rPQkyr7gQ5OCRnYaVOFuTwWs';
+
 interface CallRouteOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   body?: Record<string, unknown> | FormData;
@@ -53,6 +55,7 @@ export async function callRoute<T = unknown>(
 
   // Construir headers
   const headers: Record<string, string> = {
+    Authorization: TEST_AUTHORIZATION,
     ...customHeaders,
   };
 

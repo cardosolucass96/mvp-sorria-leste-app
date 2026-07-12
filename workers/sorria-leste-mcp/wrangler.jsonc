@@ -1,0 +1,44 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "sorria-leste-mcp",
+  "account_id": "d603948925acaef083c8eafe1a05c2c4",
+  "workers_dev": true,
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "secrets": {
+    "required": ["MCP_ALLOWED_EMAILS"]
+  },
+  "kv_namespaces": [
+    { "binding": "OAUTH_KV", "id": "6aa5c70fed4a4535873dcc91490c1d92" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sorria-leste-db",
+      "database_id": "1a32c7e9-c5e7-4c53-89f0-3169d2ba7e4f"
+    }
+  ],
+  "env": {
+    "staging": {
+      "name": "sorria-leste-mcp-staging",
+      "secrets": {
+        "required": ["MCP_ALLOWED_EMAILS"]
+      },
+      "kv_namespaces": [
+        { "binding": "OAUTH_KV", "id": "508f8a32f1bf4ef9b2f179ce0c47e687" }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "sorria-leste-mcp-staging",
+          "database_id": "eee1b611-f651-4f88-870a-e85e06060b75"
+        }
+      ]
+    }
+  }
+}

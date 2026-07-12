@@ -5,8 +5,19 @@
  * Gera e valida tokens JWT com payload customizado.
  */
 
-const JWT_SECRET = process.env.JWT_SECRET || 'sorria-leste-dev-secret-change-in-production';
 const JWT_EXPIRATION_HOURS = 24;
+
+/**
+ * JWTs nunca devem ter uma chave de fallback: se a configuração de produção
+ * estiver incompleta, emitir tokens previsíveis é pior do que falhar cedo.
+ */
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET não configurado');
+  }
+  return secret;
+}
 
 interface JwtHeader {
   alg: string;
@@ -50,7 +61,7 @@ async function sign(input: string): Promise<string> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(JWT_SECRET),
+    encoder.encode(getJwtSecret()),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
@@ -64,7 +75,7 @@ async function verify(input: string, signatureStr: string): Promise<boolean> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(JWT_SECRET),
+    encoder.encode(getJwtSecret()),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['verify']
