@@ -62,6 +62,35 @@ export const GET = withAuth(async (_request, context) => {
       [clienteId]
     );
 
+    const pagamentosAlocacoes = await query(
+      `SELECT
+         pa.id,
+         pa.pagamento_id,
+         pg.pagamento_grupo_id,
+         pa.item_atendimento_id,
+         pa.agendamento_id,
+         pa.etapa_modelo_id,
+         pa.valor_alocado,
+         COALESCE(p_item.nome, p_ag.nome, 'Procedimento') as procedimento_nome,
+         COALESCE(etapa.nome, i.etapa_label) as etapa_label,
+         i.dentes,
+         i.dente_unico,
+         i.quantidade,
+         ag.data_agendada,
+         ag.status as agendamento_status
+       FROM pagamentos_alocacoes pa
+       INNER JOIN pagamentos pg ON pg.id = pa.pagamento_id
+       INNER JOIN atendimentos a ON pg.atendimento_id = a.id
+       LEFT JOIN itens_atendimento i ON i.id = pa.item_atendimento_id
+       LEFT JOIN procedimentos p_item ON p_item.id = i.procedimento_id
+       LEFT JOIN agendamentos ag ON ag.id = pa.agendamento_id
+       LEFT JOIN procedimentos p_ag ON p_ag.id = ag.procedimento_id
+       LEFT JOIN procedimento_etapas_modelo etapa ON etapa.id = COALESCE(pa.etapa_modelo_id, ag.etapa_modelo_id, i.etapa_modelo_id)
+       WHERE a.cliente_id = ?
+       ORDER BY pa.created_at ASC, pa.id ASC`,
+      [clienteId]
+    );
+
     // Histórico — executado em queries separadas para evitar limite de compound SELECT do D1
     const [hCriados, hLiberados, hFinalizados, hPagamentos, hProcedimentos, hMovimentacoes] = await Promise.all([
       query(
@@ -159,7 +188,15 @@ export const GET = withAuth(async (_request, context) => {
       [clienteId]
     );
 
-    return NextResponse.json({ atendimentos, procedimentos, pagamentos, historico, prontuarios, movimentacoes: hMovimentacoes });
+    return NextResponse.json({
+      atendimentos,
+      procedimentos,
+      pagamentos,
+      pagamentos_alocacoes: pagamentosAlocacoes,
+      historico,
+      prontuarios,
+      movimentacoes: hMovimentacoes,
+    });
   } catch (error) {
     console.error('Erro ao buscar ficha:', error);
     return NextResponse.json({ error: 'Erro ao buscar ficha' }, { status: 500 });

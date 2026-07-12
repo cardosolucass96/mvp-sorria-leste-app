@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { PageHeader, Card, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal } from '@/components/ui';
 import { StatusBadge, ClienteForm, ClienteFormData, AnexosGallery } from '@/components/domain';
-import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarTelefone, formatarDentes, parseDentesLabels } from '@/lib/utils/formatters';
+import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarTelefone, formatarDentes, parseDentesLabels, nomeProcedimentoItem } from '@/lib/utils/formatters';
 import { finalizarJanelaDeImpressao } from '@/lib/utils/print';
 import { getOrigemLabel } from '@/lib/constants/origens';
 import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
@@ -92,6 +92,23 @@ interface Pagamento {
   created_at: string;
 }
 
+interface PagamentoAlocacao {
+  id: number;
+  pagamento_id: number;
+  pagamento_grupo_id: number | null;
+  item_atendimento_id: number | null;
+  agendamento_id: number | null;
+  etapa_modelo_id: number | null;
+  valor_alocado: number;
+  procedimento_nome: string;
+  etapa_label: string | null;
+  dentes: string | null;
+  dente_unico: string | null;
+  quantidade: number | null;
+  data_agendada: string | null;
+  agendamento_status: string | null;
+}
+
 interface EventoHistorico {
   tipo: string;
   data: string;
@@ -137,6 +154,7 @@ interface FichaData {
   atendimentos: Atendimento[];
   procedimentos: ItemProcedimento[];
   pagamentos: Pagamento[];
+  pagamentos_alocacoes: PagamentoAlocacao[];
   historico: EventoHistorico[];
   prontuarios: ItemProntuario[];
   movimentacoes: Movimentacao[];
@@ -623,6 +641,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
             th { background: #ffedd5; color: #7c2d12; }
             ul { padding-left: 16px; margin: 0; }
+            .compact-list { padding-left: 14px; margin: 0; }
+            .compact-list li { margin-bottom: 3px; }
             .muted { color: #64748b; }
           </style>
         </head>
@@ -803,19 +823,47 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     const pagamentosSelecionadosList = ficha.pagamentos.filter((pagamento) => pagamentoSet.has(pagamento.id));
     if (pagamentosSelecionadosList.length === 0) return;
 
-    const atendimentosMap = new Map(ficha.atendimentos.map((atendimento) => [atendimento.id, atendimento]));
     const formatMetodo = (metodo: string) => escapeHtml(getMetodoPagamentoLabel(metodo));
+    const alocacoesPorPagamento = new Map<number, PagamentoAlocacao[]>();
+    for (const alocacao of ficha.pagamentos_alocacoes ?? []) {
+      const lista = alocacoesPorPagamento.get(alocacao.pagamento_id) ?? [];
+      lista.push(alocacao);
+      alocacoesPorPagamento.set(alocacao.pagamento_id, lista);
+    }
+
+    const formatarReferenciasPagamento = (pagamentoId: number) => {
+      const alocacoes = alocacoesPorPagamento.get(pagamentoId) ?? [];
+      if (alocacoes.length === 0) {
+        return '<span class="muted">Não informado</span>';
+      }
+
+      return `
+        <ul class="compact-list">
+          ${alocacoes.map((alocacao) => {
+            const nome = nomeProcedimentoItem({
+              procedimento_nome: alocacao.procedimento_nome || 'Procedimento',
+              etapa_label: alocacao.etapa_label,
+              dentes: alocacao.dentes,
+              dente_unico: alocacao.dente_unico,
+            });
+            const complemento = alocacao.agendamento_id && alocacao.data_agendada
+              ? ` · agendado para ${formatarDataHora(alocacao.data_agendada)}`
+              : '';
+
+            return `
+              <li>
+                <strong>${escapeHtml(nome)}</strong>
+                <span class="muted"> · ${formatarMoeda(parseSafeNumber(alocacao.valor_alocado))}${escapeHtml(complemento)}</span>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      `;
+    };
 
     const totalSelecionado = pagamentosSelecionadosList.reduce((acc, pagamento) => acc + parseSafeNumber(pagamento.valor), 0);
-    const totalAtivo = pagamentosSelecionadosList
-      .filter((pagamento) => !pagamento.cancelado)
-      .reduce((acc, pagamento) => acc + parseSafeNumber(pagamento.valor), 0);
-    const totalCancelado = pagamentosSelecionadosList
-      .filter((pagamento) => pagamento.cancelado)
-      .reduce((acc, pagamento) => acc + parseSafeNumber(pagamento.valor), 0);
 
     const pagamentosHtml = pagamentosSelecionadosList.map((pagamento) => {
-      const atendimento = atendimentosMap.get(pagamento.atendimento_id);
       const detalhesObservacao = [
         pagamento.observacoes || null,
         pagamento.cancelado && pagamento.motivo_cancelamento
@@ -827,10 +875,9 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         <tr>
           <td>${formatarDataHora(pagamento.created_at)}</td>
           <td>#${escapeHtml(pagamento.atendimento_id)}</td>
-          <td>${escapeHtml(atendimento?.status || '-')}</td>
+          <td>${formatarReferenciasPagamento(pagamento.id)}</td>
           <td>${formatMetodo(pagamento.metodo)}</td>
           <td style=\"text-align:right;\">${formatarMoeda(parseSafeNumber(pagamento.valor))}</td>
-          <td style=\"text-align:center;\">${pagamento.cancelado ? 'Cancelado' : 'Ativo'}</td>
           <td>${escapeHtml(pagamento.recebido_por_nome || '-')}</td>
           <td>${escapeHtml(detalhesObservacao.join(' | ') || '-')}</td>
         </tr>
@@ -843,9 +890,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       contadorLabel: 'Pagamentos',
       contadorValor: pagamentosSelecionadosList.length,
       resumoHtml: `
-        <strong>Total dos pagamentos selecionados:</strong> ${formatarMoeda(totalSelecionado)}<br />
-        <strong>Total ativo:</strong> ${formatarMoeda(totalAtivo)}<br />
-        <strong>Total cancelado:</strong> ${formatarMoeda(totalCancelado)}
+        <strong>Total dos pagamentos selecionados:</strong> ${formatarMoeda(totalSelecionado)}
       `,
       conteudoHtml: `
         <section class=\"section\">
@@ -855,10 +900,9 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <tr>
                 <th>Data</th>
                 <th>Atendimento</th>
-                <th>Status do atendimento</th>
+                <th>Referente a</th>
                 <th>Forma</th>
                 <th>Valor</th>
-                <th>Situação</th>
                 <th>Recebido por</th>
                 <th>Observações</th>
               </tr>
