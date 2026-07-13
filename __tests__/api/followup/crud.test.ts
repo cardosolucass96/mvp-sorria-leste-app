@@ -391,6 +391,61 @@ describe('POST /api/followup/[id]/concluir', () => {
     const updateQuery = getExecutedQueries().find((entry) => entry.sql.includes("SET status = 'concluida'"));
     expect(updateQuery?.params).toEqual(['Contato concluído', 2, 41]);
   });
+
+  it('permite admin responsável concluir a própria tarefa', async () => {
+    verifyToken.mockResolvedValueOnce(makePayload('admin', { sub: 9 }));
+    mockQueryResponse('select * from followup_tarefas where id', makeTask({
+      id: 42,
+      responsavel_usuario_id: 9,
+      responsavel_usuario_nome: 'Admin Responsável',
+    }));
+    mockQueryResponse('from followup_tarefas f', makeTask({
+      id: 42,
+      status: 'concluida',
+      responsavel_usuario_id: 9,
+      responsavel_usuario_nome: 'Admin Responsável',
+      nota_conclusao: 'Admin concluiu',
+      concluida_por_id: 9,
+      concluida_por_nome: 'admin Teste',
+      concluida_em: '2026-05-25 11:15:00',
+    }));
+
+    const ctx = createRouteContext({ id: '42' });
+    const { status, data } = await callRoute<Record<string, unknown>>(
+      concludeFollowup,
+      '/api/followup/42/concluir',
+      {
+        method: 'POST',
+        body: { nota_conclusao: 'Admin concluiu' },
+      },
+      ctx
+    );
+
+    expect(status).toBe(200);
+    expect(data.status).toBe('concluida');
+
+    const updateQuery = getExecutedQueries().find((entry) => entry.sql.includes("SET status = 'concluida'"));
+    expect(updateQuery?.params).toEqual(['Admin concluiu', 9, 42]);
+  });
+
+  it('bloqueia admin que não é o responsável da tarefa', async () => {
+    verifyToken.mockResolvedValueOnce(makePayload('admin', { sub: 9 }));
+    mockQueryResponse('select * from followup_tarefas where id', makeTask({ id: 43, responsavel_usuario_id: 2 }));
+
+    const ctx = createRouteContext({ id: '43' });
+    const { status, data } = await callRoute<{ error: string }>(
+      concludeFollowup,
+      '/api/followup/43/concluir',
+      {
+        method: 'POST',
+        body: { nota_conclusao: 'Tentativa indevida' },
+      },
+      ctx
+    );
+
+    expect(status).toBe(403);
+    expect(data.error).toBe('Apenas atendentes ou o admin responsável podem concluir esta tarefa');
+  });
 });
 
 describe('DELETE /api/followup/[id]', () => {

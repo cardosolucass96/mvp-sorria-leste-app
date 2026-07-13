@@ -223,6 +223,37 @@ describe('FollowupPage', () => {
     expect(screen.getByRole('button', { name: /Abrir cliente/i })).toBeInTheDocument();
   });
 
+  test('admin responsável pela tarefa vê botão de concluir sem editar ou excluir', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 2, role: 'admin', roles: ['admin'] },
+      isLoading: false,
+      currentUnidade: 1,
+      hasRole: (roles: string | string[]) => {
+        const values = Array.isArray(roles) ? roles : [roles];
+        return values.includes('admin');
+      },
+    });
+
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse({
+        items: [makeTask({ id: 1, titulo: 'Tarefa do admin responsável' })],
+        summary: {
+          abertas: 1,
+          atrasadas: 0,
+          vencem_hoje: 1,
+          concluidas_hoje: 0,
+        },
+      })
+    );
+
+    render(<FollowupPage />);
+
+    expect(await screen.findByText('Tarefa do admin responsável')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Concluir/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Editar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Excluir/i })).not.toBeInTheDocument();
+  });
+
   test('usuária com roles admin e atendente consegue concluir tarefa', async () => {
     mockUseAuth.mockReturnValue({
       user: { id: 1, role: 'admin', roles: ['admin', 'atendente'] },

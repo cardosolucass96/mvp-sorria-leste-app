@@ -138,6 +138,7 @@ export default function FollowupPage() {
   const canAccess = hasRole(['admin', 'atendente']);
   const canCreate = canAccess;
   const canMutate = currentUserRoles.includes('atendente');
+  const currentUserId = Number(user?.id);
   const fallbackResponsaveis = useMemo<ResponsavelOption[]>(() => {
     const currentUserId = Number(user?.id);
     const canFallbackCurrentUser = !Number.isNaN(currentUserId)
@@ -399,6 +400,14 @@ export default function FollowupPage() {
 
   const totalVisivel = tarefasVisiveis.length;
   const diaSelecionadoLabel = selectedDay ? formatarData(formatLocalDateKey(selectedDay)) : '';
+
+  function canConcludeTask(task: FollowupTarefaCompleta) {
+    if (task.status !== 'aberta') return false;
+    if (canMutate) return true;
+    return currentUserRoles.includes('admin')
+      && !Number.isNaN(currentUserId)
+      && task.responsavel_usuario_id === currentUserId;
+  }
 
   function limparFiltros() {
     setBusca('');
@@ -827,6 +836,7 @@ export default function FollowupPage() {
                       key={task.id}
                       task={task}
                       canMutate={canMutate}
+                      canConclude={canConcludeTask(task)}
                       loading={deletingTaskId === task.id}
                       onOpenClient={() => router.push(`/clientes/${task.cliente_id}`)}
                       onEdit={() => abrirEdicao(task)}
@@ -851,6 +861,7 @@ export default function FollowupPage() {
                     key={task.id}
                     task={task}
                     canMutate={false}
+                    canConclude={false}
                     loading={false}
                     onOpenClient={() => router.push(`/clientes/${task.cliente_id}`)}
                     onEdit={() => {}}
@@ -1055,6 +1066,7 @@ export default function FollowupPage() {
 function FollowupTaskCard({
   task,
   canMutate,
+  canConclude,
   loading,
   onOpenClient,
   onEdit,
@@ -1063,6 +1075,7 @@ function FollowupTaskCard({
 }: {
   task: FollowupTarefaCompleta;
   canMutate: boolean;
+  canConclude: boolean;
   loading: boolean;
   onOpenClient: () => void;
   onEdit: () => void;
@@ -1144,35 +1157,41 @@ function FollowupTaskCard({
             Abrir cliente
           </Button>
 
-          {canMutate && task.status === 'aberta' && (
+          {task.status === 'aberta' && (
             <>
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<Pencil className="w-4 h-4" />}
-                onClick={onEdit}
-                disabled={loading}
-              >
-                Editar
-              </Button>
-              <Button
-                variant="success"
-                size="sm"
-                icon={<CheckCircle2 className="w-4 h-4" />}
-                onClick={onConclude}
-                disabled={loading}
-              >
-                Concluir
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                icon={<Trash2 className="w-4 h-4" />}
-                onClick={onDelete}
-                disabled={loading}
-              >
-                Excluir
-              </Button>
+              {canMutate && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Pencil className="w-4 h-4" />}
+                  onClick={onEdit}
+                  disabled={loading}
+                >
+                  Editar
+                </Button>
+              )}
+              {canConclude && (
+                <Button
+                  variant="success"
+                  size="sm"
+                  icon={<CheckCircle2 className="w-4 h-4" />}
+                  onClick={onConclude}
+                  disabled={loading}
+                >
+                  Concluir
+                </Button>
+              )}
+              {canMutate && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={<Trash2 className="w-4 h-4" />}
+                  onClick={onDelete}
+                  disabled={loading}
+                >
+                  Excluir
+                </Button>
+              )}
             </>
           )}
         </div>

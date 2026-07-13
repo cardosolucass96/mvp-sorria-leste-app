@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { execute } from '@/lib/db';
-import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { getUserRoles, withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { getFollowupTask, getFollowupTaskDetail, isTaskMutable } from '../../_helpers';
 
 // POST /api/followup/[id]/concluir - Conclui tarefa aberta com nota obrigatória
-export const POST = withUnitRole(['atendente'], async (
+export const POST = withUnitRole(['admin', 'atendente'], async (
   request: NextRequest,
   context: UnitAuthenticatedContext
 ) => {
@@ -27,6 +27,18 @@ export const POST = withUnitRole(['atendente'], async (
       return NextResponse.json(
         { error: 'Apenas tarefas abertas e não excluídas podem ser concluídas' },
         { status: 400 }
+      );
+    }
+
+    const userRoles = getUserRoles(context.user);
+    const isAtendente = userRoles.includes('atendente');
+    const isAdminResponsavel = userRoles.includes('admin')
+      && Number(context.user.sub) === tarefa.responsavel_usuario_id;
+
+    if (!isAtendente && !isAdminResponsavel) {
+      return NextResponse.json(
+        { error: 'Apenas atendentes ou o admin responsável podem concluir esta tarefa' },
+        { status: 403 }
       );
     }
 
