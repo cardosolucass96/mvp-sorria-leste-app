@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { PageHeader, Card, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal } from '@/components/ui';
 import { StatusBadge, ClienteForm, ClienteFormData, AnexosGallery } from '@/components/domain';
-import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarCNPJ, formatarTelefone, formatarDentes, parseDentesLabels, nomeProcedimentoItem } from '@/lib/utils/formatters';
+import { formatarData, formatarDataHora, formatarDataHoraLocal, formatarMoeda, formatarCPF, formatarCNPJ, formatarTelefone, formatarDentes, parseDentesLabels, nomeProcedimentoItem } from '@/lib/utils/formatters';
 import { finalizarJanelaDeImpressao } from '@/lib/utils/print';
 import { getOrigemLabel } from '@/lib/constants/origens';
 import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
@@ -1108,7 +1108,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               dente_unico: alocacao.dente_unico,
             });
             const complemento = alocacao.agendamento_id && alocacao.data_agendada
-              ? ` · agendado para ${formatarDataHora(alocacao.data_agendada)}`
+              ? ` · agendado para ${formatarDataHoraLocal(alocacao.data_agendada)}`
               : '';
 
             return `
@@ -1801,7 +1801,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                   return (
                     <tr key={agendamento.id} className="hover:bg-surface-secondary">
                       <td className="px-4 py-3 text-sm">
-                        {agendamento.data_agendada ? formatarDataHora(agendamento.data_agendada) : 'Sem data'}
+                        {agendamento.data_agendada ? formatarDataHoraLocal(agendamento.data_agendada) : 'Sem data'}
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-medium">
@@ -1874,7 +1874,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                           <p className="mt-2 text-sm text-muted whitespace-pre-wrap">{followup.descricao}</p>
                         )}
                         <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
-                          <span>Vencimento: {formatarDataHora(followup.vencimento_em)}</span>
+                          <span>Vencimento: {formatarDataHoraLocal(followup.vencimento_em)}</span>
                           <span>Responsável: {followup.responsavel_usuario_nome}</span>
                           <span>Criado por: {followup.criado_por_nome}</span>
                           {followup.concluida_em && <span>Concluído em: {formatarDataHora(followup.concluida_em)}</span>}

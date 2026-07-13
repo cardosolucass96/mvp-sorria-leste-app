@@ -10,18 +10,34 @@ export function formatarMoeda(valor: number): string {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const SQLITE_NAIVE_DATETIME_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?(?:\.\d+)?$/;
+
 /**
- * Converte string de data do SQLite para objeto Date tratando como horário local.
- * SQLite retorna "YYYY-MM-DD HH:MM:SS" (sem fuso) ou "YYYY-MM-DD".
- * new Date("YYYY-MM-DD") interpreta como UTC, causando bug de dia errado no Brasil (UTC-3).
+ * Converte timestamps gerados pelo sistema para Date.
+ *
+ * Regras:
+ * - `YYYY-MM-DD` continua sendo tratado como data local.
+ * - `YYYY-MM-DD HH:MM:SS` vindo do banco é tratado como UTC sem offset explícito.
+ *
+ * Isso corrige o caso do D1/Cloudflare gravar timestamps "naive" em UTC, que antes eram
+ * reinterpretados como horário local na UI e apareciam ~3 horas adiantados no Brasil.
  */
 function parseSqliteDate(data: string | null | undefined): Date | null {
   if (!data) return null;
   const texto = data.trim();
   if (!texto) return null;
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+  if (DATE_ONLY_REGEX.test(texto)) {
     return new Date(`${texto}T00:00:00`);
+  }
+
+  if (SQLITE_NAIVE_DATETIME_REGEX.test(texto)) {
+    const utcLike = `${texto.replace(' ', 'T').replace(/(\.\d{3})\d+$/, '$1')}Z`;
+    const parsedUtc = new Date(utcLike);
+    if (!Number.isNaN(parsedUtc.getTime())) {
+      return parsedUtc;
+    }
   }
 
   const candidatos = new Set<string>();
@@ -71,6 +87,38 @@ function parseSqliteDate(data: string | null | undefined): Date | null {
   return null;
 }
 
+/**
+ * Converte strings locais digitadas pelo usuário para Date sem aplicar compensação de UTC.
+ * Use para `data_agendada`, `vencimento_em` e outros campos de agenda/follow-up.
+ */
+export function parseLocalDateTimeValue(data: string | null | undefined): Date | null {
+  if (!data) return null;
+  const texto = data.trim();
+  if (!texto) return null;
+
+  if (DATE_ONLY_REGEX.test(texto)) {
+    return new Date(`${texto}T00:00:00`);
+  }
+
+  const normalizado = texto.includes(' ') ? texto.replace(' ', 'T') : texto;
+  const semMicros = normalizado.replace(/(\.\d{3})\d+(?=(Z|[+-]\d{2}:?\d{2}|$))/, '$1');
+  const candidatos = [
+    semMicros,
+    normalizado,
+    normalizado.replace(/[Zz]$/, ''),
+    texto,
+  ];
+
+  for (const candidato of candidatos) {
+    const d = new Date(candidato);
+    if (!Number.isNaN(d.getTime())) {
+      return d;
+    }
+  }
+
+  return null;
+}
+
 /** Formata data como dd/mm/aaaa */
 export function formatarData(data: string | null | undefined): string {
   const d = parseSqliteDate(data);
@@ -88,7 +136,7 @@ export function formatarDataAgendada(data: string | null | undefined): string {
   const s = data.trim();
   const temHora = (s.includes('T') || s.includes(' ')) &&
     !/T00:00(:\d{2})?$/.test(s) && !/ 00:00(:\d{2})?$/.test(s);
-  const d = parseSqliteDate(data);
+  const d = parseLocalDateTimeValue(data);
   if (!d || isNaN(d.getTime())) return '-';
   if (temHora) {
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -111,6 +159,19 @@ export function toDateTimeLocal(data: string | null | undefined): string {
 /** Formata data como dd/mm/aaaa HH:mm */
 export function formatarDataHora(data: string | null | undefined): string {
   const d = parseSqliteDate(data);
+  if (!d || isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** Formata data/hora local digitada pelo usuário sem converter de UTC */
+export function formatarDataHoraLocal(data: string | null | undefined): string {
+  const d = parseLocalDateTimeValue(data);
   if (!d || isNaN(d.getTime())) return '-';
   return d.toLocaleDateString('pt-BR', {
     day: '2-digit',

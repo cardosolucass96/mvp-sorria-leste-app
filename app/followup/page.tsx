@@ -39,7 +39,7 @@ import {
 } from '@/lib/constants/followup';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import type { FollowupTarefaCompleta } from '@/lib/types';
-import { formatarData, formatarDataHora, formatarTelefone, toDateTimeLocal } from '@/lib/utils/formatters';
+import { formatarData, formatarDataHora, formatarDataHoraLocal, formatarTelefone, toDateTimeLocal } from '@/lib/utils/formatters';
 import {
   formatLocalDateKey,
   getFollowupBucket,
@@ -1018,7 +1018,7 @@ export default function FollowupPage() {
               <p className="font-medium text-foreground">{taskToConclude.titulo}</p>
               <p className="text-muted-foreground">{taskToConclude.cliente_nome}</p>
               <p className="text-muted-foreground">
-                Vencimento: {formatarDataHora(taskToConclude.vencimento_em)}
+                Vencimento: {formatarDataHoraLocal(taskToConclude.vencimento_em)}
               </p>
             </div>
           )}
@@ -1115,7 +1115,7 @@ function FollowupTaskCard({
             <p className="text-muted-foreground">
               Vencimento:{' '}
               <span className="font-medium text-foreground">
-                {vencimento ? formatarDataHora(task.vencimento_em) : '—'}
+                {vencimento ? formatarDataHoraLocal(task.vencimento_em) : '—'}
               </span>
             </p>
             {task.concluida_em && (

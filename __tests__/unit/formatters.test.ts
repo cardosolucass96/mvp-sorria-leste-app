@@ -9,6 +9,7 @@ import {
   formatarMoeda,
   formatarData,
   formatarDataHora,
+  formatarDataHoraLocal,
   formatarDataCompleta,
   formatarCPF,
   formatarDentes,
@@ -105,6 +106,32 @@ describe('formatarDataHora', () => {
     const result = formatarDataHora('2025-01-01T00:00:00');
     expect(result).toMatch(/01\/01\/2025/);
     expect(result).toMatch(/00:00/);
+  });
+
+  test('trata datetime do banco com espaço como UTC sem offset explícito', () => {
+    const result = formatarDataHora('2026-07-13 12:06:00');
+    const expected = new Date('2026-07-13T12:06:00Z').toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    expect(result).toBe(expected);
+  });
+});
+
+describe('formatarDataHoraLocal', () => {
+  test('mantém datetime local digitado pelo usuário sem conversão de UTC', () => {
+    const result = formatarDataHoraLocal('2026-07-13 12:06:00');
+    const expected = new Date('2026-07-13T12:06:00').toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    expect(result).toBe(expected);
   });
 });
 
