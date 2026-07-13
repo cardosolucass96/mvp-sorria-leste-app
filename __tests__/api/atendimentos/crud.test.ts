@@ -85,6 +85,32 @@ describe('GET /api/atendimentos', () => {
     expect(queries[0].params).toContain('triagem');
   });
 
+  it('aplica o período padrão de hoje ou em fluxo', async () => {
+    mockQueryResponse('from atendimentos a', [atendimentoComCliente]);
+
+    await callRoute(listAtendimentos, '/api/atendimentos', {
+      searchParams: { periodo: 'hoje_ou_fluxo' },
+    });
+
+    const queries = getExecutedQueries();
+    expect(queries[0].sql).toContain("date(a.created_at) = date('now', 'localtime')");
+    expect(queries[0].sql).toContain('a.status IN (?, ?, ?, ?)');
+    expect(queries[0].params).toEqual(
+      expect.arrayContaining(['triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao'])
+    );
+  });
+
+  it('filtra por últimos 7 dias quando solicitado', async () => {
+    mockQueryResponse('from atendimentos a', [atendimentoComCliente]);
+
+    await callRoute(listAtendimentos, '/api/atendimentos', {
+      searchParams: { periodo: '7dias' },
+    });
+
+    const queries = getExecutedQueries();
+    expect(queries[0].sql).toContain("date(a.created_at) >= date('now', 'localtime', '-6 days')");
+  });
+
   it('filtra por cliente_id', async () => {
     mockQueryResponse('from atendimentos a', [atendimentoComCliente]);
 

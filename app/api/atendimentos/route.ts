@@ -3,6 +3,7 @@ import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { validarUsuarioPorRoles } from './_helpers';
 import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
+import type { AtendimentoStatus } from '@/lib/types';
 
 interface Atendimento {
   id: number;
@@ -27,6 +28,15 @@ interface CountResult {
   count: number;
 }
 
+type AtendimentoPeriodoFiltro = 'hoje_ou_fluxo' | 'hoje' | '7dias' | '30dias';
+
+const STATUSES_EM_FLUXO: AtendimentoStatus[] = [
+  'triagem',
+  'avaliacao',
+  'aguardando_pagamento',
+  'em_execucao',
+];
+
 // GET /api/atendimentos - Lista atendimentos da unidade atual
 export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
@@ -34,6 +44,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const status = searchParams.get('status');
     const clienteId = searchParams.get('cliente_id');
     const busca = searchParams.get('busca');
+    const periodo = searchParams.get('periodo') as AtendimentoPeriodoFiltro | null;
 
     let sql = `
       SELECT
@@ -57,6 +68,26 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 
     const conditions: string[] = ['a.unidade_id = ?'];
     const params: (string | number)[] = [context.unidadeId];
+
+    switch (periodo) {
+      case 'hoje_ou_fluxo':
+        conditions.push(
+          `(date(a.created_at) = date('now', 'localtime') OR a.status IN (${STATUSES_EM_FLUXO.map(() => '?').join(', ')}))`
+        );
+        params.push(...STATUSES_EM_FLUXO);
+        break;
+      case 'hoje':
+        conditions.push("date(a.created_at) = date('now', 'localtime')");
+        break;
+      case '7dias':
+        conditions.push("date(a.created_at) >= date('now', 'localtime', '-6 days')");
+        break;
+      case '30dias':
+        conditions.push("date(a.created_at) >= date('now', 'localtime', '-29 days')");
+        break;
+      default:
+        break;
+    }
 
     // Filtro por status
     if (status) {

@@ -16,6 +16,7 @@ import { StatusBadge, ViewModeToggle } from '@/components/domain';
 import { STATUS_CONFIG, STATUS_ORDER } from '@/lib/constants/status';
 import { formatarDataHora } from '@/lib/utils/formatters';
 import type { AtendimentoStatus } from '@/lib/types';
+import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface Atendimento {
   id: number;
@@ -30,7 +31,13 @@ interface Atendimento {
   procedimentos_resumo?: string | null;
   executores_resumo?: string | null;
 }
-import usePageTitle from '@/lib/utils/usePageTitle';
+
+const OPCOES_PERIODO = [
+  { value: 'hoje_ou_fluxo', label: 'Hoje + em fluxo' },
+  { value: 'hoje', label: 'Hoje' },
+  { value: '7dias', label: 'Últimos 7 dias' },
+  { value: '30dias', label: 'Últimos 30 dias' },
+];
 
 export default function AtendimentosPage() {
   usePageTitle('Atendimentos');
@@ -40,10 +47,12 @@ export default function AtendimentosPage() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'kanban' | 'lista'>('kanban');
   const [busca, setBusca] = useState('');
+  const [filtroPeriodo, setFiltroPeriodo] = useState('hoje_ou_fluxo');
   const [filtroStatus, setFiltroStatus] = useState<string>('');
   const carregarAtendimentos = useCallback(async () => {
     try {
       const params = new URLSearchParams();
+      if (filtroPeriodo) params.append('periodo', filtroPeriodo);
       if (busca) params.append('busca', busca);
       if (filtroStatus) params.append('status', filtroStatus);
       
@@ -56,7 +65,7 @@ export default function AtendimentosPage() {
     } finally {
       setLoading(false);
     }
-  }, [busca, filtroStatus, unitFetch]);
+  }, [busca, filtroPeriodo, filtroStatus, unitFetch]);
 
   useEffect(() => {
     carregarAtendimentos();
@@ -71,6 +80,7 @@ export default function AtendimentosPage() {
     acc[status] = atendimentos.filter((a) => a.status === status);
     return acc;
   }, {} as Record<AtendimentoStatus, Atendimento[]>);
+  const kanbanStatuses = STATUS_ORDER.filter((status) => status !== 'encerrado');
 
   const listaColumns: TableColumn<Atendimento>[] = [
     { key: 'id', label: 'ID', render: (a) => `#${a.id}` },
@@ -128,6 +138,16 @@ export default function AtendimentosPage() {
               placeholder="Nome ou CPF do cliente..."
             />
           </div>
+          <div className="min-w-[220px]">
+            <Select
+              label="Período"
+              name="filtroPeriodo"
+              value={filtroPeriodo}
+              onChange={(value) => setFiltroPeriodo(value)}
+              options={OPCOES_PERIODO}
+              placeholder="Todos"
+            />
+          </div>
           {viewMode === 'lista' && (
             <div className="min-w-[180px]">
               <Select
@@ -147,7 +167,7 @@ export default function AtendimentosPage() {
       {/* Kanban */}
       {viewMode === 'kanban' && (
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {STATUS_ORDER.map((status) => {
+          {kanbanStatuses.map((status) => {
             const cfg = STATUS_CONFIG[status];
             return (
               <div key={status} className="flex-shrink-0 w-72 bg-surface-muted rounded-lg">
