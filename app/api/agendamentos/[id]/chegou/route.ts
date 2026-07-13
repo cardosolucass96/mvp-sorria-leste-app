@@ -11,6 +11,16 @@ interface AtendimentoExistente {
   id: number;
 }
 
+interface ItemOrigemVinculado {
+  id: number;
+  atendimento_id: number;
+  procedimento_id: number;
+  executor_id: number | null;
+  criado_por_id: number;
+  status: string;
+  cliente_id: number;
+}
+
 interface EtapaModelo {
   id: number;
   nome: string;
@@ -20,6 +30,7 @@ interface EtapaModelo {
 interface AgendamentoDoCliente {
   id: number;
   cliente_id: number;
+  atendimento_origem_id: number | null;
   procedimento_id: number | null;
   executor_id: number | null;
   item_atendimento_origem_id: number | null;
@@ -68,24 +79,6 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
       );
     }
 
-    // 2. Verificar que o cliente não tem atendimento aberto hoje na mesma unidade
-    const atendimentoAberto = await queryOne<AtendimentoExistente>(
-      `SELECT id FROM atendimentos
-       WHERE cliente_id = ? AND status NOT IN ('finalizado', 'encerrado')
-       AND date(created_at) = date('now','localtime') AND unidade_id = ?`,
-      [agendamento.cliente_id, unidadeId]
-    );
-
-    if (atendimentoAberto) {
-      return NextResponse.json(
-        {
-          error: 'Cliente já possui atendimento aberto hoje',
-          atendimento_existente_id: atendimentoAberto.id,
-        },
-        { status: 409 }
-      );
-    }
-
     // 3. Buscar TODOS os agendamentos do cliente para hoje (pendente ou agendado)
     //    Inclui o agendamento disparador + qualquer outro com data_agendada = hoje
     const agendamentosHoje = await query<AgendamentoDoCliente>(
@@ -110,10 +103,188 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
     // 4. Determinar se é avaliação ou sessão de procedimento
     const soAvaliacao = agendamentosHoje.every(ag => ag.tipo === 'avaliacao' || !ag.procedimento_id);
     const agendamentosProcedimento = agendamentosHoje.filter(ag => ag.tipo !== 'avaliacao' && ag.procedimento_id);
+    const agendamentosVinculados = agendamentosProcedimento.filter((ag) => ag.item_atendimento_origem_id != null);
 
     let novoAtendimentoId: number;
 
-    if (soAvaliacao) {
+    if (!soAvaliacao && agendamentosVinculados.length > 0) {
+      if (agendamentosVinculados.length !== agendamentosProcedimento.length) {
+        return NextResponse.json(
+          { error: 'Os agendamentos de hoje misturam procedimentos vinculados e avulsos. Registre a chegada separadamente.' },
+          { status: 409 }
+        );
+      }
+
+      const itemOrigemIds = Array.from(new Set(
+        agendamentosVinculados
+          .map((ag) => ag.item_atendimento_origem_id)
+          .filter((itemId): itemId is number => typeof itemId === 'number' && Number.isFinite(itemId))
+      ));
+
+      const itensOrigem = await query<ItemOrigemVinculado>(
+        `SELECT
+           i.id,
+           i.atendimento_id,
+           i.procedimento_id,
+           i.executor_id,
+           i.criado_por_id,
+           i.status,
+           a.cliente_id
+         FROM itens_atendimento i
+         INNER JOIN atendimentos a ON a.id = i.atendimento_id
+         WHERE i.id IN (${itemOrigemIds.map(() => '?').join(', ')})
+           AND a.unidade_id = ?`,
+        [...itemOrigemIds, unidadeId]
+      );
+
+      if (itensOrigem.length !== itemOrigemIds.length) {
+        return NextResponse.json(
+          { error: 'Um ou mais procedimentos vinculados não foram encontrados na unidade atual' },
+          { status: 409 }
+        );
+      }
+
+      const itensOrigemMap = new Map(itensOrigem.map((item) => [item.id, item]));
+      const atendimentoOrigemIds = new Set<number>();
+
+      for (const ag of agendamentosVinculados) {
+        const itemOrigem = itensOrigemMap.get(ag.item_atendimento_origem_id!);
+        if (!itemOrigem) {
+          return NextResponse.json(
+            { error: 'Procedimento de origem não encontrado para um dos agendamentos do grupo' },
+            { status: 409 }
+          );
+        }
+
+        if (itemOrigem.cliente_id !== agendamento.cliente_id) {
+          return NextResponse.json(
+            { error: 'Os procedimentos vinculados do grupo não pertencem ao cliente selecionado' },
+            { status: 409 }
+          );
+        }
+
+        if (itemOrigem.procedimento_id !== ag.procedimento_id) {
+          return NextResponse.json(
+            { error: 'O procedimento do agendamento não corresponde ao procedimento de origem vinculado' },
+            { status: 409 }
+          );
+        }
+
+        if (ag.atendimento_origem_id && ag.atendimento_origem_id !== itemOrigem.atendimento_id) {
+          return NextResponse.json(
+            { error: 'Um dos agendamentos aponta para um atendimento de origem diferente do item vinculado' },
+            { status: 409 }
+          );
+        }
+
+        if (itemOrigem.status === 'concluido') {
+          return NextResponse.json(
+            { error: 'Não é possível registrar chegada para um procedimento vinculado que já foi concluído' },
+            { status: 409 }
+          );
+        }
+
+        atendimentoOrigemIds.add(itemOrigem.atendimento_id);
+      }
+
+      if (atendimentoOrigemIds.size !== 1) {
+        return NextResponse.json(
+          { error: 'Os agendamentos vinculados do grupo apontam para atendimentos de origem diferentes. Registre a chegada separadamente.' },
+          { status: 409 }
+        );
+      }
+
+      const atendimentoOrigemId = Array.from(atendimentoOrigemIds)[0];
+      const atendimentoAberto = await queryOne<AtendimentoExistente>(
+        `SELECT id FROM atendimentos
+         WHERE cliente_id = ? AND status NOT IN ('finalizado', 'encerrado')
+           AND unidade_id = ?
+           AND id != ?`,
+        [agendamento.cliente_id, unidadeId, atendimentoOrigemId]
+      );
+
+      if (atendimentoAberto) {
+        return NextResponse.json(
+          {
+            error: 'Cliente já possui outro atendimento aberto na unidade',
+            atendimento_existente_id: atendimentoAberto.id,
+          },
+          { status: 409 }
+        );
+      }
+
+      await execute(
+        `UPDATE atendimentos
+         SET status = 'aguardando_pagamento',
+             finalizado_at = NULL,
+             motivo_saida = NULL,
+             liberado_por_id = NULL,
+             liberado_em = NULL
+         WHERE id = ? AND unidade_id = ?`,
+        [atendimentoOrigemId, unidadeId]
+      );
+      novoAtendimentoId = atendimentoOrigemId;
+
+      for (const ag of agendamentosVinculados) {
+        const itemOrigem = itensOrigemMap.get(ag.item_atendimento_origem_id!);
+        if (!itemOrigem) continue;
+
+        if (ag.executor_id != null && !['executando', 'concluido'].includes(itemOrigem.status) && ag.executor_id !== itemOrigem.executor_id) {
+          await execute(
+            'UPDATE itens_atendimento SET executor_id = ? WHERE id = ?',
+            [ag.executor_id, itemOrigem.id]
+          );
+        }
+
+        if (ag.etapa_modelo_id != null) {
+          await execute(
+            `DELETE FROM itens_atendimento_destinos
+             WHERE atendimento_id = ?
+               AND item_atendimento_id = ?
+               AND etapa_modelo_id = ?`,
+            [atendimentoOrigemId, itemOrigem.id, ag.etapa_modelo_id]
+          );
+        } else {
+          await execute(
+            `DELETE FROM itens_atendimento_destinos
+             WHERE atendimento_id = ?
+               AND item_atendimento_id = ?
+               AND etapa_modelo_id IS NULL`,
+            [atendimentoOrigemId, itemOrigem.id]
+          );
+        }
+
+        await execute(
+          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = ? WHERE id = ?`,
+          [novoAtendimentoId, ag.id]
+        );
+      }
+
+      for (const ag of agendamentosHoje.filter(a => a.tipo === 'avaliacao' || !a.procedimento_id)) {
+        await execute(
+          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = ? WHERE id = ?`,
+          [novoAtendimentoId, ag.id]
+        );
+      }
+    } else if (soAvaliacao) {
+      // 5. Verificar que o cliente não tem atendimento aberto hoje na mesma unidade
+      const atendimentoAberto = await queryOne<AtendimentoExistente>(
+        `SELECT id FROM atendimentos
+         WHERE cliente_id = ? AND status NOT IN ('finalizado', 'encerrado')
+         AND date(created_at) = date('now','localtime') AND unidade_id = ?`,
+        [agendamento.cliente_id, unidadeId]
+      );
+
+      if (atendimentoAberto) {
+        return NextResponse.json(
+          {
+            error: 'Cliente já possui atendimento aberto hoje',
+            atendimento_existente_id: atendimentoAberto.id,
+          },
+          { status: 409 }
+        );
+      }
+
       // Avaliação: se tem avaliador atribuído, já entra direto em 'avaliacao'
       const avaliadorId = agendamentosHoje.find(ag => ag.executor_id)?.executor_id || null;
       const statusInicial = avaliadorId ? 'avaliacao' : 'triagem';
@@ -133,6 +304,24 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
         );
       }
     } else {
+      // 5. Verificar que o cliente não tem atendimento aberto hoje na mesma unidade
+      const atendimentoAberto = await queryOne<AtendimentoExistente>(
+        `SELECT id FROM atendimentos
+         WHERE cliente_id = ? AND status NOT IN ('finalizado', 'encerrado')
+         AND date(created_at) = date('now','localtime') AND unidade_id = ?`,
+        [agendamento.cliente_id, unidadeId]
+      );
+
+      if (atendimentoAberto) {
+        return NextResponse.json(
+          {
+            error: 'Cliente já possui atendimento aberto hoje',
+            atendimento_existente_id: atendimentoAberto.id,
+          },
+          { status: 409 }
+        );
+      }
+
       // Sessão: cria atendimento tipo sessão aguardando pagamento (fluxo original)
       const observacoes = agendamentosProcedimento.length > 1
         ? `Sessão com ${agendamentosProcedimento.length} procedimentos (agendamentos: ${agendamentosProcedimento.map(a => `#${a.id}`).join(', ')})`

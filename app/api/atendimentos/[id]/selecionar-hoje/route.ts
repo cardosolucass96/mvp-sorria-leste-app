@@ -108,6 +108,7 @@ async function criarAgendamentoFuturo({
   atendimento,
   item,
   etapaModeloId,
+  itemAtendimentoOrigemId,
   executorId,
   dataAgendada,
   destinoStatus,
@@ -117,6 +118,7 @@ async function criarAgendamentoFuturo({
   atendimento: AtendimentoRow;
   item: ItemRow;
   etapaModeloId: number | null;
+  itemAtendimentoOrigemId: number | null;
   executorId: number | null | undefined;
   dataAgendada?: string | null;
   destinoStatus: DestinoStatus;
@@ -125,12 +127,13 @@ async function criarAgendamentoFuturo({
 }) {
   const result = await execute(
     `INSERT INTO agendamentos
-      (cliente_id, atendimento_origem_id, procedimento_id, executor_id, data_agendada, status, etapa_modelo_id, pago, valor, valor_pago, unidade_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (cliente_id, atendimento_origem_id, procedimento_id, item_atendimento_origem_id, executor_id, data_agendada, status, etapa_modelo_id, pago, valor, valor_pago, unidade_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       atendimento.cliente_id,
       atendimento.id,
       item.procedimento_id,
+      itemAtendimentoOrigemId,
       resolverExecutorDestinoId(executorId, item.executor_id),
       dataAgendada ?? null,
       inferirStatusAgendamento(destinoStatus, dataAgendada),
@@ -270,6 +273,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     let agendamentosCriados = 0;
     let itensHoje = 0;
+    const preservarItensOriginais = acaoFinal === 'finalizar_continuacao';
 
     for (const item of itens) {
       const destinosItem = destinosPorItem.get(item.id) ?? [];
@@ -291,10 +295,23 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
           continue;
         }
 
+        const executorDestinoId = resolverExecutorDestinoId(destino.executor_id, item.executor_id);
+        if (
+          preservarItensOriginais &&
+          destino.executor_id !== undefined &&
+          executorDestinoId !== (item.executor_id ?? null)
+        ) {
+          await execute(
+            'UPDATE itens_atendimento SET executor_id = ? WHERE id = ?',
+            [executorDestinoId, item.id]
+          );
+        }
+
         const agendamentoId = await criarAgendamentoFuturo({
           atendimento,
           item,
           etapaModeloId: null,
+          itemAtendimentoOrigemId: preservarItensOriginais ? item.id : null,
           executorId: destino.executor_id,
           dataAgendada: destino.data_agendada,
           destinoStatus: destino.destino_status,
@@ -302,6 +319,10 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
           valorPago: roundMoney(item.valor_pago),
         });
         agendamentosCriados += 1;
+
+        if (preservarItensOriginais) {
+          continue;
+        }
 
         await execute(
           `UPDATE pagamentos_alocacoes
@@ -370,6 +391,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
           atendimento,
           item,
           etapaModeloId: etapa.id,
+          itemAtendimentoOrigemId: preservarItensOriginais ? item.id : null,
           executorId: destino.executor_id,
           dataAgendada: destino.data_agendada,
           destinoStatus: destino.destino_status,
@@ -378,12 +400,20 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         });
         agendamentosCriados += 1;
 
+        if (preservarItensOriginais) {
+          continue;
+        }
+
         await execute(
           `UPDATE pagamentos_alocacoes
            SET agendamento_id = ?, item_atendimento_id = NULL
            WHERE item_atendimento_id = ? AND etapa_modelo_id = ?`,
           [agendamentoId, item.id, etapa.id]
         );
+      }
+
+      if (preservarItensOriginais) {
+        continue;
       }
 
       await execute('DELETE FROM itens_atendimento_destinos WHERE item_atendimento_id = ?', [item.id]);

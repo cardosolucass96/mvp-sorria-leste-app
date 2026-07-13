@@ -146,7 +146,7 @@ describe('POST /api/atendimentos/[id]/selecionar-hoje', () => {
     const insertAgendamentoQuery = queries.find((query) => query.sql.includes('INSERT INTO agendamentos'));
 
     expect(insertAgendamentoQuery).toBeDefined();
-    expect(insertAgendamentoQuery?.params[3]).toBeNull();
+    expect(insertAgendamentoQuery?.params[4]).toBeNull();
   });
 
   it('mantem executor nulo ao quebrar procedimento em etapas para fazer_hoje', async () => {
@@ -222,11 +222,18 @@ describe('POST /api/atendimentos/[id]/selecionar-hoje', () => {
     expect(data).toEqual({ agendamentos_criados: 1, itens_hoje: 0, status_final: 'finalizado' });
 
     const queries = getExecutedQueries();
+    const insertAgendamentoQuery = queries.find((query) => query.sql.includes('INSERT INTO agendamentos'));
     const finalizarQuery = queries.find((query) =>
       query.sql.includes("SET status = 'finalizado'") && query.sql.includes("motivo_saida = 'continuacao'")
     );
+    const deleteItemQuery = queries.find((query) => query.sql.includes('DELETE FROM itens_atendimento WHERE id = ?'));
+    const realocacaoQuery = queries.find((query) => query.sql.includes('SET agendamento_id = ?, item_atendimento_id = NULL'));
 
+    expect(insertAgendamentoQuery).toBeDefined();
+    expect(insertAgendamentoQuery?.params[3]).toBe(1);
     expect(finalizarQuery).toBeDefined();
+    expect(deleteItemQuery).toBeUndefined();
+    expect(realocacaoQuery).toBeUndefined();
   });
 
   it('finaliza como continuacao e gera agendamento pendente quando ficar sem data', async () => {
@@ -262,10 +269,58 @@ describe('POST /api/atendimentos/[id]/selecionar-hoje', () => {
 
     const queries = getExecutedQueries();
     const insertAgendamentoQuery = queries.find((query) => query.sql.includes('INSERT INTO agendamentos'));
+    const deleteItemQuery = queries.find((query) => query.sql.includes('DELETE FROM itens_atendimento WHERE id = ?'));
+    const realocacaoQuery = queries.find((query) => query.sql.includes('SET agendamento_id = ?, item_atendimento_id = NULL'));
 
     expect(insertAgendamentoQuery).toBeDefined();
-    expect(insertAgendamentoQuery?.params[4]).toBeNull();
-    expect(insertAgendamentoQuery?.params[5]).toBe('pendente');
+    expect(insertAgendamentoQuery?.params[3]).toBe(1);
+    expect(insertAgendamentoQuery?.params[5]).toBeNull();
+    expect(insertAgendamentoQuery?.params[6]).toBe('pendente');
+    expect(deleteItemQuery).toBeUndefined();
+    expect(realocacaoQuery).toBeUndefined();
+  });
+
+  it('preserva o item original mesmo quando o procedimento ja esta 100% pago', async () => {
+    mockQueryResponse('select id, cliente_id, unidade_id, categoria_id, status from atendimentos', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select * from itens_atendimento where atendimento_id', [
+      { ...ITEM_LIMPEZA_PENDENTE, valor: 150, valor_pago: 150, status: 'pago', executor_id: 4 },
+    ]);
+    setLastInsertId(90);
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status, data } = await callRoute<{ agendamentos_criados: number; itens_hoje: number; status_final: string }>(
+      selecionarHoje,
+      '/api/atendimentos/3/selecionar-hoje',
+      {
+        method: 'POST',
+        body: {
+          acao_final: 'finalizar_continuacao',
+          destinos: [
+            {
+              item_id: 1,
+              etapa_modelo_id: null,
+              destino_status: 'pago_sem_data',
+              executor_id: null,
+            },
+          ],
+        },
+      },
+      ctx
+    );
+
+    expect(status).toBe(200);
+    expect(data).toEqual({ agendamentos_criados: 1, itens_hoje: 0, status_final: 'finalizado' });
+
+    const queries = getExecutedQueries();
+    const insertAgendamentoQuery = queries.find((query) => query.sql.includes('INSERT INTO agendamentos'));
+    const deleteItemQuery = queries.find((query) => query.sql.includes('DELETE FROM itens_atendimento WHERE id = ?'));
+    const realocacaoQuery = queries.find((query) => query.sql.includes('SET agendamento_id = ?, item_atendimento_id = NULL'));
+
+    expect(insertAgendamentoQuery).toBeDefined();
+    expect(insertAgendamentoQuery?.params[3]).toBe(1);
+    expect(insertAgendamentoQuery?.params[6]).toBe('pendente');
+    expect(deleteItemQuery).toBeUndefined();
+    expect(realocacaoQuery).toBeUndefined();
   });
 
   it('rejeita finalizar como continuacao quando houver procedimento para hoje', async () => {

@@ -505,6 +505,38 @@ export const DELETE = withUnit(async (_request: NextRequest, context: UnitAuthen
       );
     }
 
+    const [itensCount, pagamentosCount, continuacoesCount] = await Promise.all([
+      queryOne<CountResult>(
+        'SELECT COUNT(*) as count FROM itens_atendimento WHERE atendimento_id = ?',
+        [atendimentoId]
+      ),
+      queryOne<CountResult>(
+        'SELECT COUNT(*) as count FROM pagamentos WHERE atendimento_id = ? AND cancelado = 0',
+        [atendimentoId]
+      ),
+      queryOne<CountResult>(
+        `SELECT COUNT(*) as count
+         FROM agendamentos
+         WHERE atendimento_origem_id = ?
+           AND tipo = 'procedimento'
+           AND status IN ('pendente', 'agendado')`,
+        [atendimentoId]
+      ),
+    ]);
+
+    const possuiItem = Number(itensCount?.count ?? 0) > 0;
+    const possuiPagamento = Number(pagamentosCount?.count ?? 0) > 0;
+    const possuiContinuacaoAtiva = Number(continuacoesCount?.count ?? 0) > 0;
+
+    if (possuiItem || possuiPagamento || possuiContinuacaoAtiva) {
+      return NextResponse.json(
+        {
+          error: 'Não é possível arquivar este atendimento porque já existe procedimento, pagamento ou continuação ativa. Use o fluxo normal de continuação/finalização.',
+        },
+        { status: 409 }
+      );
+    }
+
     await garantirColunaObservacoesEncerramento();
 
     await execute(

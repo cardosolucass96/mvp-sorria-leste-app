@@ -407,6 +407,9 @@ describe('GET /api/atendimentos/[id]', () => {
 describe('DELETE /api/atendimentos/[id]', () => {
   it('arquiva atendimento ativo em vez de apagar fisicamente', async () => {
     mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('count(*) as count from itens_atendimento where atendimento_id', { count: 0 });
+    mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 0 });
+    mockQueryResponse("and status in ('pendente', 'agendado')", { count: 0 });
 
     const ctx = createRouteContext({ id: '2' });
     const { status, data } = await callRoute<Record<string, unknown>>(archiveAtendimento, '/api/atendimentos/2', {
@@ -426,15 +429,47 @@ describe('DELETE /api/atendimentos/[id]', () => {
     expect(queries.some(q => q.sql.includes('DELETE FROM atendimentos'))).toBe(false);
   });
 
-  it('permite arquivar mesmo com pagamentos já registrados', async () => {
+  it('bloqueia arquivamento quando o atendimento já tem procedimento', async () => {
     mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('count(*) as count from itens_atendimento where atendimento_id', { count: 1 });
+    mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 0 });
+    mockQueryResponse("and status in ('pendente', 'agendado')", { count: 0 });
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status, data } = await callRoute<{ error: string }>(archiveAtendimento, '/api/atendimentos/3', {
+      method: 'DELETE',
+    }, ctx);
+
+    expect(status).toBe(409);
+    expect(data.error).toContain('Use o fluxo normal de continuação/finalização');
+  });
+
+  it('bloqueia arquivamento quando já existe pagamento ativo', async () => {
+    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('count(*) as count from itens_atendimento where atendimento_id', { count: 0 });
+    mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 1 });
+    mockQueryResponse("and status in ('pendente', 'agendado')", { count: 0 });
 
     const ctx = createRouteContext({ id: '3' });
     const { status } = await callRoute(archiveAtendimento, '/api/atendimentos/3', {
       method: 'DELETE',
     }, ctx);
 
-    expect(status).toBe(200);
+    expect(status).toBe(409);
+  });
+
+  it('bloqueia arquivamento quando há continuação ativa', async () => {
+    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('count(*) as count from itens_atendimento where atendimento_id', { count: 0 });
+    mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 0 });
+    mockQueryResponse("and status in ('pendente', 'agendado')", { count: 1 });
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status } = await callRoute(archiveAtendimento, '/api/atendimentos/3', {
+      method: 'DELETE',
+    }, ctx);
+
+    expect(status).toBe(409);
   });
 
   it('rejeita quando o atendimento já está encerrado', async () => {
