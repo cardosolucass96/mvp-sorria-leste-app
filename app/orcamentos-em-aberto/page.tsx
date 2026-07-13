@@ -31,19 +31,24 @@ type SituacaoAgendamento = 'sem_agendamento' | 'agendamento_sem_data' | 'agendad
 interface SummaryResponse {
   valor_total_aberto: number;
   orcamentos_abertos: number;
-  subprocedimentos_abertos: number;
+  procedimentos_abertos: number;
   sem_agendamento: number;
   agendamento_sem_data: number;
   agendado_com_data: number;
 }
 
-interface SubprocedimentoItem {
+interface ProcedimentoItem {
   key: string;
   item_id: number | null;
+  item_ids: number[];
   procedimento_id: number;
   procedimento_nome: string;
   etapa_modelo_id: number | null;
   etapa_label: string | null;
+  por_dente: boolean;
+  group_id: string | null;
+  dentes_labels: string[];
+  quantidade_dentes: number;
   valor_total: number;
   valor_pago: number;
   saldo_aberto: number;
@@ -51,6 +56,8 @@ interface SubprocedimentoItem {
   agendamento_id: number | null;
   agendamento_status: string | null;
   data_agendada: string | null;
+  agendamentos_ativos: number;
+  resumo_agendamento: string | null;
   referencia_em: string;
 }
 
@@ -61,7 +68,7 @@ interface OrcamentoGrupo {
   cliente_telefone: string | null;
   orcamento_em: string;
   valor_total_aberto: number;
-  subprocedimentos: SubprocedimentoItem[];
+  procedimentos: ProcedimentoItem[];
 }
 
 interface OrcamentosEmAbertoResponse {
@@ -93,11 +100,11 @@ function buildVisibleSummary(items: OrcamentoGrupo[]): SummaryResponse {
     acc.valor_total_aberto += group.valor_total_aberto;
     acc.orcamentos_abertos += 1;
 
-    for (const subprocedimento of group.subprocedimentos) {
-      acc.subprocedimentos_abertos += 1;
-      if (subprocedimento.situacao_agendamento === 'sem_agendamento') {
+    for (const procedimento of group.procedimentos) {
+      acc.procedimentos_abertos += 1;
+      if (procedimento.situacao_agendamento === 'sem_agendamento') {
         acc.sem_agendamento += 1;
-      } else if (subprocedimento.situacao_agendamento === 'agendamento_sem_data') {
+      } else if (procedimento.situacao_agendamento === 'agendamento_sem_data') {
         acc.agendamento_sem_data += 1;
       } else {
         acc.agendado_com_data += 1;
@@ -108,17 +115,33 @@ function buildVisibleSummary(items: OrcamentoGrupo[]): SummaryResponse {
   }, {
     valor_total_aberto: 0,
     orcamentos_abertos: 0,
-    subprocedimentos_abertos: 0,
+    procedimentos_abertos: 0,
     sem_agendamento: 0,
     agendamento_sem_data: 0,
     agendado_com_data: 0,
   });
 }
 
-function getSubprocedimentoLabel(subprocedimento: SubprocedimentoItem) {
-  return subprocedimento.etapa_label
-    ? `${subprocedimento.procedimento_nome} — ${subprocedimento.etapa_label}`
-    : subprocedimento.procedimento_nome;
+function getProcedimentoLabel(procedimento: ProcedimentoItem) {
+  return procedimento.etapa_label
+    ? `${procedimento.procedimento_nome} — ${procedimento.etapa_label}`
+    : procedimento.procedimento_nome;
+}
+
+function getAgendamentoResumo(procedimento: ProcedimentoItem) {
+  if (procedimento.data_agendada) {
+    return `Data agendada: ${formatarDataHora(procedimento.data_agendada)}`;
+  }
+
+  if (procedimento.agendamentos_ativos > 0) {
+    if (procedimento.situacao_agendamento === 'agendamento_sem_data') {
+      return 'Agendamento ativo sem data';
+    }
+
+    return procedimento.resumo_agendamento || `${procedimento.agendamentos_ativos} agendamento(s) ativo(s)`;
+  }
+
+  return 'Sem data agendada';
 }
 
 export default function OrcamentosEmAbertoPage() {
@@ -177,8 +200,8 @@ export default function OrcamentosEmAbertoPage() {
 
     return items
       .map((item) => {
-        const subprocedimentos = item.subprocedimentos.filter((subprocedimento) => {
-          if (situacaoFiltro && subprocedimento.situacao_agendamento !== situacaoFiltro) {
+        const procedimentos = item.procedimentos.filter((procedimento) => {
+          if (situacaoFiltro && procedimento.situacao_agendamento !== situacaoFiltro) {
             return false;
           }
 
@@ -188,9 +211,11 @@ export default function OrcamentosEmAbertoPage() {
 
           const tokens = [
             item.cliente_nome,
-            subprocedimento.procedimento_nome,
-            subprocedimento.etapa_label,
-            SITUACAO_LABELS[subprocedimento.situacao_agendamento],
+            procedimento.procedimento_nome,
+            procedimento.etapa_label,
+            procedimento.dentes_labels.join(' '),
+            procedimento.resumo_agendamento,
+            SITUACAO_LABELS[procedimento.situacao_agendamento],
           ]
             .filter(Boolean)
             .join(' ')
@@ -199,15 +224,15 @@ export default function OrcamentosEmAbertoPage() {
           return tokens.includes(termo);
         });
 
-        if (subprocedimentos.length === 0) {
+        if (procedimentos.length === 0) {
           return null;
         }
 
         return {
           ...item,
-          subprocedimentos,
+          procedimentos,
           valor_total_aberto: Number(
-            subprocedimentos.reduce((total, subprocedimento) => total + subprocedimento.saldo_aberto, 0).toFixed(2)
+            procedimentos.reduce((total, procedimento) => total + procedimento.saldo_aberto, 0).toFixed(2)
           ),
         };
       })
@@ -237,22 +262,22 @@ export default function OrcamentosEmAbertoPage() {
     router.push(`/followup?${params.toString()}`);
   }
 
-  function abrirNovoAgendamento(grupo: OrcamentoGrupo, subprocedimento: SubprocedimentoItem) {
-    if (!subprocedimento.item_id) return;
+  function abrirNovoAgendamento(grupo: OrcamentoGrupo, procedimento: ProcedimentoItem) {
+    if (!procedimento.item_id) return;
 
     const params = new URLSearchParams({
       open: '1',
       cliente_id: String(grupo.cliente_id),
       tipo: 'procedimento',
-      procedimento_id: String(subprocedimento.procedimento_id),
-      item_origem_id: String(subprocedimento.item_id),
+      procedimento_id: String(procedimento.procedimento_id),
+      item_origem_id: String(procedimento.item_id),
       atendimento_origem_id: String(grupo.atendimento_id),
     });
 
-    if (subprocedimento.etapa_modelo_id != null) {
-      params.set('etapa_modelo_id', String(subprocedimento.etapa_modelo_id));
-      if (subprocedimento.etapa_label) {
-        params.set('etapa_label', subprocedimento.etapa_label);
+    if (procedimento.etapa_modelo_id != null) {
+      params.set('etapa_modelo_id', String(procedimento.etapa_modelo_id));
+      if (procedimento.etapa_label) {
+        params.set('etapa_label', procedimento.etapa_label);
       }
     }
 
@@ -281,7 +306,7 @@ export default function OrcamentosEmAbertoPage() {
 
       <PageHeader
         title="Orçamentos em Aberto"
-        description="Orçamentos gerados na avaliação com saldo pendente e próximo passo operacional."
+        description="Orçamentos gerados na avaliação com saldo pendente e visão clara dos próximos passos."
         icon={<FileText className="w-7 h-7" />}
         actions={(
           <Button variant="outline" onClick={() => void carregarDados()}>
@@ -290,7 +315,7 @@ export default function OrcamentosEmAbertoPage() {
         )}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           icon={<Wallet className="w-5 h-5" />}
           label="Valor em aberto"
@@ -306,8 +331,8 @@ export default function OrcamentosEmAbertoPage() {
         />
         <StatCard
           icon={<ClipboardList className="w-5 h-5" />}
-          label="Subprocedimentos"
-          value={visibleSummary.subprocedimentos_abertos}
+          label="Procedimentos"
+          value={visibleSummary.procedimentos_abertos}
           color="border-warning-500/40"
           iconColor="text-warning-600"
         />
@@ -326,7 +351,7 @@ export default function OrcamentosEmAbertoPage() {
             type: 'text',
             name: 'busca',
             label: 'Busca',
-            placeholder: 'Cliente, procedimento ou etapa',
+            placeholder: 'Cliente, procedimento, etapa ou dente',
           },
           {
             type: 'select',
@@ -365,7 +390,7 @@ export default function OrcamentosEmAbertoPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-lg font-semibold text-foreground">{item.cliente_nome}</h2>
                     <Badge color="orange">#{item.atendimento_id}</Badge>
-                    <Badge color="gray">{item.subprocedimentos.length} subprocedimento(s)</Badge>
+                    <Badge color="gray">{item.procedimentos.length} procedimento(s)</Badge>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                     <span>Telefone: {formatarTelefone(item.cliente_telefone)}</span>
@@ -397,54 +422,64 @@ export default function OrcamentosEmAbertoPage() {
               </div>
 
               <div className="divide-y divide-border">
-                {item.subprocedimentos.map((subprocedimento) => (
+                {item.procedimentos.map((procedimento) => (
                   <div
-                    key={subprocedimento.key}
+                    key={procedimento.key}
                     className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between"
                   >
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium text-foreground">
-                          {getSubprocedimentoLabel(subprocedimento)}
+                          {getProcedimentoLabel(procedimento)}
                         </p>
-                        <Badge color={SITUACAO_BADGE_COLORS[subprocedimento.situacao_agendamento]}>
-                          {SITUACAO_LABELS[subprocedimento.situacao_agendamento]}
+                        <Badge color={SITUACAO_BADGE_COLORS[procedimento.situacao_agendamento]}>
+                          {SITUACAO_LABELS[procedimento.situacao_agendamento]}
                         </Badge>
+                        {procedimento.por_dente && procedimento.quantidade_dentes > 0 && (
+                          <Badge color="orange">
+                            {procedimento.quantidade_dentes} dente(s)
+                          </Badge>
+                        )}
                       </div>
+                      {procedimento.por_dente && procedimento.dentes_labels.length > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          Dentes: {procedimento.dentes_labels.join(', ')}
+                        </p>
+                      )}
+                      {procedimento.resumo_agendamento && (
+                        <p className="text-sm text-muted-foreground">
+                          Andamento: {procedimento.resumo_agendamento}
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                        <span>Total: {formatarMoeda(subprocedimento.valor_total)}</span>
-                        <span>Pago: {formatarMoeda(subprocedimento.valor_pago)}</span>
+                        <span>Total: {formatarMoeda(procedimento.valor_total)}</span>
+                        <span>Pago: {formatarMoeda(procedimento.valor_pago)}</span>
                         <span className="font-medium text-foreground">
-                          Em aberto: {formatarMoeda(subprocedimento.saldo_aberto)}
+                          Em aberto: {formatarMoeda(procedimento.saldo_aberto)}
                         </span>
-                        <span>
-                          {subprocedimento.data_agendada
-                            ? `Data agendada: ${formatarDataHora(subprocedimento.data_agendada)}`
-                            : 'Sem data agendada'}
-                        </span>
+                        <span>{getAgendamentoResumo(procedimento)}</span>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {subprocedimento.agendamento_id ? (
+                      {procedimento.agendamento_id ? (
                         <Button
                           variant="outline"
                           size="sm"
                           icon={<CalendarDays className="w-4 h-4" />}
-                          onClick={() => editarAgendamento(subprocedimento.agendamento_id!)}
+                          onClick={() => editarAgendamento(procedimento.agendamento_id!)}
                         >
                           Editar agendamento
                         </Button>
-                      ) : (
+                      ) : procedimento.item_id != null ? (
                         <Button
                           size="sm"
                           icon={<CalendarPlus2 className="w-4 h-4" />}
-                          onClick={() => abrirNovoAgendamento(item, subprocedimento)}
-                          disabled={subprocedimento.item_id == null}
+                          onClick={() => abrirNovoAgendamento(item, procedimento)}
                         >
-                          Novo agendamento
+                          {procedimento.agendamentos_ativos > 0 ? 'Agendar restante' : 'Novo agendamento'}
                         </Button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 ))}

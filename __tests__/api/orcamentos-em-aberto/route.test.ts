@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 describe('GET /api/orcamentos-em-aberto', () => {
-  it('agrupa orçamentos por atendimento e expõe subprocedimentos com situação de agendamento', async () => {
+  it('agrupa orçamentos por atendimento e expõe procedimentos com dentes/faces e situação de agendamento', async () => {
     mockQueryResponse('from itens_atendimento i', [
       {
         item_id: 10,
@@ -44,13 +44,37 @@ describe('GET /api/orcamentos-em-aberto', () => {
         cliente_telefone: '85999990000',
         orcamento_em: '2026-07-10 09:00:00',
         procedimento_id: 201,
-        procedimento_nome: 'Limpeza',
+        procedimento_nome: 'Restauração',
         tem_etapas: 0,
+        por_dente: 1,
+        group_id: 'grupo-restauracao',
+        dente_unico: '11',
+        dentes: '[{\"dente\":\"11\",\"faces\":[\"V\",\"D\"]}]',
         valor: 300,
         valor_final: 300,
         valor_pago: 100,
         etapas_valores: null,
         item_created_at: '2026-07-10 09:05:00',
+      },
+      {
+        item_id: 11,
+        atendimento_id: 1,
+        cliente_id: 101,
+        cliente_nome: 'Maria Silva',
+        cliente_telefone: '85999990000',
+        orcamento_em: '2026-07-10 09:00:00',
+        procedimento_id: 201,
+        procedimento_nome: 'Restauração',
+        tem_etapas: 0,
+        por_dente: 1,
+        group_id: 'grupo-restauracao',
+        dente_unico: '12',
+        dentes: '[{\"dente\":\"12\",\"faces\":[\"M\"]}]',
+        valor: 300,
+        valor_final: 300,
+        valor_pago: 0,
+        etapas_valores: null,
+        item_created_at: '2026-07-10 09:06:00',
       },
       {
         item_id: 20,
@@ -62,6 +86,10 @@ describe('GET /api/orcamentos-em-aberto', () => {
         procedimento_id: 202,
         procedimento_nome: 'Canal',
         tem_etapas: 1,
+        por_dente: 0,
+        group_id: null,
+        dente_unico: null,
+        dentes: null,
         valor: 200,
         valor_final: 200,
         valor_pago: 0,
@@ -88,6 +116,10 @@ describe('GET /api/orcamentos-em-aberto', () => {
         valor: 200,
         valor_pago: 0,
         agendamento_created_at: '2026-07-12 09:00:00',
+        item_origem_group_id: null,
+        item_origem_dente_unico: null,
+        item_origem_dentes: null,
+        item_origem_por_dente: 0,
       },
     ]);
 
@@ -100,7 +132,7 @@ describe('GET /api/orcamentos-em-aberto', () => {
       summary: {
         valor_total_aberto: number;
         orcamentos_abertos: number;
-        subprocedimentos_abertos: number;
+        procedimentos_abertos: number;
         sem_agendamento: number;
         agendamento_sem_data: number;
         agendado_com_data: number;
@@ -108,9 +140,10 @@ describe('GET /api/orcamentos-em-aberto', () => {
       items: Array<{
         atendimento_id: number;
         valor_total_aberto: number;
-        subprocedimentos: Array<{
+        procedimentos: Array<{
           procedimento_nome: string;
           etapa_label: string | null;
+          dentes_labels: string[];
           situacao_agendamento: string;
           agendamento_id: number | null;
         }>;
@@ -119,9 +152,9 @@ describe('GET /api/orcamentos-em-aberto', () => {
 
     expect(status).toBe(200);
     expect(data.summary).toEqual({
-      valor_total_aberto: 400,
+      valor_total_aberto: 700,
       orcamentos_abertos: 2,
-      subprocedimentos_abertos: 2,
+      procedimentos_abertos: 2,
       sem_agendamento: 1,
       agendamento_sem_data: 0,
       agendado_com_data: 1,
@@ -131,10 +164,11 @@ describe('GET /api/orcamentos-em-aberto', () => {
     expect(data.items[0]).toEqual(expect.objectContaining({
       atendimento_id: 2,
       valor_total_aberto: 200,
-      subprocedimentos: [
+      procedimentos: [
         expect.objectContaining({
           procedimento_nome: 'Canal',
           etapa_label: 'Sessão 1',
+          dentes_labels: [],
           situacao_agendamento: 'agendado_com_data',
           agendamento_id: 301,
         }),
@@ -142,11 +176,12 @@ describe('GET /api/orcamentos-em-aberto', () => {
     }));
     expect(data.items[1]).toEqual(expect.objectContaining({
       atendimento_id: 1,
-      valor_total_aberto: 200,
-      subprocedimentos: [
+      valor_total_aberto: 500,
+      procedimentos: [
         expect.objectContaining({
-          procedimento_nome: 'Limpeza',
+          procedimento_nome: 'Restauração',
           etapa_label: null,
+          dentes_labels: ['11(V,D)', '12M'],
           situacao_agendamento: 'sem_agendamento',
           agendamento_id: null,
         }),
