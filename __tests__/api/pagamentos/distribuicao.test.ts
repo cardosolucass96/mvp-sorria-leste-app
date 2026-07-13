@@ -66,6 +66,18 @@ describe('POST /api/atendimentos/[id]/pagamentos — alocação explícita', () 
   it('grava pagamento e alocação por item', async () => {
     setLastInsertId(10);
     mockFluxoPadrao();
+    mockQueryResponse('from pagamentos_alocacoes pa', [
+      {
+        pagamento_alocacao_id: 10,
+        atendimento_id: 3,
+        item_atendimento_id: 101,
+        usuario_id: 3,
+        origem: 'avaliacao',
+        percentual: 10,
+        valor_base: 500,
+        created_at: '2026-07-12 10:00:00',
+      },
+    ]);
     mockQueryResponse('select * from pagamentos where id', { ...PAGAMENTO_PIX, id: 10 });
 
     const ctx = createRouteContext({ id: '3' });
@@ -82,10 +94,12 @@ describe('POST /api/atendimentos/[id]/pagamentos — alocação explícita', () 
 
     const queries = getExecutedQueries();
     const insertAlocacao = queries.find((query) => query.sql.includes('INSERT INTO pagamentos_alocacoes'));
+    const insertComissao = queries.find((query) => query.sql.includes('INSERT OR IGNORE INTO comissoes'));
     expect(insertAlocacao).toBeTruthy();
     expect(insertAlocacao?.sql).toContain('criado_por_id');
     expect(insertAlocacao?.sql).toContain('origem_comissao');
     expect(insertAlocacao?.sql).toContain('percentual_comissao');
+    expect(insertComissao?.sql).toContain('pagamento_alocacao_id');
   });
 
   it('rejeita quando não há alocações', async () => {

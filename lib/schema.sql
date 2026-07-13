@@ -282,11 +282,12 @@ CREATE TABLE IF NOT EXISTS itens_atendimento_destinos (
   FOREIGN KEY (executor_id) REFERENCES usuarios(id)
 );
 
--- Comissões (geradas ao finalizar atendimento)
+-- Comissões (venda nasce no pagamento; execução nasce na conclusão)
 CREATE TABLE IF NOT EXISTS comissoes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   atendimento_id INTEGER NOT NULL,
   item_atendimento_id INTEGER NOT NULL,
+  pagamento_alocacao_id INTEGER,
   usuario_id INTEGER NOT NULL, -- Quem recebe a comissão
   tipo TEXT NOT NULL CHECK (tipo IN ('venda', 'execucao')), -- Tipo de comissão
   origem TEXT NOT NULL DEFAULT 'avaliacao' CHECK (origem IN ('avaliacao', 'acrescimo', 'execucao')), -- Contexto da comissão
@@ -296,8 +297,13 @@ CREATE TABLE IF NOT EXISTS comissoes (
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
+  FOREIGN KEY (pagamento_alocacao_id) REFERENCES pagamentos_alocacoes(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_comissoes_pagamento_alocacao_unq
+  ON comissoes(pagamento_alocacao_id)
+  WHERE pagamento_alocacao_id IS NOT NULL;
 
 -- Notas de Execução (anotações durante a execução do procedimento)
 CREATE TABLE IF NOT EXISTS notas_execucao (

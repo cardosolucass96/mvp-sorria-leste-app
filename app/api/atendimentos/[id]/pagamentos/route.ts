@@ -9,6 +9,7 @@ import {
   garantirEsquemaFormasPagamento,
   isMetodoPagamentoValido,
 } from '@/lib/helpers/formasPagamento';
+import { gerarComissoesVendaPorAlocacoes } from '@/lib/helpers/gerarComissoes';
 import { garantirEsquemaPagamentosGrupos } from '@/lib/helpers/pagamentosGrupos';
 
 interface Pagamento {
@@ -398,6 +399,7 @@ async function criarGrupoDePagamentos({
   }));
 
   let pagamentoRepresentanteId: number | null = null;
+  const alocacaoIdsGeradas: number[] = [];
 
   for (const forma of formas) {
     const pagamentoResult = await execute(
@@ -454,7 +456,7 @@ async function criarGrupoDePagamentos({
           : item?.comissao_venda ?? 0
       ));
 
-      await execute(
+      const alocacaoResult = await execute(
         `INSERT INTO pagamentos_alocacoes (
            pagamento_id,
            item_atendimento_id,
@@ -474,6 +476,7 @@ async function criarGrupoDePagamentos({
           percentualComissao,
         ]
       );
+      alocacaoIdsGeradas.push(Number(alocacaoResult.lastInsertRowid));
 
       alocacao.restante = roundMoney(alocacao.restante - valorAlocado);
       saldoDaForma = roundMoney(saldoDaForma - valorAlocado);
@@ -489,7 +492,7 @@ async function criarGrupoDePagamentos({
     throw new Error('A distribuição automática do pagamento não fechou o total selecionado');
   }
 
-  return { pagamentoGrupoId, pagamentoRepresentanteId };
+  return { pagamentoGrupoId, pagamentoRepresentanteId, alocacaoIdsGeradas };
 }
 
 // GET /api/atendimentos/[id]/pagamentos - Lista pagamentos do atendimento
@@ -643,7 +646,7 @@ export const POST = withUnit(async (
         );
       }
 
-      const { pagamentoRepresentanteId } = await criarGrupoDePagamentos({
+      const { pagamentoRepresentanteId, alocacaoIdsGeradas } = await criarGrupoDePagamentos({
         atendimentoId,
         recebidoPorId,
         observacoes: observacoes || null,
@@ -654,6 +657,7 @@ export const POST = withUnit(async (
       });
 
       await recalcularFinanceiroItens(validacaoAlocacoes.itemIds);
+      await gerarComissoesVendaPorAlocacoes(alocacaoIdsGeradas);
 
       const novoPagamento = await queryOne<Pagamento>(
         'SELECT * FROM pagamentos WHERE id = ?',
@@ -670,18 +674,7 @@ export const POST = withUnit(async (
       );
     }
 
-    const validacaoAlocacoes = await validarAlocacoes(atendimentoId, alocacoesNormalizadas);
-    if ('error' in validacaoAlocacoes) return validacaoAlocacoes.error;
-    const somaAlocacoes = roundMoney(alocacoesNormalizadas.reduce((sum, alocacao) => sum + alocacao.valor, 0));
-
     const valorNormalizado = roundMoney(Number(valor));
-    if (Math.abs(somaAlocacoes - valorNormalizado) > 0.01) {
-      return NextResponse.json(
-        { error: 'O valor do pagamento deve ser igual à soma das alocações' },
-        { status: 400 }
-      );
-    }
-
     const formaSimplesInput: PagamentoFormaInput = formaPagamentoIdSimples
       ? { forma_pagamento_id: Number(formaPagamentoIdSimples), valor: valorNormalizado }
       : { metodo, valor: valorNormalizado };
@@ -693,7 +686,18 @@ export const POST = withUnit(async (
     if (formasResolvidas.error) return formasResolvidas.error;
     const formasNormalizadas = formasResolvidas.formas ?? [];
 
-    const { pagamentoRepresentanteId } = await criarGrupoDePagamentos({
+    const validacaoAlocacoes = await validarAlocacoes(atendimentoId, alocacoesNormalizadas);
+    if ('error' in validacaoAlocacoes) return validacaoAlocacoes.error;
+    const somaAlocacoes = roundMoney(alocacoesNormalizadas.reduce((sum, alocacao) => sum + alocacao.valor, 0));
+
+    if (Math.abs(somaAlocacoes - valorNormalizado) > 0.01) {
+      return NextResponse.json(
+        { error: 'O valor do pagamento deve ser igual à soma das alocações' },
+        { status: 400 }
+      );
+    }
+
+    const { pagamentoRepresentanteId, alocacaoIdsGeradas } = await criarGrupoDePagamentos({
       atendimentoId,
       recebidoPorId,
       observacoes: observacoes || null,
@@ -704,6 +708,7 @@ export const POST = withUnit(async (
     });
 
     await recalcularFinanceiroItens(validacaoAlocacoes.itemIds);
+    await gerarComissoesVendaPorAlocacoes(alocacaoIdsGeradas);
 
     const novoPagamento = await queryOne<Pagamento>(
       'SELECT * FROM pagamentos WHERE id = ?',

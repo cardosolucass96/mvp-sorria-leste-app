@@ -59,7 +59,12 @@ describe('GET /api/atendimentos/[id]/pagamentos', () => {
     const { status, data } = await callRoute(listPagamentos, '/api/atendimentos/3/pagamentos', {}, ctx);
 
     expect(status).toBe(200);
-    expect(data).toEqual(pagamentos);
+    expect(data).toEqual([
+      {
+        ...pagamentos[0],
+        alocacoes: [],
+      },
+    ]);
   });
 
   it('ordena por created_at DESC', async () => {
@@ -70,7 +75,7 @@ describe('GET /api/atendimentos/[id]/pagamentos', () => {
     await callRoute(listPagamentos, '/api/atendimentos/3/pagamentos', {}, ctx);
 
     const queries = getExecutedQueries();
-    const selectQ = queries.find(q => q.sql.includes('FROM pagamentos'));
+    const selectQ = queries.find(q => q.sql.includes('FROM pagamentos p'));
     expect(selectQ!.sql).toContain('ORDER BY p.created_at DESC');
   });
 
@@ -342,7 +347,7 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
 
     const queries = getExecutedQueries();
     const insertQ = queries.find(q => q.sql.includes('INSERT INTO pagamentos ('));
-    expect(insertQ!.params[5]).toBe('Pagamento parcial');
+    expect(insertQ!.params[insertQ!.params.length - 1]).toBe('Pagamento parcial');
   });
 
   it('retorna 404 se atendimento não existe', async () => {
@@ -369,7 +374,7 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
     const queries = getExecutedQueries();
     const insertQ = queries.find(q => q.sql.includes('INSERT INTO pagamentos ('));
     // recebido_por_id vem do context.user.sub (JWT mock retorna sub=1)
-    expect(insertQ!.params[2]).toBe(1);
+    expect(insertQ!.params[3]).toBe(1);
   });
 
   it('cria grupo de cobrança com múltiplas formas', async () => {

@@ -116,6 +116,8 @@ interface ComissaoRow {
 interface AvaliacaoPagaRow {
   target_type: 'item' | 'agendamento';
   target_id: number;
+  pagamento_id: number;
+  pagamento_grupo_id: number | null;
   atendimento_id: number | null;
   usuario_id: number | null;
   usuario_nome: string | null;
@@ -220,6 +222,13 @@ function buildAvaliacaoFallback(row: ProcedimentoRow, valorReferencia: number): 
 
 function buildFechamentoProcedureKey(targetType: 'item' | 'agendamento', targetId: number): string {
   return `${targetType}:${targetId}`;
+}
+
+function buildFechamentoAvaliacaoPagaKey(row: Pick<AvaliacaoPagaRow, 'target_type' | 'target_id' | 'pagamento_id' | 'pagamento_grupo_id'>): string {
+  const pagamentoKey = row.pagamento_grupo_id
+    ? `grupo:${row.pagamento_grupo_id}`
+    : `pagamento:${row.pagamento_id}`;
+  return `${buildFechamentoProcedureKey(row.target_type, row.target_id)}:${pagamentoKey}`;
 }
 
 function agruparPagamentosRecebidos(rows: PagamentoRecebidoRow[]): FechamentoCaixaPagamentoRecebido[] {
@@ -852,6 +861,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
     `SELECT
        'item' as target_type,
        pa.item_atendimento_id as target_id,
+       pg.id as pagamento_id,
+       pg.pagamento_grupo_id,
        i.atendimento_id,
        pa.criado_por_id as usuario_id,
        u.nome as usuario_nome,
@@ -882,6 +893,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      SELECT
        'agendamento' as target_type,
        pa.agendamento_id as target_id,
+       pg.id as pagamento_id,
+       pg.pagamento_grupo_id,
        ag.atendimento_origem_id as atendimento_id,
        pa.criado_por_id as usuario_id,
        u.nome as usuario_nome,
@@ -1001,15 +1014,14 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
     origem: 'avaliacao' | 'acrescimo';
     percentual: number;
     valor_base: number;
-    valor_alocado_total: number;
     pago_em: string | null;
   }>();
 
   avaliacoesPagasRows.forEach((row) => {
     const usuarioId = Number(row.usuario_id || 0);
     const percentual = Number(row.percentual || 0);
-    const valorBase = roundMoney(Number(row.valor_referencia || 0));
-    if (!usuarioId || !row.procedimento_nome || !row.origem || !(percentual > 0) || !(valorBase > 0)) {
+    const valorAlocado = roundMoney(Number(row.valor_alocado || 0));
+    if (!usuarioId || !row.procedimento_nome || !row.origem || !(percentual > 0) || !(valorAlocado > 0)) {
       return;
     }
 
@@ -1023,7 +1035,7 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
       return;
     }
 
-    const key = buildFechamentoProcedureKey(row.target_type, row.target_id);
+    const key = buildFechamentoAvaliacaoPagaKey(row);
     const current = avaliacoesPagasAgrupadas.get(key) ?? {
       key,
       usuario_id: usuarioId,
@@ -1037,12 +1049,11 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
       }),
       origem: row.origem,
       percentual: roundMoney(percentual),
-      valor_base: valorBase,
-      valor_alocado_total: 0,
+      valor_base: 0,
       pago_em: row.pago_em,
     };
 
-    current.valor_alocado_total = roundMoney(current.valor_alocado_total + Number(row.valor_alocado || 0));
+    current.valor_base = roundMoney(current.valor_base + valorAlocado);
     if (row.pago_em && (!current.pago_em || row.pago_em.localeCompare(current.pago_em) > 0)) {
       current.pago_em = row.pago_em;
     }
@@ -1050,7 +1061,6 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
   });
 
   const avaliacoesPagasDia = Array.from(avaliacoesPagasAgrupadas.values())
-    .filter((row) => row.valor_alocado_total + 0.001 >= row.valor_base)
     .filter((row) => row.pago_em?.slice(0, 10) === dataReferencia)
     .map((row) => ({
       key: row.key,

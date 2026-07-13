@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute, query } from '@/lib/db';
-import { gerarComissoesItem } from '@/lib/helpers/gerarComissoes';
+import { gerarComissoesExecucaoItem } from '@/lib/helpers/gerarComissoes';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 
@@ -396,7 +396,7 @@ export const PUT = withUnit(async (
     let atendimentoFinalizado = false;
     let atendimentoVoltouParaPagamento = false;
     if (status === 'concluido') {
-      await gerarComissoesItem(parseInt(itemId));
+      await gerarComissoesExecucaoItem(parseInt(itemId));
 
       // Auto-transição: se todos os itens do atendimento estão concluídos →
       //   - Se há itens adicionados em execução ainda não pagos → volta para 'aguardando_pagamento'

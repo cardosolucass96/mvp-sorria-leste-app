@@ -52,6 +52,8 @@ describe('obterFechamentoCaixaResponse', () => {
       {
         target_type: 'item',
         target_id: 1,
+        pagamento_id: 501,
+        pagamento_grupo_id: null,
         atendimento_id: 70,
         usuario_id: 10,
         usuario_nome: 'Dr. Carlos Avaliador',
@@ -80,7 +82,7 @@ describe('obterFechamentoCaixaResponse', () => {
     ]);
     expect(response.resultado.avaliacoes_pagas_dia).toEqual([
       {
-        key: 'item:1',
+        key: 'item:1:pagamento:501',
         usuario_id: 10,
         cliente_nome: 'Paciente Teste',
         procedimento_nome: 'Limpeza',
@@ -111,6 +113,8 @@ describe('obterFechamentoCaixaResponse', () => {
       {
         target_type: 'item',
         target_id: 2,
+        pagamento_id: 502,
+        pagamento_grupo_id: null,
         atendimento_id: 71,
         usuario_id: 10,
         usuario_nome: 'Dr. Carlos Avaliador',
@@ -137,7 +141,7 @@ describe('obterFechamentoCaixaResponse', () => {
     ]);
     expect(response.resultado.avaliacoes_pagas_dia).toEqual([
       {
-        key: 'item:2',
+        key: 'item:2:pagamento:502',
         usuario_id: 10,
         cliente_nome: 'Paciente Acréscimo',
         procedimento_nome: 'Teste Mult',
@@ -160,6 +164,8 @@ describe('obterFechamentoCaixaResponse', () => {
       {
         target_type: 'item',
         target_id: 3,
+        pagamento_id: 503,
+        pagamento_grupo_id: null,
         atendimento_id: 72,
         usuario_id: 10,
         usuario_nome: 'Dr. Carlos Avaliador',
@@ -208,12 +214,14 @@ describe('obterFechamentoCaixaResponse', () => {
     expect(response.resultado.dentistas.find((item) => item.usuario_id === 20)?.procedimentos_executados).toHaveLength(1);
   });
 
-  it('só contabiliza a comissão no dia em que a última parcela quitou o procedimento', async () => {
+  it('contabiliza comissão proporcional no dia de cada parcela paga', async () => {
     mockCommonQueries();
     mockQueryResponse('from pagamentos_alocacoes pa', [
       {
         target_type: 'item',
         target_id: 4,
+        pagamento_id: 601,
+        pagamento_grupo_id: null,
         atendimento_id: 73,
         usuario_id: 10,
         usuario_nome: 'Dr. Carlos Avaliador',
@@ -232,6 +240,8 @@ describe('obterFechamentoCaixaResponse', () => {
       {
         target_type: 'item',
         target_id: 4,
+        pagamento_id: 602,
+        pagamento_grupo_id: null,
         atendimento_id: 73,
         usuario_id: 10,
         usuario_nome: 'Dr. Carlos Avaliador',
@@ -252,15 +262,15 @@ describe('obterFechamentoCaixaResponse', () => {
 
     const response = await obterFechamentoCaixaResponse(1, '2026-06-07');
 
-    expect(response.resultado.resumo.total_comissao_avaliacao).toBe(20);
+    expect(response.resultado.resumo.total_comissao_avaliacao).toBe(10);
     expect(response.resultado.graficos.ranking_avaliadores).toEqual([
-      { usuario_id: 10, nome: 'Dr. Carlos Avaliador', valor_gerado: 200, quantidade: 1 },
+      { usuario_id: 10, nome: 'Dr. Carlos Avaliador', valor_gerado: 100, quantidade: 1 },
     ]);
     expect(response.resultado.avaliacoes_pagas_dia[0]).toMatchObject({
-      key: 'item:4',
+      key: 'item:4:pagamento:602',
       pago_em: '2026-06-07 09:30:00',
-      valor_base: 200,
-      valor_comissao: 20,
+      valor_base: 100,
+      valor_comissao: 10,
     });
   });
 
@@ -270,6 +280,8 @@ describe('obterFechamentoCaixaResponse', () => {
       {
         target_type: 'agendamento',
         target_id: 33,
+        pagamento_id: 701,
+        pagamento_grupo_id: null,
         atendimento_id: 74,
         usuario_id: 10,
         usuario_nome: 'Dr. Carlos Avaliador',
@@ -293,7 +305,7 @@ describe('obterFechamentoCaixaResponse', () => {
     expect(response.resultado.resumo.total_comissao_avaliacao).toBe(20);
     expect(response.resultado.avaliacoes_pagas_dia).toEqual([
       {
-        key: 'agendamento:33',
+        key: 'agendamento:33:pagamento:701',
         usuario_id: 10,
         cliente_nome: 'Paciente Remarcado',
         procedimento_nome: 'Canal',

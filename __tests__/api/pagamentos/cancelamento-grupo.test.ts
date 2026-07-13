@@ -44,8 +44,8 @@ describe('PUT /api/atendimentos/[id]/pagamentos/[pagamentoId]', () => {
       { id: 32, cancelado: 0 },
     ]);
     mockQueryResponse('from pagamentos_alocacoes', [
-      { item_atendimento_id: 101, agendamento_id: null },
-      { item_atendimento_id: 102, agendamento_id: null },
+      { id: 501, item_atendimento_id: 101, agendamento_id: null },
+      { id: 502, item_atendimento_id: 102, agendamento_id: null },
     ]);
     mockQueryResponse('where id = ?', { id: 101, valor: 100, valor_final: 100, valor_pago: 0, status: 'pendente', procedimento_id: 1, etapas_valores: null });
     mockQueryResponse('coalesce(sum(pa.valor_alocado), 0) as total', { total: 0 });
@@ -61,5 +61,6 @@ describe('PUT /api/atendimentos/[id]/pagamentos/[pagamentoId]', () => {
     const queries = getExecutedQueries();
     expect(queries.some((query) => query.sql.includes('UPDATE pagamentos_grupos SET cancelado = 1'))).toBe(true);
     expect(queries.some((query) => query.sql.includes('UPDATE pagamentos SET cancelado = 1') && query.sql.includes('pagamento_grupo_id'))).toBe(true);
+    expect(queries.some((query) => query.sql.includes('DELETE FROM comissoes') && query.sql.includes('pagamento_alocacao_id IN'))).toBe(true);
   });
 });

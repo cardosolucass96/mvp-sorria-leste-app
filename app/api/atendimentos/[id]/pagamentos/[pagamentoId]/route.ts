@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { execute, query, queryOne } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { removerComissoesVendaPorAlocacoes } from '@/lib/helpers/gerarComissoes';
 import { recalcularFinanceiroAgendamentos, recalcularFinanceiroItens } from '@/lib/helpers/pagamentoFlow';
 import { garantirEsquemaPagamentosGrupos } from '@/lib/helpers/pagamentosGrupos';
 
@@ -95,14 +96,15 @@ export const PUT = withUnit(async (
     const pagamentoIds = pagamentosAlvo.map((pagamentoAlvo) => pagamentoAlvo.id);
     const placeholders = pagamentoIds.map(() => '?').join(',');
     const alocacoes = pagamentoIds.length > 0
-      ? await query<{ item_atendimento_id: number | null; agendamento_id: number | null }>(
-          `SELECT item_atendimento_id, agendamento_id
+      ? await query<{ id: number; item_atendimento_id: number | null; agendamento_id: number | null }>(
+          `SELECT id, item_atendimento_id, agendamento_id
            FROM pagamentos_alocacoes
            WHERE pagamento_id IN (${placeholders})`,
           pagamentoIds
         )
       : [];
 
+    const alocacaoIds = alocacoes.map((alocacao) => alocacao.id).filter((value) => Number.isFinite(value));
     const itemIds = [...new Set(alocacoes
       .map((alocacao) => alocacao.item_atendimento_id)
       .filter((value): value is number => Number.isFinite(value)))];
@@ -116,6 +118,7 @@ export const PUT = withUnit(async (
     if (agendamentoIds.length > 0) {
       await recalcularFinanceiroAgendamentos(agendamentoIds);
     }
+    await removerComissoesVendaPorAlocacoes(alocacaoIds);
 
     return NextResponse.json({ success: true });
   } catch (error) {

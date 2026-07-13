@@ -34,12 +34,22 @@ export async function garantirSchemaComissoesOrigem() {
 
   const colunasComissoes = await query<SQLiteColumn>('PRAGMA table_info(comissoes)');
   const temOrigem = colunasComissoes.some((coluna) => coluna.name === 'origem');
+  const temPagamentoAlocacaoId = colunasComissoes.some((coluna) => coluna.name === 'pagamento_alocacao_id');
 
   if (!temOrigem) {
     await execute("ALTER TABLE comissoes ADD COLUMN origem TEXT NOT NULL DEFAULT 'avaliacao'");
     await execute("UPDATE comissoes SET origem = 'execucao' WHERE tipo = 'execucao'");
     console.warn('[MIGRATION] Coluna comissoes.origem foi adicionada automaticamente.');
   }
+
+  if (!temPagamentoAlocacaoId) {
+    await execute('ALTER TABLE comissoes ADD COLUMN pagamento_alocacao_id INTEGER REFERENCES pagamentos_alocacoes(id)');
+    console.warn('[MIGRATION] Coluna comissoes.pagamento_alocacao_id foi adicionada automaticamente.');
+  }
+
+  await execute(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_comissoes_pagamento_alocacao_unq ON comissoes(pagamento_alocacao_id) WHERE pagamento_alocacao_id IS NOT NULL'
+  );
 
   schemaComissoesGarantido = true;
 }
