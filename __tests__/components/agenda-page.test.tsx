@@ -17,6 +17,8 @@ const mockReplace = jest.fn();
 const mockUnitFetch = jest.fn();
 const mockUseAuth = jest.fn();
 const mockAgendaCalendario = jest.fn();
+const mockSearchParamsGet = jest.fn();
+const mockSearchParamsToString = jest.fn(() => '');
 const mockToast = {
   success: jest.fn(),
   error: jest.fn(),
@@ -46,8 +48,8 @@ jest.mock('next/navigation', () => ({
     replace: mockReplace,
   }),
   useSearchParams: () => ({
-    get: () => null,
-    toString: () => '',
+    get: mockSearchParamsGet,
+    toString: mockSearchParamsToString,
   }),
 }));
 
@@ -164,6 +166,8 @@ function getUnitFetchCallsMatching(
 beforeEach(() => {
   jest.clearAllMocks();
   localStorage.clear();
+  mockSearchParamsGet.mockReturnValue(null);
+  mockSearchParamsToString.mockReturnValue('');
 
   mockUseAuth.mockReturnValue({
     user: { id: 2, nome: 'Recepção', role: 'atendente', roles: ['atendente'] },
@@ -715,5 +719,139 @@ describe('AgendaPage', () => {
       data_agendada: null,
       observacoes: null,
     });
+  });
+
+  test('consome o deep link de novo agendamento com etapa pré-selecionada', async () => {
+    mockSearchParamsGet.mockImplementation((key: string) => {
+      if (key === 'open') return '1';
+      if (key === 'cliente_id') return '101';
+      if (key === 'tipo') return 'procedimento';
+      if (key === 'procedimento_id') return '201';
+      if (key === 'item_origem_id') return '77';
+      if (key === 'atendimento_origem_id') return '10';
+      if (key === 'etapa_modelo_id') return '7';
+      if (key === 'etapa_label') return 'Sessão 1';
+      return null;
+    });
+    mockSearchParamsToString.mockReturnValue(
+      'open=1&cliente_id=101&tipo=procedimento&procedimento_id=201&item_origem_id=77&atendimento_origem_id=10&etapa_modelo_id=7&etapa_label=Sess%C3%A3o+1'
+    );
+
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === '/api/usuarios?unidade_id=1') {
+        return mockJsonResponse([
+          { id: 10, nome: 'Dra. Ana', role: 'executor', roles: ['executor'], ativo: 1 },
+          { id: 12, nome: 'Dr. Caio', role: 'admin', roles: ['admin', 'avaliador'], ativo: 1 },
+        ]);
+      }
+
+      if (url === '/api/procedimentos') {
+        return mockJsonResponse([
+          { id: 201, nome: 'Canal', valor: 400 },
+        ]);
+      }
+
+      if (url === '/api/clientes/101') {
+        return mockJsonResponse({
+          id: 101,
+          nome: 'Maria Silva',
+          telefone: '85999990000',
+          cpf: null,
+        });
+      }
+
+      return mockJsonResponse({ clientes: [] });
+    });
+
+    mockUnitFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/clientes/101/procedimentos-pendentes') {
+        return mockJsonResponse([
+          {
+            item_id: 77,
+            atendimento_id: 10,
+            procedimento_id: 201,
+            procedimento_nome: 'Canal',
+            status: 'pendente',
+            valor: 400,
+            valor_final: 400,
+            valor_pago: 0,
+            valor_pendente: 400,
+            etapa_label: 'Sessão 1',
+            atendimento_status: 'finalizado',
+            motivo_saida: 'continuacao',
+            atendimento_created_at: '2026-07-10 09:00:00',
+            item_created_at: '2026-07-10 09:30:00',
+          },
+        ]);
+      }
+
+      if (url === '/api/agendamentos' && init?.method === 'POST') {
+        return mockJsonResponse({ id: 88 }, { status: 201 });
+      }
+
+      return mockJsonResponse({
+        items: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    render(<AgendaPage />);
+
+    expect(await screen.findByText('Procedimento pendente vinculado ao agendamento · Sessão 1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Criar Agendamento' }));
+
+    await waitFor(() => {
+      const postCalls = getUnitFetchCallsMatching(
+        (url, init) => url === '/api/agendamentos' && init?.method === 'POST'
+      );
+      expect(postCalls).toHaveLength(1);
+    });
+
+    const postCall = getUnitFetchCallsMatching(
+      (url, init) => url === '/api/agendamentos' && init?.method === 'POST'
+    )[0];
+
+    expect(JSON.parse(String((postCall[1] as RequestInit).body))).toEqual({
+      cliente_id: 101,
+      procedimento_id: 201,
+      item_atendimento_origem_id: 77,
+      atendimento_origem_id: 10,
+      etapa_modelo_id: 7,
+      executor_id: null,
+      data_agendada: null,
+      observacoes: null,
+    });
+    expect(mockReplace).toHaveBeenCalledWith('/agenda');
+  });
+
+  test('consome o deep link de edição de agendamento', async () => {
+    mockSearchParamsGet.mockImplementation((key: string) => {
+      if (key === 'edit') return '1';
+      return null;
+    });
+    mockSearchParamsToString.mockReturnValue('edit=1');
+
+    mockUnitFetch.mockImplementation((url: string) => {
+      if (url === '/api/agendamentos/1') {
+        return mockJsonResponse(makeAgendamento());
+      }
+
+      return mockJsonResponse({
+        items: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    render(<AgendaPage />);
+
+    expect(await screen.findByText('Editar Agendamento')).toBeInTheDocument();
+    expect(mockReplace).toHaveBeenCalledWith('/agenda');
   });
 });

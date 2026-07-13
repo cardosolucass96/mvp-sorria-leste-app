@@ -8,6 +8,8 @@ import FollowupPage from '@/app/followup/page';
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockUnitFetch = jest.fn();
+const mockSearchParamsGet = jest.fn();
+const mockSearchParamsToString = jest.fn(() => '');
 const mockToast = {
   success: jest.fn(),
   error: jest.fn(),
@@ -22,8 +24,8 @@ jest.mock('next/navigation', () => ({
     replace: mockReplace,
   }),
   useSearchParams: () => ({
-    get: () => null,
-    toString: () => '',
+    get: mockSearchParamsGet,
+    toString: mockSearchParamsToString,
   }),
 }));
 
@@ -114,6 +116,8 @@ function mockJsonResponse(data: unknown, init: { ok?: boolean; status?: number }
 beforeEach(() => {
   jest.clearAllMocks();
   localStorage.clear();
+  mockSearchParamsGet.mockReturnValue(null);
+  mockSearchParamsToString.mockReturnValue('');
 
   mockUseAuth.mockReturnValue({
     user: { id: 2, role: 'atendente', roles: ['atendente'] },
@@ -269,5 +273,50 @@ describe('FollowupPage', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('combobox', { name: /Responsável/i })).toBeInTheDocument();
+  });
+
+  test('pré-preenche o tipo orçamento ao abrir via query string', async () => {
+    mockSearchParamsGet.mockImplementation((key: string) => {
+      if (key === 'open') return '1';
+      if (key === 'cliente_id') return '101';
+      if (key === 'tipo') return 'orcamento';
+      return null;
+    });
+    mockSearchParamsToString.mockReturnValue('open=1&cliente_id=101&tipo=orcamento');
+
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse({
+        items: [],
+        summary: {
+          abertas: 0,
+          atrasadas: 0,
+          vencem_hoje: 0,
+          concluidas_hoje: 0,
+        },
+      })
+    );
+
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/usuarios')) {
+        return mockJsonResponse([{ id: 2, nome: 'Recepção 1' }]);
+      }
+      if (url === '/api/clientes/101') {
+        return mockJsonResponse({
+          id: 101,
+          nome: 'Maria Silva',
+          telefone: '85999990000',
+          cpf: null,
+        });
+      }
+      return mockJsonResponse({ clientes: [] });
+    }) as jest.Mock;
+
+    render(<FollowupPage />);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByDisplayValue('Maria Silva')).toBeInTheDocument();
+    expect(within(dialog).getByRole('combobox', { name: /Tipo/i })).toHaveValue('orcamento');
+    expect(mockReplace).toHaveBeenCalledWith('/followup');
   });
 });

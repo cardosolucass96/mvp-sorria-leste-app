@@ -16,7 +16,7 @@ import Modal from '@/components/ui/Modal';
 import Textarea from '@/components/ui/Textarea';
 import { StatusBadge, ProntuarioDrawer, AgendaCalendario, ViewModeToggle } from '@/components/domain';
 import { useToast } from '@/components/ui/Toast';
-import { formatarDataAgendada, formatarTelefone, toDateTimeLocal } from '@/lib/utils/formatters';
+import { formatarData, formatarDataAgendada, formatarMoeda, formatarTelefone, toDateTimeLocal } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
@@ -87,6 +87,33 @@ interface Procedimento {
   valor: number;
 }
 
+interface ProcedimentoPendente {
+  item_id: number;
+  atendimento_id: number;
+  procedimento_id: number;
+  procedimento_nome: string;
+  status: string;
+  valor: number;
+  valor_final: number | null;
+  valor_pago: number;
+  valor_pendente: number;
+  etapa_label: string | null;
+  atendimento_status: string;
+  motivo_saida: string | null;
+  atendimento_created_at: string;
+  item_created_at: string;
+}
+
+interface AbrirNovoAgendamentoOptions {
+  clienteId?: number;
+  tipo?: 'avaliacao' | 'procedimento';
+  procedimentoId?: number | null;
+  itemOrigemId?: number | null;
+  atendimentoOrigemId?: number | null;
+  etapaModeloId?: number | null;
+  etapaLabel?: string | null;
+}
+
 interface GrupoCliente {
   cliente_id: number;
   cliente_nome: string;
@@ -150,9 +177,18 @@ function normalizarAgendamentosResponse(
 export default function AgendaPage() {
   usePageTitle('Agenda');
   const router = useRouter();
+  const routerReplace = router.replace;
   const searchParams = useSearchParams();
   const openAgenda = searchParams.get('open');
   const openAgendaClienteId = searchParams.get('cliente_id');
+  const openAgendaTipo = searchParams.get('tipo');
+  const openAgendaProcedimentoId = searchParams.get('procedimento_id');
+  const openAgendaItemOrigemId = searchParams.get('item_origem_id');
+  const openAgendaAtendimentoOrigemId = searchParams.get('atendimento_origem_id');
+  const openAgendaEtapaModeloId = searchParams.get('etapa_modelo_id');
+  const openAgendaEtapaLabel = searchParams.get('etapa_label');
+  const editAgendamentoId = searchParams.get('edit');
+  const searchParamsString = searchParams.toString();
   const { toast } = useToast();
   const { user, hasRole, currentUnidade } = useAuth();
   const unitFetch = useUnitFetch();
@@ -186,6 +222,8 @@ export default function AgendaPage() {
   const [focusedDate, setFocusedDate] = useState<Date>(() => new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const previousCalendarRangeKeyRef = useRef<string | null>(null);
+  const handledOpenAgendaRef = useRef<string | null>(null);
+  const handledEditAgendaRef = useRef<string | null>(null);
 
   // Persistir viewMode no localStorage
   useEffect(() => {
@@ -281,7 +319,13 @@ export default function AgendaPage() {
   const [novoClienteSelecionado, setNovoClienteSelecionado] = useState<ClienteBusca | null>(null);
   const [novoTipo, setNovoTipo] = useState<'avaliacao' | 'procedimento'>('avaliacao');
   const [novoProcedimentos, setNovoProcedimentos] = useState<Procedimento[]>([]);
+  const [novoProcedimentosPendentes, setNovoProcedimentosPendentes] = useState<ProcedimentoPendente[]>([]);
+  const [novoPendentesLoading, setNovoPendentesLoading] = useState(false);
   const [novoProcId, setNovoProcId] = useState('');
+  const [novoItemOrigemId, setNovoItemOrigemId] = useState<number | null>(null);
+  const [novoAtendimentoOrigemId, setNovoAtendimentoOrigemId] = useState<number | null>(null);
+  const [novoEtapaModeloId, setNovoEtapaModeloId] = useState<number | null>(null);
+  const [novoEtapaLabel, setNovoEtapaLabel] = useState('');
   const [novoExecId, setNovoExecId] = useState('');
   const [novoData, setNovoData] = useState('');
   const [novoObs, setNovoObs] = useState('');
@@ -405,14 +449,43 @@ export default function AgendaPage() {
 
   // ─── Novo agendamento ─────────────────────────────────────────
 
-  const abrirNovoAgendamento = useCallback(async (clienteId?: number) => {
+  const limparVinculoProcedimentoPendente = useCallback(() => {
+    setNovoItemOrigemId(null);
+    setNovoAtendimentoOrigemId(null);
+    setNovoEtapaModeloId(null);
+    setNovoEtapaLabel('');
+  }, []);
+
+  const handleSelecionarProcedimentoCatalogo = useCallback((value: string) => {
+    setNovoProcId(value);
+    limparVinculoProcedimentoPendente();
+  }, [limparVinculoProcedimentoPendente]);
+
+  const handleSelecionarProcedimentoPendente = useCallback((procedimento: ProcedimentoPendente) => {
+    setNovoProcId(String(procedimento.procedimento_id));
+    setNovoItemOrigemId(procedimento.item_id);
+    setNovoAtendimentoOrigemId(procedimento.atendimento_id);
+    setNovoEtapaModeloId(null);
+    setNovoEtapaLabel(procedimento.etapa_label ?? '');
+  }, []);
+
+  const abrirNovoAgendamento = useCallback(async (options: AbrirNovoAgendamentoOptions = {}) => {
+    const tipoInicial = options.tipo === 'procedimento' || options.procedimentoId || options.itemOrigemId
+      ? 'procedimento'
+      : 'avaliacao';
     setNovoDialog(true);
     setNovoError('');
     setNovoClienteSelecionado(null);
     setNovoBuscaCliente('');
     setNovoClientes([]);
-    setNovoTipo('avaliacao');
-    setNovoProcId('');
+    setNovoTipo(tipoInicial);
+    setNovoProcedimentosPendentes([]);
+    setNovoPendentesLoading(false);
+    setNovoProcId(options.procedimentoId ? String(options.procedimentoId) : '');
+    setNovoItemOrigemId(options.itemOrigemId ?? null);
+    setNovoAtendimentoOrigemId(options.atendimentoOrigemId ?? null);
+    setNovoEtapaModeloId(options.etapaModeloId ?? null);
+    setNovoEtapaLabel(options.etapaLabel ?? '');
     setNovoExecId('');
     setNovoData('');
     setNovoObs('');
@@ -424,9 +497,9 @@ export default function AgendaPage() {
       } catch {}
     }
 
-    if (clienteId) {
+    if (options.clienteId) {
       try {
-        const res = await apiFetch(`/api/clientes/${clienteId}`);
+        const res = await apiFetch(`/api/clientes/${options.clienteId}`);
         if (res.ok) {
           const cliente = await res.json() as ClienteBusca;
           setNovoClienteSelecionado({
@@ -448,21 +521,68 @@ export default function AgendaPage() {
   }, [novoProcedimentos.length, carregarProfissionaisAgenda]);
 
   useEffect(() => {
-    if (openAgenda !== '1') return;
-
-    const clienteId = Number(openAgendaClienteId);
-    if (!Number.isInteger(clienteId) || clienteId <= 0) {
-      void abrirNovoAgendamento();
-    } else {
-      void abrirNovoAgendamento(clienteId);
+    if (openAgenda !== '1') {
+      handledOpenAgendaRef.current = null;
+      return;
     }
 
-    const nextParams = new URLSearchParams(searchParams.toString());
+    const openAgendaKey = [
+      openAgenda,
+      openAgendaClienteId ?? '',
+      openAgendaTipo ?? '',
+      openAgendaProcedimentoId ?? '',
+      openAgendaItemOrigemId ?? '',
+      openAgendaAtendimentoOrigemId ?? '',
+      openAgendaEtapaModeloId ?? '',
+      openAgendaEtapaLabel ?? '',
+    ].join('|');
+
+    if (handledOpenAgendaRef.current === openAgendaKey) {
+      return;
+    }
+
+    handledOpenAgendaRef.current = openAgendaKey;
+
+    const clienteId = Number(openAgendaClienteId);
+    const procedimentoId = Number(openAgendaProcedimentoId);
+    const itemOrigemId = Number(openAgendaItemOrigemId);
+    const atendimentoOrigemId = Number(openAgendaAtendimentoOrigemId);
+    const etapaModeloId = Number(openAgendaEtapaModeloId);
+
+    void abrirNovoAgendamento({
+      clienteId: Number.isInteger(clienteId) && clienteId > 0 ? clienteId : undefined,
+      tipo: openAgendaTipo === 'procedimento' ? 'procedimento' : 'avaliacao',
+      procedimentoId: Number.isInteger(procedimentoId) && procedimentoId > 0 ? procedimentoId : null,
+      itemOrigemId: Number.isInteger(itemOrigemId) && itemOrigemId > 0 ? itemOrigemId : null,
+      atendimentoOrigemId: Number.isInteger(atendimentoOrigemId) && atendimentoOrigemId > 0 ? atendimentoOrigemId : null,
+      etapaModeloId: Number.isInteger(etapaModeloId) && etapaModeloId > 0 ? etapaModeloId : null,
+      etapaLabel: openAgendaEtapaLabel,
+    });
+
+    const nextParams = new URLSearchParams(searchParamsString);
     nextParams.delete('open');
     nextParams.delete('cliente_id');
+    nextParams.delete('tipo');
+    nextParams.delete('procedimento_id');
+    nextParams.delete('item_origem_id');
+    nextParams.delete('atendimento_origem_id');
+    nextParams.delete('etapa_modelo_id');
+    nextParams.delete('etapa_label');
     const nextSearch = nextParams.toString();
-    router.replace(`/agenda${nextSearch ? `?${nextSearch}` : ''}`);
-  }, [openAgenda, openAgendaClienteId, router, searchParams, abrirNovoAgendamento]);
+    routerReplace(`/agenda${nextSearch ? `?${nextSearch}` : ''}`);
+  }, [
+    abrirNovoAgendamento,
+    openAgenda,
+    openAgendaAtendimentoOrigemId,
+    openAgendaClienteId,
+    openAgendaEtapaLabel,
+    openAgendaEtapaModeloId,
+    openAgendaItemOrigemId,
+    openAgendaProcedimentoId,
+    openAgendaTipo,
+    routerReplace,
+    searchParamsString,
+  ]);
 
   const buscarClientes = async (termo: string) => {
     setNovoBuscaCliente(termo);
@@ -474,7 +594,50 @@ export default function AgendaPage() {
     } catch {}
   };
 
-  const abrirEditarAgendamento = async (agendamento: Agendamento) => {
+  useEffect(() => {
+    if (!novoDialog || !novoClienteSelecionado || novoTipo !== 'procedimento') {
+      setNovoProcedimentosPendentes([]);
+      setNovoPendentesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function carregarProcedimentosPendentes() {
+      setNovoPendentesLoading(true);
+      try {
+        const res = await unitFetch(`/api/clientes/${novoClienteSelecionado.id}/procedimentos-pendentes`);
+        const data = await res.json() as ProcedimentoPendente[] | { error?: string };
+        if (!res.ok) {
+          throw new Error(
+            !Array.isArray(data) && typeof data === 'object' && data !== null && 'error' in data
+              ? data.error || 'Erro ao carregar procedimentos pendentes'
+              : 'Erro ao carregar procedimentos pendentes'
+          );
+        }
+
+        if (!cancelled) {
+          setNovoProcedimentosPendentes(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setNovoProcedimentosPendentes([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setNovoPendentesLoading(false);
+        }
+      }
+    }
+
+    void carregarProcedimentosPendentes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [novoClienteSelecionado, novoDialog, novoTipo, unitFetch]);
+
+  const abrirEditarAgendamento = useCallback(async (agendamento: Agendamento) => {
     if (!isAdminOrAtendente || !isAgendamentoAtivo(agendamento.status)) return;
     await carregarProfissionaisAgenda();
     setEditarAgendamentoDialog({
@@ -486,7 +649,52 @@ export default function AgendaPage() {
       salvando: false,
       error: '',
     });
-  };
+  }, [carregarProfissionaisAgenda, isAdminOrAtendente]);
+
+  useEffect(() => {
+    if (!isAdminOrAtendente || !editAgendamentoId) {
+      if (!editAgendamentoId) {
+        handledEditAgendaRef.current = null;
+      }
+      return;
+    }
+
+    const editAgendaKey = `edit:${editAgendamentoId}`;
+    if (handledEditAgendaRef.current === editAgendaKey) {
+      return;
+    }
+
+    handledEditAgendaRef.current = editAgendaKey;
+
+    const agendamentoId = Number(editAgendamentoId);
+    if (!Number.isInteger(agendamentoId) || agendamentoId <= 0) return;
+
+    const nextParams = new URLSearchParams(searchParamsString);
+    nextParams.delete('edit');
+    const nextSearch = nextParams.toString();
+    routerReplace(`/agenda${nextSearch ? `?${nextSearch}` : ''}`);
+
+    async function abrirEdicaoPorParametro() {
+      try {
+        const res = await unitFetch(`/api/agendamentos/${agendamentoId}`);
+        const data = await res.json() as Agendamento | { error?: string };
+        if (!res.ok) {
+          toast.error(
+            !Array.isArray(data) && typeof data === 'object' && data !== null && 'error' in data
+              ? data.error || 'Agendamento não encontrado'
+              : 'Agendamento não encontrado'
+          );
+          return;
+        }
+
+        await abrirEditarAgendamento(data as Agendamento);
+      } catch {
+        toast.error('Erro ao abrir o agendamento solicitado');
+      }
+    }
+
+    void abrirEdicaoPorParametro();
+  }, [abrirEditarAgendamento, editAgendamentoId, isAdminOrAtendente, routerReplace, searchParamsString, toast, unitFetch]);
 
   const abrirEditarGrupo = async (grupo: GrupoCliente) => {
     if (!isAdminOrAtendente) return;
@@ -521,6 +729,15 @@ export default function AgendaPage() {
         body.tipo = 'avaliacao';
       } else {
         body.procedimento_id = parseInt(novoProcId);
+        if (novoItemOrigemId) {
+          body.item_atendimento_origem_id = novoItemOrigemId;
+        }
+        if (novoAtendimentoOrigemId) {
+          body.atendimento_origem_id = novoAtendimentoOrigemId;
+        }
+        if (novoEtapaModeloId) {
+          body.etapa_modelo_id = novoEtapaModeloId;
+        }
       }
       body.executor_id = novoExecId ? parseInt(novoExecId) : null;
       const res = await unitFetch('/api/agendamentos', {
@@ -1703,7 +1920,12 @@ export default function AgendaPage() {
                 {novoClientes.map(c => (
                   <button
                     key={c.id}
-                    onClick={() => { setNovoClienteSelecionado(c); setNovoClientes([]); }}
+                    onClick={() => {
+                      setNovoClienteSelecionado(c);
+                      setNovoClientes([]);
+                      setNovoProcId('');
+                      limparVinculoProcedimentoPendente();
+                    }}
                     className="w-full border-b border-border px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-secondary last:border-0"
                   >
                     <span className="font-medium">{c.nome}</span>
@@ -1727,7 +1949,12 @@ export default function AgendaPage() {
                 )}
               </div>
               <button
-                onClick={() => { setNovoClienteSelecionado(null); setNovoBuscaCliente(''); }}
+                onClick={() => {
+                  setNovoClienteSelecionado(null);
+                  setNovoBuscaCliente('');
+                  setNovoProcId('');
+                  limparVinculoProcedimentoPendente();
+                }}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <X className="w-4 h-4" />
@@ -1739,7 +1966,12 @@ export default function AgendaPage() {
               <label className="block text-sm font-medium text-foreground mb-2">Tipo</label>
               <div className="flex rounded-lg border border-border overflow-hidden text-sm">
                 <button
-                  onClick={() => { setNovoTipo('avaliacao'); setNovoProcId(''); setNovoExecId(''); }}
+                  onClick={() => {
+                    setNovoTipo('avaliacao');
+                    setNovoProcId('');
+                    limparVinculoProcedimentoPendente();
+                    setNovoExecId('');
+                  }}
                   className={`flex-1 px-4 py-2 font-medium transition-colors ${
                     novoTipo === 'avaliacao'
                       ? 'bg-primary-600 text-white'
@@ -1762,19 +1994,104 @@ export default function AgendaPage() {
             </div>
 
             {novoTipo === 'procedimento' && (
-              <SearchableSelect
-                label="Procedimento"
-                name="procedimento_id"
-                value={novoProcId}
-                onChange={setNovoProcId}
-                options={novoProcedimentos.map((procedimento) => ({
-                  value: String(procedimento.id),
-                  label: procedimento.nome,
-                }))}
-                placeholder="Selecione..."
-                searchPlaceholder="Buscar procedimento..."
-                emptyMessage="Nenhum procedimento encontrado"
-              />
+              <div className="space-y-4">
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <label className="block text-sm font-medium text-foreground">
+                      Procedimentos pendentes deste cliente
+                    </label>
+                    {novoPendentesLoading && (
+                      <span className="text-xs text-muted-foreground">Carregando...</span>
+                    )}
+                  </div>
+
+                  {novoProcedimentosPendentes.length > 0 ? (
+                    <div className="space-y-2 rounded-lg border border-border p-2">
+                      {novoProcedimentosPendentes.map((procedimento) => {
+                        const selecionado = novoItemOrigemId === procedimento.item_id;
+                        const valorPendente = procedimento.valor_pendente > 0
+                          ? `Pendente ${formatarMoeda(procedimento.valor_pendente)}`
+                          : 'Sem saldo pendente';
+                        const contextoOrigem = procedimento.motivo_saida === 'continuacao'
+                          ? 'Continuação'
+                          : 'Atendimento aberto';
+
+                        return (
+                          <button
+                            key={procedimento.item_id}
+                            type="button"
+                            aria-pressed={selecionado}
+                            onClick={() => handleSelecionarProcedimentoPendente(procedimento)}
+                            className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                              selecionado
+                                ? 'border-primary-500 bg-primary-50 text-primary-900'
+                                : 'border-border bg-card text-foreground hover:bg-surface-secondary'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-medium">
+                                {procedimento.procedimento_nome}
+                                {procedimento.etapa_label ? ` — ${procedimento.etapa_label}` : ''}
+                              </span>
+                              {selecionado && (
+                                <span className="text-xs font-semibold uppercase tracking-wide">Selecionado</span>
+                              )}
+                            </div>
+                            <p className={`mt-1 text-xs ${selecionado ? 'text-primary-800' : 'text-muted-foreground'}`}>
+                              {contextoOrigem} de {formatarData(procedimento.atendimento_created_at)} · {valorPendente}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    !novoPendentesLoading && (
+                      <p className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
+                        Nenhum procedimento pendente sugerido para este cliente.
+                      </p>
+                    )
+                  )}
+                </div>
+
+                {novoItemOrigemId && (
+                  <div className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-900">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>
+                        Procedimento pendente vinculado ao agendamento
+                        {novoEtapaLabel ? ` · ${novoEtapaLabel}` : ''}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={limparVinculoProcedimentoPendente}
+                        className="text-xs font-medium text-primary-800 hover:text-primary-900"
+                      >
+                        Desvincular
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {novoEtapaModeloId && !novoItemOrigemId && (
+                  <div className="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900">
+                    Etapa pré-selecionada: {novoEtapaLabel || `#${novoEtapaModeloId}`}
+                  </div>
+                )}
+
+                <SearchableSelect
+                  label="Procedimento"
+                  name="procedimento_id"
+                  value={novoProcId}
+                  onChange={handleSelecionarProcedimentoCatalogo}
+                  options={novoProcedimentos.map((procedimento) => ({
+                    value: String(procedimento.id),
+                    label: procedimento.nome,
+                  }))}
+                  placeholder="Selecione..."
+                  searchPlaceholder="Buscar procedimento..."
+                  emptyMessage="Nenhum procedimento encontrado"
+                  hint={novoItemOrigemId ? 'Alterar aqui transforma o agendamento em procedimento avulso.' : undefined}
+                />
+              </div>
             )}
 
             {isAdminOrAtendente ? (

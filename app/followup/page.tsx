@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   CalendarDays,
@@ -122,6 +122,8 @@ export default function FollowupPage() {
   const searchParams = useSearchParams();
   const openFollowup = searchParams.get('open');
   const openFollowupClienteId = searchParams.get('cliente_id');
+  const openFollowupTipo = searchParams.get('tipo');
+  const searchParamsString = searchParams.toString();
   const { toast } = useToast();
   const { user, isLoading, hasRole, currentUnidade } = useAuth();
   const unitFetch = useUnitFetch();
@@ -190,6 +192,7 @@ export default function FollowupPage() {
     task: FollowupTarefaCompleta | null;
   }>({ isOpen: false, task: null });
   const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
+  const handledOpenFollowupRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && user && !canAccess) {
@@ -408,12 +411,13 @@ export default function FollowupPage() {
     setVencimentoAte('');
   }
 
-  const abrirNovaTarefa = useCallback(async (clienteId?: number) => {
+  const abrirNovaTarefa = useCallback(async (clienteId?: number, tipo?: string | null) => {
     const responsavelInicialId = responsaveis[0]?.id ?? fallbackResponsaveis[0]?.id ?? null;
     setEditingTask(null);
     setTaskForm({
       ...initialFormState,
       responsavelUsuarioId: responsavelInicialId ? String(responsavelInicialId) : '',
+      tipo: tipo === 'orcamento' ? 'orcamento' : '',
     });
     setTaskFormError('');
     setClienteResultados([]);
@@ -446,21 +450,37 @@ export default function FollowupPage() {
 
   useEffect(() => {
     if (!canCreate) return;
-    if (openFollowup !== '1') return;
+    if (openFollowup !== '1') {
+      handledOpenFollowupRef.current = null;
+      return;
+    }
+
+    const openFollowupKey = [
+      openFollowup,
+      openFollowupClienteId ?? '',
+      openFollowupTipo ?? '',
+    ].join('|');
+
+    if (handledOpenFollowupRef.current === openFollowupKey) {
+      return;
+    }
+
+    handledOpenFollowupRef.current = openFollowupKey;
 
     const clienteId = Number(openFollowupClienteId);
     if (!Number.isInteger(clienteId) || clienteId <= 0) {
-      void abrirNovaTarefa();
+      void abrirNovaTarefa(undefined, openFollowupTipo);
     } else {
-      void abrirNovaTarefa(clienteId);
+      void abrirNovaTarefa(clienteId, openFollowupTipo);
     }
 
-    const nextParams = new URLSearchParams(searchParams.toString());
+    const nextParams = new URLSearchParams(searchParamsString);
     nextParams.delete('open');
     nextParams.delete('cliente_id');
+    nextParams.delete('tipo');
     const nextSearch = nextParams.toString();
     router.replace(`/followup${nextSearch ? `?${nextSearch}` : ''}`);
-  }, [abrirNovaTarefa, canCreate, openFollowup, openFollowupClienteId, router, searchParams]);
+  }, [abrirNovaTarefa, canCreate, openFollowup, openFollowupClienteId, openFollowupTipo, router, searchParamsString]);
 
   function abrirEdicao(task: FollowupTarefaCompleta) {
     setEditingTask(task);

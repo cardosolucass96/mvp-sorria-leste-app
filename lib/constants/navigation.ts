@@ -39,6 +39,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { href: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'atendente', 'avaliador', 'executor', 'ortodontista'] },
   { href: '/painel-tv', label: 'Painel TV', icon: MonitorPlay, roles: ['admin', 'atendente'] },
   { href: '/followup', label: 'Followup', icon: MessageCircle, roles: ['admin', 'atendente'] },
+  { href: '/orcamentos-em-aberto', label: 'Orçamentos em Aberto', icon: FileText, roles: ['admin', 'atendente'] },
   { href: '/avaliacao', label: 'Fila Avaliação', icon: Search, roles: ['admin', 'avaliador'] },
   // Filas de execução são injetadas dinamicamente pelo Sidebar a partir de /api/categorias
   { href: '/meus-procedimentos', label: 'Meus Procedimentos', icon: ClipboardList, roles: ['avaliador', 'executor', 'ortodontista'] },

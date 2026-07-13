@@ -3,12 +3,14 @@ import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { AgendamentoCompleto } from '@/lib/types';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
+import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
 
 interface CriarAgendamentoBody {
   cliente_id?: number;
   atendimento_origem_id?: number | null;
   procedimento_id?: number | null;
   item_atendimento_origem_id?: number | null;
+  etapa_modelo_id?: number | null;
   executor_id?: number | null;
   data_agendada?: string | null;
   observacoes?: string | null;
@@ -23,6 +25,10 @@ interface ItemOrigemVinculado {
   cliente_id: number;
   procedimento_id: number;
   status: string;
+  valor: number;
+  valor_final: number | null;
+  valor_pago: number;
+  etapas_valores: string | null;
 }
 
 const ROLES_DENTISTA_AGENDA = ['avaliador', 'executor', 'ortodontista'];
@@ -162,6 +168,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     const {
       cliente_id,
       item_atendimento_origem_id,
+      etapa_modelo_id,
       data_agendada,
       observacoes,
       reagendado_de_id,
@@ -173,6 +180,8 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       procedimento_id,
       executor_id,
     } = body;
+    let valorAgendamento: number | null = null;
+    let valorPagoAgendamento = 0;
 
     const isAvaliacao = tipo === 'avaliacao';
 
@@ -215,7 +224,11 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
            i.atendimento_id,
            a.cliente_id,
            i.procedimento_id,
-           i.status
+           i.status,
+           i.valor,
+           i.valor_final,
+           i.valor_pago,
+           i.etapas_valores
          FROM itens_atendimento i
          INNER JOIN atendimentos a ON a.id = i.atendimento_id
          WHERE i.id = ? AND a.unidade_id = ?`,
@@ -254,13 +267,35 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         );
       }
 
+      if (etapa_modelo_id != null) {
+        const etapas = await buscarEtapasComValor({
+          procedimento_id: itemOrigem.procedimento_id,
+          etapas_valores: itemOrigem.etapas_valores,
+        });
+        const etapaSelecionada = etapas.find((etapa) => etapa.id === etapa_modelo_id);
+
+        if (!etapaSelecionada) {
+          return NextResponse.json(
+            { error: 'A etapa selecionada não pertence ao procedimento pendente informado' },
+            { status: 400 }
+          );
+        }
+
+        valorAgendamento = roundMoney(etapaSelecionada.valor ?? 0);
+        valorPagoAgendamento = await somarAlocacoesAtivasDaEtapa(itemOrigem.id, etapa_modelo_id);
+      } else {
+        valorAgendamento = roundMoney(itemOrigem.valor_final ?? itemOrigem.valor);
+        valorPagoAgendamento = roundMoney(itemOrigem.valor_pago);
+      }
+
       const agendamentoAtivo = await queryOne<{ id: number }>(
         `SELECT id
          FROM agendamentos
          WHERE item_atendimento_origem_id = ?
+           AND COALESCE(etapa_modelo_id, 0) = COALESCE(?, 0)
            AND unidade_id = ?
            AND status IN ('pendente', 'agendado')`,
-        [item_atendimento_origem_id, context.unidadeId]
+        [item_atendimento_origem_id, etapa_modelo_id ?? null, context.unidadeId]
       );
 
       if (agendamentoAtivo) {
@@ -303,11 +338,14 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     const statusInicial = data_agendada ? 'agendado' : 'pendente';
 
     const tipoAgendamento = isAvaliacao ? 'avaliacao' : 'procedimento';
+    const pagoCalculado = valorAgendamento != null
+      ? valorAgendamento > 0 && valorPagoAgendamento >= valorAgendamento
+      : Boolean(pago);
 
     const result = await execute(
       `INSERT INTO agendamentos
-        (cliente_id, atendimento_origem_id, procedimento_id, item_atendimento_origem_id, executor_id, tipo, data_agendada, status, observacoes, reagendado_de_id, pago, unidade_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (cliente_id, atendimento_origem_id, procedimento_id, item_atendimento_origem_id, executor_id, tipo, data_agendada, status, observacoes, reagendado_de_id, etapa_modelo_id, pago, valor, valor_pago, unidade_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         cliente_id,
         atendimento_origem_id || null,
@@ -319,7 +357,10 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         statusInicial,
         observacoes || null,
         reagendado_de_id || null,
-        pago ? 1 : 0,
+        etapa_modelo_id ?? null,
+        pagoCalculado ? 1 : 0,
+        valorAgendamento,
+        valorPagoAgendamento,
         context.unidadeId,
       ]
     );

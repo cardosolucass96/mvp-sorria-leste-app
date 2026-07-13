@@ -37,11 +37,12 @@ export default function Sidebar() {
     return hasRole(item.roles);
   });
 
-  // Injeta items de fila dinâmicos logo após "Followup" quando existir;
-  // senão, logo após "Agenda".
+  // Injeta items de fila dinâmicos logo após "Orçamentos em Aberto" quando existir;
+  // senão, logo após "Followup" e, por último, "Agenda".
+  const orcamentosIdx = visibleStaticItems.findIndex(i => i.href === '/orcamentos-em-aberto');
   const followupIdx = visibleStaticItems.findIndex(i => i.href === '/followup');
   const agendaIdx = visibleStaticItems.findIndex(i => i.href === '/agenda');
-  const injectionIdx = followupIdx >= 0 ? followupIdx : agendaIdx;
+  const injectionIdx = orcamentosIdx >= 0 ? orcamentosIdx : followupIdx >= 0 ? followupIdx : agendaIdx;
   const filaItems: MenuItem[] = categoriasFila.map(c => ({
     href: `/fila/${c.slug}`,
     label: `Fila ${c.nome}`,
