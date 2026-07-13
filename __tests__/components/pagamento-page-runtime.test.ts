@@ -131,7 +131,7 @@ jest.mock('@/components/ui', () => ({
   }: {
     label: string;
     name: string;
-    options: Array<{ value: string; label: string }>;
+    options: Array<{ value: string; label: string } | { label: string; options: Array<{ value: string; label: string }> }>;
     value?: string;
     onChange?: (value: string) => void;
     placeholder?: string;
@@ -147,7 +147,11 @@ jest.mock('@/components/ui', () => ({
         onChange: (event: React.ChangeEvent<HTMLSelectElement>) => onChange?.(event.target.value),
       },
       placeholder ? React.createElement('option', { value: '' }, placeholder) : null,
-      ...options.map((option) => React.createElement('option', { key: option.value, value: option.value }, option.label))
+      ...options.flatMap((option) => (
+        'options' in option
+          ? option.options.map((groupOption) => React.createElement('option', { key: groupOption.value, value: groupOption.value }, groupOption.label))
+          : React.createElement('option', { key: option.value, value: option.value }, option.label)
+      ))
     )
   ),
   Textarea: ({
@@ -228,6 +232,25 @@ describe('PagamentoPage runtime', () => {
 
       if (url === '/api/atendimentos/14/pagamentos?grouped=1') {
         return mockJsonResponse([]);
+      }
+
+      if (url === '/api/formas-pagamento') {
+        return mockJsonResponse([
+          {
+            id: 1,
+            unidade_id: 1,
+            grupo: 'PIX',
+            subgrupo: '',
+            metodo_base: 'pix',
+            ativo: 1,
+            taxa_percentual: 0.5,
+            taxa_fixa: 0,
+            vigente_de: '2025-01-01 00:00:00',
+            vigente_ate: null,
+            created_at: '2025-01-01 00:00:00',
+            updated_at: '2025-01-01 00:00:00',
+          },
+        ]);
       }
 
       throw new Error(`Unhandled request: ${url}`);

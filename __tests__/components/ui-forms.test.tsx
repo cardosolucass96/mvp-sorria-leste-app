@@ -100,6 +100,25 @@ describe('Select', () => {
     render(<Select label="X" name="x" value="" onChange={() => {}} options={options} disabled />);
     expect(screen.getByLabelText('X')).toBeDisabled();
   });
+
+  test('renderiza optgroups quando informado', () => {
+    render(
+      <Select
+        label="Forma"
+        name="forma"
+        value=""
+        onChange={() => {}}
+        options={[
+          { value: 'pix', label: 'PIX' },
+          { label: 'Cartão Crédito', options: [{ value: 'credito_3x', label: 'Rede Visa 3x' }] },
+        ]}
+      />
+    );
+
+    const select = screen.getByLabelText('Forma');
+    expect(within(select).getByRole('group', { name: 'Cartão Crédito' })).toBeInTheDocument();
+    expect(screen.getByText('Rede Visa 3x')).toBeInTheDocument();
+  });
 });
 
 // ─── Textarea ────────────────────────────────────────────────────

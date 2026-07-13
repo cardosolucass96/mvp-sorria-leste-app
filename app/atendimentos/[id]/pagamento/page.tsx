@@ -11,7 +11,8 @@ import { apiFetch } from '@/lib/utils/apiFetch';
 import { getExecutorDestinoInicial } from '@/lib/utils/destinoExecutor';
 import { isExecutorDisponivel } from '@/lib/utils/usuariosProfissionais';
 import { roundMoney } from '@/lib/helpers/pagamentoFlow';
-import type { Usuario } from '@/lib/types';
+import { buildFormaPagamentoSelectOptions, getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
+import type { FormaPagamentoComTaxa, Usuario } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
 import Alert from '@/components/ui/Alert';
 import LoadingState from '@/components/ui/LoadingState';
@@ -31,7 +32,6 @@ import {
   Textarea,
 } from '@/components/ui';
 
-type MetodoPagamento = 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito' | 'crediario' | 'afins_sorria';
 type DestinoStatus = 'fazer_hoje' | 'agendar' | 'pago_sem_data' | 'nao_pago_sem_data';
 type DestinoAcao = 'fazer_hoje' | 'agendar' | 'deixar_data_em_aberto';
 
@@ -74,6 +74,13 @@ interface Pagamento {
   pagamento_grupo_id: number | null;
   valor: number;
   metodo: string;
+  forma_pagamento_id: number | null;
+  forma_pagamento_grupo_snapshot: string | null;
+  forma_pagamento_subgrupo_snapshot: string | null;
+  taxa_percentual_snapshot: number | null;
+  taxa_fixa_snapshot: number | null;
+  valor_taxa: number | null;
+  valor_liquido: number | null;
   observacoes: string | null;
   recebido_por_nome?: string;
   cancelado: number;
@@ -86,6 +93,8 @@ interface PagamentoGrupo {
   pagamento_grupo_id: number | null;
   pagamento_representante_id: number;
   valor_total: number;
+  valor_taxa_total: number;
+  valor_liquido_total: number;
   observacoes: string | null;
   recebido_por_nome?: string | null;
   cancelado: number;
@@ -96,7 +105,7 @@ interface PagamentoGrupo {
 
 interface FormaPagamentoState {
   id: string;
-  metodo: MetodoPagamento;
+  forma_pagamento_id: string;
   valor: string;
 }
 
@@ -136,15 +145,6 @@ interface LinhaCobranca {
   executorId: string;
 }
 
-const METODOS_PAGAMENTO: Array<{ value: MetodoPagamento; label: string }> = [
-  { value: 'pix', label: 'PIX' },
-  { value: 'dinheiro', label: 'Dinheiro' },
-  { value: 'cartao_debito', label: 'Cartão Débito' },
-  { value: 'cartao_credito', label: 'Cartão Crédito' },
-  { value: 'crediario', label: 'Crediário' },
-  { value: 'afins_sorria', label: 'Afins Sorria' },
-];
-
 const DESTINO_OPTIONS = [
   { value: 'agendar', label: 'Agendar' },
   { value: 'deixar_data_em_aberto', label: 'Deixar data em aberto' },
@@ -163,16 +163,12 @@ function parseValor(value: string) {
   return Number(value.replace(',', '.'));
 }
 
-function criarFormaPagamento(idSuffix: number): FormaPagamentoState {
+function criarFormaPagamento(idSuffix: number, formaPagamentoId = ''): FormaPagamentoState {
   return {
     id: `forma-${idSuffix}`,
-    metodo: 'pix',
+    forma_pagamento_id: formaPagamentoId,
     valor: '',
   };
-}
-
-function getMetodoLabel(metodo: string) {
-  return METODOS_PAGAMENTO.find((item) => item.value === metodo)?.label ?? metodo;
 }
 
 function getFinanceiroBadge(status: LinhaCobranca['financeiroStatus'], saldo: number) {
@@ -199,6 +195,23 @@ function getOperacaoBadge(status: ItemAtendimento['status']) {
   }
 
   return null;
+}
+
+function calcularValorTaxaPreview(valor: number, forma: FormaPagamentoComTaxa | null | undefined) {
+  if (!forma) return 0;
+  return roundMoney((valor * Number(forma.taxa_percentual ?? 0)) / 100 + Number(forma.taxa_fixa ?? 0));
+}
+
+function calcularValorLiquidoPreview(valor: number, forma: FormaPagamentoComTaxa | null | undefined) {
+  return roundMoney(valor - calcularValorTaxaPreview(valor, forma));
+}
+
+function getPagamentoLabel(pagamento: {
+  metodo: string;
+  forma_pagamento_grupo_snapshot?: string | null;
+  forma_pagamento_subgrupo_snapshot?: string | null;
+}) {
+  return getFormaPagamentoSnapshotLabel(pagamento) || pagamento.metodo;
 }
 
 function getResumoFinanceiroPartes(pago: number, pendente: number, pendenteLabel = 'Pendente') {
@@ -259,6 +272,7 @@ export default function PagamentoPage({
 
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
   const [pagamentos, setPagamentos] = useState<PagamentoGrupo[]>([]);
+  const [formasPagamentoDisponiveis, setFormasPagamentoDisponiveis] = useState<FormaPagamentoComTaxa[]>([]);
   const [executores, setExecutores] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -266,12 +280,12 @@ export default function PagamentoPage({
   const [salvandoDestinos, setSalvandoDestinos] = useState(false);
   const [cancelandoId, setCancelandoId] = useState<number | null>(null);
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
-  const [metodoPagamento, setMetodoPagamento] = useState<MetodoPagamento>('pix');
+  const [formaPagamentoId, setFormaPagamentoId] = useState('');
   const [observacoesPagamento, setObservacoesPagamento] = useState('');
   const [multiplasFormas, setMultiplasFormas] = useState(false);
   const [formasPagamento, setFormasPagamento] = useState<FormaPagamentoState[]>([
-    { id: 'forma-1', metodo: 'pix', valor: '' },
-    { id: 'forma-2', metodo: 'cartao_credito', valor: '' },
+    criarFormaPagamento(1),
+    criarFormaPagamento(2),
   ]);
   const [selecoesPagamento, setSelecoesPagamento] = useState<Record<string, { selected: boolean }>>({});
   const [destinos, setDestinos] = useState<Record<string, { status: DestinoAcao; data: string; executorId: string }>>({});
@@ -300,19 +314,23 @@ export default function PagamentoPage({
   const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
-      const [resAtendimento, resPagamentos] = await Promise.all([
+      const [resAtendimento, resPagamentos, resFormas] = await Promise.all([
         unitFetch(`/api/atendimentos/${id}`),
         unitFetch(`/api/atendimentos/${id}/pagamentos?grouped=1`),
+        unitFetch('/api/formas-pagamento'),
       ]);
       if (!resAtendimento.ok) throw new Error('Atendimento não encontrado');
       const atendimentoData: Atendimento = await resAtendimento.json();
       const pagamentosData: PagamentoGrupo[] = await resPagamentos.json();
+      const formasData: FormaPagamentoComTaxa[] = resFormas.ok ? await resFormas.json() : [];
       setAtendimento(atendimentoData);
       setPagamentos(Array.isArray(pagamentosData) ? pagamentosData : []);
+      setFormasPagamentoDisponiveis(Array.isArray(formasData) ? formasData : []);
 
       const novasSelecoes: Record<string, { selected: boolean }> = {};
       const novosDestinos: Record<string, { status: DestinoAcao; data: string; executorId: string }> = {};
       const novosDescontos: Record<number, { valor: string; motivo: string }> = {};
+      const primeiraFormaId = formasData[0] ? String(formasData[0].id) : '';
 
       for (const item of atendimentoData.itens) {
         const baseline = item.valor_original ?? item.valor_final ?? item.valor;
@@ -371,6 +389,17 @@ export default function PagamentoPage({
       setDescontoEditando(novosDescontos);
       setValorSessaoEditando({});
       setErrosSessao({});
+      setFormaPagamentoId((prev) => (
+        prev && formasData.some((forma) => String(forma.id) === prev)
+          ? prev
+          : primeiraFormaId
+      ));
+      setFormasPagamento((prev) => prev.map((forma, index) => ({
+        ...forma,
+        forma_pagamento_id: forma.forma_pagamento_id && formasData.some((config) => String(config.id) === forma.forma_pagamento_id)
+          ? forma.forma_pagamento_id
+          : (index === 0 ? primeiraFormaId : forma.forma_pagamento_id),
+      })));
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Erro ao carregar pagamento');
@@ -453,6 +482,49 @@ export default function PagamentoPage({
   const formasPreenchidas = useMemo(() => {
     return formasPagamento.filter((forma) => parseValor(forma.valor || '0') > 0);
   }, [formasPagamento]);
+
+  const formasPagamentoMap = useMemo(() => {
+    return new Map(formasPagamentoDisponiveis.map((forma) => [String(forma.id), forma]));
+  }, [formasPagamentoDisponiveis]);
+
+  const formasPagamentoOptions = useMemo(() => {
+    return buildFormaPagamentoSelectOptions(formasPagamentoDisponiveis);
+  }, [formasPagamentoDisponiveis]);
+
+  const formaPagamentoSelecionada = useMemo(() => {
+    return formasPagamentoMap.get(formaPagamentoId) ?? null;
+  }, [formaPagamentoId, formasPagamentoMap]);
+
+  const resumoFormaSimples = useMemo(() => {
+    const bruto = roundMoney(totalSelecionado);
+    const taxa = calcularValorTaxaPreview(bruto, formaPagamentoSelecionada);
+    const liquido = calcularValorLiquidoPreview(bruto, formaPagamentoSelecionada);
+    return { bruto, taxa, liquido };
+  }, [formaPagamentoSelecionada, totalSelecionado]);
+
+  const resumoFormasPagamento = useMemo(() => {
+    return formasPagamento.map((forma) => {
+      const config = formasPagamentoMap.get(forma.forma_pagamento_id) ?? null;
+      const bruto = roundMoney(parseValor(forma.valor || '0'));
+      const taxa = calcularValorTaxaPreview(bruto, config);
+      const liquido = calcularValorLiquidoPreview(bruto, config);
+      return {
+        ...forma,
+        config,
+        bruto,
+        taxa,
+        liquido,
+      };
+    });
+  }, [formasPagamento, formasPagamentoMap]);
+
+  const totalTaxaFormasPagamento = useMemo(() => {
+    return roundMoney(resumoFormasPagamento.reduce((sum, forma) => sum + forma.taxa, 0));
+  }, [resumoFormasPagamento]);
+
+  const totalLiquidoFormasPagamento = useMemo(() => {
+    return roundMoney(resumoFormasPagamento.reduce((sum, forma) => sum + forma.liquido, 0));
+  }, [resumoFormasPagamento]);
 
   const linhasMap = useMemo(() => {
     return new Map(linhas.map((linha) => [linha.key, linha]));
@@ -628,7 +700,8 @@ export default function PagamentoPage({
   };
 
   const handleAdicionarForma = () => {
-    setFormasPagamento((prev) => [...prev, criarFormaPagamento(prev.length + 1)]);
+    const defaultFormaId = formasPagamentoDisponiveis[0] ? String(formasPagamentoDisponiveis[0].id) : '';
+    setFormasPagamento((prev) => [...prev, criarFormaPagamento(prev.length + 1, defaultFormaId)]);
   };
 
   const handleRemoverForma = (formaId: string) => {
@@ -671,6 +744,12 @@ export default function PagamentoPage({
           return;
         }
 
+        if (formasPreenchidas.some((forma) => !forma.forma_pagamento_id)) {
+          setError('Selecione a configuração de cada forma de pagamento.');
+          setRegistrando(false);
+          return;
+        }
+
         if (formasPreenchidas.some((forma) => !Number.isFinite(parseValor(forma.valor)) || parseValor(forma.valor) <= 0)) {
           setError('Todas as formas de pagamento precisam ter valor maior que zero.');
           setRegistrando(false);
@@ -688,7 +767,7 @@ export default function PagamentoPage({
           observacoes: observacoesPagamento || null,
           alocacoes,
           formas: formasPreenchidas.map((forma) => ({
-            metodo: forma.metodo,
+            forma_pagamento_id: Number(forma.forma_pagamento_id),
             valor: Number(parseValor(forma.valor).toFixed(2)),
           })),
         };
@@ -700,9 +779,15 @@ export default function PagamentoPage({
           return;
         }
 
+        if (!formaPagamentoId) {
+          setError('Selecione uma forma de pagamento.');
+          setRegistrando(false);
+          return;
+        }
+
         payload = {
           valor: valorInformado,
-          metodo: metodoPagamento,
+          forma_pagamento_id: Number(formaPagamentoId),
           observacoes: observacoesPagamento || null,
           alocacoes,
         };
@@ -720,8 +805,8 @@ export default function PagamentoPage({
       setObservacoesPagamento('');
       setMultiplasFormas(false);
       setFormasPagamento([
-        { id: 'forma-1', metodo: 'pix', valor: '' },
-        { id: 'forma-2', metodo: 'cartao_credito', valor: '' },
+        criarFormaPagamento(1, formaPagamentoId),
+        criarFormaPagamento(2),
       ]);
       await carregarDados();
     } catch (err) {
@@ -1182,14 +1267,21 @@ export default function PagamentoPage({
             </div>
 
             <form onSubmit={handleRegistrarPagamento} className="flex flex-col gap-4">
+              {formasPagamentoDisponiveis.length === 0 && (
+                <Alert type="warning">
+                  Nenhuma forma de pagamento ativa foi configurada para esta unidade. Cadastre ao menos uma forma ativa para registrar a cobrança.
+                </Alert>
+              )}
+
               {!multiplasFormas ? (
                 <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
                   <Select
                     label="Forma de pagamento"
-                    name="metodo_pagamento"
-                    options={METODOS_PAGAMENTO}
-                    value={metodoPagamento}
-                    onChange={(value) => setMetodoPagamento(value as MetodoPagamento)}
+                    name="forma_pagamento_id"
+                    options={formasPagamentoOptions}
+                    value={formaPagamentoId}
+                    onChange={setFormaPagamentoId}
+                    placeholder={formasPagamentoDisponiveis.length > 0 ? 'Selecione...' : 'Cadastre uma forma'}
                   />
                   <Input
                     label="Observações"
@@ -1198,6 +1290,22 @@ export default function PagamentoPage({
                     onChange={setObservacoesPagamento}
                     placeholder="Ex: entrada do tratamento"
                   />
+                  <div className="rounded-xl border border-border bg-muted/20 p-4 md:col-span-2">
+                    <div className="grid gap-3 text-sm md:grid-cols-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Bruto</p>
+                        <p className="font-semibold">{formatarMoeda(resumoFormaSimples.bruto)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Taxa</p>
+                        <p className="font-semibold">{formatarMoeda(resumoFormaSimples.taxa)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Líquido</p>
+                        <p className="font-semibold text-success-700">{formatarMoeda(resumoFormaSimples.liquido)}</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4">
@@ -1218,12 +1326,13 @@ export default function PagamentoPage({
                       <div key={forma.id} className="grid gap-3 rounded-xl border border-border bg-background p-3 md:col-span-2 md:grid-cols-[minmax(0,1fr)_180px_120px]">
                         <Select
                           label={`Forma ${index + 1}`}
-                          name={`forma-metodo-${forma.id}`}
-                          options={METODOS_PAGAMENTO}
-                          value={forma.metodo}
+                          name={`forma-config-${forma.id}`}
+                          options={formasPagamentoOptions}
+                          value={forma.forma_pagamento_id}
                           onChange={(value) => setFormasPagamento((prev) => prev.map((atual) => (
-                            atual.id === forma.id ? { ...atual, metodo: value as MetodoPagamento } : atual
+                            atual.id === forma.id ? { ...atual, forma_pagamento_id: value } : atual
                           )))}
+                          placeholder={formasPagamentoDisponiveis.length > 0 ? 'Selecione...' : 'Cadastre uma forma'}
                         />
                         <Input
                           label="Valor"
@@ -1247,6 +1356,11 @@ export default function PagamentoPage({
                           >
                             Remover
                           </Button>
+                        </div>
+                        <div className="md:col-span-3">
+                          <p className="text-xs text-muted-foreground">
+                            Taxa {formatarMoeda(resumoFormasPagamento[index]?.taxa ?? 0)} · Líquido {formatarMoeda(resumoFormasPagamento[index]?.liquido ?? 0)}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -1273,6 +1387,14 @@ export default function PagamentoPage({
                           <span className={cn('font-semibold', Math.abs(totalFormasPagamento - totalSelecionado) <= 0.01 ? 'text-success-600' : 'text-warning-600')}>
                             {formatarMoeda(totalFormasPagamento)}
                           </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Taxa total</span>
+                          <span className="font-semibold">{formatarMoeda(totalTaxaFormasPagamento)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Líquido total</span>
+                          <span className="font-semibold text-success-700">{formatarMoeda(totalLiquidoFormasPagamento)}</span>
                         </div>
                       </div>
                     </div>
@@ -1304,6 +1426,7 @@ export default function PagamentoPage({
                   variant="secondary"
                   loading={registrando}
                   disabled={
+                    formasPagamentoDisponiveis.length === 0 ||
                     totalSelecionado <= 0 ||
                     (multiplasFormas && Math.abs(totalFormasPagamento - totalSelecionado) > 0.01)
                   }
@@ -1497,7 +1620,7 @@ export default function PagamentoPage({
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-medium">{formatarMoeda(pagamento.valor_total)}</p>
                     <Badge color={pagamento.cancelado ? 'red' : 'green'} size="sm">
-                      {pagamento.cancelado ? 'Cancelado' : pagamento.formas.length > 1 ? 'Cobrança composta' : getMetodoLabel(pagamento.formas[0]?.metodo ?? '')}
+                      {pagamento.cancelado ? 'Cancelado' : pagamento.formas.length > 1 ? 'Cobrança composta' : getPagamentoLabel(pagamento.formas[0] ?? { metodo: '' })}
                     </Badge>
                     {pagamento.formas.length > 1 && (
                       <Badge color="gray" size="sm">{pagamento.formas.length} formas</Badge>
@@ -1519,11 +1642,16 @@ export default function PagamentoPage({
                     <div key={forma.id} className="flex items-center justify-between gap-3 text-sm">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge color={forma.cancelado ? 'red' : 'gray'} size="sm">
-                          {getMetodoLabel(forma.metodo)}
+                          {getPagamentoLabel(forma)}
                         </Badge>
                         <span className="text-muted-foreground">{formatarDataHora(forma.created_at)}</span>
                       </div>
-                      <span className="font-medium">{formatarMoeda(forma.valor)}</span>
+                      <div className="text-right">
+                        <span className="font-medium">{formatarMoeda(forma.valor)}</span>
+                        <p className="text-xs text-muted-foreground">
+                          Líquido {formatarMoeda(forma.valor_liquido ?? forma.valor)}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
