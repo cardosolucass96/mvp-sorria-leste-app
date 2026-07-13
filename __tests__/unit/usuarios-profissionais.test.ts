@@ -35,11 +35,21 @@ describe('usuariosProfissionais utils', () => {
     ).toBe(true);
   });
 
-  test('mantem admin como profissional valido na agenda', () => {
+  test('remove admin sem role de dentista da agenda', () => {
     expect(
       isProfissionalAgenda({
         role: 'admin',
         roles: ['admin'],
+        ativo: 1,
+      })
+    ).toBe(false);
+  });
+
+  test('mantem admin com role secundaria de dentista na agenda', () => {
+    expect(
+      isProfissionalAgenda({
+        role: 'admin',
+        roles: ['admin', 'avaliador'],
         ativo: 1,
       })
     ).toBe(true);

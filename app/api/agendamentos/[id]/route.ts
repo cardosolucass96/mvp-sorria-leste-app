@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento, AgendamentoCompleto } from '@/lib/types';
+import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 
 interface AtualizarAgendamentoBody {
   data_agendada?: string | null;
@@ -10,6 +11,8 @@ interface AtualizarAgendamentoBody {
   status?: 'faltou' | 'cancelado' | 'agendado';
   motivo_cancelamento?: string | null;
 }
+
+const ROLES_DENTISTA_AGENDA = ['avaliador', 'executor', 'ortodontista'];
 
 const DETAIL_SQL = `
   SELECT
@@ -86,6 +89,15 @@ export const PUT = withUnit(async (
 
     // Caso: atualizar executor
     if (body.executor_id !== undefined) {
+      if (body.executor_id !== null) {
+        const executorValido = await validarUsuarioPorRoles(Number(body.executor_id), ROLES_DENTISTA_AGENDA, null);
+        if (executorValido === 'not_found') {
+          return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
+        }
+        if (executorValido !== 'ok') {
+          return NextResponse.json({ error: 'Usuário selecionado não possui role de dentista' }, { status: 400 });
+        }
+      }
       updates.push('executor_id = ?');
       params.push(body.executor_id || null);
     }

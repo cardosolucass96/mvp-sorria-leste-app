@@ -19,6 +19,7 @@ import {
   CLIENTE_BASICO,
   CLIENTE_COMPLETO,
   PROC_LIMPEZA,
+  USUARIO_AVALIADOR,
   USUARIO_EXECUTOR,
   USUARIO_ADMIN,
 } from '../../helpers/seed';
@@ -226,7 +227,7 @@ describe('POST /api/agendamentos', () => {
   it('cria agendamento de procedimento com data e hora', async () => {
     mockQueryResponse('select id from clientes', { id: 1 });
     mockQueryResponse('select id from procedimentos', { id: 1 });
-    mockQueryResponse('select id from usuarios', { id: 4 });
+    mockQueryResponse('select id, role from usuarios where id = ? and ativo = 1', { id: 4, role: 'executor' });
     setLastInsertId(10);
     mockQueryResponse('where a.id = ?', {
       ...AGENDAMENTO_PROCEDIMENTO,
@@ -252,6 +253,28 @@ describe('POST /api/agendamentos', () => {
     const insert = queries.find(q => q.sql.includes('INSERT INTO agendamentos'));
     expect(insert).toBeDefined();
     expect(insert!.params).toContain('agendado'); // status quando tem data
+  });
+
+  it('rejeita agendamento com usuário sem role de dentista', async () => {
+    mockQueryResponse('select id from clientes', { id: 1 });
+    mockQueryResponse('select id from procedimentos', { id: 1 });
+    mockQueryResponse('select id, role from usuarios where id = ? and ativo = 1', { id: 1, role: 'admin' });
+
+    const { status, data } = await callRoute<{ error: string }>(
+      createAgendamento, '/api/agendamentos', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+        body: {
+          cliente_id: 1,
+          procedimento_id: 1,
+          executor_id: USUARIO_ADMIN.id,
+          data_agendada: '2027-04-10T14:00',
+        },
+      }
+    );
+
+    expect(status).toBe(400);
+    expect(data.error).toContain('role de dentista');
   });
 
   it('cria agendamento de avaliação sem procedimento_id', async () => {
@@ -308,6 +331,73 @@ describe('POST /api/agendamentos', () => {
     const queries = getExecutedQueries();
     const insert = queries.find(q => q.sql.includes('INSERT INTO agendamentos'));
     expect(insert!.params).toContain('pendente'); // sem data = pendente
+  });
+
+  it('cria agendamento vinculado a procedimento pendente existente', async () => {
+    mockQueryResponse('select id from clientes', { id: 1 });
+    mockQueryResponse('from itens_atendimento i', {
+      id: 77,
+      atendimento_id: 10,
+      cliente_id: 1,
+      procedimento_id: 1,
+      status: 'pendente',
+    });
+    mockQueryResponse('select id from procedimentos', { id: 1 });
+    setLastInsertId(31);
+    mockQueryResponse('where a.id = ?', {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      id: 31,
+      atendimento_origem_id: 10,
+      item_atendimento_origem_id: 77,
+    });
+
+    const { status } = await callRoute(
+      createAgendamento, '/api/agendamentos', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+        body: {
+          cliente_id: 1,
+          procedimento_id: 1,
+          item_atendimento_origem_id: 77,
+          atendimento_origem_id: 10,
+          data_agendada: '2027-04-20T15:00',
+        },
+      }
+    );
+
+    expect(status).toBe(201);
+    const queries = getExecutedQueries();
+    const insert = queries.find(q => q.sql.includes('INSERT INTO agendamentos'));
+    expect(insert).toBeDefined();
+    expect(insert?.params[1]).toBe(10);
+    expect(insert?.params[3]).toBe(77);
+  });
+
+  it('rejeita novo agendamento quando já existe outro ativo para o mesmo procedimento pendente', async () => {
+    mockQueryResponse('select id from clientes', { id: 1 });
+    mockQueryResponse('from itens_atendimento i', {
+      id: 77,
+      atendimento_id: 10,
+      cliente_id: 1,
+      procedimento_id: 1,
+      status: 'pendente',
+    });
+    mockQueryResponse('where item_atendimento_origem_id = ?', { id: 555 });
+
+    const { status, data } = await callRoute<{ error: string }>(
+      createAgendamento, '/api/agendamentos', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+        body: {
+          cliente_id: 1,
+          item_atendimento_origem_id: 77,
+          procedimento_id: 1,
+        },
+      }
+    );
+
+    expect(status).toBe(409);
+    expect(data.error).toContain('Já existe um agendamento ativo');
   });
 
   it('rejeita agendamento com data no passado', async () => {
@@ -540,10 +630,19 @@ describe('PUT /api/agendamentos/[id]', () => {
     expect(status).toBe(400);
   });
 
-  it('troca executor', async () => {
+  it('troca dentista responsável', async () => {
     mockQueryResponse('select * from agendamentos where id', {
       ...AGENDAMENTO_PROCEDIMENTO,
       status: 'agendado',
+    });
+    mockQueryResponse('select id, role from usuarios where id = ? and ativo = 1', {
+      id: USUARIO_AVALIADOR.id,
+      role: USUARIO_AVALIADOR.role,
+    });
+    mockQueryResponse('where a.id = ?', {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      executor_id: USUARIO_AVALIADOR.id,
+      executor_nome: USUARIO_AVALIADOR.nome,
     });
 
     const ctx = createRouteContext({ id: '1' });
@@ -551,7 +650,7 @@ describe('PUT /api/agendamentos/[id]', () => {
       updateAgendamento, '/api/agendamentos/1', {
         method: 'PUT',
         headers: { Authorization: 'Bearer test.jwt.token' },
-        body: { executor_id: USUARIO_ADMIN.id },
+        body: { executor_id: USUARIO_AVALIADOR.id },
       }, ctx
     );
 
@@ -559,7 +658,30 @@ describe('PUT /api/agendamentos/[id]', () => {
     const queries = getExecutedQueries();
     const update = queries.find(q => q.sql.includes('UPDATE agendamentos'));
     expect(update!.sql).toContain('executor_id');
-    expect(update!.params).toContain(USUARIO_ADMIN.id);
+    expect(update!.params).toContain(USUARIO_AVALIADOR.id);
+  });
+
+  it('rejeita trocar dentista responsável para admin sem role clínica', async () => {
+    mockQueryResponse('select * from agendamentos where id', {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      status: 'agendado',
+    });
+    mockQueryResponse('select id, role from usuarios where id = ? and ativo = 1', {
+      id: USUARIO_ADMIN.id,
+      role: USUARIO_ADMIN.role,
+    });
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ error: string }>(
+      updateAgendamento, '/api/agendamentos/1', {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+        body: { executor_id: USUARIO_ADMIN.id },
+      }, ctx
+    );
+
+    expect(status).toBe(400);
+    expect(data.error).toContain('role de dentista');
   });
 
   it('remove executor (null)', async () => {
@@ -756,5 +878,142 @@ describe('POST /api/agendamentos/[id]/chegou', () => {
     // valor_pago deve ser = valor (150) e status = 'pago'
     expect(insertItem!.params).toContain(150); // valor_pago
     expect(insertItem!.params).toContain('pago'); // status
+  });
+
+  it('reativa o atendimento de origem quando o agendamento está vinculado a procedimento pendente', async () => {
+    const agVinculado = {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      item_atendimento_origem_id: 77,
+      atendimento_origem_id: 10,
+      status: 'agendado',
+    };
+
+    mockQueryResponse('select * from agendamentos where id', agVinculado);
+    mockQueryResponse("status in ('pendente', 'agendado')", [agVinculado]);
+    mockQueryResponse('from itens_atendimento i', [
+      {
+        id: 77,
+        atendimento_id: 10,
+        procedimento_id: 1,
+        executor_id: null,
+        criado_por_id: 3,
+        status: 'pendente',
+        cliente_id: 1,
+      },
+    ]);
+    mockQueryResponse("status not in ('finalizado', 'encerrado')\n           and unidade_id = ?\n           and id !=", []);
+    mockQueryResponse('where a.id = ?', {
+      id: 10,
+      cliente_id: 1,
+      status: 'aguardando_pagamento',
+      tipo: 'normal',
+      cliente_nome: CLIENTE_BASICO.nome,
+      cliente_cpf: CLIENTE_BASICO.cpf,
+      cliente_telefone: CLIENTE_BASICO.telefone,
+    });
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ id: number; status: string; agendamentos_agrupados: number }>(
+      chegouAgendamento, '/api/agendamentos/1/chegou', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+      }, ctx
+    );
+
+    expect(status).toBe(201);
+    expect(data.id).toBe(10);
+
+    const queries = getExecutedQueries();
+    const updateAtendimento = queries.find(q => q.sql.includes("SET status = 'aguardando_pagamento'"));
+    const insertAtendimento = queries.find(q => q.sql.includes('INSERT INTO atendimentos'));
+    const insertItem = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
+
+    expect(updateAtendimento).toBeDefined();
+    expect(insertAtendimento).toBeUndefined();
+    expect(insertItem).toBeUndefined();
+  });
+
+  it('bloqueia chegada quando os agendamentos vinculados do grupo apontam para atendimentos de origem diferentes', async () => {
+    const agOrigemA = {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      id: 1,
+      item_atendimento_origem_id: 77,
+      atendimento_origem_id: 10,
+      status: 'agendado',
+    };
+    const agOrigemB = {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      id: 2,
+      item_atendimento_origem_id: 78,
+      atendimento_origem_id: 11,
+      status: 'pendente',
+    };
+
+    mockQueryResponse('select * from agendamentos where id', agOrigemA);
+    mockQueryResponse("status in ('pendente', 'agendado')", [agOrigemA, agOrigemB]);
+    mockQueryResponse('from itens_atendimento i', [
+      {
+        id: 77,
+        atendimento_id: 10,
+        procedimento_id: 1,
+        executor_id: null,
+        criado_por_id: 3,
+        status: 'pendente',
+        cliente_id: 1,
+      },
+      {
+        id: 78,
+        atendimento_id: 11,
+        procedimento_id: 1,
+        executor_id: null,
+        criado_por_id: 3,
+        status: 'pendente',
+        cliente_id: 1,
+      },
+    ]);
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ error: string }>(
+      chegouAgendamento, '/api/agendamentos/1/chegou', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+      }, ctx
+    );
+
+    expect(status).toBe(409);
+    expect(data.error).toContain('atendimentos de origem diferentes');
+  });
+
+  it('bloqueia chegada quando o grupo mistura procedimentos vinculados e avulsos', async () => {
+    const agVinculado = {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      id: 1,
+      item_atendimento_origem_id: 77,
+      atendimento_origem_id: 10,
+      status: 'agendado',
+    };
+    const agAvulso = {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      id: 2,
+      item_atendimento_origem_id: null,
+      atendimento_origem_id: null,
+      procedimento_id: 2,
+      procedimento_nome: 'Restauração',
+      status: 'pendente',
+    };
+
+    mockQueryResponse('select * from agendamentos where id', agVinculado);
+    mockQueryResponse("status in ('pendente', 'agendado')", [agVinculado, agAvulso]);
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<{ error: string }>(
+      chegouAgendamento, '/api/agendamentos/1/chegou', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+      }, ctx
+    );
+
+    expect(status).toBe(409);
+    expect(data.error).toContain('misturam procedimentos vinculados e avulsos');
   });
 });

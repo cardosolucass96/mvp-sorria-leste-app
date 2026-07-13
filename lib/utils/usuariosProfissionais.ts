@@ -14,10 +14,10 @@ export function getUsuarioRoles(usuario: UsuarioComRolesBasico): string[] {
 }
 
 export function isProfissionalAgenda(usuario: UsuarioComRolesBasico): boolean {
-  if (usuario.ativo === 0) return false;
+  if (usuario.ativo !== 1) return false;
 
   const roles = getUsuarioRoles(usuario);
-  return roles.includes('admin') || roles.some((role) => ROLES_PROFISSIONAL_AGENDA.has(role));
+  return roles.some((role) => ROLES_PROFISSIONAL_AGENDA.has(role));
 }
 
 export function isExecutorDisponivel(usuario: UsuarioComRolesBasico): boolean {

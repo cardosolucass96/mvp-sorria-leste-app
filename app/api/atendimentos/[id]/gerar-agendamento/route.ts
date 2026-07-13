@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { AgendamentoCompleto } from '@/lib/types';
+import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 
 interface AtendimentoBase {
   id: number;
@@ -9,6 +10,8 @@ interface AtendimentoBase {
   unidade_id: number;
   status: string;
 }
+
+const ROLES_DENTISTA_AGENDA = ['avaliador', 'executor', 'ortodontista'];
 
 // POST /api/atendimentos/[id]/gerar-agendamento - Gera agendamento de próxima sessão
 export const POST = withUnit(async (
@@ -54,14 +57,14 @@ export const POST = withUnit(async (
       return NextResponse.json({ error: 'Procedimento não encontrado' }, { status: 404 });
     }
 
-    // Verifica executor se fornecido
+    // Verifica dentista responsável se fornecido
     if (executor_id) {
-      const executor = await queryOne<{ id: number }>(
-        'SELECT id FROM usuarios WHERE id = ? AND ativo = 1',
-        [executor_id]
-      );
-      if (!executor) {
+      const executorValido = await validarUsuarioPorRoles(executor_id, ROLES_DENTISTA_AGENDA, null);
+      if (executorValido === 'not_found') {
         return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
+      }
+      if (executorValido !== 'ok') {
+        return NextResponse.json({ error: 'Usuário selecionado não possui role de dentista' }, { status: 400 });
       }
     }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { AgendamentoCompleto } from '@/lib/types';
+import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 
 interface CriarAgendamentoBody {
   cliente_id?: number;
@@ -15,6 +16,16 @@ interface CriarAgendamentoBody {
   pago?: boolean | number | null;
   tipo?: 'avaliacao' | 'procedimento' | string;
 }
+
+interface ItemOrigemVinculado {
+  id: number;
+  atendimento_id: number;
+  cliente_id: number;
+  procedimento_id: number;
+  status: string;
+}
+
+const ROLES_DENTISTA_AGENDA = ['avaliador', 'executor', 'ortodontista'];
 
 // Mapeamento seguro de campos para ORDER BY
 const SORT_FIELDS: Record<string, string> = {
@@ -148,17 +159,19 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 export const POST = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const body = await request.json() as CriarAgendamentoBody;
-    let {
+    const {
       cliente_id,
-      atendimento_origem_id,
-      procedimento_id,
       item_atendimento_origem_id,
-      executor_id,
       data_agendada,
       observacoes,
       reagendado_de_id,
       pago,
       tipo,
+    } = body;
+    let {
+      atendimento_origem_id,
+      procedimento_id,
+      executor_id,
     } = body;
 
     const isAvaliacao = tipo === 'avaliacao';
@@ -171,9 +184,6 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     if (!cliente_id) {
       return NextResponse.json({ error: 'cliente_id é obrigatório' }, { status: 400 });
-    }
-    if (!isAvaliacao && !procedimento_id) {
-      return NextResponse.json({ error: 'procedimento_id é obrigatório para agendamento de procedimento' }, { status: 400 });
     }
 
     // Não permite agendar no passado
@@ -191,6 +201,83 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
     }
 
+    if (isAvaliacao && item_atendimento_origem_id) {
+      return NextResponse.json(
+        { error: 'Agendamento de avaliação não pode ser vinculado a um procedimento pendente' },
+        { status: 400 }
+      );
+    }
+
+    if (item_atendimento_origem_id) {
+      const itemOrigem = await queryOne<ItemOrigemVinculado>(
+        `SELECT
+           i.id,
+           i.atendimento_id,
+           a.cliente_id,
+           i.procedimento_id,
+           i.status
+         FROM itens_atendimento i
+         INNER JOIN atendimentos a ON a.id = i.atendimento_id
+         WHERE i.id = ? AND a.unidade_id = ?`,
+        [item_atendimento_origem_id, context.unidadeId]
+      );
+
+      if (!itemOrigem) {
+        return NextResponse.json({ error: 'Procedimento de origem não encontrado' }, { status: 404 });
+      }
+
+      if (itemOrigem.cliente_id !== cliente_id) {
+        return NextResponse.json(
+          { error: 'O procedimento pendente não pertence ao cliente selecionado' },
+          { status: 400 }
+        );
+      }
+
+      if (itemOrigem.status === 'concluido') {
+        return NextResponse.json(
+          { error: 'Não é possível agendar um procedimento que já foi concluído' },
+          { status: 400 }
+        );
+      }
+
+      if (atendimento_origem_id && atendimento_origem_id !== itemOrigem.atendimento_id) {
+        return NextResponse.json(
+          { error: 'O atendimento de origem informado não corresponde ao procedimento selecionado' },
+          { status: 400 }
+        );
+      }
+
+      if (procedimento_id && procedimento_id !== itemOrigem.procedimento_id) {
+        return NextResponse.json(
+          { error: 'O procedimento informado não corresponde ao procedimento pendente selecionado' },
+          { status: 400 }
+        );
+      }
+
+      const agendamentoAtivo = await queryOne<{ id: number }>(
+        `SELECT id
+         FROM agendamentos
+         WHERE item_atendimento_origem_id = ?
+           AND unidade_id = ?
+           AND status IN ('pendente', 'agendado')`,
+        [item_atendimento_origem_id, context.unidadeId]
+      );
+
+      if (agendamentoAtivo) {
+        return NextResponse.json(
+          { error: 'Já existe um agendamento ativo para este procedimento pendente' },
+          { status: 409 }
+        );
+      }
+
+      atendimento_origem_id = itemOrigem.atendimento_id;
+      procedimento_id = itemOrigem.procedimento_id;
+    }
+
+    if (!isAvaliacao && !procedimento_id) {
+      return NextResponse.json({ error: 'procedimento_id é obrigatório para agendamento de procedimento' }, { status: 400 });
+    }
+
     // Verifica procedimento (se não for avaliação)
     if (!isAvaliacao) {
       const procedimento = await queryOne<{ id: number }>(
@@ -202,14 +289,14 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       }
     }
 
-    // Verifica executor se fornecido
+    // Verifica dentista responsável se fornecido
     if (executor_id) {
-      const executor = await queryOne<{ id: number }>(
-        'SELECT id FROM usuarios WHERE id = ? AND ativo = 1',
-        [executor_id]
-      );
-      if (!executor) {
+      const executorValido = await validarUsuarioPorRoles(executor_id, ROLES_DENTISTA_AGENDA, null);
+      if (executorValido === 'not_found') {
         return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
+      }
+      if (executorValido !== 'ok') {
+        return NextResponse.json({ error: 'Usuário selecionado não possui role de dentista' }, { status: 400 });
       }
     }
 

@@ -183,6 +183,7 @@ beforeEach(() => {
         { id: 10, nome: 'Dra. Ana', role: 'executor', roles: ['executor'], ativo: 1 },
         { id: 11, nome: 'Recepção', role: 'atendente', roles: ['atendente'], ativo: 1 },
         { id: 12, nome: 'Dr. Caio', role: 'admin', roles: ['admin', 'avaliador'], ativo: 1 },
+        { id: 15, nome: 'Admin Puro', role: 'admin', roles: ['admin'], ativo: 1 },
         { id: 13, nome: 'Dra. Lívia', role: 'atendente', roles: ['ortodontista'], ativo: 1 },
         { id: 14, nome: 'Dr. Igor', role: 'executor', roles: ['executor'], ativo: 0 },
       ]);
@@ -234,6 +235,7 @@ describe('AgendaPage', () => {
     expect(screen.getByRole('option', { name: 'Dra. Ana' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Dr. Caio' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Dra. Lívia' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Admin Puro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Recepção' })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Dr. Igor' })).not.toBeInTheDocument();
 
@@ -482,5 +484,236 @@ describe('AgendaPage', () => {
         executor_id: 12,
       });
     }
+  });
+
+  test('sugere procedimentos pendentes sem pré-seleção e envia o vínculo ao escolher uma sugestão', async () => {
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === '/api/usuarios?unidade_id=1') {
+        return mockJsonResponse([
+          { id: 10, nome: 'Dra. Ana', role: 'executor', roles: ['executor'], ativo: 1 },
+          { id: 11, nome: 'Recepção', role: 'atendente', roles: ['atendente'], ativo: 1 },
+          { id: 12, nome: 'Dr. Caio', role: 'admin', roles: ['admin', 'avaliador'], ativo: 1 },
+        ]);
+      }
+
+      if (url === '/api/procedimentos') {
+        return mockJsonResponse([
+          { id: 201, nome: 'Limpeza Dental', valor: 150 },
+          { id: 202, nome: 'Canal', valor: 480 },
+        ]);
+      }
+
+      if (url.startsWith('/api/clientes?busca=')) {
+        return mockJsonResponse({
+          clientes: [
+            { id: 101, nome: 'Maria Silva', telefone: '85999990000', cpf: null },
+          ],
+        });
+      }
+
+      return mockJsonResponse({ clientes: [] });
+    });
+
+    mockUnitFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/clientes/101/procedimentos-pendentes') {
+        return mockJsonResponse([
+          {
+            item_id: 77,
+            atendimento_id: 10,
+            procedimento_id: 201,
+            procedimento_nome: 'Limpeza Dental',
+            status: 'pendente',
+            valor: 150,
+            valor_final: 150,
+            valor_pago: 0,
+            valor_pendente: 150,
+            etapa_label: null,
+            atendimento_status: 'finalizado',
+            motivo_saida: 'continuacao',
+            atendimento_created_at: '2026-07-10 09:00:00',
+            item_created_at: '2026-07-10 09:30:00',
+          },
+        ]);
+      }
+
+      if (url === '/api/agendamentos' && init?.method === 'POST') {
+        return mockJsonResponse({ id: 50 }, { status: 201 });
+      }
+
+      return mockJsonResponse({
+        items: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    render(<AgendaPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Novo Agendamento/i }));
+    fireEvent.change(await screen.findByPlaceholderText('Digite o nome do cliente...'), {
+      target: { value: 'Ma' },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /Maria Silva/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Procedimento' }));
+
+    const criarButton = screen.getByRole('button', { name: 'Criar Agendamento' });
+    const sugestao = await screen.findByRole('button', { name: /Limpeza Dental/i });
+
+    expect(criarButton).toBeDisabled();
+    expect(sugestao).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText('Selecionado')).not.toBeInTheDocument();
+
+    fireEvent.click(sugestao);
+
+    expect(sugestao).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByText('Procedimento pendente vinculado ao agendamento')).toBeInTheDocument();
+    expect(criarButton).not.toBeDisabled();
+
+    fireEvent.click(criarButton);
+
+    await waitFor(() => {
+      const postCalls = getUnitFetchCallsMatching(
+        (url, init) => url === '/api/agendamentos' && init?.method === 'POST'
+      );
+      expect(postCalls).toHaveLength(1);
+    });
+
+    const postCall = getUnitFetchCallsMatching(
+      (url, init) => url === '/api/agendamentos' && init?.method === 'POST'
+    )[0];
+
+    expect(JSON.parse(String((postCall[1] as RequestInit).body))).toEqual({
+      cliente_id: 101,
+      procedimento_id: 201,
+      item_atendimento_origem_id: 77,
+      atendimento_origem_id: 10,
+      executor_id: null,
+      data_agendada: null,
+      observacoes: null,
+    });
+  });
+
+  test('permite trocar para procedimento do catálogo e limpa o vínculo do procedimento pendente', async () => {
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === '/api/usuarios?unidade_id=1') {
+        return mockJsonResponse([
+          { id: 10, nome: 'Dra. Ana', role: 'executor', roles: ['executor'], ativo: 1 },
+          { id: 11, nome: 'Recepção', role: 'atendente', roles: ['atendente'], ativo: 1 },
+          { id: 12, nome: 'Dr. Caio', role: 'admin', roles: ['admin', 'avaliador'], ativo: 1 },
+        ]);
+      }
+
+      if (url === '/api/procedimentos') {
+        return mockJsonResponse([
+          { id: 201, nome: 'Limpeza Dental', valor: 150 },
+          { id: 202, nome: 'Canal', valor: 480 },
+        ]);
+      }
+
+      if (url.startsWith('/api/clientes?busca=')) {
+        return mockJsonResponse({
+          clientes: [
+            { id: 101, nome: 'Maria Silva', telefone: '85999990000', cpf: null },
+          ],
+        });
+      }
+
+      return mockJsonResponse({ clientes: [] });
+    });
+
+    mockUnitFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/clientes/101/procedimentos-pendentes') {
+        return mockJsonResponse([
+          {
+            item_id: 77,
+            atendimento_id: 10,
+            procedimento_id: 201,
+            procedimento_nome: 'Limpeza Dental',
+            status: 'pendente',
+            valor: 150,
+            valor_final: 150,
+            valor_pago: 0,
+            valor_pendente: 150,
+            etapa_label: null,
+            atendimento_status: 'finalizado',
+            motivo_saida: 'continuacao',
+            atendimento_created_at: '2026-07-10 09:00:00',
+            item_created_at: '2026-07-10 09:30:00',
+          },
+        ]);
+      }
+
+      if (url === '/api/agendamentos' && init?.method === 'POST') {
+        return mockJsonResponse({ id: 51 }, { status: 201 });
+      }
+
+      return mockJsonResponse({
+        items: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    render(<AgendaPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Novo Agendamento/i }));
+    fireEvent.change(await screen.findByPlaceholderText('Digite o nome do cliente...'), {
+      target: { value: 'Ma' },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /Maria Silva/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Procedimento' }));
+
+    const sugestao = await screen.findByRole('button', { name: /Limpeza Dental/i });
+    fireEvent.click(sugestao);
+    expect(await screen.findByText('Procedimento pendente vinculado ao agendamento')).toBeInTheDocument();
+
+    await waitFor(() => {
+      const gatilhoCatalogo = screen
+        .getAllByRole('button', { name: /Limpeza Dental/i })
+        .find((element) => element.getAttribute('aria-haspopup') === 'listbox');
+
+      expect(gatilhoCatalogo).toBeTruthy();
+    });
+
+    const gatilhoCatalogo = screen
+      .getAllByRole('button', { name: /Limpeza Dental/i })
+      .find((element) => element.getAttribute('aria-haspopup') === 'listbox');
+
+    expect(gatilhoCatalogo).toBeTruthy();
+    fireEvent.click(gatilhoCatalogo!);
+    fireEvent.click(await screen.findByRole('button', { name: 'Canal' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Procedimento pendente vinculado ao agendamento')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Criar Agendamento' }));
+
+    await waitFor(() => {
+      const postCalls = getUnitFetchCallsMatching(
+        (url, init) => url === '/api/agendamentos' && init?.method === 'POST'
+      );
+      expect(postCalls).toHaveLength(1);
+    });
+
+    const postCall = getUnitFetchCallsMatching(
+      (url, init) => url === '/api/agendamentos' && init?.method === 'POST'
+    )[0];
+
+    expect(JSON.parse(String((postCall[1] as RequestInit).body))).toEqual({
+      cliente_id: 101,
+      procedimento_id: 202,
+      executor_id: null,
+      data_agendada: null,
+      observacoes: null,
+    });
   });
 });
