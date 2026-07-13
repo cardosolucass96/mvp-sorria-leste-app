@@ -82,6 +82,7 @@ interface Atendimento {
   cliente_id: number;
   cliente_nome: string;
   status: string;
+  avaliador_id: number | null;
   avaliador_nome: string | null;
   itens: ItemAtendimento[];
   total: number;
