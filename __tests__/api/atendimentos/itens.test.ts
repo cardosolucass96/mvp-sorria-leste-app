@@ -154,6 +154,41 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     expect(status).toBe(201);
   });
 
+  it('usa o avaliador do atendimento como criado_por padrão durante a avaliação', async () => {
+    setLastInsertId(17);
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
+    mockQueryResponse('from itens_atendimento i', novoItem);
+
+    const ctx = createRouteContext({ id: '2' });
+    await callRoute(addItem, '/api/atendimentos/2/itens', {
+      method: 'POST',
+      body: { procedimento_id: 1, criado_por_id: 1 },
+    }, ctx);
+
+    const queries = getExecutedQueries();
+    const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
+    expect(insertQuery!.params[3]).toBe(3);
+  });
+
+  it('usa o avaliador primário único da unidade quando o atendimento ainda não tem avaliador', async () => {
+    setLastInsertId(18);
+    mockQueryResponse('from atendimentos where id', { ...ATENDIMENTO_TRIAGEM, id: 5, avaliador_id: null });
+    mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
+    mockQueryResponse('from usuarios u', [{ id: 45 }]);
+    mockQueryResponse('from itens_atendimento i', { ...novoItem, id: 18, criado_por_id: 45 });
+
+    const ctx = createRouteContext({ id: '5' });
+    await callRoute(addItem, '/api/atendimentos/5/itens', {
+      method: 'POST',
+      body: { procedimento_id: 1, criado_por_id: 1 },
+    }, ctx);
+
+    const queries = getExecutedQueries();
+    const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
+    expect(insertQuery!.params[3]).toBe(45);
+  });
+
   it('adiciona item em em_execucao com status=pago e adicionado_em_execucao=1', async () => {
     setLastInsertId(12);
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
@@ -324,7 +359,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
   });
 
   it('salva valor_original = valor no INSERT (snapshot de orçamento)', async () => {
-    setLastInsertId(18);
+    setLastInsertId(19);
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
     mockQueryResponse('from itens_atendimento i', novoItem);

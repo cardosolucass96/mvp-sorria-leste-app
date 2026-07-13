@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento } from '@/lib/types';
+import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
 
 interface ItemOrigem {
   criado_por_id: number;
@@ -286,7 +287,9 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
       }
 
       // Avaliação: se tem avaliador atribuído, já entra direto em 'avaliacao'
-      const avaliadorId = agendamentosHoje.find(ag => ag.executor_id)?.executor_id || null;
+      const avaliadorAgendadoId = agendamentosHoje.find(ag => ag.executor_id)?.executor_id || null;
+      const avaliadorId = avaliadorAgendadoId
+        ?? await resolveAvaliadorPadraoDaUnidade(unidadeId, context.user.sub);
       const statusInicial = avaliadorId ? 'avaliacao' : 'triagem';
 
       const atendimentoResult = await execute(

@@ -363,7 +363,7 @@ export default function AvaliacaoDetalhePage({
         body: JSON.stringify({
           procedimento_id: parseInt(procedimentoId),
           executor_id: executorId ? parseInt(executorId) : null,
-          criado_por_id: user?.id,
+          criado_por_id: atendimento?.avaliador_id ?? user?.id,
           valor: valorTotal,
           dentes: dentesParaSalvar,
           quantidade: quantidade,

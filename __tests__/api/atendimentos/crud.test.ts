@@ -182,23 +182,64 @@ describe('POST /api/atendimentos (fluxo normal)', () => {
     expect(insertQuery!.sql).toContain("'triagem'");
   });
 
-  it('cria atendimento sem avaliador', async () => {
+  it('faz fallback para quem está criando quando não há avaliador primário', async () => {
     setLastInsertId(11);
     mockQueryResponse('select id from clientes where id', { id: 1 });
     mockQueryResponse('select count(*) as count from atendimentos', { count: 0 });
-    mockQueryResponse('from atendimentos a', novoAtendimento);
+    mockQueryResponse('from usuarios u', []);
+    mockQueryResponse('from atendimentos a', { ...novoAtendimento, id: 11, avaliador_id: 1, avaliador_nome: 'Admin Teste' });
 
-    const { status } = await callRoute(createAtendimento, '/api/atendimentos', {
+    const { status, data } = await callRoute<Record<string, unknown>>(createAtendimento, '/api/atendimentos', {
       method: 'POST',
       body: { cliente_id: 1 },
     });
 
     expect(status).toBe(201);
+    expect(data.avaliador_id).toBe(1);
 
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO atendimentos'));
-    // avaliador_id deve ser null
-    expect(insertQuery!.params[1]).toBeNull();
+    expect(insertQuery!.params[1]).toBe(1);
+  });
+
+  it('usa o único avaliador primário da unidade como padrão', async () => {
+    setLastInsertId(12);
+    mockQueryResponse('select id from clientes where id', { id: 1 });
+    mockQueryResponse('select count(*) as count from atendimentos', { count: 0 });
+    mockQueryResponse('from usuarios u', [{ id: 45 }]);
+    mockQueryResponse('from atendimentos a', { ...novoAtendimento, id: 12, avaliador_id: 45, avaliador_nome: 'Eduardo' });
+
+    const { status, data } = await callRoute<Record<string, unknown>>(createAtendimento, '/api/atendimentos', {
+      method: 'POST',
+      body: { cliente_id: 1 },
+    });
+
+    expect(status).toBe(201);
+    expect(data.avaliador_id).toBe(45);
+
+    const queries = getExecutedQueries();
+    const insertQuery = queries.find(q => q.sql.includes('INSERT INTO atendimentos'));
+    expect(insertQuery!.params[1]).toBe(45);
+  });
+
+  it('faz fallback para quem está criando quando não há avaliador primário único', async () => {
+    setLastInsertId(13);
+    mockQueryResponse('select id from clientes where id', { id: 1 });
+    mockQueryResponse('select count(*) as count from atendimentos', { count: 0 });
+    mockQueryResponse('from usuarios u', [{ id: 45 }, { id: 46 }]);
+    mockQueryResponse('from atendimentos a', { ...novoAtendimento, id: 13, avaliador_id: 1, avaliador_nome: 'Admin Teste' });
+
+    const { status, data } = await callRoute<Record<string, unknown>>(createAtendimento, '/api/atendimentos', {
+      method: 'POST',
+      body: { cliente_id: 1 },
+    });
+
+    expect(status).toBe(201);
+    expect(data.avaliador_id).toBe(1);
+
+    const queries = getExecutedQueries();
+    const insertQuery = queries.find(q => q.sql.includes('INSERT INTO atendimentos'));
+    expect(insertQuery!.params[1]).toBe(1);
   });
 
   it('rejeita se cliente_id não enviado', async () => {

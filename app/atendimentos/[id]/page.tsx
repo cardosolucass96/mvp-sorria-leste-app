@@ -637,7 +637,7 @@ export default function AtendimentoDetalhePage({
         body: JSON.stringify({
           procedimento_id: parseInt(procId),
           executor_id: execId ? parseInt(execId) : null,
-          criado_por_id: user?.id,
+          criado_por_id: atendimento?.avaliador_id ?? user?.id,
           valor: valorBase * quantidade,
           dentes: dentesParaSalvar,
           quantidade,

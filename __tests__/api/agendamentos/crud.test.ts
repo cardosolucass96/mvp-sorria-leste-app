@@ -815,7 +815,7 @@ describe('POST /api/agendamentos/[id]/chegou', () => {
     expect(updateAg).toBeDefined();
   });
 
-  it('cria atendimento normal em triagem para avaliação', async () => {
+  it('usa o avaliador primário único da unidade ao chegar uma avaliação', async () => {
     mockQueryResponse('select * from agendamentos where id', {
       ...AGENDAMENTO_AVALIACAO,
       status: 'agendado',
@@ -826,11 +826,12 @@ describe('POST /api/agendamentos/[id]/chegou', () => {
     mockQueryResponse("status in ('pendente', 'agendado')", [
       { ...AGENDAMENTO_AVALIACAO, status: 'agendado', tipo: 'avaliacao', procedimento_id: null },
     ]);
+    mockQueryResponse('from usuarios u', [{ id: 45 }]);
     setLastInsertId(200);
     mockQueryResponse('inner join clientes c', {
       id: 200,
       cliente_id: 3,
-      status: 'triagem',
+      status: 'avaliacao',
       tipo: 'normal',
       cliente_nome: CLIENTE_COMPLETO.nome,
       cliente_cpf: CLIENTE_COMPLETO.cpf,
@@ -851,12 +852,51 @@ describe('POST /api/agendamentos/[id]/chegou', () => {
     const queries = getExecutedQueries();
     const insertAtendimento = queries.find(q => q.sql.includes('INSERT INTO atendimentos'));
     expect(insertAtendimento).toBeDefined();
-    expect(insertAtendimento!.params).toContain('triagem'); // sem avaliador = triagem
-    expect(insertAtendimento!.params).toContain(null); // avaliador_id = null
+    expect(insertAtendimento!.params).toContain('avaliacao');
+    expect(insertAtendimento!.params).toContain(45);
 
     // Não deve criar itens_atendimento para avaliação
     const insertItem = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
     expect(insertItem).toBeUndefined();
+  });
+
+  it('faz fallback para quem está criando quando não há avaliador primário único na unidade', async () => {
+    mockQueryResponse('select * from agendamentos where id', {
+      ...AGENDAMENTO_AVALIACAO,
+      id: 20,
+      status: 'agendado',
+    });
+    mockQueryResponse("status not in ('finalizado'", []);
+    mockQueryResponse("status in ('pendente', 'agendado')", [
+      { ...AGENDAMENTO_AVALIACAO, id: 20, status: 'agendado', tipo: 'avaliacao', procedimento_id: null },
+    ]);
+    mockQueryResponse('from usuarios u', [{ id: 45 }, { id: 46 }]);
+    setLastInsertId(201);
+    mockQueryResponse('inner join clientes c', {
+      id: 201,
+      cliente_id: 3,
+      status: 'avaliacao',
+      tipo: 'normal',
+      cliente_nome: CLIENTE_COMPLETO.nome,
+      cliente_cpf: CLIENTE_COMPLETO.cpf,
+      cliente_telefone: CLIENTE_COMPLETO.telefone,
+    });
+
+    const ctx = createRouteContext({ id: '20' });
+    const { status } = await callRoute(
+      chegouAgendamento, '/api/agendamentos/20/chegou', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+      }, ctx
+    );
+
+    expect(status).toBe(201);
+
+    const queries = getExecutedQueries();
+    const insertAtendimento = queries.find(q => q.sql.includes('INSERT INTO atendimentos'));
+    expect(insertAtendimento).toBeDefined();
+    expect(insertAtendimento!.params).toContain('avaliacao');
+    expect(insertAtendimento!.params).toContain(1);
   });
 
   it('bloqueia quando já tem atendimento aberto hoje', async () => {

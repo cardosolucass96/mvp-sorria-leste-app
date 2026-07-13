@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
+import { resolveVendedorPadraoParaAtendimento } from '@/lib/helpers/atendimentoDefaults';
 
 interface ItemAtendimento {
   id: number;
@@ -32,6 +33,7 @@ interface Atendimento {
   status: string;
   unidade_id: number;
   categoria_id: number | null;
+  avaliador_id: number | null;
 }
 
 type VerificarResult =
@@ -86,7 +88,7 @@ const DEPENDENCIAS_ITEM_DELETE = [
 
 async function verificarAtendimentoUnidade(atendimentoId: number, unidadeId: number): Promise<VerificarResult> {
   const at = await queryOne<Atendimento>(
-    'SELECT id, status, unidade_id, categoria_id FROM atendimentos WHERE id = ?',
+    'SELECT id, status, unidade_id, categoria_id, avaliador_id FROM atendimentos WHERE id = ?',
     [atendimentoId]
   );
   if (!at) return { kind: 'error', response: NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 }) };
@@ -313,6 +315,14 @@ export const POST = withUnit(async (
     // Usa valor do procedimento se não fornecido
     const valorFinal = valor !== undefined ? valor : procedimento.valor;
     const quantidadeFinal = quantidade || 1;
+    const criadoPorSolicitado = Number.isInteger(criado_por_id) && Number(criado_por_id) > 0
+      ? Number(criado_por_id)
+      : null;
+    const shouldResolverVendedorPadrao = ['triagem', 'avaliacao'].includes(atendimento.status)
+      && (!criadoPorSolicitado || criadoPorSolicitado === Number(context.user.sub));
+    const criadoPorFinal = shouldResolverVendedorPadrao
+      ? await resolveVendedorPadraoParaAtendimento(atendimento, context.user.sub)
+      : criadoPorSolicitado ?? Number(context.user.sub);
 
     interface DenteFaceDB { dente: string; faces: Array<{ nome: string }> }
     let dentesArray: DenteFaceDB[] = [];
@@ -361,7 +371,7 @@ export const POST = withUnit(async (
             parseInt(id as string),
             procedimento_id,
             executor_id || null,
-            criado_por_id || null,
+            criadoPorFinal,
             valorPorDente,
             valorPorDente, // valor_original = snapshot do valor inicial
             valorPorDente,
@@ -389,7 +399,7 @@ export const POST = withUnit(async (
         parseInt(id as string),
         procedimento_id,
         executor_id || null,
-        criado_por_id || null,
+        criadoPorFinal,
         valorFinal,
         valorFinal, // valor_original = snapshot do valor inicial
         valorFinal,

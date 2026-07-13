@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { validarUsuarioPorRoles } from './_helpers';
+import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
 
 interface Atendimento {
   id: number;
@@ -96,6 +97,9 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
   try {
     const body = await request.json();
     const { cliente_id, avaliador_id, tipo_orto, executor_id, procedimento_id, valor, criado_por_id, categoria_id, categoria_slug } = body;
+    const avaliadorIdInformado = Number.isInteger(avaliador_id) && Number(avaliador_id) > 0
+      ? Number(avaliador_id)
+      : null;
     
     // Validações
     if (!cliente_id) {
@@ -160,8 +164,8 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     const pulaAvaliacao = categoriaResolvida?.pula_avaliacao === 1 || !!tipo_orto;
 
     // Verifica avaliador se fornecido (fluxo normal)
-    if (avaliador_id && !tipo_orto) {
-      const avaliadorValido = await validarUsuarioPorRoles(avaliador_id, ['avaliador'], null, { allowAdmin: true });
+    if (avaliadorIdInformado && !tipo_orto) {
+      const avaliadorValido = await validarUsuarioPorRoles(avaliadorIdInformado, ['avaliador'], null, { allowAdmin: true });
 
       if (avaliadorValido === 'not_found') {
         return NextResponse.json(
@@ -177,6 +181,10 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         );
       }
     }
+
+    const avaliadorIdFinal = !pulaAvaliacao && !tipo_orto
+      ? (avaliadorIdInformado ?? await resolveAvaliadorPadraoDaUnidade(context.unidadeId, context.user.sub))
+      : null;
     
     // === FLUXO CATEGORIA COM pula_avaliacao (antes: apenas orto) ===
     if (pulaAvaliacao) {
@@ -262,7 +270,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     const result = await execute(
       `INSERT INTO atendimentos (cliente_id, avaliador_id, status, unidade_id, categoria_id)
        VALUES (?, ?, 'triagem', ?, ?)`,
-      [cliente_id, avaliador_id || null, context.unidadeId, categoriaIdFinal]
+      [cliente_id, avaliadorIdFinal, context.unidadeId, categoriaIdFinal]
     );
     
     // Busca atendimento criado com dados do cliente

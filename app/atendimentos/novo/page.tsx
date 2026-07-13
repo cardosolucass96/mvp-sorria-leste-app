@@ -50,7 +50,7 @@ function NovoAtendimentoForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const unitFetch = useUnitFetch();
-  const { user } = useAuth();
+  const { user, currentUnidade } = useAuth();
   const clienteIdParam = searchParams.get('cliente');
 
   // Clientes (busca via API)
@@ -115,7 +115,7 @@ function NovoAtendimentoForm() {
     const carregarDados = async () => {
       try {
         const [resUsuarios, resCategorias] = await Promise.all([
-          apiFetch('/api/usuarios'),
+          apiFetch(currentUnidade ? `/api/usuarios?unidade_id=${currentUnidade}` : '/api/usuarios'),
           apiFetch('/api/categorias?ativo=1'),
         ]);
 
@@ -133,6 +133,12 @@ function NovoAtendimentoForm() {
             return roles.includes('avaliador') && u.ativo !== 0;
           })
         );
+        const avaliadoresPrimarios = usuariosData.filter((u) => u.ativo !== 0 && u.role === 'avaliador');
+        if (avaliadoresPrimarios.length === 1) {
+          setAvaliadorId(String(avaliadoresPrimarios[0].id));
+        } else {
+          setAvaliadorId('');
+        }
 
         const cats: CategoriaComRoles[] = await resCategorias.json();
         setCategorias(cats);
@@ -148,8 +154,7 @@ function NovoAtendimentoForm() {
       }
     };
     carregarDados();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentUnidade, buscarClientes]);
 
   // Quando a categoria mudar e for pula_avaliacao, carrega procedimentos da categoria e executores compatíveis
   useEffect(() => {
@@ -475,7 +480,9 @@ function NovoAtendimentoForm() {
             <p className="text-sm text-muted mb-3">Pode ser definido depois na fila de avaliação</p>
             <Select label="Avaliador" name="avaliador" value={avaliadorId} onChange={setAvaliadorId}
               options={avaliadores.map((a) => ({ value: String(a.id), label: a.nome }))}
-              placeholder="-- Definir depois --" />
+              placeholder="-- Definir depois --"
+              hint="Se existir um único avaliador com role primária 'avaliador' na unidade, ele entra como padrão. Caso contrário, o sistema usa quem estiver criando."
+            />
           </Card>
         ) : (
           <Card className="border-l-4 border-l-warning-500">
