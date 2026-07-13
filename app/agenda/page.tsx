@@ -601,12 +601,13 @@ export default function AgendaPage() {
       return;
     }
 
+    const clienteSelecionadoId = novoClienteSelecionado.id;
     let cancelled = false;
 
     async function carregarProcedimentosPendentes() {
       setNovoPendentesLoading(true);
       try {
-        const res = await unitFetch(`/api/clientes/${novoClienteSelecionado.id}/procedimentos-pendentes`);
+        const res = await unitFetch(`/api/clientes/${clienteSelecionadoId}/procedimentos-pendentes`);
         const data = await res.json() as ProcedimentoPendente[] | { error?: string };
         if (!res.ok) {
           throw new Error(
