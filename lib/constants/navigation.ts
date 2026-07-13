@@ -17,6 +17,7 @@ import {
   User,
   Banknote,
   Wallet,
+  WalletCards,
   Calendar,
   Building2,
   Tags,
@@ -42,14 +43,15 @@ export const MENU_ITEMS: MenuItem[] = [
   // Filas de execução são injetadas dinamicamente pelo Sidebar a partir de /api/categorias
   { href: '/meus-procedimentos', label: 'Meus Procedimentos', icon: ClipboardList, roles: ['avaliador', 'executor', 'ortodontista'] },
   { href: '/pagamentos', label: 'Pagamentos', icon: CreditCard, roles: ['admin', 'atendente'] },
+  { href: '/fechamento-caixa', label: 'Fechamento de Caixa', icon: Wallet, roles: ['admin', 'atendente'] },
+  { href: '/minhas-comissoes', label: 'Minhas Comissões', icon: Banknote, roles: ['avaliador'] },
+  { href: '/comissoes', label: 'Comissões', icon: Banknote, roles: ['admin'] },
   { href: '/procedimentos', label: 'Procedimentos', icon: FileText, roles: ['admin'] },
+  { href: '/formas-pagamento', label: 'Formas Pagto', icon: WalletCards, roles: ['admin'] },
   { href: '/categorias', label: 'Filas', icon: Tags, roles: ['admin'] },
   { href: '/usuarios', label: 'Usuários', icon: User, roles: ['admin'] },
   { href: '/termos', label: 'Termos', icon: FileText, roles: ['admin'] },
   { href: '/unidades', label: 'Unidades', icon: Building2, roles: ['admin'] },
-  { href: '/fechamento-caixa', label: 'Fechamento de Caixa', icon: Wallet, roles: ['admin', 'atendente'] },
-  { href: '/minhas-comissoes', label: 'Minhas Comissões', icon: Banknote, roles: ['avaliador'] },
-  { href: '/comissoes', label: 'Comissões', icon: Banknote, roles: ['admin'] },
 ];
 
 /** Labels de view mode */
