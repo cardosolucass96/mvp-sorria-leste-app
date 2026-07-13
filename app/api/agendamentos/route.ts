@@ -4,6 +4,7 @@ import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { AgendamentoCompleto } from '@/lib/types';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
+import { isDateTimeLocalValueInPast } from '@/lib/utils/formatters';
 
 interface CriarAgendamentoBody {
   cliente_id?: number;
@@ -197,9 +198,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     // Não permite agendar no passado
     if (data_agendada) {
-      const agora = new Date();
-      const dataEscolhida = new Date(data_agendada);
-      if (dataEscolhida < agora) {
+      if (isDateTimeLocalValueInPast(data_agendada)) {
         return NextResponse.json({ error: 'Não é possível agendar para uma data no passado' }, { status: 400 });
       }
     }

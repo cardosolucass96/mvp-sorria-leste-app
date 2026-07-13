@@ -3,6 +3,7 @@ import { queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento, AgendamentoCompleto } from '@/lib/types';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
+import { isDateTimeLocalValueInPast } from '@/lib/utils/formatters';
 
 interface AtualizarAgendamentoBody {
   data_agendada?: string | null;
@@ -73,8 +74,7 @@ export const PUT = withUnit(async (
     // Caso: agendar/reagendar com data
     if (body.data_agendada !== undefined) {
       if (body.data_agendada) {
-        const dataEscolhida = new Date(body.data_agendada);
-        if (dataEscolhida < new Date()) {
+        if (isDateTimeLocalValueInPast(body.data_agendada)) {
           return NextResponse.json({ error: 'Não é possível agendar para uma data no passado' }, { status: 400 });
         }
       }

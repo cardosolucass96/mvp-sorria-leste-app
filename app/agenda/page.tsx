@@ -16,7 +16,14 @@ import Modal from '@/components/ui/Modal';
 import Textarea from '@/components/ui/Textarea';
 import { StatusBadge, ProntuarioDrawer, AgendaCalendario, ViewModeToggle } from '@/components/domain';
 import { useToast } from '@/components/ui/Toast';
-import { formatarData, formatarDataAgendada, formatarMoeda, formatarTelefone, toDateTimeLocal } from '@/lib/utils/formatters';
+import {
+  formatarData,
+  formatarDataAgendada,
+  formatarMoeda,
+  formatarTelefone,
+  getCurrentDateTimeLocalValue,
+  toDateTimeLocal,
+} from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
@@ -154,6 +161,10 @@ function isAgendamentoAtivo(status: string) {
 
 function formatDate(d: Date) {
   return d.toISOString().slice(0, 10);
+}
+
+function getDateTimeLocalMinValue() {
+  return getCurrentDateTimeLocalValue();
 }
 
 function normalizarAgendamentosResponse(
@@ -1637,7 +1648,7 @@ export default function AgendaPage() {
             <label className="block text-sm font-medium text-foreground mb-1">Nova data</label>
             <input
               type="datetime-local"
-              min={new Date().toISOString().slice(0, 16)}
+              min={getDateTimeLocalMinValue()}
               value={reagendarDialog.novaData}
               onChange={e => setReagendarDialog(prev => ({ ...prev, novaData: e.target.value }))}
               className="field-control w-full px-3 py-2 text-sm"
@@ -2121,7 +2132,7 @@ export default function AgendaPage() {
               type="datetime-local"
               value={novoData}
               onChange={setNovoData}
-              min={new Date().toISOString().slice(0, 16)}
+              min={getDateTimeLocalMinValue()}
             />
 
             <Textarea

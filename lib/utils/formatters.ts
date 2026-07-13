@@ -12,6 +12,8 @@ export function formatarMoeda(valor: number): string {
 
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const SQLITE_NAIVE_DATETIME_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?(?:\.\d+)?$/;
+const DATETIME_LOCAL_PREFIX_REGEX = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2})(?::\d{2})?)?/;
+const CLINIC_TIME_ZONE = 'America/Fortaleza';
 
 /**
  * Converte timestamps gerados pelo sistema para Date.
@@ -154,6 +156,82 @@ export function toDateTimeLocal(data: string | null | undefined): string {
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) return s.replace(' ', 'T').substring(0, 16);
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.substring(0, 16);
   return s;
+}
+
+function getDatePartsInTimeZone(
+  date: Date,
+  timeZone: string
+): Record<'year' | 'month' | 'day' | 'hour' | 'minute', string> {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const values = {
+    year: '0000',
+    month: '00',
+    day: '00',
+    hour: '00',
+    minute: '00',
+  };
+
+  for (const part of parts) {
+    if (part.type in values) {
+      values[part.type as keyof typeof values] = part.value;
+    }
+  }
+
+  return values;
+}
+
+/**
+ * Retorna a string `YYYY-MM-DDTHH:mm` no fuso operacional da clinica.
+ * Use para `min` de inputs `datetime-local` e para comparacoes no backend.
+ */
+export function getCurrentDateTimeLocalValue(date: Date = new Date(), timeZone: string = CLINIC_TIME_ZONE): string {
+  const { year, month, day, hour, minute } = getDatePartsInTimeZone(date, timeZone);
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+/**
+ * Normaliza valores de `datetime-local` para `YYYY-MM-DDTHH:mm`.
+ * A comparacao fica no mesmo nivel de precisao que o input do navegador: minuto.
+ */
+export function normalizeDateTimeLocalValue(data: string | null | undefined): string | null {
+  if (!data) return null;
+
+  const texto = data.trim();
+  if (!texto) return null;
+
+  if (DATE_ONLY_REGEX.test(texto)) {
+    return `${texto}T00:00`;
+  }
+
+  const match = texto.match(DATETIME_LOCAL_PREFIX_REGEX);
+  if (!match) return null;
+
+  const [, date, hour = '00', minute = '00'] = match;
+  return `${date}T${hour}:${minute}`;
+}
+
+/**
+ * Valida se um valor vindo de `datetime-local` esta no passado, usando:
+ * - fuso da clinica (`America/Fortaleza`);
+ * - precisao de minuto, igual ao campo do navegador.
+ */
+export function isDateTimeLocalValueInPast(
+  data: string | null | undefined,
+  now: Date = new Date(),
+  timeZone: string = CLINIC_TIME_ZONE
+): boolean {
+  const normalized = normalizeDateTimeLocalValue(data);
+  if (!normalized) return false;
+  return normalized < getCurrentDateTimeLocalValue(now, timeZone);
 }
 
 /** Formata data como dd/mm/aaaa HH:mm */

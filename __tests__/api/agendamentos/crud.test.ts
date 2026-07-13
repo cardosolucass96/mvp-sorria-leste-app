@@ -53,6 +53,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   teardownCloudflareContextMock();
 });
 
@@ -417,6 +418,33 @@ describe('POST /api/agendamentos', () => {
     expect(data.error).toContain('passado');
   });
 
+  it('aceita agendamento no minuto atual da clinica mesmo com runtime em UTC', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-07-13T13:18:30Z'));
+
+    mockQueryResponse('select id from clientes', { id: 3 });
+    setLastInsertId(21);
+    mockQueryResponse('where a.id = ?', {
+      ...AGENDAMENTO_AVALIACAO,
+      id: 21,
+      data_agendada: '2026-07-13T10:18',
+    });
+
+    const { status } = await callRoute(
+      createAgendamento, '/api/agendamentos', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+        body: {
+          cliente_id: 3,
+          tipo: 'avaliacao',
+          data_agendada: '2026-07-13T10:18',
+        },
+      }
+    );
+
+    expect(status).toBe(201);
+  });
+
   it('rejeita procedimento sem cliente_id', async () => {
     const { status } = await callRoute(
       createAgendamento, '/api/agendamentos', {
@@ -704,6 +732,31 @@ describe('PUT /api/agendamentos/[id]', () => {
     const update = queries.find(q => q.sql.includes('UPDATE agendamentos'));
     expect(update!.sql).toContain('executor_id');
     expect(update!.params).toContain(null);
+  });
+
+  it('aceita reagendamento no minuto atual da clinica mesmo com runtime em UTC', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-07-13T13:18:30Z'));
+
+    mockQueryResponse('select * from agendamentos where id', {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      status: 'agendado',
+    });
+    mockQueryResponse('where a.id = ?', {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      data_agendada: '2026-07-13T10:18',
+    });
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status } = await callRoute(
+      updateAgendamento, '/api/agendamentos/1', {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+        body: { data_agendada: '2026-07-13T10:18' },
+      }, ctx
+    );
+
+    expect(status).toBe(200);
   });
 });
 
