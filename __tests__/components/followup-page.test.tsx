@@ -223,6 +223,37 @@ describe('FollowupPage', () => {
     expect(screen.getByRole('button', { name: /Abrir cliente/i })).toBeInTheDocument();
   });
 
+  test('usuária com roles admin e atendente consegue concluir tarefa', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 1, role: 'admin', roles: ['admin', 'atendente'] },
+      isLoading: false,
+      currentUnidade: 1,
+      hasRole: (roles: string | string[]) => {
+        const values = Array.isArray(roles) ? roles : [roles];
+        return values.some((value) => ['admin', 'atendente'].includes(value));
+      },
+    });
+
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse({
+        items: [makeTask({ id: 1, titulo: 'Tarefa aberta' })],
+        summary: {
+          abertas: 1,
+          atrasadas: 0,
+          vencem_hoje: 1,
+          concluidas_hoje: 0,
+        },
+      })
+    );
+
+    render(<FollowupPage />);
+
+    expect(await screen.findByText('Tarefa aberta')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Editar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Concluir/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Excluir/i })).toBeInTheDocument();
+  });
+
   test('alterna para calendário e persiste o modo em localStorage', async () => {
     mockUnitFetch.mockImplementation(() =>
       mockJsonResponse({

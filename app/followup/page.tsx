@@ -127,11 +127,6 @@ export default function FollowupPage() {
   const { toast } = useToast();
   const { user, isLoading, hasRole, currentUnidade } = useAuth();
   const unitFetch = useUnitFetch();
-
-  const canAccess = hasRole(['admin', 'atendente']);
-  const canCreate = canAccess;
-  const isReadOnlyAdmin = hasRole('admin');
-  const canMutate = hasRole('atendente') && !isReadOnlyAdmin;
   const currentUserRoles = useMemo(
     () => (
       user
@@ -140,6 +135,9 @@ export default function FollowupPage() {
     ),
     [user]
   );
+  const canAccess = hasRole(['admin', 'atendente']);
+  const canCreate = canAccess;
+  const canMutate = currentUserRoles.includes('atendente');
   const fallbackResponsaveis = useMemo<ResponsavelOption[]>(() => {
     const currentUserId = Number(user?.id);
     const canFallbackCurrentUser = !Number.isNaN(currentUserId)
