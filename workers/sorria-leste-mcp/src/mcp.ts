@@ -3,18 +3,22 @@ import { z } from 'zod';
 import {
   audit,
   assertUnit,
+  attendanceFinancialDetail,
   attendanceOperationalDetail,
+  clientFinancialProfile,
   clientOperationalHistory,
   clientOperationalProfile,
   clientStats,
   clientSummary,
   dayAgenda,
   executionQueue,
+  followupDetail,
   followupSummary,
   getIdentity,
   listAppointments,
   listAttendances,
   listCategories,
+  listDetailedFollowups,
   listFollowups,
   listPendingAppointments,
   listProcedures,
@@ -25,8 +29,9 @@ import {
   operationalSummaryV2,
   queuePanel,
   searchClients,
+  unitFinancialSummary,
 } from './repository';
-import { omitFinancialFields } from './security';
+import { hasFinancialScope, omitFinancialFields } from './security';
 import type { Env, Identity } from './types';
 
 const PAGE = z.coerce.number().int().min(1).max(50).default(25);
@@ -60,8 +65,9 @@ function ensureDateRange(from: string, to: string): void {
   if (to < from) throw new Error('Período inválido.');
 }
 
-function result(payload: unknown): ToolResult {
-  return { content: [{ type: 'text', text: JSON.stringify(omitFinancialFields(payload), null, 2) }] };
+function result(payload: unknown, redactFinancial = true): ToolResult {
+  const serialized = redactFinancial ? omitFinancialFields(payload) : payload;
+  return { content: [{ type: 'text', text: JSON.stringify(serialized, null, 2) }] };
 }
 
 function failure(): ToolResult {
@@ -77,6 +83,7 @@ async function runReadTool<T>(
   tool: string,
   unidadeId: number | null,
   action: (identity: Identity, setAuditUnit: (id: number | null) => void) => Promise<T>,
+  options: { redactFinancial?: boolean; requiresFinancialScope?: boolean } = {},
 ): Promise<ToolResult> {
   let identity: Identity | null = null;
   let auditUnitId = unidadeId;
@@ -87,13 +94,22 @@ async function runReadTool<T>(
   try {
     identity = await getIdentity(env, props);
     if (unidadeId !== null) assertUnit(identity, unidadeId);
+    if (options.requiresFinancialScope && !hasFinancialScope(identity.scope)) {
+      throw new Error('Escopo financeiro não autorizado para esta conexão MCP.');
+    }
     const payload = await action(identity, setAuditUnit);
     await audit(env, identity, tool, auditUnitId, true);
-    return result(payload);
+    return result(payload, options.redactFinancial ?? true);
   } catch (error) {
     console.error(`Falha na ferramenta MCP ${tool}`, error);
     await audit(env, identity, tool, auditUnitId, false);
     return failure();
+  }
+}
+
+function assertFinancialScope(identity: Identity): void {
+  if (!hasFinancialScope(identity.scope)) {
+    throw new Error('Escopo financeiro não autorizado para esta conexão MCP.');
   }
 }
 
@@ -107,8 +123,9 @@ export function createServer(env: Env, props: unknown): McpServer {
       instructions: [
         'Servidor MCP operacional da Sorria Leste, somente leitura.',
         'Use filtros específicos e informe a unidade quando solicitado.',
-        'Não há ferramentas financeiras, clínicas, anexos, prontuários, HTML completo de termos nem escrita.',
-        'Dados pessoais de clientes são minimizados/mascarados e campos financeiros são removidos antes da resposta.',
+        'Ferramentas financeiras exigem o escopo separado sorria.finance.read.',
+        'Não há escrita, anexos, prontuários, notas clínicas nem HTML completo de termos.',
+        'Dados pessoais de clientes são minimizados/mascarados; no escopo operacional os campos financeiros continuam ocultos.',
       ].join(' '),
     },
   );
@@ -248,6 +265,19 @@ export function createServer(env: Env, props: unknown): McpServer {
     }),
   );
 
+  server.tool('detalhar_atendimento_financeiro', 'Ficha financeira do atendimento com itens, totais, pagamentos, taxas, formas e alocações.', {
+    atendimentoId: ATTENDANCE,
+  }, async ({ atendimentoId }) =>
+    runReadTool(env, props, 'detalhar_atendimento_financeiro', null, async (identity, setAuditUnit) => {
+      assertFinancialScope(identity);
+      const detail = await attendanceFinancialDetail(env, atendimentoId);
+      if (!detail) return { encontrado: false };
+      setAuditUnit(detail.unidadeId);
+      assertUnit(identity, detail.unidadeId);
+      return detail;
+    }, { redactFinancial: false, requiresFinancialScope: true }),
+  );
+
   server.tool('listar_followups', 'Lista follow-ups operacionais por unidade. Follow-ups de cobrança são rejeitados/omitidos.', {
     unidadeId: UNIT,
     status: FOLLOWUP_STATUS.optional(),
@@ -263,6 +293,58 @@ export function createServer(env: Env, props: unknown): McpServer {
       if (dataInicio && dataFim) ensureDateRange(dataInicio, dataFim);
       return listFollowups(env, unidadeId, status, tipo, responsavelUsuarioId, clienteId, dataInicio, dataFim, limite, offset);
     }),
+  );
+
+  server.tool('listar_followups_completos', 'Lista follow-ups com mais contexto: descrição, cliente, responsável, criador e conclusão. Cobrança exige escopo financeiro.', {
+    unidadeId: UNIT,
+    status: FOLLOWUP_STATUS.optional(),
+    tipo: FOLLOWUP_TIPO.optional(),
+    responsavelUsuarioId: USER.optional(),
+    clienteId: CLIENT.optional(),
+    busca: z.string().trim().min(2).max(120).optional(),
+    incluirCobranca: z.boolean().default(false),
+    dataInicio: DATE.optional(),
+    dataFim: DATE.optional(),
+    limite: PAGE,
+    offset: OFFSET,
+  }, async ({ unidadeId, status, tipo, responsavelUsuarioId, clienteId, busca, incluirCobranca, dataInicio, dataFim, limite, offset }) =>
+    runReadTool(env, props, 'listar_followups_completos', unidadeId, async (identity) => {
+      if (dataInicio && dataFim) ensureDateRange(dataInicio, dataFim);
+      if ((incluirCobranca || tipo === 'cobranca') && !hasFinancialScope(identity.scope)) {
+        throw new Error('Escopo financeiro não autorizado para follow-ups de cobrança.');
+      }
+      return listDetailedFollowups(env, unidadeId, {
+        status,
+        tipo,
+        responsavelUsuarioId,
+        clienteId,
+        from: dataInicio,
+        to: dataFim,
+        search: busca,
+        includeBilling: incluirCobranca || tipo === 'cobranca',
+        allowFinancialText: incluirCobranca || tipo === 'cobranca',
+        limit: limite,
+        offset,
+      });
+    }, { redactFinancial: !(incluirCobranca || tipo === 'cobranca') }),
+  );
+
+  server.tool('detalhar_followup', 'Retorna o follow-up completo por ID. Se for cobrança, exige escopo financeiro.', {
+    followupId: z.coerce.number().int().positive(),
+  }, async ({ followupId }) =>
+    runReadTool(env, props, 'detalhar_followup', null, async (identity, setAuditUnit) => {
+      const operationalDetail = await followupDetail(env, followupId, false);
+      if (!operationalDetail) return { encontrado: false };
+      setAuditUnit(operationalDetail.unidadeId);
+      assertUnit(identity, operationalDetail.unidadeId);
+
+      if (operationalDetail.tipo === 'cobranca') {
+        assertFinancialScope(identity);
+        return followupDetail(env, followupId, true);
+      }
+
+      return operationalDetail;
+    }, { redactFinancial: false }),
   );
 
   server.tool('resumo_followups', 'Contadores de follow-ups abertos, atrasados, vencendo hoje e concluídos por tipo; exclui cobrança.', {
@@ -283,6 +365,16 @@ export function createServer(env: Env, props: unknown): McpServer {
       const profile = await clientOperationalProfile(env, clienteId);
       return profile ?? { encontrado: false };
     }),
+  );
+
+  server.tool('perfil_cliente_financeiro', 'Perfil financeiro do cliente com saldo, pendências, atendimentos financeiros, pagamentos recentes e movimentações.', {
+    clienteId: CLIENT,
+  }, async ({ clienteId }) =>
+    runReadTool(env, props, 'perfil_cliente_financeiro', null, async (identity) => {
+      assertFinancialScope(identity);
+      const profile = await clientFinancialProfile(env, clienteId);
+      return profile ?? { encontrado: false };
+    }, { redactFinancial: false, requiresFinancialScope: true }),
   );
 
   server.tool('historico_cliente_operacional', 'Timeline resumida de atendimentos, agendamentos e follow-ups não financeiros do cliente.', {
@@ -318,6 +410,18 @@ export function createServer(env: Env, props: unknown): McpServer {
       ensureDateRange(dataInicio, dataFim);
       return operationalSummaryV2(env, unidadeId, dataInicio, dataFim);
     }),
+  );
+
+  server.tool('resumo_financeiro_unidade', 'Consolidado financeiro da unidade por período, com totais, taxas, recebimentos por método, por recebedor e pagamentos recentes.', {
+    unidadeId: UNIT,
+    dataInicio: DATE,
+    dataFim: DATE,
+  }, async ({ unidadeId, dataInicio, dataFim }) =>
+    runReadTool(env, props, 'resumo_financeiro_unidade', unidadeId, async (identity) => {
+      assertFinancialScope(identity);
+      ensureDateRange(dataInicio, dataFim);
+      return unitFinancialSummary(env, unidadeId, dataInicio, dataFim);
+    }, { redactFinancial: false, requiresFinancialScope: true }),
   );
 
   return server;

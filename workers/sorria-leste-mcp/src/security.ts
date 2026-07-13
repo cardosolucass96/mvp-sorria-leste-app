@@ -1,10 +1,13 @@
 import type { AppUser, Env, OAuthProps } from './types';
 
 const READ_SCOPE = 'sorria.read';
+const FINANCIAL_READ_SCOPE = 'sorria.finance.read';
 const FINANCIAL_FIELD_PATTERN = /(valor|pagamento|pagamentos|saldo|comissao|comissoes|caixa|desconto|recebido|crediario|dinheiro|pix|cartao|cobranca)/i;
 const FINANCIAL_TEXT_PATTERN = /(valor|pagamento|pagamentos|saldo|comissão|comissões|comissao|comissoes|caixa|desconto|recebido|crediario|crediário|dinheiro|pix|cartao|cartão|cobranca|cobrança)/i;
 const MONEY_TEXT_PATTERN = /\bR\$\s*\d+(?:[.,]\d+)?|\b\d+(?:[.,]\d{2})\b/g;
 const HAS_MONEY_TEXT_PATTERN = /\bR\$\s*\d+(?:[.,]\d+)?|\b\d+(?:[.,]\d{2})\b/;
+
+const ALLOWED_SCOPES = new Set([READ_SCOPE, FINANCIAL_READ_SCOPE]);
 
 export function allowedEmails(env: Env): Set<string> {
   return new Set(
@@ -39,9 +42,21 @@ export function hasReadScope(scope: string[]): boolean {
   return scope.includes(READ_SCOPE);
 }
 
-export function grantedReadScope(requestedScope: string[]): string[] | null {
-  if (requestedScope.some((scope) => scope !== READ_SCOPE)) return null;
-  return [READ_SCOPE];
+export function hasFinancialScope(scope: string[]): boolean {
+  return scope.includes(FINANCIAL_READ_SCOPE);
+}
+
+export function grantedScopes(requestedScope: string[]): string[] | null {
+  if (requestedScope.some((scope) => !ALLOWED_SCOPES.has(scope))) return null;
+
+  const requested = requestedScope.length > 0 ? requestedScope : [READ_SCOPE];
+  const granted = new Set(requested);
+
+  if (granted.has(FINANCIAL_READ_SCOPE)) {
+    granted.add(READ_SCOPE);
+  }
+
+  return Array.from(granted).sort((left, right) => left.localeCompare(right));
 }
 
 export function maskCpf(cpf: string | null): string | null {
@@ -65,11 +80,15 @@ export function maskEmail(email: string | null): string | null {
   return `${local.slice(0, 1) || '*'}***@${domain}`;
 }
 
-export function maskNullableText(value: string | null | undefined, maxLength = 140): string | null {
+export function maskNullableText(
+  value: string | null | undefined,
+  maxLength = 140,
+  options?: { allowFinancialText?: boolean },
+): string | null {
   if (!value) return null;
-  if (FINANCIAL_TEXT_PATTERN.test(value)) return '[texto oculto]';
-  const sanitized = value
-    .replace(MONEY_TEXT_PATTERN, '[texto oculto]')
+  const allowFinancialText = options?.allowFinancialText ?? false;
+  if (!allowFinancialText && FINANCIAL_TEXT_PATTERN.test(value)) return '[texto oculto]';
+  const sanitized = (allowFinancialText ? value : value.replace(MONEY_TEXT_PATTERN, '[texto oculto]'))
     .replace(/\s+/g, ' ')
     .trim();
   if (!sanitized) return null;

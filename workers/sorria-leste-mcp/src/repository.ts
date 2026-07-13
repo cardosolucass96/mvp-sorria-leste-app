@@ -43,6 +43,14 @@ function dbAttendanceStatus(status: string | undefined): string | undefined {
   return status;
 }
 
+function roundMoney(value: number | null | undefined): number {
+  return Number(Number(value ?? 0).toFixed(2));
+}
+
+function paymentGroupKey(paymentGroupId: number | null, paymentId: number): string {
+  return paymentGroupId ? `grupo:${paymentGroupId}` : `pagamento:${paymentId}`;
+}
+
 export async function getIdentity(env: Env, propsInput: unknown): Promise<Identity> {
   const props = parseOAuthProps(propsInput);
   if (!props || !hasReadScope(props.scope)) throw new Error('Acesso MCP sem escopo de leitura.');
@@ -351,6 +359,56 @@ async function getCategoryBySlug(env: Env, slug: string) {
   ).bind(slug).first<{ id: number; nome: string; slug: string; cor: string; icone: string; ordem: number; pula_avaliacao: number }>();
 }
 
+function buildFollowupFilters(options: {
+  unidadeId: number;
+  status?: string;
+  tipo?: string;
+  responsavelUsuarioId?: number;
+  clienteId?: number;
+  from?: string;
+  to?: string;
+  search?: string;
+  includeBilling?: boolean;
+}) {
+  const conditions = ['f.unidade_id = ?', 'f.excluida_em IS NULL'];
+  const params: Primitive[] = [options.unidadeId];
+
+  if (!options.includeBilling) {
+    conditions.push("f.tipo <> 'cobranca'");
+  }
+  if (options.status) {
+    conditions.push('f.status = ?');
+    params.push(options.status);
+  }
+  if (options.tipo) {
+    conditions.push('f.tipo = ?');
+    params.push(options.tipo);
+  }
+  if (options.responsavelUsuarioId) {
+    conditions.push('f.responsavel_usuario_id = ?');
+    params.push(options.responsavelUsuarioId);
+  }
+  if (options.clienteId) {
+    conditions.push('f.cliente_id = ?');
+    params.push(options.clienteId);
+  }
+  if (options.from) {
+    conditions.push('f.vencimento_em >= ?');
+    params.push(startOfDay(options.from));
+  }
+  if (options.to) {
+    conditions.push('f.vencimento_em <= ?');
+    params.push(endOfDay(options.to));
+  }
+  if (options.search?.trim()) {
+    const like = `%${options.search.trim()}%`;
+    conditions.push("(c.nome LIKE ? OR f.titulo LIKE ? OR COALESCE(f.descricao, '') LIKE ?)");
+    params.push(like, like, like);
+  }
+
+  return { conditions, params };
+}
+
 export async function queuePanel(env: Env, unidadeId: number, categoriaSlug: string, limit: number, offset: number) {
   const categoria = await getCategoryBySlug(env, categoriaSlug);
   if (!categoria) return { categoria: null, pacientes: [] };
@@ -523,6 +581,307 @@ export async function attendanceOperationalDetail(env: Env, atendimentoId: numbe
   };
 }
 
+export async function attendanceFinancialDetail(env: Env, atendimentoId: number) {
+  const atendimento = await env.DB.prepare(`SELECT a.id, a.unidade_id, a.status, a.tipo,
+      a.created_at, a.finalizado_at,
+      c.id AS cliente_id, c.nome AS cliente_nome, c.telefone AS cliente_telefone, c.email AS cliente_email, c.cpf AS cliente_cpf,
+      cat.nome AS categoria_nome, cat.slug AS categoria_slug,
+      un.nome AS unidade_nome
+    FROM atendimentos a
+    JOIN clientes c ON c.id = a.cliente_id
+    LEFT JOIN categorias cat ON cat.id = a.categoria_id
+    LEFT JOIN unidades un ON un.id = a.unidade_id
+    WHERE a.id = ?`).bind(atendimentoId).first<{
+      id: number;
+      unidade_id: number;
+      status: string;
+      tipo: string;
+      created_at: string;
+      finalizado_at: string | null;
+      cliente_id: number;
+      cliente_nome: string;
+      cliente_telefone: string | null;
+      cliente_email: string | null;
+      cliente_cpf: string | null;
+      categoria_nome: string | null;
+      categoria_slug: string | null;
+      unidade_nome: string | null;
+    }>();
+  if (!atendimento) return null;
+
+  const itens = await all<{
+    id: number;
+    procedimento_nome: string;
+    etapa_label: string | null;
+    executor_nome: string | null;
+    status: string;
+    quantidade: number;
+    dentes: string | null;
+    dente_unico: string | null;
+    valor: number;
+    valor_original: number | null;
+    valor_final: number | null;
+    valor_pago: number;
+    desconto_valor: number | null;
+    desconto_motivo: string | null;
+    created_at: string;
+    concluido_at: string | null;
+  }>(env.DB.prepare(`SELECT
+      i.id,
+      p.nome AS procedimento_nome,
+      i.etapa_label,
+      ex.nome AS executor_nome,
+      i.status,
+      i.quantidade,
+      i.dentes,
+      i.dente_unico,
+      i.valor,
+      i.valor_original,
+      i.valor_final,
+      i.valor_pago,
+      i.desconto_valor,
+      i.desconto_motivo,
+      i.created_at,
+      i.concluido_at
+    FROM itens_atendimento i
+    JOIN procedimentos p ON p.id = i.procedimento_id
+    LEFT JOIN usuarios ex ON ex.id = i.executor_id
+    WHERE i.atendimento_id = ?
+    ORDER BY i.created_at ASC, i.id ASC`).bind(atendimentoId));
+
+  const pagamentos = await all<{
+    id: number;
+    pagamento_grupo_id: number | null;
+    atendimento_id: number;
+    forma_pagamento_id: number | null;
+    valor: number;
+    metodo: string;
+    forma_pagamento_grupo_snapshot: string | null;
+    forma_pagamento_subgrupo_snapshot: string | null;
+    taxa_percentual_snapshot: number | null;
+    taxa_fixa_snapshot: number | null;
+    valor_taxa: number | null;
+    valor_liquido: number | null;
+    observacoes: string | null;
+    cancelado: number;
+    motivo_cancelamento: string | null;
+    created_at: string;
+    recebido_por_nome: string | null;
+    grupo_valor_total: number | null;
+    grupo_observacoes: string | null;
+    grupo_cancelado: number | null;
+    grupo_motivo_cancelamento: string | null;
+    grupo_created_at: string | null;
+  }>(env.DB.prepare(`SELECT
+      pg.id,
+      pg.pagamento_grupo_id,
+      pg.atendimento_id,
+      pg.forma_pagamento_id,
+      pg.valor,
+      pg.metodo,
+      pg.forma_pagamento_grupo_snapshot,
+      pg.forma_pagamento_subgrupo_snapshot,
+      pg.taxa_percentual_snapshot,
+      pg.taxa_fixa_snapshot,
+      pg.valor_taxa,
+      pg.valor_liquido,
+      pg.observacoes,
+      pg.cancelado,
+      pg.motivo_cancelamento,
+      pg.created_at,
+      u.nome AS recebido_por_nome,
+      grp.valor_total AS grupo_valor_total,
+      grp.observacoes AS grupo_observacoes,
+      grp.cancelado AS grupo_cancelado,
+      grp.motivo_cancelamento AS grupo_motivo_cancelamento,
+      grp.created_at AS grupo_created_at
+    FROM pagamentos pg
+    LEFT JOIN usuarios u ON u.id = pg.recebido_por_id
+    LEFT JOIN pagamentos_grupos grp ON grp.id = pg.pagamento_grupo_id
+    WHERE pg.atendimento_id = ?
+    ORDER BY pg.created_at DESC, pg.id DESC`).bind(atendimentoId));
+
+  const alocacoes = await all<{
+    id: number;
+    pagamento_id: number;
+    item_atendimento_id: number | null;
+    agendamento_id: number | null;
+    etapa_modelo_id: number | null;
+    valor_alocado: number;
+    procedimento_nome: string;
+    etapa_label: string | null;
+    dentes: string | null;
+    dente_unico: string | null;
+    quantidade: number | null;
+    data_agendada: string | null;
+    agendamento_status: string | null;
+  }>(env.DB.prepare(`SELECT
+       pa.id,
+       pa.pagamento_id,
+       pa.item_atendimento_id,
+       pa.agendamento_id,
+       pa.etapa_modelo_id,
+       pa.valor_alocado,
+       COALESCE(p_item.nome, p_ag.nome, 'Procedimento') AS procedimento_nome,
+       COALESCE(etapa.nome, i.etapa_label) AS etapa_label,
+       i.dentes,
+       i.dente_unico,
+       i.quantidade,
+       ag.data_agendada,
+       ag.status AS agendamento_status
+     FROM pagamentos_alocacoes pa
+     INNER JOIN pagamentos pg ON pg.id = pa.pagamento_id
+     LEFT JOIN itens_atendimento i ON i.id = pa.item_atendimento_id
+     LEFT JOIN procedimentos p_item ON p_item.id = i.procedimento_id
+     LEFT JOIN agendamentos ag ON ag.id = pa.agendamento_id
+     LEFT JOIN procedimentos p_ag ON p_ag.id = ag.procedimento_id
+     LEFT JOIN procedimento_etapas_modelo etapa ON etapa.id = COALESCE(pa.etapa_modelo_id, ag.etapa_modelo_id, i.etapa_modelo_id)
+     WHERE pg.atendimento_id = ?
+     ORDER BY pa.created_at ASC, pa.id ASC`).bind(atendimentoId));
+
+  const alocacoesPorPagamento = new Map<number, typeof alocacoes>();
+  for (const alocacao of alocacoes) {
+    const current = alocacoesPorPagamento.get(alocacao.pagamento_id) ?? [];
+    current.push(alocacao);
+    alocacoesPorPagamento.set(alocacao.pagamento_id, current);
+  }
+
+  const pagamentosAgrupados = new Map<string, {
+    id: string;
+    pagamento_grupo_id: number | null;
+    pagamento_representante_id: number;
+    valor_total: number;
+    valor_taxa_total: number;
+    valor_liquido_total: number;
+    observacoes: string | null;
+    cancelado: boolean;
+    motivo_cancelamento: string | null;
+    created_at: string;
+    recebido_por_nome: string | null;
+    alocacoes: typeof alocacoes;
+    formas: Array<{
+      id: number;
+      valor: number;
+      metodo: string;
+      forma_pagamento_id: number | null;
+      forma_pagamento_grupo_snapshot: string | null;
+      forma_pagamento_subgrupo_snapshot: string | null;
+      taxa_percentual_snapshot: number | null;
+      taxa_fixa_snapshot: number | null;
+      valor_taxa: number | null;
+      valor_liquido: number | null;
+      observacoes: string | null;
+      cancelado: boolean;
+      motivo_cancelamento: string | null;
+      created_at: string;
+      alocacoes: typeof alocacoes;
+    }>;
+  }>();
+
+  for (const pagamento of pagamentos) {
+    const key = paymentGroupKey(pagamento.pagamento_grupo_id, pagamento.id);
+    const current = pagamentosAgrupados.get(key) ?? {
+      id: key,
+      pagamento_grupo_id: pagamento.pagamento_grupo_id,
+      pagamento_representante_id: pagamento.id,
+      valor_total: roundMoney(pagamento.grupo_valor_total ?? pagamento.valor),
+      valor_taxa_total: 0,
+      valor_liquido_total: 0,
+      observacoes: pagamento.grupo_observacoes ?? pagamento.observacoes,
+      cancelado: Boolean(pagamento.grupo_cancelado ?? pagamento.cancelado),
+      motivo_cancelamento: pagamento.grupo_motivo_cancelamento ?? pagamento.motivo_cancelamento,
+      created_at: pagamento.grupo_created_at ?? pagamento.created_at,
+      recebido_por_nome: pagamento.recebido_por_nome,
+      alocacoes: [],
+      formas: [],
+    };
+
+    const formaAlocacoes = alocacoesPorPagamento.get(pagamento.id) ?? [];
+    current.alocacoes.push(...formaAlocacoes);
+    current.valor_taxa_total = roundMoney(current.valor_taxa_total + Number(pagamento.valor_taxa ?? 0));
+    current.valor_liquido_total = roundMoney(current.valor_liquido_total + Number(pagamento.valor_liquido ?? pagamento.valor));
+    current.formas.push({
+      id: pagamento.id,
+      valor: roundMoney(pagamento.valor),
+      metodo: pagamento.metodo,
+      forma_pagamento_id: pagamento.forma_pagamento_id,
+      forma_pagamento_grupo_snapshot: pagamento.forma_pagamento_grupo_snapshot,
+      forma_pagamento_subgrupo_snapshot: pagamento.forma_pagamento_subgrupo_snapshot,
+      taxa_percentual_snapshot: pagamento.taxa_percentual_snapshot,
+      taxa_fixa_snapshot: pagamento.taxa_fixa_snapshot,
+      valor_taxa: pagamento.valor_taxa,
+      valor_liquido: pagamento.valor_liquido,
+      observacoes: pagamento.observacoes,
+      cancelado: Boolean(pagamento.cancelado),
+      motivo_cancelamento: pagamento.motivo_cancelamento,
+      created_at: pagamento.created_at,
+      alocacoes: formaAlocacoes,
+    });
+    pagamentosAgrupados.set(key, current);
+  }
+
+  const itensNormalizados = itens.map((item) => {
+    const valorCobrado = roundMoney(item.valor_final ?? item.valor);
+    const valorPago = roundMoney(item.valor_pago);
+    return {
+      id: item.id,
+      procedimento_nome: item.procedimento_nome,
+      etapa_label: item.etapa_label,
+      executor_nome: item.executor_nome,
+      status: executionStatus(item.status),
+      quantidade: item.quantidade,
+      dentes: item.dentes,
+      dente_unico: item.dente_unico,
+      valor_orcado: roundMoney(item.valor_original ?? valorCobrado),
+      valor_cobrado: valorCobrado,
+      valor_pago: valorPago,
+      valor_pendente: roundMoney(Math.max(valorCobrado - valorPago, 0)),
+      desconto_valor: roundMoney(item.desconto_valor ?? 0),
+      desconto_motivo: item.desconto_motivo,
+      created_at: item.created_at,
+      concluido_at: item.concluido_at,
+    };
+  });
+
+  const resumo = {
+    valor_total_itens: roundMoney(itensNormalizados.reduce((sum, item) => sum + item.valor_cobrado, 0)),
+    valor_total_pago_itens: roundMoney(itensNormalizados.reduce((sum, item) => sum + item.valor_pago, 0)),
+    valor_total_pendente_itens: roundMoney(itensNormalizados.reduce((sum, item) => sum + item.valor_pendente, 0)),
+    valor_total_recebido_bruto: roundMoney(pagamentos.reduce((sum, item) => sum + (item.cancelado ? 0 : item.valor), 0)),
+    valor_total_recebido_taxa: roundMoney(pagamentos.reduce((sum, item) => sum + (item.cancelado ? 0 : Number(item.valor_taxa ?? 0)), 0)),
+    valor_total_recebido_liquido: roundMoney(pagamentos.reduce((sum, item) => sum + (item.cancelado ? 0 : Number(item.valor_liquido ?? item.valor)), 0)),
+    valor_total_cancelado: roundMoney(pagamentos.reduce((sum, item) => sum + (item.cancelado ? item.valor : 0), 0)),
+  };
+
+  return {
+    unidadeId: atendimento.unidade_id,
+    atendimento: {
+      id: atendimento.id,
+      unidade_nome: atendimento.unidade_nome,
+      status: attendanceStatus(atendimento.status),
+      tipo: atendimento.tipo,
+      categoria: atendimento.categoria_nome ? { nome: atendimento.categoria_nome, slug: atendimento.categoria_slug } : null,
+      created_at: atendimento.created_at,
+      finalizado_at: atendimento.finalizado_at,
+      resumo,
+    },
+    cliente: {
+      id: atendimento.cliente_id,
+      nome: atendimento.cliente_nome,
+      telefone: maskPhone(atendimento.cliente_telefone),
+      email: maskEmail(atendimento.cliente_email),
+      cpf: maskCpf(atendimento.cliente_cpf),
+    },
+    itens: itensNormalizados,
+    pagamentos: Array.from(pagamentosAgrupados.values())
+      .map((pagamento) => ({
+        ...pagamento,
+        formas: [...pagamento.formas].sort((left, right) => right.created_at.localeCompare(left.created_at)),
+      }))
+      .sort((left, right) => right.created_at.localeCompare(left.created_at)),
+  };
+}
+
 export async function listFollowups(
   env: Env,
   unidadeId: number,
@@ -536,32 +895,16 @@ export async function listFollowups(
   offset: number,
 ) {
   if (isForbiddenFollowupType(tipo)) return { rejeitado: true, motivo: 'Tipo não exposto pelo MCP operacional.' };
-  const conditions = ['f.unidade_id = ?', 'f.excluida_em IS NULL', "f.tipo <> 'cobranca'"];
-  const params: Primitive[] = [unidadeId];
-  if (status) {
-    conditions.push('f.status = ?');
-    params.push(status);
-  }
-  if (tipo) {
-    conditions.push('f.tipo = ?');
-    params.push(tipo);
-  }
-  if (responsavelUsuarioId) {
-    conditions.push('f.responsavel_usuario_id = ?');
-    params.push(responsavelUsuarioId);
-  }
-  if (clienteId) {
-    conditions.push('f.cliente_id = ?');
-    params.push(clienteId);
-  }
-  if (from) {
-    conditions.push('f.vencimento_em >= ?');
-    params.push(startOfDay(from));
-  }
-  if (to) {
-    conditions.push('f.vencimento_em <= ?');
-    params.push(endOfDay(to));
-  }
+  const { conditions, params } = buildFollowupFilters({
+    unidadeId,
+    status,
+    tipo,
+    responsavelUsuarioId,
+    clienteId,
+    from,
+    to,
+    includeBilling: false,
+  });
   params.push(limit, offset);
   const rows = await all<{
     id: number; tipo: string; status: string; titulo: string; vencimento_em: string; concluida_em: string | null; cliente_id: number; cliente_nome: string; cliente_telefone: string | null; responsavel_usuario_nome: string; criado_por_nome: string;
@@ -582,6 +925,257 @@ export async function listFollowups(
       titulo: maskNullableText(row.titulo, 120),
       cliente_telefone: maskPhone(row.cliente_telefone),
     })),
+  };
+}
+
+export async function listDetailedFollowups(
+  env: Env,
+  unidadeId: number,
+  options: {
+    status?: string;
+    tipo?: string;
+    responsavelUsuarioId?: number;
+    clienteId?: number;
+    from?: string;
+    to?: string;
+    search?: string;
+    includeBilling?: boolean;
+    allowFinancialText?: boolean;
+    limit: number;
+    offset: number;
+  },
+) {
+  const { conditions, params } = buildFollowupFilters({
+    unidadeId,
+    status: options.status,
+    tipo: options.tipo,
+    responsavelUsuarioId: options.responsavelUsuarioId,
+    clienteId: options.clienteId,
+    from: options.from,
+    to: options.to,
+    search: options.search,
+    includeBilling: options.includeBilling,
+  });
+  const where = conditions.join(' AND ');
+
+  const summaryParams = [...params];
+  const porTipoStatus = await all<{ tipo: string; status: string; total: number }>(
+    env.DB.prepare(`SELECT f.tipo, f.status, COUNT(*) AS total
+      FROM followup_tarefas f
+      JOIN clientes c ON c.id = f.cliente_id
+      WHERE ${where}
+      GROUP BY f.tipo, f.status
+      ORDER BY f.tipo ASC, f.status ASC`).bind(...summaryParams),
+  );
+  const urgency = await env.DB.prepare(`SELECT
+      SUM(CASE WHEN f.status = 'aberta' THEN 1 ELSE 0 END) AS abertas,
+      SUM(CASE WHEN f.status = 'aberta' AND f.vencimento_em < datetime('now', 'localtime') THEN 1 ELSE 0 END) AS atrasadas,
+      SUM(CASE WHEN f.status = 'aberta' AND DATE(f.vencimento_em) = DATE('now', 'localtime') THEN 1 ELSE 0 END) AS vencem_hoje,
+      SUM(CASE WHEN f.status = 'concluida' AND DATE(f.concluida_em) = DATE('now', 'localtime') THEN 1 ELSE 0 END) AS concluidas_hoje
+    FROM followup_tarefas f
+    JOIN clientes c ON c.id = f.cliente_id
+    WHERE ${where}`).bind(...summaryParams).first<{
+      abertas: number | null;
+      atrasadas: number | null;
+      vencem_hoje: number | null;
+      concluidas_hoje: number | null;
+    }>();
+
+  const rows = await all<{
+    id: number;
+    unidade_id: number;
+    tipo: string;
+    status: string;
+    titulo: string;
+    descricao: string | null;
+    vencimento_em: string;
+    concluida_em: string | null;
+    created_at: string;
+    updated_at: string | null;
+    cliente_id: number;
+    cliente_nome: string;
+    cliente_telefone: string | null;
+    cliente_email: string | null;
+    cliente_cpf: string | null;
+    responsavel_usuario_id: number;
+    responsavel_usuario_nome: string;
+    criado_por_id: number;
+    criado_por_nome: string;
+    concluida_por_id: number | null;
+    concluida_por_nome: string | null;
+  }>(env.DB.prepare(`SELECT
+      f.id,
+      f.unidade_id,
+      f.tipo,
+      f.status,
+      f.titulo,
+      f.descricao,
+      f.vencimento_em,
+      f.concluida_em,
+      f.created_at,
+      f.updated_at,
+      c.id AS cliente_id,
+      c.nome AS cliente_nome,
+      c.telefone AS cliente_telefone,
+      c.email AS cliente_email,
+      c.cpf AS cliente_cpf,
+      ru.id AS responsavel_usuario_id,
+      ru.nome AS responsavel_usuario_nome,
+      cu.id AS criado_por_id,
+      cu.nome AS criado_por_nome,
+      uu.id AS concluida_por_id,
+      uu.nome AS concluida_por_nome
+    FROM followup_tarefas f
+    JOIN clientes c ON c.id = f.cliente_id
+    JOIN usuarios ru ON ru.id = f.responsavel_usuario_id
+    JOIN usuarios cu ON cu.id = f.criado_por_id
+    LEFT JOIN usuarios uu ON uu.id = f.concluida_por_id
+    WHERE ${where}
+    ORDER BY CASE WHEN f.status = 'aberta' THEN 0 ELSE 1 END, f.vencimento_em ASC, f.created_at ASC
+    LIMIT ? OFFSET ?`).bind(...params, options.limit, options.offset));
+
+  return {
+    resumo: {
+      porTipoStatus,
+      urgencia: {
+        abertas: urgency?.abertas ?? 0,
+        atrasadas: urgency?.atrasadas ?? 0,
+        vencem_hoje: urgency?.vencem_hoje ?? 0,
+        concluidas_hoje: urgency?.concluidas_hoje ?? 0,
+      },
+    },
+    items: rows.map((row) => ({
+      id: row.id,
+      unidade_id: row.unidade_id,
+      tipo: row.tipo,
+      status: row.status,
+      titulo: maskNullableText(row.titulo, 160, { allowFinancialText: options.allowFinancialText }),
+      descricao: maskNullableText(row.descricao, 320, { allowFinancialText: options.allowFinancialText }),
+      vencimento_em: row.vencimento_em,
+      concluida_em: row.concluida_em,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      cliente: {
+        id: row.cliente_id,
+        nome: row.cliente_nome,
+        telefone: maskPhone(row.cliente_telefone),
+        email: maskEmail(row.cliente_email),
+        cpf: maskCpf(row.cliente_cpf),
+      },
+      responsavel: {
+        id: row.responsavel_usuario_id,
+        nome: row.responsavel_usuario_nome,
+      },
+      criado_por: {
+        id: row.criado_por_id,
+        nome: row.criado_por_nome,
+      },
+      concluida_por: row.concluida_por_id
+        ? {
+            id: row.concluida_por_id,
+            nome: row.concluida_por_nome,
+          }
+        : null,
+    })),
+  };
+}
+
+export async function followupDetail(
+  env: Env,
+  followupId: number,
+  allowFinancialText = false,
+) {
+  const row = await env.DB.prepare(`SELECT
+      f.id,
+      f.unidade_id,
+      f.tipo,
+      f.status,
+      f.titulo,
+      f.descricao,
+      f.vencimento_em,
+      f.concluida_em,
+      f.created_at,
+      f.updated_at,
+      c.id AS cliente_id,
+      c.nome AS cliente_nome,
+      c.telefone AS cliente_telefone,
+      c.email AS cliente_email,
+      c.cpf AS cliente_cpf,
+      ru.id AS responsavel_usuario_id,
+      ru.nome AS responsavel_usuario_nome,
+      cu.id AS criado_por_id,
+      cu.nome AS criado_por_nome,
+      uu.id AS concluida_por_id,
+      uu.nome AS concluida_por_nome,
+      un.nome AS unidade_nome
+    FROM followup_tarefas f
+    JOIN clientes c ON c.id = f.cliente_id
+    JOIN usuarios ru ON ru.id = f.responsavel_usuario_id
+    JOIN usuarios cu ON cu.id = f.criado_por_id
+    LEFT JOIN usuarios uu ON uu.id = f.concluida_por_id
+    LEFT JOIN unidades un ON un.id = f.unidade_id
+    WHERE f.id = ? AND f.excluida_em IS NULL`).bind(followupId).first<{
+      id: number;
+      unidade_id: number;
+      tipo: string;
+      status: string;
+      titulo: string;
+      descricao: string | null;
+      vencimento_em: string;
+      concluida_em: string | null;
+      created_at: string;
+      updated_at: string | null;
+      cliente_id: number;
+      cliente_nome: string;
+      cliente_telefone: string | null;
+      cliente_email: string | null;
+      cliente_cpf: string | null;
+      responsavel_usuario_id: number;
+      responsavel_usuario_nome: string;
+      criado_por_id: number;
+      criado_por_nome: string;
+      concluida_por_id: number | null;
+      concluida_por_nome: string | null;
+      unidade_nome: string | null;
+    }>();
+  if (!row) return null;
+
+  return {
+    unidadeId: row.unidade_id,
+    tipo: row.tipo,
+    followup: {
+      id: row.id,
+      unidade_nome: row.unidade_nome,
+      tipo: row.tipo,
+      status: row.status,
+      titulo: maskNullableText(row.titulo, 160, { allowFinancialText }),
+      descricao: maskNullableText(row.descricao, 500, { allowFinancialText }),
+      vencimento_em: row.vencimento_em,
+      concluida_em: row.concluida_em,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      cliente: {
+        id: row.cliente_id,
+        nome: row.cliente_nome,
+        telefone: maskPhone(row.cliente_telefone),
+        email: maskEmail(row.cliente_email),
+        cpf: maskCpf(row.cliente_cpf),
+      },
+      responsavel: {
+        id: row.responsavel_usuario_id,
+        nome: row.responsavel_usuario_nome,
+      },
+      criado_por: {
+        id: row.criado_por_id,
+        nome: row.criado_por_nome,
+      },
+      concluida_por: row.concluida_por_id
+        ? {
+            id: row.concluida_por_id,
+            nome: row.concluida_por_nome,
+          }
+        : null,
+    },
   };
 }
 
@@ -679,6 +1273,254 @@ export async function clientOperationalProfile(env: Env, clienteId: number) {
   };
 }
 
+export async function clientFinancialProfile(env: Env, clienteId: number) {
+  const client = await env.DB.prepare(
+    `SELECT id, nome, telefone, email, cpf, origem, plano_odontologico, created_at
+     FROM clientes WHERE id = ?`,
+  ).bind(clienteId).first<{
+    id: number;
+    nome: string;
+    telefone: string | null;
+    email: string | null;
+    cpf: string | null;
+    origem: string;
+    plano_odontologico: string | null;
+    created_at: string;
+  }>();
+  if (!client) return null;
+
+  const saldo = await env.DB.prepare(
+    'SELECT saldo, updated_at FROM saldo_clientes WHERE cliente_id = ?',
+  ).bind(clienteId).first<{ saldo: number; updated_at: string | null }>();
+  const saldoCalculado = await env.DB.prepare(`SELECT
+      COALESCE(SUM(i.valor_pago), 0) AS saldo_calculado
+    FROM itens_atendimento i
+    JOIN atendimentos a ON a.id = i.atendimento_id
+    WHERE a.cliente_id = ? AND i.status != 'concluido' AND i.valor_pago > 0`).bind(clienteId).first<{ saldo_calculado: number | null }>();
+  const valorPendente = await env.DB.prepare(`SELECT
+      COALESCE(SUM(
+        CASE
+          WHEN (COALESCE(i.valor_final, i.valor) - COALESCE(i.valor_pago, 0)) > 0
+            THEN (COALESCE(i.valor_final, i.valor) - COALESCE(i.valor_pago, 0))
+          ELSE 0
+        END
+      ), 0) AS valor_pendente
+    FROM itens_atendimento i
+    JOIN atendimentos a ON a.id = i.atendimento_id
+    WHERE a.cliente_id = ? AND a.status NOT IN ('encerrado')`).bind(clienteId).first<{ valor_pendente: number | null }>();
+
+  const atendimentos = await all<{
+    id: number;
+    status: string;
+    created_at: string;
+    unidade_nome: string | null;
+    total: number | null;
+    total_pago: number | null;
+  }>(env.DB.prepare(`SELECT
+      a.id,
+      a.status,
+      a.created_at,
+      u.nome AS unidade_nome,
+      COALESCE(SUM(i.valor_final), SUM(i.valor), 0) AS total,
+      COALESCE(SUM(i.valor_pago), 0) AS total_pago
+    FROM atendimentos a
+    LEFT JOIN unidades u ON u.id = a.unidade_id
+    LEFT JOIN itens_atendimento i ON i.atendimento_id = a.id
+    WHERE a.cliente_id = ?
+    GROUP BY a.id
+    ORDER BY a.created_at DESC
+    LIMIT 15`).bind(clienteId));
+
+  const pagamentos = await all<{
+    id: number;
+    pagamento_grupo_id: number | null;
+    atendimento_id: number;
+    valor: number;
+    metodo: string;
+    forma_pagamento_grupo_snapshot: string | null;
+    forma_pagamento_subgrupo_snapshot: string | null;
+    valor_taxa: number | null;
+    valor_liquido: number | null;
+    observacoes: string | null;
+    cancelado: number;
+    motivo_cancelamento: string | null;
+    created_at: string;
+    recebido_por_nome: string | null;
+    unidade_id: number;
+    unidade_nome: string | null;
+  }>(env.DB.prepare(`SELECT
+      pg.id,
+      pg.pagamento_grupo_id,
+      pg.atendimento_id,
+      pg.valor,
+      pg.metodo,
+      pg.forma_pagamento_grupo_snapshot,
+      pg.forma_pagamento_subgrupo_snapshot,
+      pg.valor_taxa,
+      pg.valor_liquido,
+      pg.observacoes,
+      pg.cancelado,
+      pg.motivo_cancelamento,
+      pg.created_at,
+      u.nome AS recebido_por_nome,
+      a.unidade_id,
+      un.nome AS unidade_nome
+    FROM pagamentos pg
+    JOIN atendimentos a ON a.id = pg.atendimento_id
+    LEFT JOIN usuarios u ON u.id = pg.recebido_por_id
+    LEFT JOIN unidades un ON un.id = a.unidade_id
+    WHERE a.cliente_id = ?
+    ORDER BY pg.created_at DESC, pg.id DESC
+    LIMIT 50`).bind(clienteId));
+
+  const pagamentosAgrupados = new Map<string, {
+    id: string;
+    pagamento_grupo_id: number | null;
+    pagamento_representante_id: number;
+    atendimento_id: number;
+    unidade_id: number;
+    unidade_nome: string | null;
+    valor_total: number;
+    valor_taxa_total: number;
+    valor_liquido_total: number;
+    observacoes: string | null;
+    cancelado: boolean;
+    motivo_cancelamento: string | null;
+    created_at: string;
+    recebido_por_nome: string | null;
+    formas: Array<{
+      id: number;
+      valor: number;
+      metodo: string;
+      forma_pagamento_grupo_snapshot: string | null;
+      forma_pagamento_subgrupo_snapshot: string | null;
+      valor_taxa: number | null;
+      valor_liquido: number | null;
+      observacoes: string | null;
+      cancelado: boolean;
+      motivo_cancelamento: string | null;
+      created_at: string;
+    }>;
+  }>();
+
+  for (const pagamento of pagamentos) {
+    const key = paymentGroupKey(pagamento.pagamento_grupo_id, pagamento.id);
+    const current = pagamentosAgrupados.get(key) ?? {
+      id: key,
+      pagamento_grupo_id: pagamento.pagamento_grupo_id,
+      pagamento_representante_id: pagamento.id,
+      atendimento_id: pagamento.atendimento_id,
+      unidade_id: pagamento.unidade_id,
+      unidade_nome: pagamento.unidade_nome,
+      valor_total: 0,
+      valor_taxa_total: 0,
+      valor_liquido_total: 0,
+      observacoes: pagamento.observacoes,
+      cancelado: Boolean(pagamento.cancelado),
+      motivo_cancelamento: pagamento.motivo_cancelamento,
+      created_at: pagamento.created_at,
+      recebido_por_nome: pagamento.recebido_por_nome,
+      formas: [],
+    };
+
+    current.valor_total = roundMoney(current.valor_total + pagamento.valor);
+    current.valor_taxa_total = roundMoney(current.valor_taxa_total + Number(pagamento.valor_taxa ?? 0));
+    current.valor_liquido_total = roundMoney(current.valor_liquido_total + Number(pagamento.valor_liquido ?? pagamento.valor));
+    current.formas.push({
+      id: pagamento.id,
+      valor: roundMoney(pagamento.valor),
+      metodo: pagamento.metodo,
+      forma_pagamento_grupo_snapshot: pagamento.forma_pagamento_grupo_snapshot,
+      forma_pagamento_subgrupo_snapshot: pagamento.forma_pagamento_subgrupo_snapshot,
+      valor_taxa: pagamento.valor_taxa,
+      valor_liquido: pagamento.valor_liquido,
+      observacoes: pagamento.observacoes,
+      cancelado: Boolean(pagamento.cancelado),
+      motivo_cancelamento: pagamento.motivo_cancelamento,
+      created_at: pagamento.created_at,
+    });
+    pagamentosAgrupados.set(key, current);
+  }
+
+  const movimentacoes = await all<{
+    id: number;
+    tipo: string;
+    valor: number;
+    saldo_anterior: number;
+    saldo_novo: number;
+    pagamento_id: number | null;
+    item_atendimento_id: number | null;
+    atendimento_id: number | null;
+    cliente_destino_id: number | null;
+    observacoes: string | null;
+    created_at: string;
+  }>(env.DB.prepare(`SELECT
+      id,
+      tipo,
+      valor,
+      saldo_anterior,
+      saldo_novo,
+      pagamento_id,
+      item_atendimento_id,
+      atendimento_id,
+      cliente_destino_id,
+      observacoes,
+      created_at
+    FROM movimentacoes_saldo
+    WHERE cliente_id = ?
+    ORDER BY created_at DESC
+    LIMIT 30`).bind(clienteId));
+
+  const totalPagoHistorico = roundMoney(pagamentos.reduce((sum, item) => sum + (item.cancelado ? 0 : item.valor), 0));
+  const totalCanceladoHistorico = roundMoney(pagamentos.reduce((sum, item) => sum + (item.cancelado ? item.valor : 0), 0));
+
+  return {
+    cliente: {
+      id: client.id,
+      nome: client.nome,
+      telefone: maskPhone(client.telefone),
+      email: maskEmail(client.email),
+      cpf: maskCpf(client.cpf),
+      origem: client.origem,
+      plano_odontologico: client.plano_odontologico,
+      cadastrado_em: client.created_at,
+    },
+    resumo: {
+      saldo_atual: roundMoney(saldo?.saldo ?? 0),
+      saldo_calculado: roundMoney(saldoCalculado?.saldo_calculado ?? 0),
+      valor_pendente_aberto: roundMoney(valorPendente?.valor_pendente ?? 0),
+      total_pago_historico: totalPagoHistorico,
+      total_cancelado_historico: totalCanceladoHistorico,
+      saldo_updated_at: saldo?.updated_at ?? null,
+    },
+    atendimentos_financeiros: atendimentos.map((item) => {
+      const total = roundMoney(item.total ?? 0);
+      const totalPago = roundMoney(item.total_pago ?? 0);
+      return {
+        id: item.id,
+        status: attendanceStatus(item.status),
+        created_at: item.created_at,
+        unidade_nome: item.unidade_nome,
+        total,
+        total_pago: totalPago,
+        total_pendente: roundMoney(Math.max(total - totalPago, 0)),
+      };
+    }),
+    pagamentos_recentes: Array.from(pagamentosAgrupados.values())
+      .map((pagamento) => ({
+        ...pagamento,
+        formas: [...pagamento.formas].sort((left, right) => right.created_at.localeCompare(left.created_at)),
+      }))
+      .sort((left, right) => right.created_at.localeCompare(left.created_at)),
+    movimentacoes_saldo: movimentacoes.map((item) => ({
+      ...item,
+      valor: roundMoney(item.valor),
+      saldo_anterior: roundMoney(item.saldo_anterior),
+      saldo_novo: roundMoney(item.saldo_novo),
+    })),
+  };
+}
+
 export async function clientOperationalHistory(env: Env, clienteId: number, limit: number) {
   const atendimentos = await all<{ id: number; data: string; status: string; unidade_nome: string | null; categoria_nome: string | null }>(
     env.DB.prepare(`SELECT a.id, a.created_at AS data, a.status, u.nome AS unidade_nome, c.nome AS categoria_nome
@@ -708,6 +1550,182 @@ export async function clientOperationalHistory(env: Env, clienteId: number, limi
     ...agendamentos.map((item) => ({ evento: 'agendamento', ...item })),
     ...followups.map((item) => ({ evento: 'followup', ...item, titulo: maskNullableText(item.titulo, 120) })),
   ].sort((left, right) => right.data.localeCompare(left.data)).slice(0, limit);
+}
+
+export async function unitFinancialSummary(env: Env, unidadeId: number, from: string, to: string) {
+  const summary = await env.DB.prepare(`SELECT
+      COUNT(*) AS quantidade_formas,
+      COUNT(DISTINCT CASE
+        WHEN pg.cancelado = 0 THEN CASE
+          WHEN pg.pagamento_grupo_id IS NOT NULL THEN 'grupo:' || CAST(pg.pagamento_grupo_id AS TEXT)
+          ELSE 'pagamento:' || CAST(pg.id AS TEXT)
+        END
+        ELSE NULL
+      END) AS quantidade_recebimentos,
+      COUNT(DISTINCT CASE WHEN pg.cancelado = 0 THEN pg.atendimento_id ELSE NULL END) AS quantidade_atendimentos,
+      COUNT(DISTINCT CASE WHEN pg.cancelado = 0 THEN a.cliente_id ELSE NULL END) AS quantidade_clientes,
+      SUM(CASE WHEN pg.cancelado = 0 THEN pg.valor ELSE 0 END) AS total_bruto,
+      SUM(CASE WHEN pg.cancelado = 0 THEN COALESCE(pg.valor_taxa, 0) ELSE 0 END) AS total_taxas,
+      SUM(CASE WHEN pg.cancelado = 0 THEN COALESCE(pg.valor_liquido, pg.valor) ELSE 0 END) AS total_liquido,
+      SUM(CASE WHEN pg.cancelado = 1 THEN 1 ELSE 0 END) AS quantidade_cancelados,
+      SUM(CASE WHEN pg.cancelado = 1 THEN pg.valor ELSE 0 END) AS valor_cancelado
+    FROM pagamentos pg
+    JOIN atendimentos a ON a.id = pg.atendimento_id
+    WHERE a.unidade_id = ? AND DATE(pg.created_at) BETWEEN ? AND ?`).bind(unidadeId, from, to).first<{
+      quantidade_formas: number | null;
+      quantidade_recebimentos: number | null;
+      quantidade_atendimentos: number | null;
+      quantidade_clientes: number | null;
+      total_bruto: number | null;
+      total_taxas: number | null;
+      total_liquido: number | null;
+      quantidade_cancelados: number | null;
+      valor_cancelado: number | null;
+    }>();
+
+  const porMetodo = await all<{
+    metodo: string;
+    forma_pagamento_grupo_snapshot: string | null;
+    forma_pagamento_subgrupo_snapshot: string | null;
+    quantidade_formas: number;
+    quantidade_recebimentos: number;
+    total_bruto: number;
+    total_taxas: number;
+    total_liquido: number;
+  }>(env.DB.prepare(`SELECT
+      pg.metodo,
+      pg.forma_pagamento_grupo_snapshot,
+      pg.forma_pagamento_subgrupo_snapshot,
+      COUNT(*) AS quantidade_formas,
+      COUNT(DISTINCT CASE
+        WHEN pg.pagamento_grupo_id IS NOT NULL THEN 'grupo:' || CAST(pg.pagamento_grupo_id AS TEXT)
+        ELSE 'pagamento:' || CAST(pg.id AS TEXT)
+      END) AS quantidade_recebimentos,
+      SUM(pg.valor) AS total_bruto,
+      SUM(COALESCE(pg.valor_taxa, 0)) AS total_taxas,
+      SUM(COALESCE(pg.valor_liquido, pg.valor)) AS total_liquido
+    FROM pagamentos pg
+    JOIN atendimentos a ON a.id = pg.atendimento_id
+    WHERE a.unidade_id = ? AND DATE(pg.created_at) BETWEEN ? AND ? AND pg.cancelado = 0
+    GROUP BY pg.metodo, pg.forma_pagamento_grupo_snapshot, pg.forma_pagamento_subgrupo_snapshot
+    ORDER BY total_bruto DESC, pg.metodo ASC`).bind(unidadeId, from, to));
+
+  const porRecebedor = await all<{
+    recebido_por_id: number | null;
+    recebido_por_nome: string | null;
+    quantidade_formas: number;
+    quantidade_recebimentos: number;
+    total_bruto: number;
+    total_liquido: number;
+  }>(env.DB.prepare(`SELECT
+      pg.recebido_por_id,
+      u.nome AS recebido_por_nome,
+      COUNT(*) AS quantidade_formas,
+      COUNT(DISTINCT CASE
+        WHEN pg.pagamento_grupo_id IS NOT NULL THEN 'grupo:' || CAST(pg.pagamento_grupo_id AS TEXT)
+        ELSE 'pagamento:' || CAST(pg.id AS TEXT)
+      END) AS quantidade_recebimentos,
+      SUM(pg.valor) AS total_bruto,
+      SUM(COALESCE(pg.valor_liquido, pg.valor)) AS total_liquido
+    FROM pagamentos pg
+    JOIN atendimentos a ON a.id = pg.atendimento_id
+    LEFT JOIN usuarios u ON u.id = pg.recebido_por_id
+    WHERE a.unidade_id = ? AND DATE(pg.created_at) BETWEEN ? AND ? AND pg.cancelado = 0
+    GROUP BY pg.recebido_por_id, u.nome
+    ORDER BY total_bruto DESC, recebido_por_nome ASC`).bind(unidadeId, from, to));
+
+  const recentes = await all<{
+    id: number;
+    pagamento_grupo_id: number | null;
+    atendimento_id: number;
+    cliente_id: number;
+    cliente_nome: string;
+    valor: number;
+    metodo: string;
+    forma_pagamento_grupo_snapshot: string | null;
+    forma_pagamento_subgrupo_snapshot: string | null;
+    valor_taxa: number | null;
+    valor_liquido: number | null;
+    cancelado: number;
+    motivo_cancelamento: string | null;
+    created_at: string;
+    recebido_por_nome: string | null;
+  }>(env.DB.prepare(`SELECT
+      pg.id,
+      pg.pagamento_grupo_id,
+      pg.atendimento_id,
+      a.cliente_id,
+      c.nome AS cliente_nome,
+      pg.valor,
+      pg.metodo,
+      pg.forma_pagamento_grupo_snapshot,
+      pg.forma_pagamento_subgrupo_snapshot,
+      pg.valor_taxa,
+      pg.valor_liquido,
+      pg.cancelado,
+      pg.motivo_cancelamento,
+      pg.created_at,
+      u.nome AS recebido_por_nome
+    FROM pagamentos pg
+    JOIN atendimentos a ON a.id = pg.atendimento_id
+    JOIN clientes c ON c.id = a.cliente_id
+    LEFT JOIN usuarios u ON u.id = pg.recebido_por_id
+    WHERE a.unidade_id = ? AND DATE(pg.created_at) BETWEEN ? AND ?
+    ORDER BY pg.created_at DESC, pg.id DESC
+    LIMIT 25`).bind(unidadeId, from, to));
+
+  const totalBruto = roundMoney(summary?.total_bruto ?? 0);
+  const quantidadeRecebimentos = summary?.quantidade_recebimentos ?? 0;
+
+  return {
+    unidadeId,
+    periodo: { inicio: from, fim: to },
+    resumo: {
+      quantidade_formas: summary?.quantidade_formas ?? 0,
+      quantidade_recebimentos: quantidadeRecebimentos,
+      quantidade_atendimentos: summary?.quantidade_atendimentos ?? 0,
+      quantidade_clientes: summary?.quantidade_clientes ?? 0,
+      total_bruto: totalBruto,
+      total_taxas: roundMoney(summary?.total_taxas ?? 0),
+      total_liquido: roundMoney(summary?.total_liquido ?? 0),
+      quantidade_cancelados: summary?.quantidade_cancelados ?? 0,
+      valor_cancelado: roundMoney(summary?.valor_cancelado ?? 0),
+      ticket_medio_recebimento: quantidadeRecebimentos > 0
+        ? roundMoney(totalBruto / quantidadeRecebimentos)
+        : 0,
+    },
+    por_metodo: porMetodo.map((item) => ({
+      ...item,
+      total_bruto: roundMoney(item.total_bruto),
+      total_taxas: roundMoney(item.total_taxas),
+      total_liquido: roundMoney(item.total_liquido),
+    })),
+    por_recebedor: porRecebedor.map((item) => ({
+      ...item,
+      total_bruto: roundMoney(item.total_bruto),
+      total_liquido: roundMoney(item.total_liquido),
+    })),
+    pagamentos_recentes: recentes.map((item) => ({
+      id: paymentGroupKey(item.pagamento_grupo_id, item.id),
+      pagamento_forma_id: item.id,
+      pagamento_grupo_id: item.pagamento_grupo_id,
+      atendimento_id: item.atendimento_id,
+      cliente: {
+        id: item.cliente_id,
+        nome: item.cliente_nome,
+      },
+      valor: roundMoney(item.valor),
+      metodo: item.metodo,
+      forma_pagamento_grupo_snapshot: item.forma_pagamento_grupo_snapshot,
+      forma_pagamento_subgrupo_snapshot: item.forma_pagamento_subgrupo_snapshot,
+      valor_taxa: roundMoney(item.valor_taxa ?? 0),
+      valor_liquido: roundMoney(item.valor_liquido ?? item.valor),
+      cancelado: Boolean(item.cancelado),
+      motivo_cancelamento: item.motivo_cancelamento,
+      created_at: item.created_at,
+      recebido_por_nome: item.recebido_por_nome,
+    })),
+  };
 }
 
 export async function clientStats(env: Env, from: string, to: string) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  grantedReadScope,
+  grantedScopes,
+  hasFinancialScope,
   isForbiddenFollowupType,
   maskCpf,
   maskEmail,
@@ -11,10 +12,14 @@ import {
 } from '../src/security';
 
 describe('proteções MCP', () => {
-  it('aceita somente o escopo inicial de leitura', () => {
-    expect(grantedReadScope([])).toEqual(['sorria.read']);
-    expect(grantedReadScope(['sorria.read'])).toEqual(['sorria.read']);
-    expect(grantedReadScope(['sorria.write'])).toBeNull();
+  it('aceita leitura operacional e financeira sem perder o escopo base', () => {
+    expect(grantedScopes([])).toEqual(['sorria.read']);
+    expect(grantedScopes(['sorria.read'])).toEqual(['sorria.read']);
+    expect(grantedScopes(['sorria.finance.read'])).toEqual(['sorria.finance.read', 'sorria.read']);
+    expect(grantedScopes(['sorria.read', 'sorria.finance.read'])).toEqual(['sorria.finance.read', 'sorria.read']);
+    expect(grantedScopes(['sorria.write'])).toBeNull();
+    expect(hasFinancialScope(['sorria.read'])).toBe(false);
+    expect(hasFinancialScope(['sorria.read', 'sorria.finance.read'])).toBe(true);
   });
 
   it('mascara identificadores pessoais nos resultados', () => {
@@ -60,6 +65,7 @@ describe('proteções MCP', () => {
 
   it('oculta texto livre com conteúdo financeiro', () => {
     expect(maskNullableText('Paciente pediu desconto de R$ 120,00')).toBe('[texto oculto]');
+    expect(maskNullableText('Paciente pediu desconto de R$ 120,00', 140, { allowFinancialText: true })).toBe('Paciente pediu desconto de R$ 120,00');
     expect(omitFinancialFields({ observacao: 'Retornar sobre Pix amanhã' })).toEqual({ observacao: '[texto oculto]' });
   });
 

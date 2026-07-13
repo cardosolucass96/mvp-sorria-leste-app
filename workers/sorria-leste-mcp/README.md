@@ -2,17 +2,20 @@
 
 Servidor MCP remoto para o Codex/ChatGPT consultar a operação da Sorria Leste. Ele roda como um Cloudflare Worker separado da aplicação Next.js, usa OAuth próprio, D1 direto com queries preparadas e KV para o fluxo de autorização.
 
-## Escopo v2
+## Escopo v3
 
-Este MCP é somente leitura operacional. Ele ajuda a consultar agenda, fila, follow-ups não financeiros, clientes, equipe, categorias, atendimentos, termos e catálogo.
+Este MCP é somente leitura e agora tem dois níveis de escopo:
 
-Ele não é financeiro e não é clínico:
+- `sorria.read`: operação diária sem financeiro sensível.
+- `sorria.finance.read`: adiciona consultas financeiras e follow-up de cobrança.
 
-- Não retorna pagamentos, saldo, caixa, comissões, descontos, preços de catálogo, valores de atendimento ou valores de procedimento.
+O servidor ajuda a consultar agenda, fila, clientes, equipe, categorias, atendimentos, termos, catálogo, follow-ups e, quando autorizado, financeiro.
+
+Ele continua não clínico e não permite escrita:
+
 - Não retorna prontuários, notas clínicas, anexos/R2, observações clínicas sensíveis ou HTML completo dos termos.
-- Follow-ups do tipo `cobranca` são rejeitados/omitidos.
 - CPF, telefone e e-mail de clientes são mascarados.
-- Toda resposta passa por uma guarda final que remove chaves financeiras como `valor`, `pagamento`, `saldo`, `comissao`, `caixa` e `desconto`.
+- No escopo operacional, follow-ups do tipo `cobranca` continuam omitidos e toda resposta passa por uma guarda final que remove chaves financeiras como `valor`, `pagamento`, `saldo`, `comissao`, `caixa` e `desconto`.
 - Toda chamada registra apenas metadados em `mcp_audit_log`: usuário, client id, ferramenta, unidade e sucesso/erro. Não registra payload nem dado pessoal.
 
 ## Ferramentas
@@ -46,6 +49,14 @@ Ele não é financeiro e não é clínico:
 - `estatisticas_clientes`: agregados de novos clientes por período, origem, sexo e plano odontológico.
 - `listar_followups`: follow-ups por unidade/status/tipo/responsável/cliente/período, excluindo cobrança.
 - `resumo_followups`: contadores de follow-ups abertos, atrasados, vencendo hoje e concluídos por tipo, excluindo cobrança.
+- `listar_followups_completos`: versão expandida com descrição, criador, conclusão, busca textual e, quando autorizado, cobrança.
+- `detalhar_followup`: detalhe completo de um follow-up por ID; cobrança exige escopo financeiro.
+
+### Financeiro (`sorria.finance.read`)
+
+- `detalhar_atendimento_financeiro`: valores dos itens, pendências, pagamentos, taxas, formas e alocações do atendimento.
+- `perfil_cliente_financeiro`: saldo atual, saldo calculado, pendências, atendimentos financeiros, pagamentos recentes e movimentações.
+- `resumo_financeiro_unidade`: consolidado financeiro por unidade/período com totais, taxas, cancelamentos, recebimentos por método e por recebedor.
 
 ## Exemplos de prompts
 
@@ -67,6 +78,18 @@ Busque o perfil operacional do cliente 123.
 
 ```text
 Liste follow-ups atrasados da unidade 1, sem cobranças.
+```
+
+```text
+Liste follow-ups completos da unidade 1 da atendente 7, incluindo descrição.
+```
+
+```text
+Resumo financeiro da unidade 1 entre 2026-07-01 e 2026-07-12.
+```
+
+```text
+Detalhe financeiro do atendimento 123.
 ```
 
 ## Preparação
