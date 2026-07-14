@@ -37,6 +37,10 @@ const STATUSES_EM_FLUXO: AtendimentoStatus[] = [
   'em_execucao',
 ];
 
+const DATA_HOJE_SQL = "date('now', 'localtime')";
+const FINALIZADO_HOJE_SQL = `(a.status = ? AND date(COALESCE(a.finalizado_at, a.created_at)) = ${DATA_HOJE_SQL})`;
+const CRIADO_HOJE_SEM_ENCERRADO_SQL = `(a.status NOT IN (?, ?) AND date(a.created_at) = ${DATA_HOJE_SQL})`;
+
 // GET /api/atendimentos - Lista atendimentos da unidade atual
 export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
@@ -72,12 +76,13 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     switch (periodo) {
       case 'hoje_ou_fluxo':
         conditions.push(
-          `(date(a.created_at) = date('now', 'localtime') OR a.status IN (${STATUSES_EM_FLUXO.map(() => '?').join(', ')}))`
+          `(${CRIADO_HOJE_SEM_ENCERRADO_SQL} OR ${FINALIZADO_HOJE_SQL} OR a.status IN (${STATUSES_EM_FLUXO.map(() => '?').join(', ')}))`
         );
-        params.push(...STATUSES_EM_FLUXO);
+        params.push('finalizado', 'encerrado', 'finalizado', ...STATUSES_EM_FLUXO);
         break;
       case 'hoje':
-        conditions.push("date(a.created_at) = date('now', 'localtime')");
+        conditions.push(`(${CRIADO_HOJE_SEM_ENCERRADO_SQL} OR ${FINALIZADO_HOJE_SQL})`);
+        params.push('finalizado', 'encerrado', 'finalizado');
         break;
       case '7dias':
         conditions.push("date(a.created_at) >= date('now', 'localtime', '-6 days')");

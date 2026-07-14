@@ -57,6 +57,7 @@ import type {
   FechamentoCaixaResponse,
   FechamentoCaixaVisao,
 } from '@/lib/fechamento-caixa/types';
+import { PRINT_STYLE_TOKENS_BASE } from '@/lib/printStyles';
 
 const METODO_LABELS: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -711,10 +712,10 @@ export default function FechamentoCaixaPage() {
           <meta charset="utf-8" />
           <title>Fechamento de Caixa - ${escapeHtml(resultado.data_referencia)}</title>
           <style>
-            :root { --sorria-orange: #ea580c; --sorria-orange-dark: #7c2d12; --sorria-orange-soft: #fff7ed; --sorria-orange-border: #fed7aa; }
+            ${PRINT_STYLE_TOKENS_BASE}
             * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; font-size: 12px; background: #ffffff; }
-            h1 { font-size: 20px; margin: 0; color: #0f172a; letter-spacing: 0.2px; }
+            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: var(--sorria-ink); font-size: 12px; background: var(--sorria-surface); }
+            h1 { font-size: 20px; margin: 0; color: var(--sorria-ink); letter-spacing: 0.2px; }
             h2 { font-size: 14px; margin: 16px 0 8px; color: var(--sorria-orange); }
             .header { border: 1px solid var(--sorria-orange-border); padding: 14px 14px 12px; margin-bottom: 14px; background: var(--sorria-orange-soft); border-radius: 6px; }
             .report-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
@@ -723,18 +724,18 @@ export default function FechamentoCaixaPage() {
             .brand-text { color: var(--sorria-orange); font-size: 12px; font-weight: 700; letter-spacing: 0.2px; }
             .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
             .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
-            .summary-card { border: 1px solid var(--sorria-orange-border); border-radius: 6px; padding: 10px 12px; background: #fff; }
+            .summary-card { border: 1px solid var(--sorria-orange-border); border-radius: 6px; padding: 10px 12px; background: var(--sorria-surface-soft); }
             .summary-card strong { display: block; color: var(--sorria-orange-dark); margin-bottom: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
             .summary-value { color: var(--sorria-orange); font-size: 18px; font-weight: 700; }
-            .summary-box { background: #fff; border: 1px solid var(--sorria-orange-border); border-radius: 6px; padding: 10px 12px; }
+            .summary-box { background: var(--sorria-surface-soft); border: 1px solid var(--sorria-orange-border); border-radius: 6px; padding: 10px 12px; }
             table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; }
-            th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
-            th { background: #ffedd5; color: var(--sorria-orange-dark); }
+            th, td { border: 1px solid var(--sorria-line); padding: 6px 8px; text-align: left; vertical-align: top; }
+            th { background: var(--sorria-orange-soft-2); color: var(--sorria-orange-dark); }
             .compact-table th, .compact-table td { padding: 5px 6px; font-size: 11px; }
             .multiline-cell { white-space: normal; }
-            .muted { color: #64748b; }
+            .muted { color: var(--sorria-line-soft); }
             .section { margin-top: 20px; page-break-inside: avoid; }
-            .status-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #ffedd5; color: var(--sorria-orange-dark); font-weight: 700; font-size: 11px; }
+            .status-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--sorria-orange-soft-2); color: var(--sorria-orange-dark); font-weight: 700; font-size: 11px; }
             @media print {
               body { padding: 10px; }
             }

@@ -318,14 +318,14 @@ export default function CategoriasPage() {
                 type="checkbox"
                 checked={formData.pula_avaliacao}
                 onChange={(e) => setFormData({ ...formData, pula_avaliacao: e.target.checked })}
-                className="w-4 h-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+                className="w-4 h-4 rounded border-input text-primary focus:ring-primary/50"
               />
-              <span className="text-sm text-neutral-700">
+              <span className="text-sm text-foreground">
                 Pula avaliação (atendimento nasce em <em>aguardando pagamento</em>)
               </span>
             </label>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 Roles que atendem essa fila
               </label>
               <div className="flex flex-wrap gap-3">
@@ -335,9 +335,9 @@ export default function CategoriasPage() {
                       type="checkbox"
                       checked={formData.roles.includes(role)}
                       onChange={() => toggleRole(role)}
-                      className="w-4 h-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+                    className="w-4 h-4 rounded border-input text-primary focus:ring-primary/50"
                     />
-                    <span className="text-sm text-neutral-700">{ROLE_LABELS[role]}</span>
+                    <span className="text-sm text-foreground">{ROLE_LABELS[role]}</span>
                   </label>
                 ))}
               </div>
@@ -373,7 +373,7 @@ export default function CategoriasPage() {
           {
             key: 'slug',
             label: 'Slug',
-            render: (c) => <code className="text-xs text-neutral-600">/fila/{c.slug}</code>,
+            render: (c) => <code className="text-xs text-muted-foreground">/fila/{c.slug}</code>,
           },
           {
             key: 'roles',
@@ -396,7 +396,7 @@ export default function CategoriasPage() {
           {
             key: 'ordem',
             label: 'Ordem',
-            render: (c) => <span className="text-sm text-neutral-600">{c.ordem}</span>,
+            render: (c) => <span className="text-sm text-muted-foreground">{c.ordem}</span>,
           },
           {
             key: 'status',

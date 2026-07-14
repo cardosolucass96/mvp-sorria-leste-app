@@ -32,6 +32,7 @@ import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { buildTermoPrintableDocument } from '@/lib/helpers/termosDocumento';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
+import { PRINT_STYLE_TOKENS_BASE, PRINT_STYLE_TOKENS_CLIENT_HEADER } from '@/lib/printStyles';
 
 const METODOS_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -47,7 +48,7 @@ const HISTORICO_CONFIG: Record<string, { label: string; cor: string }> = {
   liberado:               { label: 'Liberado para execução', cor: 'bg-info-500' },
   finalizado:             { label: 'Finalizado',             cor: 'bg-success-500' },
   pagamento:              { label: 'Pagamento',              cor: 'bg-warning-500' },
-  procedimento:           { label: 'Procedimento',           cor: 'bg-neutral-400' },
+  procedimento:           { label: 'Procedimento',           cor: 'bg-muted' },
   etapa_concluida:        { label: 'Etapa concluída',        cor: 'bg-success-400' },
   credito:                { label: 'Crédito de saldo',       cor: 'bg-success-600' },
   debito:                 { label: 'Débito de saldo',        cor: 'bg-error-500' },
@@ -672,25 +673,25 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           <meta charset=\"utf-8\" />
           <title>${escapeHtml(tituloDocumento)} - ${escapeHtml(cliente.nome)}</title>
           <style>
-            :root { --sorria-orange: #ea580c; }
-            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; font-size: 12px; background: #ffffff; }
-            h1 { font-size: 20px; margin: 0; color: #0f172a; letter-spacing: 0.2px; }
+            ${PRINT_STYLE_TOKENS_CLIENT_HEADER}
+            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: var(--sorria-ink); font-size: 12px; background: var(--sorria-surface); }
+            h1 { font-size: 20px; margin: 0; color: var(--sorria-ink); letter-spacing: 0.2px; }
             h2 { font-size: 14px; margin: 16px 0 8px; color: var(--sorria-orange); }
             h3 { font-size: 12px; margin: 12px 0 6px; }
-            .section { margin-top: 16px; border-top: 1px solid #cbd5e1; padding-top: 12px; page-break-inside: avoid; }
-            .header { border: 1px solid #fed7aa; padding: 14px 14px 12px; margin-bottom: 14px; background: #fff7ed; border-radius: 6px; }
-            .summary { margin: 12px 0; background: #fff; border: 1px solid #fed7aa; border-radius: 6px; padding: 10px 12px; }
+            .section { margin-top: 16px; border-top: 1px solid var(--sorria-line); padding-top: 12px; page-break-inside: avoid; }
+            .header { border: 1px solid var(--sorria-soft-border); padding: 14px 14px 12px; margin-bottom: 14px; background: var(--sorria-soft); border-radius: 6px; }
+            .summary { margin: 12px 0; background: var(--sorria-surface); border: 1px solid var(--sorria-soft-border); border-radius: 6px; padding: 10px 12px; }
             .report-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
             .brand { display: flex; align-items: center; gap: 10px; }
             .brand img { width: 40px; height: 40px; object-fit: contain; }
             .brand-text { color: var(--sorria-orange); font-size: 12px; font-weight: 700; letter-spacing: 0.2px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-            th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
-            th { background: #ffedd5; color: #7c2d12; }
+            th, td { border: 1px solid var(--sorria-line); padding: 5px 8px; text-align: left; vertical-align: top; }
+            th { background: var(--sorria-soft-alt); color: var(--sorria-soft-text); }
             ul { padding-left: 16px; margin: 0; }
             .compact-list { padding-left: 14px; margin: 0; }
             .compact-list li { margin-bottom: 3px; }
-            .muted { color: #64748b; }
+            .muted { color: var(--sorria-muted); }
           </style>
         </head>
         <body>
@@ -817,57 +818,57 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           <meta charset="utf-8" />
           <title>Recibo de Pagamento - ${escapeHtml(cliente.nome)}</title>
           <style>
-            :root { --sorria-orange: #ea580c; --ink: #111827; --muted: #475569; --label: #334155; --line: #d8dee8; --soft: #fff7ed; }
+            ${PRINT_STYLE_TOKENS_BASE}
             @page { size: A4; margin: 12mm; }
             * { box-sizing: border-box; }
-            html { background: #ffffff; }
-            body { font-family: Arial, Helvetica, sans-serif; padding: 0; margin: 0; color: var(--ink); font-size: 11.5px; line-height: 1.42; background: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            html { background: var(--sorria-surface); }
+            body { font-family: Arial, Helvetica, sans-serif; padding: 0; margin: 0; color: var(--ink); font-size: 11.5px; line-height: 1.42; background: var(--sorria-surface); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             h1 { font-size: 22px; line-height: 1.08; margin: 0; color: var(--ink); letter-spacing: -0.35px; }
-            h2 { font-size: 11px; margin: 0 0 8px; color: #9a3412; text-transform: uppercase; letter-spacing: 0.7px; }
+            h2 { font-size: 11px; margin: 0 0 8px; color: var(--sorria-orange-dark); text-transform: uppercase; letter-spacing: 0.7px; }
             .receipt-page { width: 186mm; max-width: 100%; margin: 0 auto; }
-            .document-hero { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 12px 14px; border: 1px solid #fdba74; border-radius: 12px; background: linear-gradient(135deg, #fff7ed 0%, #ffffff 58%, #ffedd5 100%); }
+            .document-hero { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 12px 14px; border: 1px solid var(--sorria-orange-border-strong); border-radius: 12px; background: linear-gradient(135deg, var(--sorria-soft) 0%, var(--sorria-surface) 58%, var(--sorria-soft-soft) 100%); }
             .hero-brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
             .hero-brand img { width: 46px; height: 46px; object-fit: contain; flex: 0 0 auto; }
-            .hero-kicker { color: #c2410c; font-weight: 800; letter-spacing: 0.75px; text-transform: uppercase; font-size: 10px; }
+            .hero-kicker { color: var(--sorria-orange-strong); font-weight: 800; letter-spacing: 0.75px; text-transform: uppercase; font-size: 10px; }
             .hero-brand p { margin: 2px 0 0; color: var(--label); font-weight: 700; }
             .hero-meta { min-width: 174px; display: grid; grid-template-columns: 1fr; gap: 6px; }
-            .hero-meta div { border: 1px solid #fed7aa; border-radius: 9px; background: rgba(255,255,255,0.9); padding: 7px 9px; }
+            .hero-meta div { border: 1px solid var(--sorria-orange-border); border-radius: 9px; background: color-mix(in srgb, var(--sorria-surface) 90%, transparent); padding: 7px 9px; }
             .hero-meta span, .info-line span, .summary-item span { display: block; color: var(--label); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.45px; font-weight: 700; }
             .hero-meta strong { display: block; margin-top: 1px; font-size: 12px; color: var(--ink); }
             .info-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; align-items: stretch; }
-            .info-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
-            .company-card { background: #fffaf5; }
-            .info-line { display: grid; grid-template-columns: 92px 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px solid #edf2f7; }
+            .info-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; background: var(--sorria-surface); break-inside: avoid; page-break-inside: avoid; }
+            .company-card { background: var(--sorria-surface-subtle); }
+            .info-line { display: grid; grid-template-columns: 92px 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--sorria-line-soft); }
             .info-line:last-child { border-bottom: 0; }
             .info-line strong { font-weight: 700; overflow-wrap: anywhere; }
-            .summary { margin: 10px 0; border: 1px solid #fdba74; background: #fff7ed; border-radius: 6px; padding: 10px 12px; break-inside: avoid; page-break-inside: avoid; }
+            .summary { margin: 10px 0; border: 1px solid var(--sorria-orange-border-strong); background: var(--sorria-soft); border-radius: 6px; padding: 10px 12px; break-inside: avoid; page-break-inside: avoid; }
             .summary-grid { display: grid; grid-template-columns: 1fr 1.35fr; gap: 9px; }
-            .summary-item { border-radius: 10px; background: #fff; border: 1px solid #fed7aa; padding: 9px 11px; }
+            .summary-item { border-radius: 10px; background: var(--sorria-surface); border: 1px solid var(--sorria-orange-border); padding: 9px 11px; }
             .summary-item strong { display: block; margin-top: 2px; font-size: 16px; line-height: 1.15; }
-            .summary-item.total { background: #c2410c; color: #fff; border-color: #c2410c; }
-            .summary-item.total span { color: #fff7ed; }
+            .summary-item.total { background: var(--sorria-orange-strong); color: var(--sorria-surface); border-color: var(--sorria-orange-strong); }
+            .summary-item.total span { color: var(--sorria-soft); }
             section { break-inside: avoid; page-break-inside: avoid; }
             table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
             thead { display: table-header-group; }
             tfoot { display: table-footer-group; }
             tr { break-inside: avoid; page-break-inside: avoid; }
             th, td { border-bottom: 1px solid var(--line); padding: 6px 7px; text-align: left; vertical-align: top; }
-            th { background: #fff2e6; color: #7c2d12; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 800; }
-            td { background: #fff; }
+            th { background: var(--sorria-soft-soft-2); color: var(--sorria-orange-dark); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 800; }
+            td { background: var(--sorria-surface); }
             tr:last-child td { border-bottom: 0; }
             ul { padding-left: 16px; margin: 0; }
             .compact-list { padding-left: 14px; margin: 0; }
             .compact-list li { margin-bottom: 3px; }
             .receipt-footer { margin-top: 22px; color: var(--label); break-inside: avoid; page-break-inside: avoid; }
-            .receipt-footer p { margin: 0 0 24px; padding: 9px 11px; border-left: 3px solid #c2410c; background: #fff7ed; color: #334155; }
+            .receipt-footer p { margin: 0 0 24px; padding: 9px 11px; border-left: 3px solid var(--sorria-orange-strong); background: var(--sorria-soft); color: var(--sorria-label); }
             .signature-row { display: grid; grid-template-columns: 1fr 1fr; gap: 42px; margin-top: 26px; }
-            .signature-row span { display: block; border-top: 1px solid #64748b; margin-bottom: 7px; }
+            .signature-row span { display: block; border-top: 1px solid var(--sorria-muted-border); margin-bottom: 7px; }
             .signature-row strong { display: block; text-align: center; color: var(--ink); font-weight: 700; }
             .muted { color: var(--muted); }
             @media print {
               .receipt-page { width: 100%; max-width: none; }
               .document-hero, .info-card, .summary, table { box-shadow: none !important; }
-              .document-hero { border-color: #f97316; }
+              .document-hero { border-color: var(--sorria-orange-hover); }
               a { color: inherit; text-decoration: none; }
             }
           </style>
@@ -964,7 +965,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <td>${escapeHtml(parseSafeNumber(item.quantidade))}</td>
             </tr>
             <tr>
-              <td colspan=\"7\" style=\"padding-top:0; font-size:11px; color:#64748b;\">
+              <td colspan=\"7\" style=\"padding-top:0; font-size:11px; color:var(--sorria-muted-border);\">
                 Observações: ${escapeHtml(item.observacoes || '-')}
               </td>
             </tr>
@@ -1743,7 +1744,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 <tbody>
                   {ficha.movimentacoes.map((m, i) => {
                     const isEntrada = ['credito', 'transferencia_entrada'].includes(m.tipo);
-                    const cfg = HISTORICO_CONFIG[m.tipo] ?? { label: m.tipo, cor: 'bg-neutral-400' };
+                    const cfg = HISTORICO_CONFIG[m.tipo] ?? { label: m.tipo, cor: 'bg-muted' };
                     return (
                       <tr key={i} className="hover:bg-surface-secondary">
                         <td className="px-4 py-3 text-sm text-muted">{formatarDataHora(m.data)}</td>
@@ -2082,7 +2083,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 <div className="absolute bottom-0 left-4 top-0 w-0.5 bg-border" />
                 <div className="space-y-4">
                   {eventos.map((ev, i) => {
-                    const cfg = HISTORICO_CONFIG[ev.tipo] ?? { label: ev.tipo, cor: 'bg-neutral-400' };
+                    const cfg = HISTORICO_CONFIG[ev.tipo] ?? { label: ev.tipo, cor: 'bg-muted' };
                     return (
                       <div key={i} className="flex gap-4 relative">
                         <div className={`w-3 h-3 rounded-full mt-1.5 shrink-0 z-10 ${cfg.cor}`} style={{ marginLeft: '10px' }} />

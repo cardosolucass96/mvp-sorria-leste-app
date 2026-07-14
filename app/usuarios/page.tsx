@@ -396,7 +396,7 @@ export default function UsuariosPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 <Shield className="w-4 h-4 inline mr-1" />
                 Perfis (marque quantos quiser)
               </label>
@@ -410,9 +410,9 @@ export default function UsuariosPage() {
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleRole(role)}
-                          className="w-4 h-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+                          className="w-4 h-4 rounded border-input text-primary focus:ring-primary/50"
                         />
-                        <span className="text-sm text-neutral-700">{ROLE_LABELS_DESCRITIVOS[role]}</span>
+                        <span className="text-sm text-foreground">{ROLE_LABELS_DESCRITIVOS[role]}</span>
                       </label>
                       {checked && (
                         <label className="flex items-center gap-1 cursor-pointer text-xs text-muted">
@@ -421,7 +421,7 @@ export default function UsuariosPage() {
                             name="role_primaria"
                             checked={formData.role_primaria === role}
                             onChange={() => setFormData({ ...formData, role_primaria: role })}
-                            className="w-3.5 h-3.5 text-brand-600 focus:ring-brand-500"
+                            className="w-3.5 h-3.5 text-primary focus:ring-primary/50"
                           />
                           Primária
                         </label>
@@ -436,7 +436,7 @@ export default function UsuariosPage() {
             </div>
             {unidades.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   <Building2 className="w-4 h-4 inline mr-1" />
                   Unidades
                 </label>
@@ -452,9 +452,9 @@ export default function UsuariosPage() {
                             : formData.unidade_ids.filter(id => id !== u.id);
                           setFormData({ ...formData, unidade_ids: ids.length > 0 ? ids : [u.id] });
                         }}
-                        className="w-4 h-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+                        className="w-4 h-4 rounded border-input text-primary focus:ring-primary/50"
                       />
-                      <span className="text-sm text-neutral-700">{u.nome}</span>
+                      <span className="text-sm text-foreground">{u.nome}</span>
                     </label>
                   ))}
                 </div>
@@ -492,7 +492,7 @@ export default function UsuariosPage() {
           {
             key: 'email',
             label: 'Email',
-            render: (u) => <span className="text-neutral-600">{u.email}</span>,
+            render: (u) => <span className="text-muted-foreground">{u.email}</span>,
           },
           {
             key: 'valor_diaria',
@@ -534,7 +534,7 @@ export default function UsuariosPage() {
                   );
                 })}
                 {(!u.unidade_ids || u.unidade_ids.length === 0) && (
-                  <span className="text-neutral-400 text-sm">—</span>
+                  <span className="text-muted text-sm">—</span>
                 )}
               </div>
             ),

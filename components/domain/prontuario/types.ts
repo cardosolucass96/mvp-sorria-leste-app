@@ -96,7 +96,7 @@ export const HISTORICO_CONFIG: Record<string, { label: string; cor: string }> = 
   liberado:               { label: 'Liberado para execução', cor: 'bg-primary-400' },
   finalizado:             { label: 'Finalizado',             cor: 'bg-success-500' },
   pagamento:              { label: 'Pagamento',              cor: 'bg-warning-500' },
-  procedimento:           { label: 'Procedimento',           cor: 'bg-neutral-400' },
+  procedimento:           { label: 'Procedimento',           cor: 'bg-muted' },
   etapa_concluida:        { label: 'Etapa concluída',        cor: 'bg-success-400' },
   credito:                { label: 'Crédito de saldo',       cor: 'bg-success-600' },
   debito:                 { label: 'Débito de saldo',        cor: 'bg-error-500' },

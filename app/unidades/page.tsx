@@ -288,7 +288,7 @@ export default function UnidadesPage() {
             label: 'Nome',
             render: (u) => (
               <div className="flex items-start gap-2">
-                <Building2 className="w-4 h-4 text-neutral-400 mt-0.5" />
+                <Building2 className="w-4 h-4 text-muted-foreground mt-0.5" />
                 <div>
                   <span className="font-medium text-foreground">{u.nome}</span>
                   {u.razao_social && (
@@ -304,15 +304,15 @@ export default function UnidadesPage() {
           {
             key: 'endereco',
             label: 'Endereço',
-            render: (u) => (
-              <span className="text-neutral-600">{u.endereco || '—'}</span>
-            ),
+              render: (u) => (
+                <span className="text-muted-foreground">{u.endereco || '—'}</span>
+              ),
           },
           {
             key: 'telefone',
             label: 'Contato',
-            render: (u) => (
-              <div className="text-neutral-600">
+              render: (u) => (
+                <div className="text-muted-foreground">
                 <div>{u.telefone || '—'}</div>
                 {u.email && <div className="text-xs text-muted-foreground">{u.email}</div>}
               </div>

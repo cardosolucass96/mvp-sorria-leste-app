@@ -108,7 +108,7 @@ export default function SearchableSelect({
             'focus:outline-none focus:ring-2 focus:border-transparent',
             'disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground',
             error
-              ? 'border-error-300 text-error-900 focus:ring-error-400'
+              ? 'border-error-400 text-error-800 dark:border-error-300/90 dark:text-error-200 focus:ring-error-400'
               : 'border-input text-foreground focus:ring-ring'
           )}
           onClick={() => {

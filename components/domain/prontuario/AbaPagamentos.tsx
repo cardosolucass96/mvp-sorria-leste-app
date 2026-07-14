@@ -75,7 +75,7 @@ export default function AbaPagamentos({ pagamentos, movimentacoes }: AbaPagament
           <div className="space-y-2">
             {movimentacoes.map((m, i) => {
               const isEntrada = ['credito', 'transferencia_entrada'].includes(m.tipo);
-              const cfg = HISTORICO_CONFIG[m.tipo] ?? { label: m.tipo, cor: 'bg-neutral-400' };
+              const cfg = HISTORICO_CONFIG[m.tipo] ?? { label: m.tipo, cor: 'bg-muted' };
               return (
                 <div key={i} className="rounded-lg border border-border p-3">
                   <div className="flex items-start justify-between gap-2">

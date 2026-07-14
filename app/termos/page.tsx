@@ -323,11 +323,11 @@ export default function TermosPage() {
                 <p className="text-sm font-medium">Prévia de impressão</p>
                 <p className="text-xs text-muted-foreground">A prévia usa valores de exemplo para preencher os placeholders.</p>
               </div>
-              <div className="overflow-hidden rounded-xl border border-border bg-white">
+              <div className="overflow-hidden rounded-xl border border-border bg-surface">
                 <iframe
                   title="Prévia do termo"
                   srcDoc={previewDocument}
-                  className="h-[980px] w-full bg-white"
+                  className="h-[980px] w-full bg-surface"
                 />
               </div>
             </div>

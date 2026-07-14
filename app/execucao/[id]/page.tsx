@@ -420,7 +420,9 @@ export default function ExecucaoProcedimentoPage() {
 
     return (
       <div key={etapa.id} className={`rounded-lg border transition-colors ${
-        concluida ? 'border-success-200 bg-success-50' : 'border-neutral-200 bg-surface'
+        concluida
+          ? 'border-success-200 bg-success-50 dark:border-success-500/30 dark:bg-success-500/12'
+          : 'border-border/70 bg-surface'
       }`}>
         {/* Linha da etapa */}
         <button
@@ -433,8 +435,8 @@ export default function ExecucaoProcedimentoPage() {
           disabled={concluida || !canAct}
         >
           {concluida
-            ? <CheckCircle2 className="w-5 h-5 text-success-500 shrink-0" />
-            : <Circle className="w-5 h-5 text-neutral-300 shrink-0" />
+            ? <CheckCircle2 className="w-5 h-5 text-success-500 dark:text-success-200 shrink-0" />
+            : <Circle className="w-5 h-5 text-muted-foreground shrink-0" />
           }
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -458,7 +460,7 @@ export default function ExecucaoProcedimentoPage() {
         {concluida && etapa.prontuario_descricao && (
           <div className="px-4 pb-3 ml-8">
             <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Prontuário</p>
-            <p className="text-sm text-neutral-700 whitespace-pre-wrap">{etapa.prontuario_descricao}</p>
+            <p className="text-sm text-foreground whitespace-pre-wrap">{etapa.prontuario_descricao}</p>
             {etapa.prontuario_observacoes && (
               <p className="text-xs text-muted mt-1 italic">{etapa.prontuario_observacoes}</p>
             )}
@@ -468,7 +470,7 @@ export default function ExecucaoProcedimentoPage() {
 
         {/* Formulário de prontuário inline */}
         {aberta && !concluida && canAct && (
-          <div className="px-4 pb-4 ml-8 space-y-3 border-t border-neutral-100 pt-3">
+          <div className="px-4 pb-4 ml-8 space-y-3 border-t border-border pt-3">
             <div>
               <label className="block text-sm font-medium mb-1">
                 Descrição do que foi feito *
@@ -480,14 +482,14 @@ export default function ExecucaoProcedimentoPage() {
                 rows={4}
                 className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none resize-none ${
                   descricao.length < MIN_CHARS && descricao.length > 0
-                    ? 'border-error-300'
-                    : descricao.length >= MIN_CHARS
-                      ? 'border-success-300'
-                      : 'border-neutral-300'
+                ? 'border-error-300 dark:border-error-500/50'
+                : descricao.length >= MIN_CHARS
+                      ? 'border-success-300 dark:border-success-500/50'
+                      : 'border-input'
                 }`}
               />
               <div className="flex justify-between mt-1">
-                <span className={`text-xs ${descricao.length < MIN_CHARS ? 'text-error-600' : 'text-success-600'}`}>
+                <span className={`text-xs ${descricao.length < MIN_CHARS ? 'text-error-600 dark:text-error-100' : 'text-success-600 dark:text-success-100'}`}>
                   {descricao.length}/{MIN_CHARS} mín.
                 </span>
               </div>
@@ -499,7 +501,7 @@ export default function ExecucaoProcedimentoPage() {
                 onChange={e => setEtapaObservacoes(prev => ({ ...prev, [etapa.id]: e.target.value }))}
                 placeholder="Cuidados pós-procedimento, retornos, etc..."
                 rows={2}
-                className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none resize-none"
+                className="w-full border border-input rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none resize-none"
               />
             </div>
             <Button
@@ -533,20 +535,20 @@ export default function ExecucaoProcedimentoPage() {
         <div className="flex justify-between items-start mb-4">
           <StatusBadge type="item" status={item.status} />
           {isDisponivel && (
-            <span className="px-3 py-1 text-sm font-semibold rounded bg-warning-100 text-warning-800">
+            <span className="px-3 py-1 text-sm font-semibold rounded bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-100">
               Disponível
             </span>
           )}
           {isMeu && item.status !== 'concluido' && (
-            <span className="px-3 py-1 text-sm font-semibold rounded bg-info-100 text-info-800">
+            <span className="px-3 py-1 text-sm font-semibold rounded bg-info-100 text-info-800 dark:bg-info-900/30 dark:text-info-100">
               Meu procedimento
             </span>
           )}
         </div>
 
         {item.concluido_at && (
-          <div className="bg-success-50 border border-success-200 p-3 rounded mb-4">
-            <p className="text-sm text-success-800">Concluído em {formatarDataHora(item.concluido_at)}</p>
+          <div className="bg-success-50 border border-success-200 p-3 rounded mb-4 dark:bg-success-900/25 dark:border-success-900/35">
+            <p className="text-sm text-success-800 dark:text-success-100">Concluído em {formatarDataHora(item.concluido_at)}</p>
           </div>
         )}
 
@@ -567,7 +569,7 @@ export default function ExecucaoProcedimentoPage() {
           </Button>
           {/* Sessão atual para procedimentos multi-sessão */}
           {isMultiSessao && item.etapa_label && (
-            <div className="p-3 bg-primary-50 border border-primary-200 rounded-lg text-sm text-primary-800">
+            <div className="p-3 bg-primary-50 border border-primary-200 rounded-lg text-sm text-primary-800 dark:bg-primary-900/22 dark:border-primary-900/40 dark:text-primary-100">
               <strong>Sessão sendo executada:</strong> {item.etapa_label}
             </div>
           )}
@@ -585,7 +587,7 @@ export default function ExecucaoProcedimentoPage() {
           {isMeu && item.status === 'executando' && !temEtapas && (
             <div className="space-y-2">
               {!prontuario && (
-                <div className="p-3 bg-warning-50 border border-warning-300 rounded-lg text-sm text-warning-800">
+                <div className="p-3 bg-warning-50 border border-warning-300 rounded-lg text-sm text-warning-800 dark:bg-warning-900/22 dark:border-warning-900/35 dark:text-warning-100">
                   <strong>Prontuário pendente:</strong> preencha abaixo antes de concluir.
                 </div>
               )}
@@ -598,12 +600,12 @@ export default function ExecucaoProcedimentoPage() {
           )}
           {/* Para itens COM etapas por dente: conclusão é automática */}
           {isMeu && item.status === 'executando' && temEtapas && etapasConcluidas < item.etapas.length && (
-            <div className="p-3 bg-info-50 border border-info-200 rounded-lg text-sm text-info-800">
+            <div className="p-3 bg-info-50 border border-info-200 rounded-lg text-sm text-info-800 dark:bg-info-900/22 dark:border-info-900/35 dark:text-info-100">
               Conclua todas as etapas abaixo para finalizar o procedimento automaticamente.
             </div>
           )}
           {item.status === 'concluido' && (
-            <div className="w-full text-center text-neutral-600 py-3 bg-surface-muted rounded-lg">
+            <div className="w-full text-center text-muted-foreground py-3 bg-surface-muted rounded-lg">
               Procedimento concluído
             </div>
           )}
@@ -620,8 +622,8 @@ export default function ExecucaoProcedimentoPage() {
             <div className="flex items-center gap-3">
               <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
                 etapasConcluidas === item.etapas.length
-                  ? 'bg-success-100 text-success-700'
-                  : 'bg-neutral-100 text-neutral-600'
+                  ? 'bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-100'
+                  : 'bg-muted/80 dark:bg-muted/40 text-muted-foreground'
               }`}>
                 {etapasConcluidas}/{item.etapas.length} concluídas
               </span>
@@ -629,7 +631,7 @@ export default function ExecucaoProcedimentoPage() {
           </div>
 
           {/* Barra de progresso */}
-          <div className="w-full bg-neutral-200 rounded-full h-2 mb-5">
+          <div className="w-full bg-muted/70 rounded-full h-2 mb-5">
             <div
               className="bg-success-500 h-2 rounded-full transition-all duration-500"
               style={{ width: `${progresso}%` }}
@@ -646,7 +648,7 @@ export default function ExecucaoProcedimentoPage() {
                   return (
                     <div key={dente}>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-bold text-primary-700 bg-primary-50 px-2.5 py-1 rounded-full">
+                        <span className="text-sm font-bold text-primary-700 bg-primary-50 px-2.5 py-1 rounded-full dark:text-primary-100 dark:bg-primary-900/22">
                           Dente {dente}
                         </span>
                         <span className="text-xs text-muted">{concluidas}/{etapas.length}</span>
@@ -672,16 +674,16 @@ export default function ExecucaoProcedimentoPage() {
         <Card className={!prontuario && item.status === 'executando' ? 'ring-2 ring-error-400' : ''}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold">
-              Prontuário {!prontuario && item.status === 'executando' && <span className="text-error-600">*</span>}
+              Prontuário {!prontuario && item.status === 'executando' && <span className="text-error-600 dark:text-error-100">*</span>}
             </h2>
             {prontuario && (
-              <span className="px-3 py-1 text-sm font-semibold rounded bg-success-100 text-success-800">Preenchido</span>
+              <span className="px-3 py-1 text-sm font-semibold rounded bg-success-100 text-success-800 dark:bg-success-900/30 dark:text-success-100">Preenchido</span>
             )}
           </div>
 
           {!prontuario && item.status === 'executando' && (
-            <div className="mb-4 p-3 bg-error-50 border border-error-200 rounded-lg">
-              <p className="text-sm text-error-700">
+            <div className="mb-4 p-3 bg-error-50 border border-error-200 rounded-lg dark:bg-error-900/22 dark:border-error-900/35">
+              <p className="text-sm text-error-700 dark:text-error-100">
                 <strong>Obrigatório:</strong> mínimo {MIN_CHARS} caracteres para concluir.
               </p>
             </div>
@@ -690,7 +692,7 @@ export default function ExecucaoProcedimentoPage() {
           {isMeu && item.status === 'executando' && (
             <div className="space-y-4">
               {erroProntuario && (
-                <div className="p-3 bg-error-50 border border-error-200 rounded-lg text-sm text-error-700">{erroProntuario}</div>
+                <div className="p-3 bg-error-50 border border-error-200 rounded-lg text-sm text-error-700 dark:bg-error-900/22 dark:border-error-900/35 dark:text-error-100">{erroProntuario}</div>
               )}
               <div>
                 <label className="block text-sm font-medium mb-1">Descrição do Procedimento *</label>
@@ -699,11 +701,11 @@ export default function ExecucaoProcedimentoPage() {
                   onChange={e => setDescricaoProntuario(e.target.value)}
                   placeholder="Descreva o procedimento realizado, materiais, técnicas..."
                   className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:outline-none ${
-                    descricaoProntuario.length < MIN_CHARS ? 'border-error-300' : 'border-success-300'
+                    descricaoProntuario.length < MIN_CHARS ? 'border-error-300 dark:border-error-500/50' : 'border-success-300 dark:border-success-500/50'
                   }`}
                   rows={5}
                 />
-                <span className={`text-xs ${descricaoProntuario.length < MIN_CHARS ? 'text-error-600' : 'text-success-600'}`}>
+                <span className={`text-xs ${descricaoProntuario.length < MIN_CHARS ? 'text-error-600 dark:text-error-100' : 'text-success-600 dark:text-success-100'}`}>
                   {descricaoProntuario.length}/{MIN_CHARS} mín.
                 </span>
               </div>
@@ -713,7 +715,7 @@ export default function ExecucaoProcedimentoPage() {
                   value={observacoesProntuario}
                   onChange={e => setObservacoesProntuario(e.target.value)}
                   placeholder="Cuidados pós-procedimento, retornos..."
-                  className="w-full border border-neutral-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full border border-input rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:outline-none"
                   rows={3}
                 />
               </div>
@@ -732,13 +734,13 @@ export default function ExecucaoProcedimentoPage() {
                 <h3 className="text-md font-semibold mb-3 flex items-center gap-2">
                   <Paperclip className="w-4 h-4" /> Anexos e Imagens
                 </h3>
-                <div className="p-4 border-2 border-dashed border-neutral-300 rounded-lg mb-4">
+                <div className="p-4 border-2 border-dashed border-input rounded-lg mb-4">
                   <input type="text" value={descricaoAnexo} onChange={e => setDescricaoAnexo(e.target.value)}
-                    placeholder="Descrição (opcional)" className="w-full border border-neutral-300 rounded px-3 py-2 text-sm mb-2" />
+                    placeholder="Descrição (opcional)" className="w-full border border-input rounded px-3 py-2 text-sm mb-2" />
                   <input ref={fileInputRef} type="file" accept="image/*,video/*,.pdf,.doc,.docx"
                     onChange={enviarAnexo} disabled={enviandoAnexo}
-                    className="block w-full text-sm text-muted file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700" />
-                  {enviandoAnexo && <p className="mt-2 text-sm text-primary-600">Enviando...</p>}
+                    className="block w-full text-sm text-muted file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-50 dark:file:bg-primary-900/30 file:text-primary-700 dark:file:text-primary-100" />
+                  {enviandoAnexo && <p className="mt-2 text-sm text-primary-600 dark:text-primary-100">Enviando...</p>}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {anexos.length > 0 ? anexos.map(anexo => {
@@ -755,14 +757,14 @@ export default function ExecucaoProcedimentoPage() {
                           <video src={url} controls className="w-full h-32 object-cover bg-black" />
                         ) : (
                           <a href={`${url}?download=true`} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center justify-center h-32 bg-surface-muted hover:bg-neutral-200">
-                            <FileText className="w-8 h-8 text-neutral-400" />
+                            className="flex items-center justify-center h-32 bg-surface-muted hover:bg-muted/80">
+                            <FileText className="w-8 h-8 text-muted-foreground" />
                           </a>
                         )}
                         <div className="p-2">
                           <p className="font-medium text-xs truncate">{anexo.nome_arquivo}</p>
-                          <p className="text-xs text-neutral-400">{(anexo.tamanho / 1024 / 1024).toFixed(2)} MB</p>
-                          <button onClick={() => removerAnexo(anexo.id)} className="mt-1 text-xs text-error-600 hover:text-error-800">
+                          <p className="text-xs text-muted-foreground">{(anexo.tamanho / 1024 / 1024).toFixed(2)} MB</p>
+                          <button onClick={() => removerAnexo(anexo.id)} className="mt-1 text-xs text-error-600 dark:text-error-100 hover:text-error-800 dark:hover:text-error-200">
                             Remover
                           </button>
                         </div>
@@ -779,14 +781,14 @@ export default function ExecucaoProcedimentoPage() {
               <div>
                 <label className="block text-sm font-medium text-muted mb-1">Descrição</label>
                 <div className="bg-surface-secondary p-4 rounded-lg border">
-                  <p className="text-neutral-800 whitespace-pre-wrap">{prontuario.descricao}</p>
+                  <p className="text-foreground whitespace-pre-wrap">{prontuario.descricao}</p>
                 </div>
               </div>
               {prontuario.observacoes && (
                 <div>
                   <label className="block text-sm font-medium text-muted mb-1">Observações</label>
                   <div className="bg-surface-secondary p-4 rounded-lg border">
-                    <p className="text-neutral-800 whitespace-pre-wrap">{prontuario.observacoes}</p>
+                    <p className="text-foreground whitespace-pre-wrap">{prontuario.observacoes}</p>
                   </div>
                 </div>
               )}
@@ -809,8 +811,8 @@ export default function ExecucaoProcedimentoPage() {
       )}
 
       {isDisponivel && (
-        <div className="bg-warning-50 border border-warning-200 p-4 rounded-lg">
-          <p className="text-sm text-warning-800">
+        <div className="bg-warning-50 border border-warning-200 p-4 rounded-lg dark:bg-warning-900/22 dark:border-warning-900/35">
+          <p className="text-sm text-warning-800 dark:text-warning-100">
             Este procedimento está disponível. <strong>Pegue-o primeiro</strong> para adicionar novos procedimentos.
           </p>
         </div>
@@ -821,7 +823,7 @@ export default function ExecucaoProcedimentoPage() {
         size="lg"
         className="sm:h-[80vh]"
         title="Adicionar Procedimento">
-        <p className="text-sm text-neutral-600 mb-4">Para: <strong>{item.cliente_nome}</strong></p>
+        <p className="text-sm text-muted-foreground mb-4">Para: <strong>{item.cliente_nome}</strong></p>
         <SearchableSelect
           label="Procedimento *"
           name="novo_procedimento_id"

@@ -63,11 +63,11 @@ const WEEK_END_HOUR = 20;
 const LEGEND_STATUSES = ['agendado', 'faltou', 'realizado', 'cancelado'] as const;
 
 const STATUS_EVENT_STYLES: Record<string, string> = {
-  faltou: 'border-warning-200 bg-warning-50 text-warning-900',
-  pendente: 'border-neutral-200 bg-neutral-100 text-neutral-700',
-  agendado: 'border-primary-200 bg-primary-50 text-primary-900',
-  realizado: 'border-success-200 bg-success-50 text-success-900',
-  cancelado: 'border-error-200 bg-error-50 text-error-900',
+  faltou: 'border-warning-200 bg-warning-50 text-warning-900 dark:border-warning-900/45 dark:bg-warning-900/25 dark:text-warning-100',
+  pendente: 'border-muted bg-muted/65 text-muted-foreground dark:border-muted dark:bg-muted/55',
+  agendado: 'border-primary/40 bg-primary/10 text-primary dark:border-primary/70 dark:bg-primary/18',
+  realizado: 'border-success-200 bg-success-50 text-success-900 dark:border-success-900/45 dark:bg-success-900/25 dark:text-success-100',
+  cancelado: 'border-error-200 bg-error-50 text-error-900 dark:border-error-900/45 dark:bg-error-900/25 dark:text-error-100',
 };
 
 const STATUS_LEGEND_DOT: Record<string, string> = {
@@ -270,10 +270,10 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
 
   return (
     <div className="w-full overflow-hidden rounded-[28px] border border-border/70 bg-gradient-to-b from-surface via-surface to-background shadow-[0_18px_60px_-40px_rgba(15,23,42,0.35)]">
-      <div className="border-b border-border/70 bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.10),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.95),rgba(255,255,255,0.84))] px-4 py-4 sm:px-5">
+      <div className="border-b border-border/70 bg-[radial-gradient(circle_at_top_left,rgba(234,88,12,0.15),transparent_34%),linear-gradient(180deg,var(--color-surface),color-mix(in srgb,var(--color-surface) 88%, #000 12%))] px-4 py-4 sm:px-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary-700/80">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">
               Calendário operacional
             </p>
             <h3 className="text-lg font-semibold text-foreground">
@@ -353,7 +353,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
               month_caption: 'hidden',
               month_grid: 'w-full table-fixed border-separate border-spacing-x-2 border-spacing-y-2.5',
               weekdays: 'flex w-full',
-              weekday: 'flex-1 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500',
+          weekday: 'flex-1 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground',
               week: 'mt-0 flex w-full',
               day: 'aspect-auto h-auto min-w-0 flex-1 p-0 align-top',
               outside: 'opacity-45',
@@ -390,7 +390,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                           modifiers.today
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-background/90 text-foreground',
-                          isSelected && !modifiers.today && 'bg-primary/12 text-primary-700 ring-primary/20'
+                        isSelected && !modifiers.today && 'bg-primary/12 text-primary ring-primary/20'
                         )}
                       >
                         {day.date.getDate()}

@@ -32,7 +32,7 @@ function NomeProcedimento({ proc }: { proc: Procedimento }) {
     <span className="inline-flex items-center gap-1.5 flex-wrap">
       <span>{base}</span>
       {proc.tem_etapas === 1 && proc.etapa_label && (
-        <span className="text-xs bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded font-medium">
+        <span className="text-xs bg-primary-100 text-primary-700 dark:bg-primary-900/50 dark:text-primary-200 px-1.5 py-0.5 rounded font-medium">
           {proc.etapa_label}
         </span>
       )}
@@ -167,9 +167,9 @@ export default function FilaPage() {
           <div className="flex rounded-lg border border-border overflow-hidden text-sm">
             <button
               onClick={() => setVisualizacao('procedimento')}
-              className={`flex items-center gap-1.5 px-3 py-2 transition-colors
-                ${visualizacao === 'procedimento'
-                  ? 'bg-primary-600 text-white'
+                className={`flex items-center gap-1.5 px-3 py-2 transition-colors
+                  ${visualizacao === 'procedimento'
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-surface text-muted hover:bg-surface-secondary'}`}
             >
               <LayoutList className="w-4 h-4" />
@@ -177,9 +177,9 @@ export default function FilaPage() {
             </button>
             <button
               onClick={() => setVisualizacao('paciente')}
-              className={`flex items-center gap-1.5 px-3 py-2 transition-colors border-l border-border
-                ${visualizacao === 'paciente'
-                  ? 'bg-primary-600 text-white'
+                className={`flex items-center gap-1.5 px-3 py-2 transition-colors border-l border-border
+                  ${visualizacao === 'paciente'
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-surface text-muted hover:bg-surface-secondary'}`}
             >
               <Users className="w-4 h-4" />
@@ -209,7 +209,7 @@ export default function FilaPage() {
                 <Section
                   label="Meus Procedimentos"
                   count={fila.meusProcedimentos.length}
-                  badgeClass="bg-info-100 text-info-800"
+                  badgeClass="bg-info-100 text-info-800 dark:bg-info-900/30 dark:text-info-100"
                   empty="Nenhum procedimento atribuído a você ainda."
                 >
                   {fila.meusProcedimentos.map(proc => (
@@ -225,7 +225,7 @@ export default function FilaPage() {
                 <Section
                   label="Disponíveis para Pegar"
                   count={fila.disponiveis.length}
-                  badgeClass="bg-warning-100 text-warning-800"
+                  badgeClass="bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-100"
                   empty="Nenhum procedimento disponível no momento."
                 >
                   {fila.disponiveis.map(proc => (
@@ -251,7 +251,7 @@ export default function FilaPage() {
             <div className="space-y-8 mt-6">
               <PacienteSection
                 label="Meus Pacientes"
-                badgeClass="bg-info-100 text-info-800"
+                badgeClass="bg-info-100 text-info-800 dark:bg-info-900/30 dark:text-info-100"
                 grupos={meusPacientes}
                 empty="Nenhum paciente atribuído a você ainda."
                 userId={user?.id}
@@ -262,7 +262,7 @@ export default function FilaPage() {
               />
               <PacienteSection
                 label="Pacientes Disponíveis"
-                badgeClass="bg-warning-100 text-warning-800"
+                badgeClass="bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-100"
                 grupos={pacientesDisp}
                 empty="Nenhum paciente disponível no momento."
                 userId={user?.id}
@@ -305,7 +305,7 @@ function Section({
 }) {
   return (
     <section>
-      <h2 className="text-lg font-bold text-neutral-800 mb-4 flex items-center gap-2">
+      <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
         <span className={`px-3 py-1 rounded-full text-sm ${badgeClass}`}>{label}</span>
         <span className="text-muted text-sm font-normal">({count})</span>
       </h2>
@@ -340,7 +340,7 @@ function PacienteSection({
 }) {
   return (
     <section>
-      <h2 className="text-lg font-bold text-neutral-800 mb-4 flex items-center gap-2">
+      <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
         <span className={`px-3 py-1 rounded-full text-sm ${badgeClass}`}>{label}</span>
         <span className="text-muted text-sm font-normal">({grupos.length})</span>
       </h2>
@@ -362,7 +362,7 @@ function PacienteSection({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onVerProntuario(grupo.cliente_id)}
-                      className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1.5 rounded-lg border border-border text-muted hover:text-primary-700 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+                      className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1.5 rounded-lg border border-border text-muted hover:text-primary hover:border-primary-300 hover:bg-primary-50 transition-colors dark:hover:bg-primary/40 dark:hover:border-primary-300/70 dark:hover:text-primary-200"
                       title="Ver prontuário"
                     >
                       <FileText className="w-3.5 h-3.5" />
@@ -372,7 +372,7 @@ function PacienteSection({
                       <button
                         onClick={() => onPegarTodos(grupo.atendimento_id, grupo.cliente_nome, disp)}
                         disabled={carregandoEste}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 disabled:opacity-50 transition-colors"
                       >
                         {carregandoEste
                           ? 'Pegando...'
@@ -395,7 +395,7 @@ function PacienteSection({
                         {proc.executor_id === userId && (
                           <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-info-500" title="Meu procedimento" />
                         )}
-                        <span className="text-sm font-medium text-foreground group-hover:text-primary-700">
+                        <span className="text-sm font-medium text-foreground group-hover:text-primary">
                           <NomeProcedimento proc={proc} />
                         </span>
                       </div>
@@ -420,8 +420,8 @@ function ProcedimentoCard({ proc, irmaos, onClick }: { proc: Procedimento; irmao
           <h3 className="text-lg font-semibold text-foreground">
             <NomeProcedimento proc={proc} />
           </h3>
-          <p className="text-sm text-neutral-600">{proc.cliente_nome}</p>
-          <p className="text-xs text-neutral-400">Atendimento #{proc.atendimento_id}</p>
+          <p className="text-sm text-muted-foreground">{proc.cliente_nome}</p>
+          <p className="text-xs text-muted-foreground/80">Atendimento #{proc.atendimento_id}</p>
         </div>
         <StatusBadge type="item" status={proc.status} />
       </div>
@@ -431,7 +431,7 @@ function ProcedimentoCard({ proc, irmaos, onClick }: { proc: Procedimento; irmao
           <div className="space-y-1">
             {irmaos.map(irmao => (
               <div key={irmao.id} className="flex items-center justify-between gap-2">
-                <span className="text-xs text-neutral-600">
+                <span className="text-xs text-muted-foreground">
                   <NomeProcedimento proc={irmao} />
                 </span>
                 <StatusBadge type="item" status={irmao.status} />

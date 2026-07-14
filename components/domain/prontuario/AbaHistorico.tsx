@@ -18,7 +18,7 @@ export default function AbaHistorico({ historico }: AbaHistoricoProps) {
       <div className="absolute bottom-0 left-[7px] top-0 w-0.5 bg-border" />
       <div className="space-y-3">
         {historico.map((ev, i) => {
-          const cfg = HISTORICO_CONFIG[ev.tipo] ?? { label: ev.tipo, cor: 'bg-neutral-400' };
+          const cfg = HISTORICO_CONFIG[ev.tipo] ?? { label: ev.tipo, cor: 'bg-muted' };
           return (
             <div key={i} className="flex gap-3 relative">
               <div

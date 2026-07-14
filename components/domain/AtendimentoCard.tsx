@@ -32,7 +32,7 @@ export default function AtendimentoCard({
   atendimento,
   onClick,
   compact = false,
-  borderColor = 'border-l-blue-500',
+  borderColor = 'border-l-primary-500',
   actions,
   className,
 }: AtendimentoCardProps) {

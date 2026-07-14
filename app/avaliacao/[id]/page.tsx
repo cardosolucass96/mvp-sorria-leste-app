@@ -857,9 +857,9 @@ export default function AvaliacaoDetalhePage({
                                 href={`${url}?download=true`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center justify-center h-32 bg-surface-muted hover:bg-neutral-200"
+                                className="flex items-center justify-center h-32 bg-surface-muted hover:bg-muted/75"
                               >
-                                <FileText className="w-8 h-8 text-neutral-400" />
+                                <FileText className="w-8 h-8 text-muted-foreground" />
                               </a>
                             )}
                             <div className="p-2">

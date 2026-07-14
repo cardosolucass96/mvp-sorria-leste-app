@@ -44,7 +44,7 @@ export default function FilterBar({
         </svg>
         Filtros
         {hasFilters && (
-          <span className="bg-primary text-white text-xs px-1.5 py-0.5 rounded-full">
+          <span className="bg-primary text-primary-foreground text-xs px-1.5 py-0.5 rounded-full">
             {Object.values(values).filter((v) => v !== '').length}
           </span>
         )}

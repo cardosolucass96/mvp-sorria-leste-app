@@ -14,16 +14,21 @@ const sizeClasses: Record<NonNullable<AvatarProps['size']>, string> = {
 };
 
 /** Gera cor determinística baseada no nome */
-function hashColor(name: string): string {
-  const colors = [
-    'bg-primary',
-    'bg-info-500',
-    'bg-success-500',
-    'bg-evaluation-500',
-    'bg-error-500',
-    'bg-warning-500',
-    'bg-teal-500',
-    'bg-pink-500',
+interface AvatarColor {
+  bg: string;
+  text: string;
+}
+
+function hashColor(name: string): AvatarColor {
+  const colors: AvatarColor[] = [
+    { bg: 'bg-primary', text: 'text-primary-foreground' },
+    { bg: 'bg-info-500', text: 'text-info-50' },
+    { bg: 'bg-success-500', text: 'text-success-50' },
+    { bg: 'bg-evaluation-500', text: 'text-evaluation-50' },
+    { bg: 'bg-error-500', text: 'text-error-50' },
+    { bg: 'bg-warning-500', text: 'text-warning-50' },
+    { bg: 'bg-dentist-500', text: 'text-dentist-50' },
+    { bg: 'bg-info-600', text: 'text-info-50' },
   ];
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
@@ -34,13 +39,14 @@ function hashColor(name: string): string {
 
 export default function Avatar({ nome, size = 'md', className = '' }: AvatarProps) {
   const initials = obterIniciais(nome);
-  const bg = hashColor(nome);
+  const { bg, text } = hashColor(nome);
 
   return (
     <span
       className={cn(
         "inline-flex items-center justify-center rounded-full",
-        "text-white font-semibold select-none shrink-0",
+        "font-semibold select-none shrink-0",
+        text,
         bg,
         sizeClasses[size],
         className

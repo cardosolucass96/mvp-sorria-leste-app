@@ -112,7 +112,7 @@ export default function Sidebar() {
       {/* Footer */}
       <SidebarFooter className="group-data-[collapsible=icon]:hidden">
         <div className="flex items-center justify-center gap-2 px-2 py-2">
-          <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="h-1.5 w-1.5 rounded-full bg-success-500 animate-pulse" />
           <p className="text-xs text-muted-foreground">Sorria Leste v1.0</p>
         </div>
       </SidebarFooter>

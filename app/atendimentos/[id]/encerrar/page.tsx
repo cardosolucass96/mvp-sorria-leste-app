@@ -175,7 +175,7 @@ export default function EncerrarAtendimentoPage({
         {itensConcluidos.length === 0 ? (
           <p className="text-sm text-muted">Nenhum procedimento foi concluído.</p>
         ) : (
-          <div className="divide-y divide-neutral-100">
+          <div className="divide-y divide-border">
             {itensConcluidos.map(item => (
               <div key={item.id} className="flex items-center justify-between py-2.5">
                 <div className="min-w-0">
@@ -194,14 +194,14 @@ export default function EncerrarAtendimentoPage({
         )}
 
         {itensPendentes.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-neutral-100">
+          <div className="mt-3 pt-3 border-t border-border">
             <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">
               Procedimentos não concluídos ({itensPendentes.length})
             </p>
             <div className="space-y-1">
               {itensPendentes.map(item => (
                 <div key={item.id} className="flex items-center justify-between text-sm">
-                  <span className="text-neutral-600">{nomeProcedimento(item)}</span>
+                  <span className="text-foreground">{nomeProcedimento(item)}</span>
                   <StatusBadge type="item" status={item.status} />
                 </div>
               ))}
@@ -209,7 +209,7 @@ export default function EncerrarAtendimentoPage({
           </div>
         )}
 
-        <div className="mt-4 pt-3 border-t border-neutral-200 flex justify-between text-sm font-semibold">
+        <div className="mt-4 pt-3 border-t border-border flex justify-between text-sm font-semibold">
           <span>Total dos procedimentos</span>
           <span>{formatarMoeda(atendimento.total)}</span>
         </div>
@@ -221,7 +221,7 @@ export default function EncerrarAtendimentoPage({
         {pagamentosAtivos.length === 0 ? (
           <p className="text-sm text-muted">Nenhum pagamento registrado.</p>
         ) : (
-          <div className="divide-y divide-neutral-100">
+          <div className="divide-y divide-border">
             {pagamentosAtivos.map(pag => (
               <div key={pag.id} className="flex items-center justify-between py-2.5">
                 <div>
@@ -238,7 +238,7 @@ export default function EncerrarAtendimentoPage({
           </div>
         )}
 
-        <div className="mt-4 pt-3 border-t border-neutral-200 space-y-1">
+        <div className="mt-4 pt-3 border-t border-border space-y-1">
           <div className="flex justify-between text-sm">
             <span className="text-muted">Total pago</span>
             <span className="font-semibold">{formatarMoeda(totalPagamentos)}</span>

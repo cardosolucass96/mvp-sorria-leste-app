@@ -132,17 +132,17 @@ export default function ClientesPage() {
     {
       key: 'cpf',
       label: 'CPF',
-      render: (cliente) => <span className="text-neutral-600">{formatarCPF(cliente.cpf)}</span>,
+      render: (cliente) => <span className="text-muted-foreground">{formatarCPF(cliente.cpf)}</span>,
     },
     {
       key: 'telefone',
       label: 'Telefone',
-      render: (cliente) => <span className="text-neutral-600">{formatarTelefone(cliente.telefone)}</span>,
+      render: (cliente) => <span className="text-muted-foreground">{formatarTelefone(cliente.telefone)}</span>,
     },
     {
       key: 'email',
       label: 'Email',
-      render: (cliente) => <span className="text-neutral-600">{cliente.email || '-'}</span>,
+      render: (cliente) => <span className="text-muted-foreground">{cliente.email || '-'}</span>,
     },
     {
       key: 'acoes',

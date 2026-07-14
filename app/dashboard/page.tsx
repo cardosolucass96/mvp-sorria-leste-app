@@ -207,7 +207,7 @@ export default function DashboardAdminPage() {
         <>
           {/* Cards de Resumo */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="bg-gradient-to-br from-success-500 to-success-600 text-white border-none">
+            <Card className="bg-gradient-to-br from-success-500 to-success-600 text-success-50 border-none">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-success-100 text-sm">Faturamento</p>
@@ -217,7 +217,7 @@ export default function DashboardAdminPage() {
               </div>
             </Card>
 
-            <Card className="bg-gradient-to-br from-warning-500 to-warning-600 text-white border-none">
+            <Card className="bg-gradient-to-br from-warning-500 to-warning-600 text-warning-50 border-none">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-warning-100 text-sm">A Receber</p>
@@ -227,7 +227,7 @@ export default function DashboardAdminPage() {
               </div>
             </Card>
 
-            <Card className="bg-gradient-to-br from-evaluation-500 to-evaluation-600 text-white border-none">
+            <Card className="bg-gradient-to-br from-evaluation-500 to-evaluation-600 text-evaluation-50 border-none">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-evaluation-100 text-sm">Ticket Médio</p>
@@ -264,7 +264,7 @@ export default function DashboardAdminPage() {
                           className="h-full bg-gradient-to-r from-primary-400 to-primary-500 rounded-full flex items-center justify-end pr-2"
                           style={{ width: `${Math.max((mes.faturamento / maxFaturamento) * 100, 5)}%` }}
                         >
-                          <span className="text-xs text-white font-medium">
+                          <span className="text-xs text-primary-50 font-medium">
                             {formatCurrency(mes.faturamento)}
                           </span>
                         </div>
@@ -290,11 +290,11 @@ export default function DashboardAdminPage() {
                     <div key={status.status} className="flex items-center gap-3">
                       <span className="w-40 text-sm text-muted-foreground">{config?.label || status.status}</span>
                       <div className="flex-1 bg-surface-muted rounded-full h-6 overflow-hidden">
-                        <div
-                          className={`h-full ${config?.bgCor || 'bg-neutral-300'} rounded-full flex items-center justify-end pr-2`}
+                          <div
+                          className={`h-full ${config?.bgCor || 'bg-muted'} rounded-full flex items-center justify-end pr-2`}
                           style={{ width: `${Math.max((status.count / data.resumo.totalAtendimentos) * 100, 5)}%` }}
                         >
-                          <span className="text-xs text-white font-medium">{status.count}</span>
+                          <span className={`text-xs font-medium ${config?.cor || 'text-foreground'}`}>{status.count}</span>
                         </div>
                       </div>
                     </div>
@@ -311,7 +311,8 @@ export default function DashboardAdminPage() {
               </h3>
               <div className="space-y-3">
                 {data.porCanal.map((canal, idx) => {
-                  const colors = ['bg-info-500', 'bg-success-500', 'bg-evaluation-500', 'bg-pink-500', 'bg-evaluation-500'];
+                  const colors = ['bg-info-500', 'bg-success-500', 'bg-evaluation-500', 'bg-dentist-500', 'bg-warning-500'];
+                  const textColors = ['text-info-50', 'text-success-50', 'text-evaluation-50', 'text-dentist-50', 'text-warning-50'];
                   return (
                     <div key={canal.origem} className="flex items-center gap-3">
                       <span className="w-28 truncate text-sm text-muted-foreground">{canal.label}</span>
@@ -320,7 +321,7 @@ export default function DashboardAdminPage() {
                           className={`h-full ${colors[idx % colors.length]} rounded-full flex items-center justify-end pr-2`}
                           style={{ width: `${Math.max((canal.total / maxCanal) * 100, 10)}%` }}
                         >
-                          <span className="text-xs text-white font-medium">
+                          <span className={`text-xs font-medium ${textColors[idx % textColors.length]}`}>
                             {formatCurrency(canal.total)}
                           </span>
                         </div>
@@ -366,9 +367,9 @@ export default function DashboardAdminPage() {
                 {data.topVendedores.length > 0 ? (
                   data.topVendedores.map((v, idx) => (
                     <div key={v.nome} className="flex items-center gap-3 rounded-lg bg-secondary/55 p-3">
-                      <span className={`w-8 h-8 flex items-center justify-center rounded-full text-white font-bold text-sm ${
-                        idx === 0 ? 'bg-warning-500' : idx === 1 ? 'bg-neutral-400' : idx === 2 ? 'bg-warning-600' : 'bg-neutral-300'
-                      }`}>
+                        <span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${
+                          idx === 0 ? 'bg-warning-500 text-warning-50' : idx === 1 ? 'bg-muted/45 text-foreground' : idx === 2 ? 'bg-warning-600 text-warning-50' : 'bg-muted/30 text-foreground'
+                        }`}>
                         {idx + 1}
                       </span>
                       <span className="flex-1 font-medium text-foreground">{v.nome}</span>
@@ -390,8 +391,8 @@ export default function DashboardAdminPage() {
                 {data.topExecutores.length > 0 ? (
                   data.topExecutores.map((e, idx) => (
                     <div key={e.nome} className="flex items-center gap-3 rounded-lg bg-secondary/55 p-3">
-                      <span className={`w-8 h-8 flex items-center justify-center rounded-full text-white font-bold text-sm ${
-                        idx === 0 ? 'bg-warning-500' : idx === 1 ? 'bg-neutral-400' : idx === 2 ? 'bg-warning-600' : 'bg-neutral-300'
+                      <span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${
+                        idx === 0 ? 'bg-warning-500 text-warning-50' : idx === 1 ? 'bg-muted/45 text-foreground' : idx === 2 ? 'bg-warning-600 text-warning-50' : 'bg-muted/30 text-foreground'
                       }`}>
                         {idx + 1}
                       </span>

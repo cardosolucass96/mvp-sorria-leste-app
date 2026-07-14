@@ -368,7 +368,7 @@ export default function ProcedimentosPage() {
             label: 'Procedimento',
             render: (proc) => (
               <div>
-                <span className={`font-medium ${!proc.ativo ? 'text-neutral-400' : 'text-foreground'}`}>
+                <span className={`font-medium ${!proc.ativo ? 'text-muted-foreground' : 'text-foreground'}`}>
                   {proc.nome}
                 </span>
                 {proc.tem_etapas === 1 && (
@@ -382,7 +382,7 @@ export default function ProcedimentosPage() {
             label: 'Valor',
             align: 'right',
             render: (proc) => (
-              <span className={`font-semibold ${proc.valor === 0 ? 'text-success-600' : 'text-foreground'}`}>
+              <span className={`font-semibold ${proc.valor === 0 ? 'text-success-600 dark:text-success-300' : 'text-foreground'}`}>
                 {proc.valor === 0 ? 'Grátis' : formatarMoeda(proc.valor)}
               </span>
             ),
@@ -397,7 +397,7 @@ export default function ProcedimentosPage() {
                   <Badge color="amber">Sim</Badge>
                   {proc.tem_face === 1 && <Badge color="blue">Faces</Badge>}
                 </div>
-              ) : <span className="text-neutral-400">-</span>
+              ) : <span className="text-muted-foreground">-</span>
             ),
           },
           ...(podeVerComissoes ? [
@@ -405,19 +405,19 @@ export default function ProcedimentosPage() {
               key: 'comissao_venda',
               label: 'Comissão Avaliação',
               align: 'right' as const,
-              render: (proc: Procedimento) => <span className="text-neutral-600">{proc.comissao_venda}%</span>,
+              render: (proc: Procedimento) => <span className="text-muted-foreground">{proc.comissao_venda}%</span>,
             },
             {
               key: 'comissao_acrescimo',
               label: 'Comissão Acréscimo',
               align: 'right' as const,
-              render: (proc: Procedimento) => <span className="text-neutral-600">{proc.comissao_acrescimo}%</span>,
+              render: (proc: Procedimento) => <span className="text-muted-foreground">{proc.comissao_acrescimo}%</span>,
             },
             {
               key: 'comissao_execucao',
               label: 'Comissão Execução',
               align: 'right' as const,
-              render: (proc: Procedimento) => <span className="text-neutral-600">{proc.comissao_execucao}%</span>,
+              render: (proc: Procedimento) => <span className="text-muted-foreground">{proc.comissao_execucao}%</span>,
             },
           ] : []),
           {
@@ -432,19 +432,19 @@ export default function ProcedimentosPage() {
             align: 'right',
             render: (proc) => (
               <div className="space-x-2">
-                <Button variant="ghost" size="sm" onClick={() => abrirModalEditar(proc)} className="text-info-600 hover:text-info-800">
+                <Button variant="ghost" size="sm" onClick={() => abrirModalEditar(proc)} className="text-info-600 hover:text-info-800 dark:text-info-300 dark:hover:text-info-100">
                   Editar
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => duplicarProcedimento(proc)} className="text-neutral-600 hover:text-neutral-800">
+                <Button variant="ghost" size="sm" onClick={() => duplicarProcedimento(proc)} className="text-muted-foreground hover:text-foreground">
                   <Copy className="w-3.5 h-3.5 mr-1" />
                   Duplicar
                 </Button>
                 {proc.ativo ? (
-                  <Button variant="ghost" size="sm" onClick={() => handleDesativar(proc.id)} className="text-error-600 hover:text-error-800">
+                  <Button variant="ghost" size="sm" onClick={() => handleDesativar(proc.id)} className="text-error-600 hover:text-error-800 dark:text-error-300 dark:hover:text-error-100">
                     Desativar
                   </Button>
                 ) : (
-                  <Button variant="ghost" size="sm" onClick={() => handleReativar(proc.id)} className="text-success-600 hover:text-success-800">
+                  <Button variant="ghost" size="sm" onClick={() => handleReativar(proc.id)} className="text-success-600 hover:text-success-800 dark:text-success-300 dark:hover:text-success-100">
                     Reativar
                   </Button>
                 )}
@@ -585,7 +585,7 @@ export default function ProcedimentosPage() {
                   type="button"
                   onClick={adicionarEtapa}
                   disabled={saving}
-                  className="flex items-center gap-1 text-sm text-info-600 hover:text-info-800"
+                  className="flex items-center gap-1 text-sm text-info-600 hover:text-info-800 dark:text-info-300 dark:hover:text-info-100"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Adicionar etapa
@@ -615,14 +615,14 @@ export default function ProcedimentosPage() {
                           type="button"
                           onClick={() => removerEtapa(idx)}
                           disabled={saving}
-                          className="text-error-500 hover:text-error-700 shrink-0"
+                          className="text-error-500 hover:text-error-700 dark:text-error-300 dark:hover:text-error-100 shrink-0"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                       <div className={`grid gap-2 pl-8 ${podeVerComissoes ? 'grid-cols-4' : 'grid-cols-1'}`}>
                         <div>
-                          <label className="block text-xs text-muted mb-1">Valor (R$) <span className="text-neutral-400">opcional</span></label>
+                          <label className="block text-xs text-muted mb-1">Valor (R$) <span className="text-muted-foreground">opcional</span></label>
                           <input
                             type="number"
                             step="0.01"

@@ -332,7 +332,7 @@ export default function Header() {
                     'hidden md:inline-flex text-xs',
                     viewMode === 'admin'
                       ? ''
-                      : 'border-emerald-500/20 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/70 dark:bg-emerald-950 dark:text-emerald-300 dark:hover:bg-emerald-900'
+                      : 'border-success-500/20 bg-success-500/10 text-success-700 hover:bg-success-100 dark:border-success-700/60 dark:bg-success-800/20 dark:text-success-200 dark:hover:bg-success-800/30'
                   )}
                   title={viewMode === 'admin' ? 'Trocar para visão Dentista' : 'Trocar para visão Admin'}
                   variant={viewMode === 'admin' ? 'secondary' : 'outline'}

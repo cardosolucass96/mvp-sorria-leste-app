@@ -107,7 +107,7 @@ export default function AvaliacaoPage() {
           <Card variant="outlined">
             <div className="text-center py-4">
               <p className="text-muted">Você não tem atendimentos atribuídos</p>
-              <p className="text-sm text-neutral-400 mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 Assuma um atendimento da lista abaixo para começar
               </p>
             </div>
@@ -160,7 +160,7 @@ export default function AvaliacaoPage() {
       </div>
 
       {/* Divisor */}
-      <hr className="border-neutral-200" />
+      <hr className="border-border" />
 
       {/* Seção: Atendimentos Disponíveis */}
       <div className="space-y-4">

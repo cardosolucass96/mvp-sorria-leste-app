@@ -134,7 +134,7 @@ export default function SeletorDentes({
                   disabled={disabled}
                   className={`px-2 py-1.5 text-xs font-medium rounded transition-all
                     ${selecionado
-                      ? 'bg-primary text-white shadow-sm'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'bg-background text-foreground border border-input hover:border-primary/40 hover:bg-muted'
                     }
                     ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -231,8 +231,8 @@ export default function SeletorDentes({
                           disabled={disabled}
                           title={faceDisplay.label}
                           className={`px-2 py-1 text-xs font-semibold rounded transition-all
-                            ${ativa
-                              ? 'bg-info-600 text-white'
+                          ${ativa
+                              ? 'bg-info-600 text-info-50'
                               : 'bg-background text-muted-foreground border border-input hover:border-info-500/40 hover:bg-info-500/10'
                             }
                             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -243,7 +243,7 @@ export default function SeletorDentes({
                     })}
                   </div>
                   {item.faces.length === 0 && (
-                    <span className="text-xs text-warning-600 shrink-0">Selecione ao menos 1 face</span>
+                    <span className="text-xs text-warning-700 dark:text-warning-300 shrink-0">Selecione ao menos 1 face</span>
                   )}
                 </div>
               ))}

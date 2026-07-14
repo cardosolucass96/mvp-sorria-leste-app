@@ -73,14 +73,14 @@ function formatMonthLabel(date: Date): string {
 
 function getUrgenciaSurfaceClass(urgencia?: FollowupUrgencia): string {
   if (!urgencia) {
-    return 'border-border/70 bg-background/90 hover:border-primary/30 hover:bg-primary-50/55';
+    return 'border-border/70 bg-background/90 hover:border-primary/30 hover:bg-primary/20';
   }
 
   return {
-    atrasada: 'border-error-200/80 bg-error-50/82 hover:bg-error-100/88',
-    hoje: 'border-warning-200/80 bg-warning-50/88 hover:bg-warning-100/90',
-    futura: 'border-info-200/80 bg-info-50/82 hover:bg-info-100/88',
-    concluida: 'border-success-200/80 bg-success-50/82 hover:bg-success-100/88',
+    atrasada: 'border-error-200/80 bg-error-50/82 hover:bg-error-100/88 dark:border-error-900/55 dark:bg-error-900/22',
+    hoje: 'border-warning-200/80 bg-warning-50/88 hover:bg-warning-100/90 dark:border-warning-900/55 dark:bg-warning-900/22',
+    futura: 'border-info-200/80 bg-info-50/82 hover:bg-info-100/88 dark:border-info-900/55 dark:bg-info-900/22',
+    concluida: 'border-success-200/80 bg-success-50/82 hover:bg-success-100/88 dark:border-success-900/55 dark:bg-success-900/22',
   }[urgencia];
 }
 
@@ -150,10 +150,10 @@ export default function FollowupCalendario<T extends FollowupMinimal>({
 
   return (
     <div className="w-full overflow-hidden rounded-[28px] border border-border/70 bg-gradient-to-b from-surface via-surface to-background shadow-[0_18px_60px_-40px_rgba(15,23,42,0.35)]">
-      <div className="border-b border-border/70 bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.10),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.95),rgba(255,255,255,0.84))] px-4 py-4 sm:px-5">
+      <div className="border-b border-border/70 bg-[radial-gradient(circle_at_top_left,rgba(234,88,12,0.15),transparent_34%),linear-gradient(180deg,var(--color-surface),color-mix(in srgb,var(--color-surface) 88%, #000 12%))] px-4 py-4 sm:px-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary-700/80">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">
               Calendário operacional
             </p>
             <h3 className="text-lg font-semibold text-foreground">
@@ -236,7 +236,7 @@ export default function FollowupCalendario<T extends FollowupMinimal>({
             month_caption: 'hidden',
             month_grid: 'w-full table-fixed border-separate border-spacing-x-2 border-spacing-y-2.5',
             weekdays: 'flex w-full',
-            weekday: 'flex-1 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500',
+            weekday: 'flex-1 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground',
             week: 'mt-0 flex w-full',
             day: 'aspect-auto h-auto min-w-0 flex-1 p-0 align-top',
             outside: 'opacity-45',
@@ -276,7 +276,7 @@ export default function FollowupCalendario<T extends FollowupMinimal>({
                         dayIsToday
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-background/90 text-foreground',
-                        isSelected && !dayIsToday && 'bg-primary/12 text-primary-700 ring-primary/20'
+                        isSelected && !dayIsToday && 'bg-primary/12 text-primary ring-primary/20'
                       )}
                     >
                       {day.date.getDate()}
@@ -286,7 +286,7 @@ export default function FollowupCalendario<T extends FollowupMinimal>({
                         {info.total}
                       </span>
                     ) : dayIsToday ? (
-                      <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary-700">
+                      <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
                         Hoje
                       </span>
                     ) : null}

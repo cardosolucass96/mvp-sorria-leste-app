@@ -85,7 +85,7 @@ describe('GET /api/atendimentos', () => {
     expect(queries[0].params).toContain('triagem');
   });
 
-  it('aplica o período padrão de hoje ou em fluxo', async () => {
+  it('aplica o período padrão de hoje ou em fluxo incluindo finalizados de hoje e sem encerrados', async () => {
     mockQueryResponse('from atendimentos a', [atendimentoComCliente]);
 
     await callRoute(listAtendimentos, '/api/atendimentos', {
@@ -94,9 +94,27 @@ describe('GET /api/atendimentos', () => {
 
     const queries = getExecutedQueries();
     expect(queries[0].sql).toContain("date(a.created_at) = date('now', 'localtime')");
+    expect(queries[0].sql).toContain("date(COALESCE(a.finalizado_at, a.created_at)) = date('now', 'localtime')");
+    expect(queries[0].sql).toContain('a.status NOT IN (?, ?)');
     expect(queries[0].sql).toContain('a.status IN (?, ?, ?, ?)');
     expect(queries[0].params).toEqual(
-      expect.arrayContaining(['triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao'])
+      expect.arrayContaining(['triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao', 'finalizado', 'encerrado'])
+    );
+  });
+
+  it('filtra por hoje usando finalizado_at para finalizados e sem trazer encerrados', async () => {
+    mockQueryResponse('from atendimentos a', [atendimentoComCliente]);
+
+    await callRoute(listAtendimentos, '/api/atendimentos', {
+      searchParams: { periodo: 'hoje' },
+    });
+
+    const queries = getExecutedQueries();
+    expect(queries[0].sql).toContain("date(a.created_at) = date('now', 'localtime')");
+    expect(queries[0].sql).toContain("date(COALESCE(a.finalizado_at, a.created_at)) = date('now', 'localtime')");
+    expect(queries[0].sql).toContain('a.status NOT IN (?, ?)');
+    expect(queries[0].params).toEqual(
+      expect.arrayContaining(['finalizado', 'encerrado'])
     );
   });
 

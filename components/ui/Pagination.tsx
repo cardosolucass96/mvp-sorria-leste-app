@@ -81,8 +81,8 @@ export default function Pagination({
               aria-current={p === page ? 'page' : undefined}
               className={cn(
                 "min-w-[2rem] h-8 rounded-md text-sm font-medium transition-colors duration-150",
-                p === page
-                  ? "bg-primary text-white cursor-default"
+                  p === page
+                  ? "bg-primary text-primary-foreground cursor-default"
                   : "text-foreground hover:bg-muted cursor-pointer"
               )}
             >

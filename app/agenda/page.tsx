@@ -1277,7 +1277,7 @@ export default function AgendaPage() {
                 rel="noopener noreferrer"
                 title="Lembrete WhatsApp"
                 onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center justify-center p-1.5 rounded text-[#25D366] hover:bg-[#25D366]/10 transition-colors"
+                className="inline-flex items-center justify-center p-1.5 rounded text-success-600 dark:text-success-300 hover:bg-success-600/10 transition-colors"
               >
                 <MessageCircle className="w-4 h-4" />
               </a>
@@ -1331,7 +1331,7 @@ export default function AgendaPage() {
                   size="sm"
                   onClick={() => handleChegou(grupo)}
                   loading={isLoading}
-                  className="!bg-success-600 hover:!bg-success-700 !text-white"
+                  className="!bg-success-600 hover:!bg-success-700 !text-success-50"
                 >
                   <UserCheck className="w-3.5 h-3.5 mr-1.5" />
                   Chegou
@@ -1501,7 +1501,7 @@ export default function AgendaPage() {
                 onClick={() => aplicarFiltroRapido(f.id)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   filtroRapido === f.id
-                    ? 'bg-primary-600 text-white'
+                    ? 'bg-primary text-primary-foreground'
                     : 'bg-muted/70 text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
               >
@@ -1600,7 +1600,7 @@ export default function AgendaPage() {
                   key={n}
                   onClick={() => setPage(n)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    n === page ? 'bg-primary text-white' : 'border border-border text-muted-foreground hover:bg-accent/40 hover:text-foreground'
+                    n === page ? 'bg-primary text-primary-foreground' : 'border border-border text-muted-foreground hover:bg-accent/40 hover:text-foreground'
                   }`}
                 >
                   {n}
@@ -1858,9 +1858,9 @@ export default function AgendaPage() {
             <Button variant="ghost" onClick={() => setCancelarDialog({ isOpen: false, grupo: null, motivo: '' })}>
               Voltar
             </Button>
-            <Button
+              <Button
               variant="primary"
-              className="!bg-error-600 hover:!bg-error-700"
+              className="!bg-error-600 !text-error-50 hover:!bg-error-700"
               loading={grupoLoading === `${cancelarDialog.grupo.cliente_id}_${cancelarDialog.grupo.data_key}`}
               onClick={handleCancelar}
             >
@@ -1984,9 +1984,9 @@ export default function AgendaPage() {
                     limparVinculoProcedimentoPendente();
                     setNovoExecId('');
                   }}
-                  className={`flex-1 px-4 py-2 font-medium transition-colors ${
+                className={`flex-1 px-4 py-2 font-medium transition-colors ${
                     novoTipo === 'avaliacao'
-                      ? 'bg-primary-600 text-white'
+                      ? 'bg-primary text-primary-foreground'
                       : 'bg-card text-muted-foreground hover:bg-surface-secondary hover:text-foreground'
                   }`}
                 >
@@ -1996,7 +1996,7 @@ export default function AgendaPage() {
                   onClick={() => setNovoTipo('procedimento')}
                   className={`flex-1 px-4 py-2 font-medium transition-colors border-l border-border ${
                     novoTipo === 'procedimento'
-                      ? 'bg-primary-600 text-white'
+                      ? 'bg-primary text-primary-foreground'
                       : 'bg-card text-muted-foreground hover:bg-surface-secondary hover:text-foreground'
                   }`}
                 >
@@ -2035,8 +2035,8 @@ export default function AgendaPage() {
                             aria-pressed={selecionado}
                             onClick={() => handleSelecionarProcedimentoPendente(procedimento)}
                             className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
-                              selecionado
-                                ? 'border-primary-500 bg-primary-50 text-primary-900'
+                            selecionado
+                                ? 'border-primary/40 bg-primary/12 text-primary dark:border-primary dark:bg-primary/30 dark:text-primary-100'
                                 : 'border-border bg-card text-foreground hover:bg-surface-secondary'
                             }`}
                           >
@@ -2049,7 +2049,7 @@ export default function AgendaPage() {
                                 <span className="text-xs font-semibold uppercase tracking-wide">Selecionado</span>
                               )}
                             </div>
-                            <p className={`mt-1 text-xs ${selecionado ? 'text-primary-800' : 'text-muted-foreground'}`}>
+                            <p className={`mt-1 text-xs ${selecionado ? 'text-primary' : 'text-muted-foreground'}`}>
                               {contextoOrigem} de {formatarData(procedimento.atendimento_created_at)} · {valorPendente}
                             </p>
                           </button>
@@ -2066,7 +2066,7 @@ export default function AgendaPage() {
                 </div>
 
                 {novoItemOrigemId && (
-                  <div className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-900">
+                  <div className="rounded-lg border border-primary/40 bg-primary/12 px-3 py-2 text-sm text-primary dark:border-primary dark:bg-primary/25 dark:text-primary-100">
                     <div className="flex items-center justify-between gap-3">
                       <span>
                         Procedimento pendente vinculado ao agendamento
@@ -2075,7 +2075,7 @@ export default function AgendaPage() {
                       <button
                         type="button"
                         onClick={limparVinculoProcedimentoPendente}
-                        className="text-xs font-medium text-primary-800 hover:text-primary-900"
+                        className="text-xs font-medium text-primary hover:text-primary/80"
                       >
                         Desvincular
                       </button>
@@ -2084,7 +2084,7 @@ export default function AgendaPage() {
                 )}
 
                 {novoEtapaModeloId && !novoItemOrigemId && (
-                  <div className="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900">
+                  <div className="rounded-lg border border-warning/40 bg-warning/12 px-3 py-2 text-sm text-warning dark:border-warning/65 dark:bg-warning/20 dark:text-warning-100">
                     Etapa pré-selecionada: {novoEtapaLabel || `#${novoEtapaModeloId}`}
                   </div>
                 )}

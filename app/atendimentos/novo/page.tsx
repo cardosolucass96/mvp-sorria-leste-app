@@ -408,9 +408,9 @@ function NovoAtendimentoForm() {
         <Card>
           <h2 className="text-lg font-semibold mb-3">3. Tipo de Atendimento</h2>
           <div className="grid grid-cols-2 gap-3">
-            <button type="button" onClick={() => setTipoAtendimento('normal')}
+              <button type="button" onClick={() => setTipoAtendimento('normal')}
               className={`p-4 rounded-lg border-2 text-left transition-all ${
-                tipoAtendimento === 'normal' ? 'border-primary-500 bg-primary-50' : 'border-neutral-200 hover:border-neutral-300'
+                tipoAtendimento === 'normal' ? 'border-primary-500 bg-primary-50' : 'border-border hover:border-border/80'
               }`}>
               <Search className="w-5 h-5 mb-1 text-primary-500" aria-hidden="true" />
               <div className="font-semibold text-sm">Avaliação sem agendamento</div>
@@ -421,7 +421,7 @@ function NovoAtendimentoForm() {
               if (clienteSelecionado) buscarAgendamentos(clienteSelecionado.id);
             }}
               className={`p-4 rounded-lg border-2 text-left transition-all ${
-                tipoAtendimento === 'sessao' ? 'border-warning-500 bg-warning-50' : 'border-neutral-200 hover:border-neutral-300'
+                tipoAtendimento === 'sessao' ? 'border-warning-500 bg-warning-50' : 'border-border hover:border-border/80'
               }`}>
               <Calendar className="w-5 h-5 mb-1 text-warning-500" aria-hidden="true" />
               <div className="font-semibold text-sm">Já agendado</div>

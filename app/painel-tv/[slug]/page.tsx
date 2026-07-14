@@ -104,7 +104,7 @@ export default function PainelTvFilaPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[linear-gradient(135deg,_#7c2d12_0%,_#ea580c_45%,_#ffedd5_100%)] p-8 text-white">
+      <div className="min-h-screen bg-gradient-to-br from-primary-950 via-primary-700 to-primary-100 p-8 text-foreground">
         <div className="mx-auto max-w-7xl">
           <LoadingState mode="skeleton" lines={8} />
         </div>
@@ -114,7 +114,7 @@ export default function PainelTvFilaPage() {
 
   if (!painel) {
     return (
-      <div className="min-h-screen bg-[linear-gradient(135deg,_#7c2d12_0%,_#ea580c_45%,_#ffedd5_100%)] p-8">
+      <div className="min-h-screen bg-gradient-to-br from-primary-950 via-primary-700 to-primary-100 p-8 text-foreground">
         <div className="mx-auto max-w-5xl">
           <Alert type="error">{error || 'Painel indisponível'}</Alert>
         </div>
@@ -123,27 +123,27 @@ export default function PainelTvFilaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(135deg,_#7c2d12_0%,_#ea580c_45%,_#ffedd5_100%)] text-white">
+    <div className="min-h-screen bg-gradient-to-br from-primary-950 via-primary-700 to-primary-100 text-foreground">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-5 py-6 md:px-8 md:py-8">
-        <header className="rounded-[2rem] border border-white/20 bg-white/10 p-5 shadow-xl backdrop-blur-md md:p-8">
+        <header className="rounded-[2rem] border border-border/50 bg-card/70 p-5 shadow-xl backdrop-blur-md md:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-4">
               <Link
                 href="/painel-tv"
-                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-white/20"
+                className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/50 px-4 py-2 text-sm font-medium text-foreground/90 transition hover:bg-background/70"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Trocar fila
               </Link>
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-[0.25em] text-white/90">
+                <div className="inline-flex items-center gap-2 rounded-full bg-muted/60 px-4 py-2 text-sm font-semibold uppercase tracking-[0.25em] text-muted-foreground">
                   <Tv2 className="h-4 w-4" />
                   Painel da recepção
                 </div>
                 <h1 className="mt-4 text-4xl font-black tracking-tight md:text-6xl">
                   {painel.categoria.nome}
                 </h1>
-                <p className="mt-3 max-w-3xl text-base text-white/80 md:text-lg">
+                <p className="mt-3 max-w-3xl text-base text-muted-foreground md:text-lg">
                   Pacientes em ordem de entrada na fila. Quando um doutor já estiver vinculado, ele aparece aqui no painel.
                 </p>
               </div>
@@ -151,7 +151,7 @@ export default function PainelTvFilaPage() {
 
             <div className="grid gap-3 md:grid-cols-2 lg:w-[32rem]">
               <div className="md:col-span-2 flex justify-start md:justify-end">
-                <div className="rounded-2xl bg-primary-950/90 px-5 py-4 shadow-lg ring-1 ring-white/10">
+                <div className="rounded-2xl bg-primary-950/90 px-5 py-4 shadow-lg ring-1 ring-primary-200/50">
                   <Image
                     src="/logo-sorria-leste-branca-fundo-transparente.svg"
                     alt="Sorria Leste"
@@ -162,14 +162,14 @@ export default function PainelTvFilaPage() {
                   />
                 </div>
               </div>
-              <div className="rounded-2xl border border-white/20 bg-black/15 px-5 py-4">
-                <p className="text-sm uppercase tracking-[0.2em] text-white/65">Horário atual</p>
+              <div className="rounded-2xl border border-border/50 bg-background/60 px-5 py-4">
+                <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Horário atual</p>
                 <p className="mt-2 text-3xl font-bold">{agora.toLocaleTimeString('pt-BR')}</p>
               </div>
-              <div className="rounded-2xl border border-white/20 bg-black/15 px-5 py-4">
-                <p className="text-sm uppercase tracking-[0.2em] text-white/65">Última atualização</p>
+              <div className="rounded-2xl border border-border/50 bg-background/60 px-5 py-4">
+                <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Última atualização</p>
                 <p className="mt-2 text-xl font-bold">{formatarDataHora(painel.atualizado_em)}</p>
-                <p className="mt-1 inline-flex items-center gap-2 text-sm text-white/80">
+                <p className="mt-1 inline-flex items-center gap-2 text-sm text-muted-foreground">
                   <RefreshCcw className="h-4 w-4" />
                   Auto refresh de 15 em 15 segundos
                 </p>
@@ -186,10 +186,10 @@ export default function PainelTvFilaPage() {
 
         {pacientes.length === 0 ? (
           <div className="flex flex-1 items-center justify-center py-10">
-            <div className="w-full rounded-[2rem] border border-white/20 bg-white/10 p-10 text-center shadow-xl backdrop-blur-md">
-              <UserRound className="mx-auto h-16 w-16 text-white/80" />
+            <div className="w-full rounded-[2rem] border border-border/50 bg-card/80 p-10 text-center shadow-xl backdrop-blur-md">
+              <UserRound className="mx-auto h-16 w-16 text-muted-foreground" />
               <h2 className="mt-5 text-3xl font-bold">Nenhum paciente na fila</h2>
-              <p className="mt-3 text-lg text-white/80">
+              <p className="mt-3 text-lg text-muted-foreground">
                 Quando alguém entrar em {painel.categoria.nome}, o nome aparecerá automaticamente aqui.
               </p>
             </div>
@@ -199,11 +199,11 @@ export default function PainelTvFilaPage() {
             {pacientes.map((paciente, index) => (
               <article
                 key={paciente.atendimento_id}
-                className="flex min-h-[280px] flex-col rounded-[2rem] border border-white/20 bg-white/12 p-6 shadow-xl backdrop-blur-md"
+                className="flex min-h-[280px] flex-col rounded-[2rem] border border-border/50 bg-card/70 p-6 shadow-xl backdrop-blur-md"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.25em] text-white/65">
+                    <p className="text-sm font-semibold uppercase tracking-[0.25em] text-muted-foreground">
                       Paciente {index + 1}
                     </p>
                     <h2 className="mt-3 text-3xl font-black leading-tight md:text-4xl">
@@ -213,7 +213,7 @@ export default function PainelTvFilaPage() {
                   <div
                     className={`rounded-full px-4 py-2 text-sm font-bold ${
                       paciente.possui_procedimento_em_execucao
-                        ? 'bg-success-500 text-white'
+                      ? 'bg-success-500 text-success-50'
                         : 'bg-warning-300 text-warning-900'
                     }`}
                   >
@@ -222,16 +222,16 @@ export default function PainelTvFilaPage() {
                 </div>
 
                 <div className="mt-6 grid gap-4">
-                  <div className="rounded-2xl bg-black/15 p-4">
-                    <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-white/65">
+                  <div className="rounded-2xl bg-background/60 p-4">
+                    <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-muted-foreground">
                       <Clock3 className="h-4 w-4" />
                       Entrou na fila
                     </p>
                     <p className="mt-2 text-2xl font-bold">{formatarHorario(paciente.entrou_na_fila_em)}</p>
                   </div>
 
-                  <div className="rounded-2xl bg-black/15 p-4">
-                    <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-white/65">
+                  <div className="rounded-2xl bg-background/60 p-4">
+                    <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-muted-foreground">
                       <Stethoscope className="h-4 w-4" />
                       Doutor
                     </p>
@@ -240,12 +240,12 @@ export default function PainelTvFilaPage() {
                     </p>
                   </div>
 
-                  <div className="rounded-2xl bg-black/15 p-4">
-                    <p className="text-sm uppercase tracking-[0.2em] text-white/65">Procedimentos</p>
+                  <div className="rounded-2xl bg-background/60 p-4">
+                    <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Procedimentos</p>
                     <p className="mt-2 text-lg font-semibold">
                       {paciente.quantidade_procedimentos} item{paciente.quantidade_procedimentos !== 1 ? 's' : ''}
                     </p>
-                    <p className="mt-2 text-sm leading-6 text-white/80">
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       {paciente.procedimentos.join(' • ')}
                     </p>
                   </div>

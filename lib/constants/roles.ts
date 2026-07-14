@@ -25,9 +25,9 @@ export const ROLE_LABELS_DESCRITIVOS: Record<UserRole, string> = {
 /** Cores por role (Tailwind classes) */
 export const ROLE_COLORS: Record<UserRole, { cor: string; bgCor: string }> = {
   admin: { cor: 'text-evaluation-700', bgCor: 'bg-evaluation-100' },
-  atendente: { cor: 'text-blue-700', bgCor: 'bg-blue-100' },
-  avaliador: { cor: 'text-amber-700', bgCor: 'bg-amber-100' },
-  executor: { cor: 'text-green-700', bgCor: 'bg-green-100' },
+  atendente: { cor: 'text-primary-700', bgCor: 'bg-primary-100' },
+  avaliador: { cor: 'text-evaluation-700', bgCor: 'bg-evaluation-100' },
+  executor: { cor: 'text-dentist-500', bgCor: 'bg-dentist-100' },
   ortodontista: { cor: 'text-info-700', bgCor: 'bg-info-100' },
 };
 

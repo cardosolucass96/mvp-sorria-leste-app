@@ -304,7 +304,7 @@ export default function Home() {
               </h3>
               <p className="text-sm text-muted-foreground">Comissão sobre procedimentos que você vendeu</p>
             </div>
-            <Link href="/minhas-comissoes" className="btn bg-success-600 text-white hover:bg-success-700">
+            <Link href="/minhas-comissoes" className="btn bg-success-600 text-success-50 hover:bg-success-700">
               Ver Detalhes
             </Link>
           </div>
@@ -411,7 +411,7 @@ export default function Home() {
                 </h3>
                 <p className="text-sm text-muted-foreground">Histórico completo de avaliações e execuções</p>
               </div>
-              <span className="btn bg-success-600 text-white hover:bg-success-700">
+              <span className="btn bg-success-600 text-success-50 hover:bg-success-700">
                 Ver Detalhes
               </span>
             </div>

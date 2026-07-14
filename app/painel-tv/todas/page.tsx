@@ -151,7 +151,7 @@ export default function PainelTvTodasPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[linear-gradient(135deg,_#7c2d12_0%,_#ea580c_45%,_#ffedd5_100%)] p-8 text-white">
+      <div className="min-h-screen bg-gradient-to-br from-primary-950 via-primary-700 to-primary-100 p-8 text-foreground">
         <div className="mx-auto max-w-7xl">
           <LoadingState mode="skeleton" lines={10} />
         </div>
@@ -160,28 +160,28 @@ export default function PainelTvTodasPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(135deg,_#7c2d12_0%,_#ea580c_45%,_#ffedd5_100%)] text-white">
+    <div className="min-h-screen bg-gradient-to-br from-primary-950 via-primary-700 to-primary-100 text-foreground">
       <div className="mx-auto flex min-h-screen max-w-[1700px] flex-col px-5 py-6 md:px-8 md:py-8">
-        <header className="rounded-[2rem] border border-white/20 bg-white/10 p-5 shadow-xl backdrop-blur-md md:p-8">
+        <header className="rounded-[2rem] border border-border/50 bg-card/70 p-5 shadow-xl backdrop-blur-md md:p-8">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="space-y-4">
               <Link
                 href="/painel-tv"
-                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-white/20"
+                className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/50 px-4 py-2 text-sm font-medium text-foreground/90 transition hover:bg-background/70"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Voltar aos painéis
               </Link>
 
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-[0.25em] text-white/90">
+                <div className="inline-flex items-center gap-2 rounded-full bg-muted/60 px-4 py-2 text-sm font-semibold uppercase tracking-[0.25em] text-muted-foreground">
                   <Tv2 className="h-4 w-4" />
                   Painel integrado
                 </div>
                 <h1 className="mt-4 text-4xl font-black tracking-tight md:text-6xl">
                   Todas as filas
                 </h1>
-                <p className="mt-3 max-w-4xl text-base text-white/80 md:text-lg">
+                <p className="mt-3 max-w-4xl text-base text-muted-foreground md:text-lg">
                   Visualização única para recepção, com as filas lado a lado na mesma tela.
                 </p>
               </div>
@@ -189,7 +189,7 @@ export default function PainelTvTodasPage() {
 
             <div className="grid gap-3 md:grid-cols-2 xl:w-[34rem]">
               <div className="md:col-span-2 flex justify-start md:justify-end">
-                <div className="rounded-2xl bg-primary-950/90 px-5 py-4 shadow-lg ring-1 ring-white/10">
+                <div className="rounded-2xl bg-primary-950/90 px-5 py-4 shadow-lg ring-1 ring-primary-200/50">
                   <Image
                     src="/logo-sorria-leste-branca-fundo-transparente.svg"
                     alt="Sorria Leste"
@@ -200,14 +200,14 @@ export default function PainelTvTodasPage() {
                   />
                 </div>
               </div>
-              <div className="rounded-2xl border border-white/20 bg-black/15 px-5 py-4">
-                <p className="text-sm uppercase tracking-[0.2em] text-white/65">Horário atual</p>
+              <div className="rounded-2xl border border-border/50 bg-background/60 px-5 py-4">
+                <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Horário atual</p>
                 <p className="mt-2 text-3xl font-bold">{agora.toLocaleTimeString('pt-BR')}</p>
               </div>
-              <div className="rounded-2xl border border-white/20 bg-black/15 px-5 py-4">
-                <p className="text-sm uppercase tracking-[0.2em] text-white/65">Última atualização</p>
+              <div className="rounded-2xl border border-border/50 bg-background/60 px-5 py-4">
+                <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Última atualização</p>
                 <p className="mt-2 text-xl font-bold">{formatarDataHora(ultimaAtualizacao)}</p>
-                <p className="mt-1 inline-flex items-center gap-2 text-sm text-white/80">
+                <p className="mt-1 inline-flex items-center gap-2 text-sm text-muted-foreground">
                   <RefreshCcw className="h-4 w-4" />
                   Auto refresh de 15 em 15 segundos
                 </p>
@@ -226,16 +226,16 @@ export default function PainelTvTodasPage() {
           {filasOrdenadas.map((fila) => (
             <Card
               key={fila.categoria.id}
-              className="border-white/15 bg-white/10 p-0 text-white shadow-xl backdrop-blur-md"
+              className="border-border bg-card/80 p-0 text-foreground shadow-xl backdrop-blur-md"
             >
               <div className="flex h-full flex-col">
-                <div className="border-b border-white/10 px-5 py-4 md:px-6">
+                <div className="border-b border-border/60 px-5 py-4 md:px-6">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm font-semibold uppercase tracking-[0.25em] text-white/60">Fila</p>
+                      <p className="text-sm font-semibold uppercase tracking-[0.25em] text-muted-foreground">Fila</p>
                       <h2 className="mt-2 text-3xl font-black">{fila.categoria.nome}</h2>
                     </div>
-                    <div className="rounded-full bg-white/15 px-4 py-2 text-sm font-bold">
+                    <div className="rounded-full bg-muted/60 px-4 py-2 text-sm font-bold">
                       {fila.pacientes.length} paciente{fila.pacientes.length !== 1 ? 's' : ''}
                     </div>
                   </div>
@@ -248,9 +248,9 @@ export default function PainelTvTodasPage() {
                 ) : fila.pacientes.length === 0 ? (
                   <div className="flex flex-1 items-center justify-center p-8">
                     <div className="text-center">
-                      <UserRound className="mx-auto h-14 w-14 text-white/75" />
+                      <UserRound className="mx-auto h-14 w-14 text-muted-foreground" />
                       <h3 className="mt-4 text-2xl font-bold">Fila vazia</h3>
-                      <p className="mt-2 text-white/75">
+                      <p className="mt-2 text-muted-foreground">
                         Quando alguém entrar em {fila.categoria.nome}, aparecerá aqui.
                       </p>
                     </div>
@@ -260,12 +260,12 @@ export default function PainelTvTodasPage() {
                     {fila.pacientes.map((paciente) => (
                       <article
                         key={`${fila.categoria.slug}-${paciente.atendimento_id}`}
-                        className="rounded-[1.5rem] border border-white/15 bg-black/15 p-5"
+                        className="rounded-[1.5rem] border border-border/50 bg-background/60 p-5"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <h3 className="text-2xl font-black leading-tight">{paciente.cliente_nome}</h3>
-                            <p className="mt-2 inline-flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-white/65">
+                            <p className="mt-2 inline-flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-muted-foreground">
                               <Clock3 className="h-4 w-4" />
                               {formatarHorario(paciente.entrou_na_fila_em)}
                             </p>
@@ -273,7 +273,7 @@ export default function PainelTvTodasPage() {
                           <div
                             className={`rounded-full px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] ${
                               paciente.possui_procedimento_em_execucao
-                                ? 'bg-success-500 text-white'
+                                ? 'bg-success-500 text-success-50'
                                 : 'bg-warning-300 text-warning-900'
                             }`}
                           >
@@ -283,7 +283,7 @@ export default function PainelTvTodasPage() {
 
                         <div className="mt-5 space-y-4">
                           <div>
-                            <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/60">
+                            <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
                               <Stethoscope className="h-4 w-4" />
                               Doutor
                             </p>
@@ -293,8 +293,8 @@ export default function PainelTvTodasPage() {
                           </div>
 
                           <div>
-                            <p className="text-xs uppercase tracking-[0.2em] text-white/60">Procedimentos</p>
-                            <p className="mt-2 text-sm leading-6 text-white/80">
+                            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Procedimentos</p>
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
                               {paciente.procedimentos.join(' • ')}
                             </p>
                           </div>

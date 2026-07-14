@@ -128,7 +128,7 @@ export default function MeusProcedimentosPage() {
           {
             key: 'cliente',
             label: 'Paciente',
-            render: (proc) => <span className="text-neutral-700">{proc.cliente_nome}</span>,
+            render: (proc) => <span className="text-foreground">{proc.cliente_nome}</span>,
           },
           {
             key: 'tipo',
@@ -144,7 +144,7 @@ export default function MeusProcedimentosPage() {
             align: 'center',
             render: (proc) => proc.dentes
               ? <span className="text-primary-600 font-medium">{formatarDentes(proc.dentes)}</span>
-              : <span className="text-neutral-400">-</span>,
+              : <span className="text-muted-foreground">-</span>,
           },
           {
             key: 'status',
