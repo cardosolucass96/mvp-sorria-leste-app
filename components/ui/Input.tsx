@@ -8,6 +8,7 @@ export interface InputProps {
   label: string;
   name: string;
   type?: 'text' | 'email' | 'password' | 'number' | 'date' | 'datetime-local' | 'tel' | 'search';
+  inputMode?: 'none' | 'text' | 'decimal' | 'numeric' | 'tel' | 'search' | 'email' | 'url';
   placeholder?: string;
   value: string | number;
   onChange: (value: string) => void;
@@ -37,6 +38,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       label,
       name,
       type = 'text',
+      inputMode,
       placeholder,
       value,
       onChange,
@@ -86,6 +88,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             id={id}
             name={name}
             type={mask ? 'text' : type}
+            inputMode={inputMode}
             placeholder={placeholder}
             value={value}
             onChange={handleChange}

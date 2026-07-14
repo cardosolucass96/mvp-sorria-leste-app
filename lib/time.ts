@@ -33,6 +33,14 @@ function createUtcDateFromClinicParts(
   return new Date(localUtcMillis - CLINIC_UTC_OFFSET_MINUTES * 60_000);
 }
 
+function parseDateOnlyParts(value: string): { year: number; month: number; day: number } | null {
+  const trimmed = value.trim();
+  if (!DATE_ONLY_REGEX.test(trimmed)) return null;
+
+  const [year, month, day] = trimmed.split('-').map(Number);
+  return { year, month, day };
+}
+
 function buildDateFromCandidates(candidates: Iterable<string>): Date | null {
   for (const candidate of candidates) {
     const parsed = new Date(candidate);
@@ -149,6 +157,14 @@ export function parseStoredUtcInstant(value: string | null | undefined): Date | 
   return buildDateFromCandidates(candidates);
 }
 
+export function getStoredUtcInstantMillis(value: string | null | undefined): number | null {
+  const parsed = parseStoredUtcInstant(value);
+  if (!parsed) return null;
+
+  const millis = parsed.getTime();
+  return Number.isNaN(millis) ? null : millis;
+}
+
 export function normalizeStoredUtcInstant(value: string | null | undefined): string | null {
   const parsed = parseStoredUtcInstant(value);
   return parsed ? parsed.toISOString() : null;
@@ -254,6 +270,44 @@ export function addDaysToClinicDateKey(dateKey: string, days: number): string {
   const base = new Date(Date.UTC(year, month - 1, day, 12));
   base.setUTCDate(base.getUTCDate() + days);
   return `${base.getUTCFullYear()}-${pad(base.getUTCMonth() + 1)}-${pad(base.getUTCDate())}`;
+}
+
+function clinicDateKeyToDayNumber(dateKey: string): number {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return Math.floor(Date.UTC(year, month - 1, day, 12) / 86_400_000);
+}
+
+export function getClinicCalendarDayDifference(from: Date, to: Date = new Date()): number {
+  return clinicDateKeyToDayNumber(getClinicDateKey(to)) - clinicDateKeyToDayNumber(getClinicDateKey(from));
+}
+
+export function getClinicCalendarDayDifferenceFromStoredUtcInstant(
+  value: string | null | undefined,
+  to: Date = new Date(),
+): number | null {
+  const parsed = parseStoredUtcInstant(value);
+  return parsed ? getClinicCalendarDayDifference(parsed, to) : null;
+}
+
+export function calculateAgeFromDateOnly(
+  value: string | null | undefined,
+  now: Date = new Date(),
+): number | null {
+  if (!value) return null;
+
+  const parts = parseDateOnlyParts(value);
+  if (!parts) return null;
+
+  const hoje = getDatePartsInTimeZone(now);
+  let idade = Number(hoje.year) - parts.year;
+  const monthDiff = Number(hoje.month) - parts.month;
+  const dayDiff = Number(hoje.day) - parts.day;
+
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    idade -= 1;
+  }
+
+  return idade >= 0 ? idade : null;
 }
 
 export interface ClinicUtcRange {

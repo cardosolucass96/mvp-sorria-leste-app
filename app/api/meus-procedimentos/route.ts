@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { getStoredUtcInstantMillis } from '@/lib/time';
 
 interface ProcedimentoRow {
   item_id: number;
@@ -73,8 +74,8 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 
     // Combinar e ordenar por data
     const todos = [...avaliacoes, ...execucoes].sort((a, b) => {
-      const dataA = new Date(a.concluido_at || a.created_at).getTime();
-      const dataB = new Date(b.concluido_at || b.created_at).getTime();
+      const dataA = getStoredUtcInstantMillis(a.concluido_at || a.created_at) ?? 0;
+      const dataB = getStoredUtcInstantMillis(b.concluido_at || b.created_at) ?? 0;
       return dataB - dataA;
     });
 

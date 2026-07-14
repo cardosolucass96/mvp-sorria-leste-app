@@ -1,5 +1,5 @@
 import { Cliente } from '@/lib/types';
-import { formatarCPF, formatarTelefone, formatarData, formatarDataHora } from '@/lib/utils/formatters';
+import { formatarCPF, formatarTelefone, formatarData, formatarDataHora, formatarAgoraDaClinica, formatarDateNaClinica } from '@/lib/utils/formatters';
 import { getOrigemLabel } from '@/lib/constants/origens';
 
 interface RenderConfig {
@@ -122,10 +122,10 @@ export function buildTermoContext(cliente: Cliente, overrides: RenderConfig = {}
   };
 
   const agora = new Date();
-  base.data_atual = agora.toLocaleDateString('pt-BR');
-  base.data_hora_atual = agora.toLocaleString('pt-BR');
+  base.data_atual = formatarDateNaClinica(agora, { day: '2-digit', month: '2-digit', year: 'numeric' });
+  base.data_hora_atual = formatarAgoraDaClinica(agora);
   base.data_hora_atual_iso = agora.toISOString();
-  base.ano_atual = String(agora.getFullYear());
+  base.ano_atual = formatarDateNaClinica(agora, { year: 'numeric' });
 
   Object.entries(overrides).forEach(([chave, valor]) => {
     const key = chave.trim().toLowerCase();

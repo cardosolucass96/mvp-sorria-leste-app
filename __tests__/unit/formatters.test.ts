@@ -6,6 +6,10 @@
  */
 
 import {
+  formatarAgoraDaClinica,
+  formatarDateNaClinica,
+  formatarHoraDaClinica,
+  formatarInstanteUtcNaClinica,
   formatarMoeda,
   formatarData,
   formatarDataHora,
@@ -124,14 +128,28 @@ describe('formatarDataHora', () => {
 describe('formatarDataHoraLocal', () => {
   test('mantém datetime local digitado pelo usuário sem conversão de UTC', () => {
     const result = formatarDataHoraLocal('2026-07-13 12:06:00');
-    const expected = new Date('2026-07-13T12:06:00').toLocaleDateString('pt-BR', {
+    expect(result).toBe('13/07/2026 12:06');
+  });
+});
+
+describe('helpers de timezone da clínica', () => {
+  test('formata Date no fuso da clínica', () => {
+    const result = formatarDateNaClinica(new Date('2026-07-14T02:15:00.000Z'), {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     });
-    expect(result).toBe(expected);
+    expect(result).toContain('13/07/2026');
+    expect(result).toContain('23:15');
+  });
+
+  test('formata instante UTC e hora atual da clínica com a mesma base', () => {
+    const date = new Date('2026-07-14T02:15:00.000Z');
+    expect(formatarInstanteUtcNaClinica(date.toISOString(), { hour: '2-digit', minute: '2-digit' })).toBe('23:15');
+    expect(formatarHoraDaClinica(date)).toBe('23:15');
+    expect(formatarAgoraDaClinica(date)).toContain('23:15');
   });
 });
 

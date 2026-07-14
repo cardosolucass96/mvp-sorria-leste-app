@@ -27,6 +27,7 @@ const OUTPUT_IGNORED = path.join(OUTPUT_ROOT, `${outputPrefix}.linhas-ignoradas.
 const OUTPUT_SQL = path.join(OUTPUT_ROOT, `${outputPrefix}.import.sql`);
 
 const DB_NAME = 'sorria-leste-db';
+const CLINIC_UTC_OFFSET_MINUTES = -3 * 60;
 const LEGACY_SOURCE = mappingConfig.legacySource || 'simplifica_atividades';
 const UNIDADE_ID = Number(mappingConfig.unidadeId || 2);
 const OPEN_CUTOFF = mappingConfig.openCutoff || '2026-06-06 00:00:00';
@@ -193,6 +194,30 @@ function parseDateToParts(value) {
   const [year, month, day] = datePart.split('-').map(Number);
   const [hour, minute, second] = timePart.split(':').map(Number);
   return { year, month, day, hour, minute, second };
+}
+
+function buildUtcIsoFromParts(parts, shiftMinutes = 0) {
+  const utcMillis = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour || 0,
+    parts.minute || 0,
+    parts.second || 0,
+    0
+  ) - shiftMinutes * 60 * 1000;
+
+  return new Date(utcMillis).toISOString();
+}
+
+function legacyTechnicalDateTimeToUtcIso(value) {
+  const parts = parseDateToParts(value);
+  return parts ? buildUtcIsoFromParts(parts) : null;
+}
+
+function clinicLocalDateTimeToUtcIso(value) {
+  const parts = parseDateToParts(value);
+  return parts ? buildUtcIsoFromParts(parts, CLINIC_UTC_OFFSET_MINUTES) : null;
 }
 
 function buildLocalDate(parts) {
@@ -671,8 +696,12 @@ function main() {
       continue;
     }
 
-    const createdAt = parseDate(pickFirstNonEmpty(row, ['criado_em']));
-    const updatedAt = parseDate(pickFirstNonEmpty(row, ['alterado_em'])) || createdAt;
+    const createdAtRaw = pickFirstNonEmpty(row, ['criado_em']);
+    const updatedAtRaw = pickFirstNonEmpty(row, ['alterado_em']);
+    const createdAt = parseDate(createdAtRaw);
+    const updatedAt = parseDate(updatedAtRaw) || createdAt;
+    const createdAtUtc = legacyTechnicalDateTimeToUtcIso(createdAtRaw) || legacyTechnicalDateTimeToUtcIso(createdAt);
+    const updatedAtUtc = legacyTechnicalDateTimeToUtcIso(updatedAtRaw) || legacyTechnicalDateTimeToUtcIso(updatedAt) || createdAtUtc;
     if (!createdAt || !updatedAt || !legacyId) {
       invalidRows.push({
         line: row.__line,
@@ -704,12 +733,15 @@ function main() {
       telefoneFixo: pickFirstNonEmpty(row, ['telefone_fixo']),
       createdAt,
       updatedAt,
-      effectiveAt: updatedAt || createdAt,
+      createdAtUtc,
+      updatedAtUtc,
+      effectiveAtLocal: updatedAt || createdAt,
+      effectiveAtUtc: updatedAtUtc || createdAtUtc,
     };
 
     const dedupeKey = `${task.nomeKey}::${task.motivoKey}`;
     const current = dedupeMap.get(dedupeKey);
-    if (!current || task.effectiveAt > current.effectiveAt || (task.effectiveAt === current.effectiveAt && task.createdAt > current.createdAt)) {
+    if (!current || task.effectiveAtLocal > current.effectiveAtLocal || (task.effectiveAtLocal === current.effectiveAtLocal && task.createdAt > current.createdAt)) {
       if (current) {
         dedupeConflicts.set(dedupeKey, (dedupeConflicts.get(dedupeKey) || 1) + 1);
       }
@@ -775,8 +807,20 @@ function main() {
     }
 
     const tipo = mappingConfig.tipoMap[task.motivo];
-    const dueDate = extractDueDate(task.descricaoRaw, task.effectiveAt) || task.effectiveAt;
-    const status = task.effectiveAt >= OPEN_CUTOFF ? 'aberta' : 'concluida';
+    const status = task.effectiveAtLocal >= OPEN_CUTOFF ? 'aberta' : 'concluida';
+    const dueDateLocal = extractDueDate(task.descricaoRaw, task.effectiveAtLocal) || task.effectiveAtLocal;
+    const dueDateUtc = clinicLocalDateTimeToUtcIso(dueDateLocal);
+    const concluidaEmUtc = status === 'concluida' ? task.effectiveAtUtc : null;
+    if (!dueDateUtc || !task.createdAtUtc || !task.updatedAtUtc || (status === 'concluida' && !task.effectiveAtUtc)) {
+      invalidRows.push({
+        line: task.line,
+        legacy_id: task.legacyId,
+        nome: task.nome,
+        motivo: task.motivo,
+        issue: 'invalid_dates',
+      });
+      continue;
+    }
     if (status === 'aberta') openTasks++;
     else concludedTasks++;
 
@@ -794,11 +838,11 @@ function main() {
       titulo: task.motivo,
       descricao: descriptionParts.join('\n'),
       status,
-      vencimento_em: dueDate,
+      vencimento_em: dueDateUtc,
       nota_conclusao: status === 'concluida' ? COMPLETION_NOTE : null,
-      concluida_em: status === 'concluida' ? task.effectiveAt : null,
-      created_at: task.createdAt,
-      updated_at: task.updatedAt,
+      concluida_em: concluidaEmUtc,
+      created_at: task.createdAtUtc,
+      updated_at: task.updatedAtUtc,
       legado_fonte: LEGACY_SOURCE,
       legado_id: task.legacyId,
     });

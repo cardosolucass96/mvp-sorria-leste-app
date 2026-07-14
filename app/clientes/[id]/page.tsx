@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { PageHeader, Card, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal } from '@/components/ui';
 import { StatusBadge, ClienteForm, ClienteFormData, AnexosGallery } from '@/components/domain';
-import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarCNPJ, formatarTelefone, formatarDentes, parseDentesLabels, nomeProcedimentoItem } from '@/lib/utils/formatters';
+import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarCNPJ, formatarTelefone, formatarDentes, parseDentesLabels, nomeProcedimentoItem, formatarAgoraDaClinica } from '@/lib/utils/formatters';
 import { finalizarJanelaDeImpressao } from '@/lib/utils/print';
 import { getOrigemLabel } from '@/lib/constants/origens';
 import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
@@ -33,6 +33,7 @@ import { buildTermoPrintableDocument } from '@/lib/helpers/termosDocumento';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 import { PRINT_STYLE_TOKENS_BASE, PRINT_STYLE_TOKENS_CLIENT_HEADER } from '@/lib/printStyles';
+import { calculateAgeFromDateOnly, getStoredUtcInstantMillis } from '@/lib/time';
 
 const METODOS_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -389,7 +390,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
 
         const todosProntuario = anexosExec
           .flat()
-          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          .sort((a, b) => (getStoredUtcInstantMillis(b.created_at) ?? 0) - (getStoredUtcInstantMillis(a.created_at) ?? 0));
         setAnexosProntuario(todosProntuario);
       }
     } catch {
@@ -788,7 +789,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     }
 
     const logoUrl = `${window.location.origin}/logo-sorria-leste-laranja-fundo-transparente.svg`;
-    const emitidoEm = new Date().toLocaleString('pt-BR');
+    const emitidoEm = formatarAgoraDaClinica();
     const empresaNome = unidade.multipla ? 'Sorria Leste' : (unidade.razao_social || 'Sorria Leste');
     const unidadeNome = unidade.nome || 'Unidade não informada';
     const empresaEndereco = unidade.multipla ? 'Conforme unidade do pagamento' : unidade.endereco;
@@ -1460,11 +1461,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                     <p className="font-medium">
                       {cliente.data_nascimento ? formatarData(cliente.data_nascimento) : '-'}
                       {cliente.data_nascimento && (() => {
-                        const hoje = new Date();
-                        const nasc = new Date(cliente.data_nascimento);
-                        let idade = hoje.getFullYear() - nasc.getFullYear();
-                        const m = hoje.getMonth() - nasc.getMonth();
-                        if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+                        const idade = calculateAgeFromDateOnly(cliente.data_nascimento);
                         return idade >= 0 ? <span className="text-sm text-muted ml-1">({idade} anos)</span> : null;
                       })()}
                     </p>
@@ -2021,6 +2018,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                   <div key={`${anexo.origem}-${anexo.itemAtendimentoId}-${anexo.id}`} className="rounded-lg border border-border overflow-hidden">
                     {isImagem(anexo.tipo) ? (
                       <a href={anexo.url} target="_blank" rel="noopener noreferrer">
+                        {/* URL dinâmica de upload/prontuário; next/image não cobre esse caso sem configuração extra de domínio. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={anexo.url}
                           alt={anexo.nome}

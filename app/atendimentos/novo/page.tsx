@@ -12,6 +12,7 @@ import { formatarDataAgendada } from '@/lib/utils/formatters';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import type { CategoriaComRoles } from '@/lib/types';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { getClinicCalendarDayDifferenceFromStoredUtcInstant } from '@/lib/time';
 
 interface Agendamento {
   id: number;
@@ -240,8 +241,8 @@ function NovoAtendimentoForm() {
   };
 
   const diasAtras = (dataStr: string) => {
-    const diff = Math.floor((Date.now() - new Date(dataStr).getTime()) / (1000 * 60 * 60 * 24));
-    if (diff === 0) return 'Criado hoje';
+    const diff = getClinicCalendarDayDifferenceFromStoredUtcInstant(dataStr);
+    if (diff === null || diff <= 0) return 'Criado hoje';
     if (diff === 1) return 'Criado há 1 dia';
     return `Criado há ${diff} dias`;
   };

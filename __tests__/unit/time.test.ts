@@ -1,5 +1,7 @@
 import {
+  calculateAgeFromDateOnly,
   clinicDateTimeInputToUtcIso,
+  getClinicCalendarDayDifferenceFromStoredUtcInstant,
   getClinicDateKey,
   getClinicDayUtcRange,
   getClinicMonthUtcRange,
@@ -26,6 +28,20 @@ describe('lib/time', () => {
     const parsed = parseStoredUtcInstant('2026-07-14T02:30:00.000Z');
     expect(parsed).not.toBeNull();
     expect(getClinicDateKey(parsed!)).toBe('2026-07-13');
+  });
+
+  test('calcula idade de date-only usando a virada do dia da clínica', () => {
+    expect(calculateAgeFromDateOnly('2000-07-14', new Date('2026-07-14T02:30:00.000Z'))).toBe(25);
+    expect(calculateAgeFromDateOnly('2000-07-14', new Date('2026-07-14T03:05:00.000Z'))).toBe(26);
+  });
+
+  test('calcula diferença de dias pelo calendário da clínica, não por 24 horas corridas', () => {
+    expect(
+      getClinicCalendarDayDifferenceFromStoredUtcInstant(
+        '2026-07-14T02:50:00.000Z',
+        new Date('2026-07-14T12:00:00.000Z'),
+      ),
+    ).toBe(1);
   });
 
   test('calcula o range UTC de hoje na clínica', () => {

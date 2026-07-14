@@ -22,9 +22,42 @@ export function formatarMoeda(valor: number): string {
 
 const DATETIME_LOCAL_PREFIX_REGEX = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2})(?::\d{2})?)?/;
 
-function formatClinicDateOnly(date: Date): string {
-  return date.toLocaleDateString('pt-BR', {
+export function formatarDateNaClinica(date: Date, options: Intl.DateTimeFormatOptions): string {
+  return new Intl.DateTimeFormat('pt-BR', {
     timeZone: CLINIC_TIME_ZONE,
+    ...options,
+  }).format(date);
+}
+
+export function formatarInstanteUtcNaClinica(
+  data: string | null | undefined,
+  options: Intl.DateTimeFormatOptions,
+  fallback = '-',
+): string {
+  const parsed = parseStoredUtcInstant(data);
+  if (!parsed || Number.isNaN(parsed.getTime())) return fallback;
+  return formatarDateNaClinica(parsed, options);
+}
+
+export function formatarHoraDaClinica(date: Date = new Date()): string {
+  return formatarDateNaClinica(date, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export function formatarAgoraDaClinica(date: Date = new Date()): string {
+  return formatarDateNaClinica(date, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatClinicDateOnly(date: Date): string {
+  return formatarDateNaClinica(date, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -35,13 +68,7 @@ function formatUtcInstantInClinic(
   data: string | null | undefined,
   options: Intl.DateTimeFormatOptions,
 ): string {
-  const parsed = parseStoredUtcInstant(data);
-  if (!parsed || Number.isNaN(parsed.getTime())) return '-';
-
-  return parsed.toLocaleDateString('pt-BR', {
-    timeZone: CLINIC_TIME_ZONE,
-    ...options,
-  });
+  return formatarInstanteUtcNaClinica(data, options);
 }
 
 /**
@@ -175,8 +202,9 @@ export function normalizeDateTimeLocalValue(data: string | null | undefined): st
 export function isDateTimeLocalValueInPast(
   data: string | null | undefined,
   now: Date = new Date(),
-  _timeZone: string = CLINIC_TIME_ZONE
+  timeZone: string = CLINIC_TIME_ZONE
 ): boolean {
+  void timeZone;
   return isClinicDateTimeInputInPast(data, now);
 }
 

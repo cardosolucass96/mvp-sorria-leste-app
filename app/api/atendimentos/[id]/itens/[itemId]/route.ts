@@ -303,7 +303,7 @@ export const PUT = withUnit(async (
       updates.push('desconto_aplicado_por_id = ?');
       updateParams.push(descontoValor > 0 ? context.user.sub : null);
       updates.push('desconto_aplicado_em = ?');
-      updateParams.push(descontoValor > 0 ? new Date().toISOString() : null);
+      updateParams.push(descontoValor > 0 ? nowUtcIso() : null);
 
       // Backfill defensivo: se o item é legacy (valor_original IS NULL),
       // snapshota o valor atual (antes da edição) como baseline do orçamento.

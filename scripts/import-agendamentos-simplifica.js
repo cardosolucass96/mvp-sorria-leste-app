@@ -30,15 +30,25 @@ const OUTPUT_USERS = path.join(OUTPUT_ROOT, `${outputPrefix}.usuarios-sem-match.
 const OUTPUT_SQL = path.join(OUTPUT_ROOT, `${outputPrefix}.import.sql`);
 
 const DB_NAME = 'sorria-leste-db';
+const CLINIC_TIME_ZONE = 'America/Fortaleza';
+const CLINIC_UTC_OFFSET_MINUTES = -3 * 60;
 const LEGACY_SOURCE = mappingConfig.legacySource || 'simplifica_search_results';
 const UNIDADE_ID = Number(mappingConfig.unidadeId || 2);
-const TODAY_KEY = formatDateKeyLocal(new Date());
+const TODAY_KEY = formatDateKeyClinic(new Date());
 
-function formatDateKeyLocal(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+function formatDateKeyClinic(date) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CLINIC_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = formatter.formatToParts(date);
+  const values = { year: '0000', month: '00', day: '00' };
+  for (const part of parts) {
+    if (part.type in values) values[part.type] = part.value;
+  }
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function decodeFile(buffer) {
@@ -182,6 +192,47 @@ function parseDate(value) {
 
   const [, dd, mm, yyyy, hh = '00', min = '00', ss = '00'] = match;
   return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+}
+
+function parseDateToParts(value) {
+  const normalized = parseDate(value);
+  if (!normalized) return null;
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute, second] = match;
+  return {
+    year: Number(year),
+    month: Number(month),
+    day: Number(day),
+    hour: Number(hour),
+    minute: Number(minute),
+    second: Number(second),
+  };
+}
+
+function buildUtcIsoFromParts(parts, shiftMinutes = 0) {
+  const utcMillis = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour || 0,
+    parts.minute || 0,
+    parts.second || 0,
+    0
+  ) - shiftMinutes * 60 * 1000;
+
+  return new Date(utcMillis).toISOString();
+}
+
+function legacyTechnicalDateTimeToUtcIso(value) {
+  const parts = parseDateToParts(value);
+  return parts ? buildUtcIsoFromParts(parts) : null;
+}
+
+function clinicLocalDateTimeToUtcIso(value) {
+  const parts = parseDateToParts(value);
+  return parts ? buildUtcIsoFromParts(parts, CLINIC_UTC_OFFSET_MINUTES) : null;
 }
 
 function extractDateKey(value) {
@@ -778,9 +829,15 @@ function main() {
     const consultorLegado = pickFirstNonEmpty(row, ['consultor']);
     const profissionalLegado = pickFirstNonEmpty(row, ['profissional']);
     const pessoa = extractPessoa(pickFirstNonEmpty(row, ['pessoa', 'cliente']));
-    const dataAgendada = parseDate(pickFirstNonEmpty(row, ['data_hora', 'datahora']));
-    const createdAt = parseDate(pickFirstNonEmpty(row, ['criado_em', 'created_at'])) || dataAgendada;
-    const updatedAt = parseDate(pickFirstNonEmpty(row, ['encerramento', 'updated_at'])) || createdAt;
+    const dataAgendadaRaw = pickFirstNonEmpty(row, ['data_hora', 'datahora']);
+    const createdAtRaw = pickFirstNonEmpty(row, ['criado_em', 'created_at']);
+    const updatedAtRaw = pickFirstNonEmpty(row, ['encerramento', 'updated_at']);
+    const dataAgendada = parseDate(dataAgendadaRaw);
+    const createdAt = parseDate(createdAtRaw) || dataAgendada;
+    const updatedAt = parseDate(updatedAtRaw) || createdAt;
+    const dataAgendadaUtc = clinicLocalDateTimeToUtcIso(dataAgendada);
+    const createdAtUtc = legacyTechnicalDateTimeToUtcIso(createdAtRaw) || dataAgendadaUtc;
+    const updatedAtUtc = legacyTechnicalDateTimeToUtcIso(updatedAtRaw) || createdAtUtc;
 
     const observations = [];
     pushObservation(observations, 'Arquivo legado', path.basename(PRIMARY_CSV_PATH));
@@ -817,7 +874,7 @@ function main() {
       statusCountsFinal[statusFinal] = (statusCountsFinal[statusFinal] || 0) + 1;
     }
 
-    if (!dataAgendada || !createdAt || !updatedAt) {
+    if (!dataAgendada || !createdAt || !updatedAt || !dataAgendadaUtc || !createdAtUtc || !updatedAtUtc) {
       blockedReasons.push('invalid_dates');
     }
 
@@ -897,13 +954,13 @@ function main() {
       executor_id: executorResolution.executorId,
       tipo: procedureResolution.tipo,
       status: statusFinal,
-      data_agendada: dataAgendada,
+      data_agendada: dataAgendadaUtc,
       observacoes: observations.join('\n') || null,
       motivo_cancelamento: cleanText(pickFirstNonEmpty(row, ['motivo_cancelamento']))
         || (normalizeNameKey(statusLegado) === 'remarcado' ? 'Remarcado no sistema legado' : null),
       unidade_id: UNIDADE_ID,
-      created_at: createdAt,
-      updated_at: updatedAt,
+      created_at: createdAtUtc,
+      updated_at: updatedAtUtc,
       legado_fonte: LEGACY_SOURCE,
       legado_id: legacyId,
     });

@@ -100,12 +100,38 @@ function escapeHtml(value: unknown): string {
 }
 
 function parseCurrencyInput(value: string): number {
-  const normalized = value.replace(/\./g, '').replace(',', '.').trim();
-  return Number(normalized || '0');
+  const raw = value.trim().replace(/^R\$\s*/i, '');
+  if (!raw) return 0;
+
+  const sanitized = raw.replace(/[^\d,.-]/g, '');
+  if (!sanitized || sanitized === '-') return 0;
+
+  const hasComma = sanitized.includes(',');
+  const hasDot = sanitized.includes('.');
+  let normalized = sanitized;
+
+  if (hasComma && hasDot) {
+    normalized = sanitized.lastIndexOf(',') > sanitized.lastIndexOf('.')
+      ? sanitized.replace(/\./g, '').replace(',', '.')
+      : sanitized.replace(/,/g, '');
+  } else if (hasComma) {
+    normalized = sanitized.replace(/\./g, '').replace(',', '.');
+  } else if (hasDot) {
+    const parts = sanitized.split('.');
+    const fraction = parts[parts.length - 1] ?? '';
+    normalized = parts.length === 2 && fraction.length <= 2
+      ? sanitized
+      : sanitized.replace(/\./g, '');
+  }
+
+  normalized = normalized.replace(/(?!^)-/g, '');
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatNumberInput(value: number): string {
-  return Number.isFinite(value) ? String(value) : '0';
+function formatCurrencyInput(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(2).replace('.', ',') : '0,00';
 }
 
 function draftHasContent(entry: Record<string, unknown> | undefined) {
@@ -1506,7 +1532,7 @@ export default function FechamentoCaixaPage() {
                           onClick={() => setEditProcedureModal({
                             open: true,
                             itemKey: procedimento.key,
-                            valor: formatNumberInput(procedimento.valor_base),
+                            valor: formatCurrencyInput(procedimento.valor_base),
                             motivo: '',
                           })}
                       >
@@ -1600,7 +1626,7 @@ export default function FechamentoCaixaPage() {
                         onClick={() => setEditProcedureModal({
                           open: true,
                           itemKey: procedimento.key,
-                          valor: formatNumberInput(procedimento.valor),
+                          valor: formatCurrencyInput(procedimento.valor),
                           motivo: '',
                         })}
                       >
@@ -1683,8 +1709,8 @@ export default function FechamentoCaixaPage() {
                         onClick={() => setEditProfessionalModal({
                           open: true,
                           usuarioId: dentista.usuario_id,
-                          valorDiaria: formatNumberInput(dentista.valor_diaria),
-                          comissaoAvaliacao: formatNumberInput(dentista.comissao_avaliacao),
+                          valorDiaria: formatCurrencyInput(dentista.valor_diaria),
+                          comissaoAvaliacao: formatCurrencyInput(dentista.comissao_avaliacao),
                           motivo: '',
                         })}
                       >
@@ -1877,20 +1903,22 @@ export default function FechamentoCaixaPage() {
           <Input
             label="Valor de diária"
             name="valor_diaria"
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={editProfessionalModal.valorDiaria}
             onChange={(value) => setEditProfessionalModal((prev) => ({ ...prev, valorDiaria: value }))}
-            min={0}
-            step="0.01"
+            placeholder="0,00"
+            hint="Aceita vírgula ou ponto decimal."
           />
           <Input
             label="Comissão de avaliação + acréscimos"
             name="comissao_avaliacao"
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={editProfessionalModal.comissaoAvaliacao}
             onChange={(value) => setEditProfessionalModal((prev) => ({ ...prev, comissaoAvaliacao: value }))}
-            min={0}
-            step="0.01"
+            placeholder="0,00"
+            hint="Aceita vírgula ou ponto decimal."
           />
           <Textarea
             label="Motivo do ajuste"
@@ -1954,11 +1982,12 @@ export default function FechamentoCaixaPage() {
           <Input
             label="Valor do procedimento"
             name="valor_procedimento"
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={editProcedureModal.valor}
             onChange={(value) => setEditProcedureModal((prev) => ({ ...prev, valor: value }))}
-            min={0}
-            step="0.01"
+            placeholder="0,00"
+            hint="Aceita vírgula ou ponto decimal."
           />
           <Textarea
             label="Motivo do ajuste"
@@ -2031,10 +2060,12 @@ export default function FechamentoCaixaPage() {
           <Input
             label="Valor"
             name="valor_lancamento"
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={manualLaunchModal.valor}
             onChange={(value) => setManualLaunchModal((prev) => ({ ...prev, valor: value }))}
-            step="0.01"
+            placeholder="0,00"
+            hint="Use valor negativo para desconto e positivo para acréscimo."
           />
           <Textarea
             label="Motivo"

@@ -255,6 +255,21 @@ function createResponseFixture(): FechamentoCaixaResponse {
   };
 }
 
+function createEditableResponseFixture(): FechamentoCaixaResponse {
+  const fixture = createResponseFixture();
+
+  return {
+    ...fixture,
+    fechamento: {
+      ...fixture.fechamento,
+      status: 'aberto',
+      fechado_por_id: null,
+      fechado_por_nome: null,
+      fechado_em: null,
+    },
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockClipboardWriteText.mockResolvedValue(undefined);
@@ -406,5 +421,28 @@ describe('FechamentoCaixaPage', () => {
       openSpy.mockRestore();
       jest.useRealTimers();
     }
+  });
+
+  test('aceita valor com vírgula nos ajustes manuais do fechamento', async () => {
+    mockUnitFetch.mockImplementation(() => mockJsonResponse(createEditableResponseFixture()));
+
+    render(<FechamentoCaixaPage />);
+
+    expect(await screen.findByText('Fechamento de Caixa')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Editar valores/i }));
+
+    const diariaInput = await screen.findByLabelText('Valor de diária');
+    expect(diariaInput).toHaveAttribute('type', 'text');
+    expect(diariaInput).toHaveAttribute('inputmode', 'decimal');
+
+    fireEvent.change(diariaInput, { target: { value: '7,50' } });
+    expect(screen.getByDisplayValue('7,50')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Motivo do ajuste'), { target: { value: 'Teste de vírgula' } });
+    fireEvent.click(screen.getByRole('button', { name: /Aplicar ajustes/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Diária R\$\s*7,50/i)).toBeInTheDocument();
+    });
   });
 });

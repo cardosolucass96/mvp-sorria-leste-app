@@ -3,6 +3,7 @@
 import { Cliente } from '@/lib/types';
 import { formatarData, formatarMoeda, formatarCPF, formatarTelefone } from '@/lib/utils/formatters';
 import { getOrigemLabel } from '@/lib/constants/origens';
+import { calculateAgeFromDateOnly } from '@/lib/time';
 
 export interface AbaDadosProps {
   cliente: Cliente;
@@ -85,11 +86,5 @@ function Campo({ label, value }: { label: string; value: string | null | undefin
 }
 
 function calcularIdade(dataNasc: string | null): number | null {
-  if (!dataNasc) return null;
-  const hoje = new Date();
-  const nasc = new Date(dataNasc);
-  let idade = hoje.getFullYear() - nasc.getFullYear();
-  const m = hoje.getMonth() - nasc.getMonth();
-  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
-  return idade >= 0 ? idade : null;
+  return calculateAgeFromDateOnly(dataNasc);
 }

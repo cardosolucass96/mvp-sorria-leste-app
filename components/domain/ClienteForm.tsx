@@ -16,6 +16,7 @@ import Alert from '@/components/ui/Alert';
 import { ORIGENS_OPTIONS } from '@/lib/constants/origens';
 import { validarCPF, validarEmail, validarTelefone } from '@/lib/utils/validators';
 import { unmask } from '@/lib/utils/masks';
+import { calculateAgeFromDateOnly } from '@/lib/time';
 
 export interface ClienteFormData {
   nome: string;
@@ -151,11 +152,7 @@ export default function ClienteForm({
               disabled={loading}
             />
             {formData.data_nascimento && (() => {
-              const hoje = new Date();
-              const nasc = new Date(formData.data_nascimento);
-              let idade = hoje.getFullYear() - nasc.getFullYear();
-              const m = hoje.getMonth() - nasc.getMonth();
-              if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+              const idade = calculateAgeFromDateOnly(formData.data_nascimento);
               return idade >= 0 ? (
                 <p className="text-sm text-muted-foreground mt-1">{idade} anos</p>
               ) : null;

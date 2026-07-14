@@ -192,6 +192,29 @@ describe('GET /api/meus-procedimentos — ordenação', () => {
     expect(data[2].item_id).toBe(2); // created_at = 2024-06-10
   });
 
+  it('ordena mistura de ISO UTC e timestamp legacy naive sem depender do timezone do runtime', async () => {
+    mockQueryResponse('criado_por_id = ?', [{
+      ...avaliacaoItem,
+      item_id: 10,
+      created_at: '2026-07-13 23:30:00',
+      concluido_at: null,
+    }]);
+    mockQueryResponse('executor_id = ?', [{
+      ...execucaoItem,
+      item_id: 11,
+      created_at: '2026-07-14T02:50:00.000Z',
+      concluido_at: null,
+    }]);
+
+    const { data } = await callRoute<Array<{ item_id: number }>>(
+      getMeusProcedimentos, '/api/meus-procedimentos', {
+        searchParams: { usuario_id: '3' },
+      }
+    );
+
+    expect(data.map((item) => item.item_id)).toEqual([11, 10]);
+  });
+
   it('cada query individual é ordenada por created_at DESC', async () => {
     mockQueryResponse('criado_por_id = ?', []);
     mockQueryResponse('executor_id = ?', []);

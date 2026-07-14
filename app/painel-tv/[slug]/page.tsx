@@ -8,6 +8,7 @@ import { ArrowLeft, Clock3, RefreshCcw, Stethoscope, Tv2, UserRound } from 'luci
 import { Alert, LoadingState } from '@/components/ui';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import { formatarHoraDaClinica, formatarInstanteUtcNaClinica } from '@/lib/utils/formatters';
 
 interface PacientePainelTv {
   atendimento_id: number;
@@ -27,19 +28,19 @@ interface PainelTvResponse {
 }
 
 function formatarHorario(dataIso: string) {
-  return new Intl.DateTimeFormat('pt-BR', {
+  return formatarInstanteUtcNaClinica(dataIso, {
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(dataIso));
+  });
 }
 
 function formatarDataHora(dataIso: string) {
-  return new Intl.DateTimeFormat('pt-BR', {
+  return formatarInstanteUtcNaClinica(dataIso, {
     day: '2-digit',
     month: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(dataIso));
+  });
 }
 
 export default function PainelTvFilaPage() {
@@ -164,7 +165,7 @@ export default function PainelTvFilaPage() {
               </div>
               <div className="rounded-2xl border border-border/50 bg-background/60 px-5 py-4">
                 <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Horário atual</p>
-                <p className="mt-2 text-3xl font-bold">{agora.toLocaleTimeString('pt-BR')}</p>
+                <p className="mt-2 text-3xl font-bold">{formatarHoraDaClinica(agora)}</p>
               </div>
               <div className="rounded-2xl border border-border/50 bg-background/60 px-5 py-4">
                 <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Última atualização</p>

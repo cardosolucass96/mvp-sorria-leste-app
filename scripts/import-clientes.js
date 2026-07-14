@@ -120,19 +120,39 @@ function escapeSql(val) {
   return "'" + String(val).replace(/'/g, "''") + "'";
 }
 
-/** Tenta converter data para formato ISO (YYYY-MM-DD HH:MM:SS) */
+function buildUtcIso(year, month, day, hour = '00', minute = '00', second = '00') {
+  return new Date(Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+    0
+  )).toISOString();
+}
+
+/** Tenta converter data para ISO UTC */
 function parseData(val) {
   if (!val || val.trim() === '') return null;
   const s = val.trim();
-  // Já está em ISO
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s;
-  // Formato DD/MM/YYYY
-  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (m) return `${m[3]}-${m[2]}-${m[1]} 00:00:00`;
-  // Formato DD/MM/YYYY HH:MM
-  const m2 = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
-  if (m2) return `${m2[3]}-${m2[2]}-${m2[1]} ${m2[4]}:${m2[5]}:00`;
-  return s; // devolve como está
+
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) {
+    const parsed = new Date(s);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2})(?::(\d{2})(?::(\d{2}))?)?)?$/);
+  if (isoMatch) {
+    const [, yyyy, mm, dd, hh = '00', min = '00', ss = '00'] = isoMatch;
+    return buildUtcIso(yyyy, mm, dd, hh, min, ss);
+  }
+
+  const localMatch = s.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (!localMatch) return null;
+
+  const [, dd, mm, yyyy, hh = '00', min = '00', ss = '00'] = localMatch;
+  return buildUtcIso(yyyy, mm, dd, hh, min, ss);
 }
 
 // ── Parsing CSV simples (suporta aspas) ───────────────────────────────────────
@@ -352,7 +372,7 @@ async function main() {
     const origem = mapearOrigem(r.origem_contato) || 'fachada'; // fallback para fachada
     if (!mapearOrigem(r.origem_contato)) ignoradoOrigem++;
 
-    const data = parseData(r.data_inclusao) || new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const data = parseData(r.data_inclusao) || new Date().toISOString();
 
     linhasSQL.push(
       `INSERT INTO clientes (nome, telefone, email, origem, created_at) VALUES (` +
