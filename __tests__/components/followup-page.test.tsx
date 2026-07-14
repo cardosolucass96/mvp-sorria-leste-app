@@ -53,15 +53,8 @@ jest.mock('@/components/domain', () => ({
   ),
 }));
 
-function pad(value: number) {
-  return String(value).padStart(2, '0');
-}
-
-function formatSqliteDate(date: Date): string {
-  return [
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
-    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
-  ].join(' ');
+function formatUtcIso(date: Date): string {
+  return date.toISOString();
 }
 
 function addMinutes(date: Date, minutes: number): Date {
@@ -90,12 +83,12 @@ function makeTask(overrides: Record<string, unknown> = {}) {
     titulo: 'Ligar para cliente',
     descricao: 'Cliente pediu retorno à tarde',
     status: 'aberta',
-    vencimento_em: formatSqliteDate(addMinutes(now, 120)),
+    vencimento_em: formatUtcIso(addMinutes(now, 120)),
     nota_conclusao: null,
     concluida_em: null,
     excluida_em: null,
-    created_at: formatSqliteDate(addDays(now, -1)),
-    updated_at: formatSqliteDate(addDays(now, -1)),
+    created_at: formatUtcIso(addDays(now, -1)),
+    updated_at: formatUtcIso(addDays(now, -1)),
     cliente_nome: 'Maria Silva',
     cliente_telefone: '85999990000',
     responsavel_usuario_nome: 'Recepção 1',
@@ -120,7 +113,7 @@ beforeEach(() => {
   mockSearchParamsToString.mockReturnValue('');
 
   mockUseAuth.mockReturnValue({
-    user: { id: 2, role: 'atendente', roles: ['atendente'] },
+    user: { id: 2, nome: 'Recepção 1', role: 'atendente', roles: ['atendente'] },
     isLoading: false,
     currentUnidade: 1,
     hasRole: (roles: string | string[]) => {
@@ -132,7 +125,7 @@ beforeEach(() => {
   global.fetch = jest.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes('/api/usuarios')) {
-      return mockJsonResponse([{ id: 2, nome: 'Recepção 1' }]);
+      return mockJsonResponse([{ id: 2, nome: 'Recepção 1', role: 'atendente' }]);
     }
     return mockJsonResponse({ clientes: [] });
   }) as jest.Mock;
@@ -143,22 +136,46 @@ afterAll(() => {
 });
 
 describe('FollowupPage', () => {
+  test('abre a página já filtrando pelo responsável logado', async () => {
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse({
+        items: [makeTask({ id: 1, titulo: 'Tarefa do responsável atual' })],
+        summary: {
+          abertas: 1,
+          atrasadas: 0,
+          vencem_hoje: 1,
+          concluidas_hoje: 0,
+        },
+      })
+    );
+
+    render(<FollowupPage />);
+
+    expect(await screen.findByText('Tarefa do responsável atual')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Responsável')).toHaveValue('2');
+    });
+    await waitFor(() => {
+      expect(mockUnitFetch).toHaveBeenCalledWith('/api/followup?responsavel_usuario_id=2');
+    });
+  });
+
   test('agrupa tarefas em atrasadas, hoje, próximos 7 dias, depois e concluídas', async () => {
     const now = new Date();
     const items = [
-      makeTask({ id: 1, titulo: 'Tarefa atrasada', tipo: 'cobranca', vencimento_em: formatSqliteDate(addMinutes(now, -90)) }),
-      makeTask({ id: 2, titulo: 'Contato de hoje', tipo: 'retorno', vencimento_em: formatSqliteDate(addMinutes(now, 120)) }),
-      makeTask({ id: 3, titulo: 'Contato da semana', tipo: 'orcamento', vencimento_em: formatSqliteDate(addDays(now, 3)) }),
-      makeTask({ id: 4, titulo: 'Contato futuro', tipo: 'outro', vencimento_em: formatSqliteDate(addDays(now, 12)) }),
+      makeTask({ id: 1, titulo: 'Tarefa atrasada', tipo: 'cobranca', vencimento_em: formatUtcIso(addMinutes(now, -90)) }),
+      makeTask({ id: 2, titulo: 'Contato de hoje', tipo: 'retorno', vencimento_em: formatUtcIso(addMinutes(now, 120)) }),
+      makeTask({ id: 3, titulo: 'Contato da semana', tipo: 'orcamento', vencimento_em: formatUtcIso(addDays(now, 3)) }),
+      makeTask({ id: 4, titulo: 'Contato futuro', tipo: 'outro', vencimento_em: formatUtcIso(addDays(now, 12)) }),
       makeTask({
         id: 5,
         titulo: 'Tarefa concluída',
         status: 'concluida',
         nota_conclusao: 'Contato feito',
-        concluida_em: formatSqliteDate(addMinutes(now, -20)),
+        concluida_em: formatUtcIso(addMinutes(now, -20)),
         concluida_por_id: 2,
         concluida_por_nome: 'Recepção 1',
-        vencimento_em: formatSqliteDate(addDays(now, -1)),
+        vencimento_em: formatUtcIso(addDays(now, -1)),
       }),
     ];
 

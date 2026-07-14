@@ -167,6 +167,7 @@ export default function FollowupPage() {
   const [responsavelFiltro, setResponsavelFiltro] = useState('');
   const [vencimentoDe, setVencimentoDe] = useState('');
   const [vencimentoAte, setVencimentoAte] = useState('');
+  const [responsavelFiltroInicializado, setResponsavelFiltroInicializado] = useState(false);
 
   const [viewMode, setViewMode] = useState<'lista' | 'calendario'>('lista');
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
@@ -269,6 +270,17 @@ export default function FollowupPage() {
   }, [editingTask, responsaveis, taskForm.responsavelUsuarioId, taskModalOpen]);
 
   useEffect(() => {
+    if (responsavelFiltroInicializado) return;
+    if (isLoading || !user || !canAccess) return;
+
+    if (!Number.isNaN(currentUserId)) {
+      setResponsavelFiltro(String(currentUserId));
+    }
+
+    setResponsavelFiltroInicializado(true);
+  }, [canAccess, currentUserId, isLoading, responsavelFiltroInicializado, user]);
+
+  useEffect(() => {
     if (!taskModalOpen) return;
     const query = taskForm.clienteBusca.trim();
     if (query.length < 2) {
@@ -353,10 +365,10 @@ export default function FollowupPage() {
   ]);
 
   useEffect(() => {
-    if (!isLoading && user && canAccess) {
+    if (!isLoading && user && canAccess && responsavelFiltroInicializado) {
       carregarTarefas();
     }
-  }, [canAccess, carregarTarefas, isLoading, user]);
+  }, [canAccess, carregarTarefas, isLoading, responsavelFiltroInicializado, user]);
 
   const tarefasVisiveis = useMemo(() => {
     if (viewMode === 'calendario' && selectedDay) {

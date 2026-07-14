@@ -63,12 +63,17 @@ export default function FilterBar({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
           {fields.map((field) => {
             if (field.type === 'select' && field.options) {
+              const selectId = `filter-${field.name}`;
               return (
                 <div key={field.name} className="w-full">
-                  <label className="block text-sm font-medium text-foreground mb-1">
+                  <label
+                    htmlFor={selectId}
+                    className="block text-sm font-medium text-foreground mb-1"
+                  >
                     {field.label}
                   </label>
                   <select
+                    id={selectId}
                     value={values[field.name] || ''}
                     onChange={(e) => onChange(field.name, e.target.value)}
                     className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
