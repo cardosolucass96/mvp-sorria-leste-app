@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, DollarSign, ArrowDownCircle, AlertTriangle, Target,
+  LayoutDashboard, DollarSign, AlertTriangle, Target,
   ClipboardList, Users, TrendingUp, Banknote, BarChart2,
   Award, Star, Megaphone, Stethoscope,
 } from 'lucide-react';
@@ -17,15 +17,18 @@ import { addDaysToClinicDateKey, getClinicDateKey } from '@/lib/time';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface DashboardData {
-  resumo: {
-    faturamento: number;
-    aReceber: number;
-    totalAtendimentos: number;
-    totalClientes: number;
-    ticketMedio: number;
-    taxaConversao: number;
-    comissoesTotal: number;
-    atendimentosFinalizados: number;
+  resumo_operacional: {
+    faturamento_total: number;
+    atendimentos_criados: number;
+    procedimentos_pagos: number;
+    valor_orcado_nao_pago: number;
+  };
+  resumo_analitico: {
+    total_clientes: number;
+    ticket_medio: number;
+    taxa_conversao: number;
+    comissoes_total: number;
+    atendimentos_finalizados: number;
   };
   porStatus: { status: string; count: number }[];
   porCanal: { origem: string; label: string; total: number; count: number }[];
@@ -74,25 +77,34 @@ export default function DashboardAdminPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
-  const [periodoSelecionado, setPeriodoSelecionado] = useState('todos');
+  const [dataInicio, setDataInicio] = useState(() => getClinicDateKey());
+  const [dataFim, setDataFim] = useState(() => getClinicDateKey());
+  const [periodoSelecionado, setPeriodoSelecionado] = useState('hoje');
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const params = new URLSearchParams();
       if (dataInicio) params.append('data_inicio', dataInicio);
       if (dataFim) params.append('data_fim', dataFim);
 
-      const res = await unitFetch(`/api/dashboard/admin?${params}`);
+      const path = params.toString()
+        ? `/api/dashboard/admin?${params.toString()}`
+        : '/api/dashboard/admin';
+      const res = await unitFetch(path);
       const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json?.error || 'Erro ao carregar dashboard');
+      }
       setData(json);
     } catch (error) {
       console.error('Erro ao carregar dashboard:', error);
       setError('Erro ao carregar dashboard');
+      setData(null);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [dataInicio, dataFim, unitFetch]);
 
   useEffect(() => {
@@ -154,6 +166,7 @@ export default function DashboardAdminPage() {
     return null;
   }
 
+  const totalAtendimentosPeriodo = data?.resumo_operacional.atendimentos_criados || 1;
   const maxFaturamento = data?.faturamentoMensal.reduce((max, m) => Math.max(max, m.faturamento), 0) || 1;
   const maxCanal = data?.porCanal.reduce((max, c) => Math.max(max, c.total), 0) || 1;
 
@@ -165,7 +178,7 @@ export default function DashboardAdminPage() {
       <PageHeader
         title="Dashboard"
         icon={<LayoutDashboard className="w-7 h-7" />}
-        description="Visão geral do desempenho da clínica"
+        description="Leitura operacional da unidade com foco em recebido, criação e orçamento aberto"
         actions={
           <div className="flex flex-wrap gap-2">
             {['hoje', 'semana', 'mes', 'trimestre', 'ano', 'todos'].map((periodo) => (
@@ -234,40 +247,50 @@ export default function DashboardAdminPage() {
             <Card className="bg-gradient-to-br from-success-500 to-success-600 text-success-50 border-none">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-success-100 text-sm">Faturamento</p>
-                  <p className="text-3xl font-bold">{formatCurrency(data.resumo.faturamento)}</p>
+                  <p className="text-success-100 text-sm">Faturamento total recebido</p>
+                  <p className="text-3xl font-bold">{formatCurrency(data.resumo_operacional.faturamento_total)}</p>
                 </div>
                 <DollarSign className="w-10 h-10 opacity-30" aria-hidden="true" />
               </div>
             </Card>
 
-            <Card className="bg-gradient-to-br from-warning-500 to-warning-600 text-warning-50 border-none">
+            <Card className="bg-gradient-to-br from-primary-500 to-primary-600 text-primary-50 border-none">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-warning-100 text-sm">A Receber</p>
-                  <p className="text-3xl font-bold">{formatCurrency(data.resumo.aReceber)}</p>
+                  <p className="text-primary-100 text-sm">Atendimentos criados</p>
+                  <p className="text-3xl font-bold">{data.resumo_operacional.atendimentos_criados}</p>
                 </div>
-                <ArrowDownCircle className="w-10 h-10 opacity-30" aria-hidden="true" />
+                <ClipboardList className="w-10 h-10 opacity-30" aria-hidden="true" />
               </div>
             </Card>
 
             <Card className="bg-gradient-to-br from-evaluation-500 to-evaluation-600 text-evaluation-50 border-none">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-evaluation-100 text-sm">Ticket Médio</p>
-                  <p className="text-3xl font-bold">{formatCurrency(data.resumo.ticketMedio)}</p>
+                  <p className="text-evaluation-100 text-sm">Procedimentos pagos</p>
+                  <p className="text-3xl font-bold">{data.resumo_operacional.procedimentos_pagos}</p>
                 </div>
-                <Target className="w-10 h-10 opacity-30" aria-hidden="true" />
+                <Stethoscope className="w-10 h-10 opacity-30" aria-hidden="true" />
+              </div>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-warning-500 to-warning-600 text-warning-50 border-none">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-warning-100 text-sm">Orçado não pago</p>
+                  <p className="text-3xl font-bold">{formatCurrency(data.resumo_operacional.valor_orcado_nao_pago)}</p>
+                </div>
+                <AlertTriangle className="w-10 h-10 opacity-30" aria-hidden="true" />
               </div>
             </Card>
           </div>
 
           {/* Segunda linha de cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard icon={<ClipboardList className="w-6 h-6" />} label="Total Atendimentos" value={data.resumo.totalAtendimentos} color="border-primary-400" />
-            <StatCard icon={<Users className="w-6 h-6" />} label="Total Clientes" value={data.resumo.totalClientes} color="border-info-400" />
-            <StatCard icon={<TrendingUp className="w-6 h-6" />} label="Taxa de Conversão" value={`${data.resumo.taxaConversao}%`} color="border-success-400" />
-            <StatCard icon={<Banknote className="w-6 h-6" />} label="Comissões Pagas" value={formatCurrency(data.resumo.comissoesTotal)} color="border-warning-400" />
+            <StatCard icon={<Target className="w-6 h-6" />} label="Ticket médio orçado" value={formatCurrency(data.resumo_analitico.ticket_medio)} color="border-primary-400" />
+            <StatCard icon={<Users className="w-6 h-6" />} label="Clientes no período" value={data.resumo_analitico.total_clientes} color="border-info-400" />
+            <StatCard icon={<TrendingUp className="w-6 h-6" />} label="Taxa de conversão" value={`${data.resumo_analitico.taxa_conversao}%`} color="border-success-400" />
+            <StatCard icon={<Banknote className="w-6 h-6" />} label="Comissões no período" value={formatCurrency(data.resumo_analitico.comissoes_total)} color="border-warning-400" />
           </div>
 
           {/* Gráficos */}
@@ -276,7 +299,7 @@ export default function DashboardAdminPage() {
             <Card>
               <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <TrendingUp className="w-4 h-4 text-primary-500" />
-                Faturamento Mensal
+                Faturamento recebido - últimos 6 meses
               </h3>
               <div className="space-y-3">
                 {data.faturamentoMensal.length > 0 ? (
@@ -308,22 +331,26 @@ export default function DashboardAdminPage() {
                 Atendimentos por Status
               </h3>
               <div className="space-y-3">
-                {data.porStatus.map((status) => {
-                  const config = STATUS_CONFIG[status.status as AtendimentoStatus];
-                  return (
-                    <div key={status.status} className="flex items-center gap-3">
-                      <span className="w-40 text-sm text-muted-foreground">{config?.label || status.status}</span>
-                      <div className="flex-1 bg-surface-muted rounded-full h-6 overflow-hidden">
+                {data.porStatus.length > 0 ? (
+                  data.porStatus.map((status) => {
+                    const config = STATUS_CONFIG[status.status as AtendimentoStatus];
+                    return (
+                      <div key={status.status} className="flex items-center gap-3">
+                        <span className="w-40 text-sm text-muted-foreground">{config?.label || status.status}</span>
+                        <div className="flex-1 bg-surface-muted rounded-full h-6 overflow-hidden">
                           <div
-                          className={`h-full ${config?.bgCor || 'bg-muted'} rounded-full flex items-center justify-end pr-2`}
-                          style={{ width: `${Math.max((status.count / data.resumo.totalAtendimentos) * 100, 5)}%` }}
-                        >
-                          <span className={`text-xs font-medium ${config?.cor || 'text-foreground'}`}>{status.count}</span>
+                            className={`h-full ${config?.bgCor || 'bg-muted'} rounded-full flex items-center justify-end pr-2`}
+                            style={{ width: `${Math.max((status.count / totalAtendimentosPeriodo) * 100, 5)}%` }}
+                          >
+                            <span className={`text-xs font-medium ${config?.cor || 'text-foreground'}`}>{status.count}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <p className="text-muted text-center py-4">Sem dados no período</p>
+                )}
               </div>
             </Card>
 
@@ -331,29 +358,33 @@ export default function DashboardAdminPage() {
             <Card>
               <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <Megaphone className="w-4 h-4 text-primary-500" />
-                Faturamento por Canal de Aquisição
+                Recebido por Canal de Aquisição
               </h3>
               <div className="space-y-3">
-                {data.porCanal.map((canal, idx) => {
-                  const colors = ['bg-info-500', 'bg-success-500', 'bg-evaluation-500', 'bg-dentist-500', 'bg-warning-500'];
-                  const textColors = ['text-info-50', 'text-success-50', 'text-evaluation-50', 'text-dentist-50', 'text-warning-50'];
-                  return (
-                    <div key={canal.origem} className="flex items-center gap-3">
-                      <span className="w-28 truncate text-sm text-muted-foreground">{canal.label}</span>
-                      <div className="flex-1 bg-surface-muted rounded-full h-8 overflow-hidden">
-                        <div
-                          className={`h-full ${colors[idx % colors.length]} rounded-full flex items-center justify-end pr-2`}
-                          style={{ width: `${Math.max((canal.total / maxCanal) * 100, 10)}%` }}
-                        >
-                          <span className={`text-xs font-medium ${textColors[idx % textColors.length]}`}>
-                            {formatCurrency(canal.total)}
-                          </span>
+                {data.porCanal.length > 0 ? (
+                  data.porCanal.map((canal, idx) => {
+                    const colors = ['bg-info-500', 'bg-success-500', 'bg-evaluation-500', 'bg-dentist-500', 'bg-warning-500'];
+                    const textColors = ['text-info-50', 'text-success-50', 'text-evaluation-50', 'text-dentist-50', 'text-warning-50'];
+                    return (
+                      <div key={canal.origem} className="flex items-center gap-3">
+                        <span className="w-28 truncate text-sm text-muted-foreground">{canal.label}</span>
+                        <div className="flex-1 bg-surface-muted rounded-full h-8 overflow-hidden">
+                          <div
+                            className={`h-full ${colors[idx % colors.length]} rounded-full flex items-center justify-end pr-2`}
+                            style={{ width: `${Math.max((canal.total / maxCanal) * 100, 10)}%` }}
+                          >
+                            <span className={`text-xs font-medium ${textColors[idx % textColors.length]}`}>
+                              {formatCurrency(canal.total)}
+                            </span>
+                          </div>
                         </div>
+                        <span className="w-20 text-right text-xs text-muted-foreground">{canal.count} atend.</span>
                       </div>
-                      <span className="w-20 text-right text-xs text-muted-foreground">{canal.count} atend.</span>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <p className="text-muted text-center py-4">Sem dados no período</p>
+                )}
               </div>
             </Card>
 
@@ -361,21 +392,25 @@ export default function DashboardAdminPage() {
             <Card>
               <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <Stethoscope className="w-4 h-4 text-primary-500" />
-                Top 10 Procedimentos
+                Top 10 Procedimentos Orçados
               </h3>
               <div className="space-y-2">
-                {data.topProcedimentos.slice(0, 10).map((proc, idx) => (
-                  <div key={proc.nome} className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                      {idx + 1}
-                    </span>
-                    <span className="flex-1 truncate text-sm text-foreground" title={proc.nome}>
-                      {proc.nome}
-                    </span>
-                    <span className="text-sm font-medium text-foreground">{formatCurrency(proc.total)}</span>
-                    <span className="w-12 text-right text-xs text-muted-foreground">{proc.count}x</span>
-                  </div>
-                ))}
+                {data.topProcedimentos.length > 0 ? (
+                  data.topProcedimentos.slice(0, 10).map((proc, idx) => (
+                    <div key={proc.nome} className="flex items-center gap-3">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                        {idx + 1}
+                      </span>
+                      <span className="flex-1 truncate text-sm text-foreground" title={proc.nome}>
+                        {proc.nome}
+                      </span>
+                      <span className="text-sm font-medium text-foreground">{formatCurrency(proc.total)}</span>
+                      <span className="w-12 text-right text-xs text-muted-foreground">{proc.count}x</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-muted text-center py-4">Sem dados no período</p>
+                )}
               </div>
             </Card>
           </div>

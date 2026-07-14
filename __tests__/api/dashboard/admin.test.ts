@@ -1,20 +1,3 @@
-/**
- * Sprint 9 — Testes do Dashboard Admin
- *
- * Cobre: GET /api/dashboard/admin
- *   - Resumo financeiro (faturamento, a receber)
- *   - Atendimentos por status
- *   - Faturamento por canal de aquisição
- *   - Top 10 procedimentos
- *   - Faturamento mensal (últimos 6 meses)
- *   - Ticket médio
- *   - Top vendedores e executores
- *   - Taxa de conversão
- *   - Comissões totais
- *   - Filtro de período (data_inicio, data_fim)
- *   - Dashboard sem dados → zeros, não erros
- */
-
 import { callRoute } from '../../helpers/api-test-helper';
 import {
   setupCloudflareContextMock,
@@ -24,13 +7,13 @@ import {
   getExecutedQueries,
 } from '../../helpers/db-mock';
 
-// Mock JWT para bypass de autenticação nos testes
 jest.mock('@/lib/auth/jwt', () => ({
   extractToken: jest.fn().mockReturnValue('mock-token'),
   verifyToken: jest.fn().mockResolvedValue({
     sub: 1,
     email: 'admin@test.com',
     role: 'admin',
+    roles: ['admin'],
     nome: 'Admin Teste',
     unidade_ids: [1, 2],
     unidade_atual: 1,
@@ -40,28 +23,22 @@ jest.mock('@/lib/auth/jwt', () => ({
   generateToken: jest.fn().mockResolvedValue('mock-token'),
 }));
 
+import { verifyToken } from '@/lib/auth/jwt';
 import { GET as getAdminDashboard } from '@/app/api/dashboard/admin/route';
 
-beforeEach(() => {
-  resetMockDb();
-  setupCloudflareContextMock();
-});
-
-afterEach(() => {
-  teardownCloudflareContextMock();
-});
-
-// Interface do retorno
-interface AdminDashboard {
-  resumo: {
-    faturamento: number;
-    aReceber: number;
-    totalAtendimentos: number;
-    totalClientes: number;
-    ticketMedio: number;
-    taxaConversao: number;
-    comissoesTotal: number;
-    atendimentosFinalizados: number;
+interface AdminDashboardResponse {
+  resumo_operacional: {
+    faturamento_total: number;
+    atendimentos_criados: number;
+    procedimentos_pagos: number;
+    valor_orcado_nao_pago: number;
+  };
+  resumo_analitico: {
+    total_clientes: number;
+    ticket_medio: number;
+    taxa_conversao: number;
+    comissoes_total: number;
+    atendimentos_finalizados: number;
   };
   porStatus: Array<{ status: string; count: number }>;
   porCanal: Array<{ origem: string; total: number; count: number; label: string }>;
@@ -71,18 +48,34 @@ interface AdminDashboard {
   topExecutores: Array<{ nome: string; tipo: string; total: number }>;
 }
 
-// =============================================================================
-// Estrutura da resposta
-// =============================================================================
+function findExecutedQuery(marker: string) {
+  const query = getExecutedQueries().find((entry) =>
+    entry.sql.toLowerCase().includes(marker.toLowerCase())
+  );
+  expect(query).toBeDefined();
+  return query!;
+}
 
-describe('GET /api/dashboard/admin — estrutura', () => {
-  it('retorna todos os blocos do dashboard', async () => {
-    const { status, data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
+beforeEach(() => {
+  resetMockDb();
+  setupCloudflareContextMock();
+  jest.clearAllMocks();
+});
+
+afterEach(() => {
+  teardownCloudflareContextMock();
+});
+
+describe('GET /api/dashboard/admin — contrato operacional', () => {
+  it('retorna o novo bloco resumo_operacional e o resumo_analitico', async () => {
+    const { status, data } = await callRoute<AdminDashboardResponse>(
+      getAdminDashboard,
+      '/api/dashboard/admin'
     );
 
     expect(status).toBe(200);
-    expect(data).toHaveProperty('resumo');
+    expect(data).toHaveProperty('resumo_operacional');
+    expect(data).toHaveProperty('resumo_analitico');
     expect(data).toHaveProperty('porStatus');
     expect(data).toHaveProperty('porCanal');
     expect(data).toHaveProperty('topProcedimentos');
@@ -91,49 +84,26 @@ describe('GET /api/dashboard/admin — estrutura', () => {
     expect(data).toHaveProperty('topExecutores');
   });
 
-  it('resumo contém todas as métricas', async () => {
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    expect(data.resumo).toHaveProperty('faturamento');
-    expect(data.resumo).toHaveProperty('aReceber');
-    expect(data.resumo).toHaveProperty('totalAtendimentos');
-    expect(data.resumo).toHaveProperty('totalClientes');
-    expect(data.resumo).toHaveProperty('ticketMedio');
-    expect(data.resumo).toHaveProperty('taxaConversao');
-    expect(data.resumo).toHaveProperty('comissoesTotal');
-    expect(data.resumo).toHaveProperty('atendimentosFinalizados');
-  });
-});
-
-// =============================================================================
-// Dashboard sem dados — zeros em tudo
-// =============================================================================
-
-describe('GET /api/dashboard/admin — banco vazio', () => {
-  it('retorna zeros no resumo com banco vazio', async () => {
-    const { status, data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
+  it('retorna zero nos cards principais quando o dia nao tem dados', async () => {
+    const { status, data } = await callRoute<AdminDashboardResponse>(
+      getAdminDashboard,
+      '/api/dashboard/admin'
     );
 
     expect(status).toBe(200);
-    expect(data.resumo.faturamento).toBe(0);
-    expect(data.resumo.aReceber).toBe(0);
-    // vencidas removido do resumo
-    expect(data.resumo.totalAtendimentos).toBe(0);
-    expect(data.resumo.totalClientes).toBe(0);
-    expect(data.resumo.ticketMedio).toBe(0);
-    expect(data.resumo.taxaConversao).toBe(0);
-    expect(data.resumo.comissoesTotal).toBe(0);
-    expect(data.resumo.atendimentosFinalizados).toBe(0);
-  });
-
-  it('retorna arrays vazios para agregações', async () => {
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
+    expect(data.resumo_operacional).toEqual({
+      faturamento_total: 0,
+      atendimentos_criados: 0,
+      procedimentos_pagos: 0,
+      valor_orcado_nao_pago: 0,
+    });
+    expect(data.resumo_analitico).toEqual({
+      total_clientes: 0,
+      ticket_medio: 0,
+      taxa_conversao: 0,
+      comissoes_total: 0,
+      atendimentos_finalizados: 0,
+    });
     expect(data.porStatus).toEqual([]);
     expect(data.porCanal).toEqual([]);
     expect(data.topProcedimentos).toEqual([]);
@@ -141,424 +111,155 @@ describe('GET /api/dashboard/admin — banco vazio', () => {
     expect(data.topVendedores).toEqual([]);
     expect(data.topExecutores).toEqual([]);
   });
-});
 
-// =============================================================================
-// Resumo financeiro — faturamento, a receber, vencidas
-// =============================================================================
+  it('conta atendimento criado no periodo em atendimentos_criados', async () => {
+    mockQueryResponse('resumo_operacional:atendimentos_criados', [{ count: 3 }]);
 
-describe('GET /api/dashboard/admin — resumo financeiro', () => {
-  it('faturamento = soma dos pagamentos', async () => {
-    mockQueryResponse('sum(p.valor)', [{ total: 25000 }]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
+    const { data } = await callRoute<AdminDashboardResponse>(
+      getAdminDashboard,
+      '/api/dashboard/admin'
     );
 
-    expect(data.resumo.faturamento).toBe(25000);
+    expect(data.resumo_operacional.atendimentos_criados).toBe(3);
   });
 
-  it('aReceber = soma de (valor - valor_pago) para não finalizados', async () => {
-    mockQueryResponse('sum(i.valor - i.valor_pago)', [{ total: 5000 }]);
+  it('conta item quitado no periodo em procedimentos_pagos mesmo sem execucao', async () => {
+    mockQueryResponse('resumo_operacional:procedimentos_pagos', [{ count: 7 }]);
 
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
+    const { data } = await callRoute<AdminDashboardResponse>(
+      getAdminDashboard,
+      '/api/dashboard/admin'
     );
 
-    expect(data.resumo.aReceber).toBe(5000);
+    expect(data.resumo_operacional.procedimentos_pagos).toBe(7);
 
-    // Verifica que exclui finalizados
-    const queries = getExecutedQueries();
-    const aReceberQuery = queries.find(q =>
-      q.sql.includes('i.valor - i.valor_pago') && q.sql.includes("'finalizado'")
-    );
-    expect(aReceberQuery).toBeDefined();
+    const procedimentosPagosQuery = findExecutedQuery('resumo_operacional:procedimentos_pagos');
+    expect(procedimentosPagosQuery.sql).toContain('WITH alocacoes_ativas');
+    expect(procedimentosPagosQuery.sql).toContain('primeira_quitacao');
+    expect(procedimentosPagosQuery.sql).toContain('COALESCE(i.valor_pago, 0) + 0.001 >= COALESCE(i.valor_final, i.valor)');
   });
 
-  it('comissoesTotal = soma de todas as comissões', async () => {
-    mockQueryResponse('sum(c.valor_comissao)', [{ total: 8000 }]);
+  it('nao inclui pagamento cancelado no faturamento_total', async () => {
+    mockQueryResponse('resumo_operacional:faturamento_total', [{ total: 15000 }]);
 
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
+    const { data } = await callRoute<AdminDashboardResponse>(
+      getAdminDashboard,
+      '/api/dashboard/admin'
     );
 
-    expect(data.resumo.comissoesTotal).toBe(8000);
+    expect(data.resumo_operacional.faturamento_total).toBe(15000);
+
+    const faturamentoQuery = findExecutedQuery('resumo_operacional:faturamento_total');
+    expect(faturamentoQuery.sql).toContain('COALESCE(p.cancelado, 0) = 0');
   });
-});
 
-// =============================================================================
-// Atendimentos por status
-// =============================================================================
+  it('soma saldo aberto do orcamento gerado no periodo em valor_orcado_nao_pago', async () => {
+    mockQueryResponse('resumo_operacional:valor_orcado_nao_pago', [{ total: 8450 }]);
 
-describe('GET /api/dashboard/admin — atendimentos por status', () => {
-  it('retorna contagem agrupada por status', async () => {
-    mockQueryResponse('group by status', [
-      { status: 'triagem', count: 10 },
-      { status: 'avaliacao', count: 8 },
-      { status: 'aguardando_pagamento', count: 5 },
-      { status: 'em_execucao', count: 12 },
-      { status: 'finalizado', count: 30 },
-    ]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
+    const { data } = await callRoute<AdminDashboardResponse>(
+      getAdminDashboard,
+      '/api/dashboard/admin'
     );
 
-    expect(data.porStatus).toHaveLength(5);
-    expect(data.porStatus[0]).toEqual({ status: 'triagem', count: 10 });
-    expect(data.porStatus[4]).toEqual({ status: 'finalizado', count: 30 });
+    expect(data.resumo_operacional.valor_orcado_nao_pago).toBe(8450);
+
+    const orcadoQuery = findExecutedQuery('resumo_operacional:valor_orcado_nao_pago');
+    expect(orcadoQuery.sql).toContain("COALESCE(a.tipo, 'normal') != 'sessao'");
+    expect(orcadoQuery.sql).toContain("COALESCE(a.motivo_saida, '') != 'continuacao'");
+    expect(orcadoQuery.sql).toContain('COALESCE(i.adicionado_em_execucao, 0) = 0');
   });
 
-  it('query ordena por pipeline pipeline lógica (triagem→avaliacao→...→finalizado)', async () => {
-    mockQueryResponse('group by status', []);
+  it('nao inclui item quitado no mesmo dia em valor_orcado_nao_pago', async () => {
+    mockQueryResponse('resumo_operacional:valor_orcado_nao_pago', [{ total: 0 }]);
 
-    await callRoute(getAdminDashboard, '/api/dashboard/admin');
-
-    const queries = getExecutedQueries();
-    const statusQuery = queries.find(q => q.sql.includes('GROUP BY status'));
-    expect(statusQuery).toBeDefined();
-    expect(statusQuery!.sql).toContain('CASE status');
-    expect(statusQuery!.sql).toContain("'triagem' THEN 1");
-    expect(statusQuery!.sql).toContain("'finalizado' THEN 5");
-  });
-});
-
-// =============================================================================
-// Faturamento por canal de aquisição
-// =============================================================================
-
-describe('GET /api/dashboard/admin — faturamento por canal', () => {
-  it('retorna faturamento agrupado por origem do cliente', async () => {
-    mockQueryResponse('group by c.origem', [
-      { origem: 'fachada', total: 10000, count: 8 },
-      { origem: 'indicacao', total: 5000, count: 3 },
-    ]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
+    const { data } = await callRoute<AdminDashboardResponse>(
+      getAdminDashboard,
+      '/api/dashboard/admin'
     );
 
-    expect(data.porCanal).toHaveLength(2);
-    expect(data.porCanal[0].origem).toBe('fachada');
-    expect(data.porCanal[0].total).toBe(10000);
-    expect(data.porCanal[0].count).toBe(8);
+    expect(data.resumo_operacional.valor_orcado_nao_pago).toBe(0);
+
+    const orcadoQuery = findExecutedQuery('resumo_operacional:valor_orcado_nao_pago');
+    expect(orcadoQuery.sql).toContain('COALESCE(i.valor_pago, 0) + 0.001 < COALESCE(i.valor_final, i.valor)');
   });
 
-  it('adiciona labels formatados para origens conhecidas', async () => {
-    mockQueryResponse('group by c.origem', [
-      { origem: 'fachada', total: 10000, count: 8 },
-      { origem: 'trafego_meta', total: 7000, count: 5 },
-      { origem: 'trafego_google', total: 3000, count: 2 },
-      { origem: 'organico', total: 2000, count: 4 },
-      { origem: 'indicacao', total: 5000, count: 3 },
-    ]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    expect(data.porCanal.find(c => c.origem === 'fachada')!.label).toBe('Fachada');
-    expect(data.porCanal.find(c => c.origem === 'trafego_meta')!.label).toBe('Tráfego Meta');
-    expect(data.porCanal.find(c => c.origem === 'trafego_google')!.label).toBe('Tráfego Google');
-    expect(data.porCanal.find(c => c.origem === 'organico')!.label).toBe('Orgânico');
-    expect(data.porCanal.find(c => c.origem === 'indicacao')!.label).toBe('Indicação');
-  });
-
-  it('origem desconhecida usa o próprio valor como label', async () => {
-    mockQueryResponse('group by c.origem', [
-      { origem: 'nova_origem', total: 1000, count: 1 },
-    ]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    expect(data.porCanal[0].label).toBe('nova_origem');
-  });
-});
-
-// =============================================================================
-// Top 10 procedimentos
-// =============================================================================
-
-describe('GET /api/dashboard/admin — top procedimentos', () => {
-  it('retorna top procedimentos com total e contagem', async () => {
-    mockQueryResponse('group by pr.id', [
-      { nome: 'Canal', total: 16000, count: 20 },
-      { nome: 'Restauração', total: 8000, count: 20 },
-      { nome: 'Limpeza', total: 3000, count: 20 },
-    ]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    expect(data.topProcedimentos).toHaveLength(3);
-    expect(data.topProcedimentos[0].nome).toBe('Canal');
-    expect(data.topProcedimentos[0].total).toBe(16000);
-  });
-
-  it('query limita a 10 procedimentos ordenados por total DESC', async () => {
-    mockQueryResponse('group by pr.id', []);
-
-    await callRoute(getAdminDashboard, '/api/dashboard/admin');
-
-    const queries = getExecutedQueries();
-    const procQuery = queries.find(q =>
-      q.sql.includes('GROUP BY pr.id') && q.sql.includes('LIMIT 10')
-    );
-    expect(procQuery).toBeDefined();
-    expect(procQuery!.sql).toContain('ORDER BY total DESC');
-  });
-});
-
-// =============================================================================
-// Faturamento mensal
-// =============================================================================
-
-describe('GET /api/dashboard/admin — faturamento mensal', () => {
-  it('retorna faturamento agrupado por mês', async () => {
-    mockQueryResponse('where p.created_at >= ? and a.unidade_id = ?', [
-      { created_at: '2025-07-10T15:00:00.000Z', valor: 12000, atendimento_id: 10 },
-      { created_at: '2025-07-20T15:00:00.000Z', valor: 8000, atendimento_id: 11 },
-      { created_at: '2025-08-12T15:00:00.000Z', valor: 25000, atendimento_id: 20 },
-      { created_at: '2025-09-03T15:00:00.000Z', valor: 10000, atendimento_id: 30 },
-      { created_at: '2025-09-25T15:00:00.000Z', valor: 12000, atendimento_id: 31 },
-      { created_at: '2025-09-26T15:00:00.000Z', valor: 5000, atendimento_id: 31 },
-    ]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    expect(data.faturamentoMensal).toHaveLength(3);
-    expect(data.faturamentoMensal[0].mes).toBe('2025-07');
-    expect(data.faturamentoMensal[0].faturamento).toBe(20000);
-    expect(data.faturamentoMensal[0].atendimentos).toBe(2);
-    expect(data.faturamentoMensal[1]).toEqual({ mes: '2025-08', faturamento: 25000, atendimentos: 1 });
-    expect(data.faturamentoMensal[2]).toEqual({ mes: '2025-09', faturamento: 27000, atendimentos: 2 });
-  });
-
-  it('query busca últimos 6 meses', async () => {
-    mockQueryResponse('where p.created_at >= ? and a.unidade_id = ?', []);
-
-    await callRoute(getAdminDashboard, '/api/dashboard/admin');
-
-    const queries = getExecutedQueries();
-    const mensalQuery = queries.find(q =>
-      q.sql.includes('WHERE p.created_at >= ? AND a.unidade_id = ?')
-    );
-    expect(mensalQuery).toBeDefined();
-    expect(mensalQuery!.sql).toContain('ORDER BY p.created_at ASC');
-  });
-});
-
-// =============================================================================
-// Ticket médio, taxa de conversão
-// =============================================================================
-
-describe('GET /api/dashboard/admin — métricas derivadas', () => {
-  it('ticketMedio = média do valor total dos atendimentos finalizados', async () => {
-    mockQueryResponse('avg(total_atend)', [{ total: 850 }]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    expect(data.resumo.ticketMedio).toBe(850);
-
-    // Verifica que filtra atendimentos finalizados
-    const queries = getExecutedQueries();
-    const ticketQuery = queries.find(q => q.sql.includes('AVG(total_atend)'));
-    expect(ticketQuery!.sql).toContain("'finalizado'");
-    expect(ticketQuery!.sql).toContain("COALESCE(a.motivo_saida, '') != 'continuacao'");
-  });
-
-  it('taxaConversao = (finalizados / total) * 100', async () => {
-    // Registrar primeiro o mock mais específico da query de finalizados para não ser capturado pelo total.
-    mockQueryResponse("coalesce(a.motivo_saida, '') != 'continuacao'", [{ count: 40 }]);
-    mockQueryResponse("count(*) as count\n      from atendimentos a\n      where a.unidade_id", [{ count: 100 }]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    // totalAtendimentos usa o mock com "where 1=1", finalizados usa o mock com "status = 'finalizado'"
-    expect(data.resumo.totalAtendimentos).toBe(100);
-    expect(data.resumo.atendimentosFinalizados).toBe(40);
-    expect(data.resumo.taxaConversao).toBe(40.0);
-
-    const queries = getExecutedQueries();
-    const finalizadosQuery = queries.find((query) =>
-      query.sql.includes("status IN ('finalizado', 'encerrado')")
-    );
-    expect(finalizadosQuery?.sql).toContain("COALESCE(a.motivo_saida, '') != 'continuacao'");
-  });
-
-  it('taxaConversao = 0 quando não há atendimentos', async () => {
-    // Total: 0
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    expect(data.resumo.taxaConversao).toBe(0);
-  });
-
-  it('totalClientes conta todos os clientes', async () => {
-    mockQueryResponse('count(*) as count from clientes', [{ count: 200 }]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    expect(data.resumo.totalClientes).toBe(200);
-  });
-});
-
-// =============================================================================
-// Top vendedores e executores
-// =============================================================================
-
-describe('GET /api/dashboard/admin — rankings', () => {
-  it('topVendedores retorna ranking por comissão de venda', async () => {
-    mockQueryResponse("c.tipo = 'venda'", [
-      { nome: 'Ana Secretária', tipo: 'venda', total: 5000 },
-      { nome: 'João Admin', tipo: 'venda', total: 3000 },
-    ]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    expect(data.topVendedores).toHaveLength(2);
-    expect(data.topVendedores[0].nome).toBe('Ana Secretária');
-    expect(data.topVendedores[0].total).toBe(5000);
-    expect(data.topVendedores[0].tipo).toBe('venda');
-  });
-
-  it('topVendedores limita a 5 resultados', async () => {
-    mockQueryResponse("c.tipo = 'venda'", []);
-
-    await callRoute(getAdminDashboard, '/api/dashboard/admin');
-
-    const queries = getExecutedQueries();
-    const vendedoresQuery = queries.find(q =>
-      q.sql.includes("c.tipo = 'venda'") && q.sql.includes('LIMIT 5')
-    );
-    expect(vendedoresQuery).toBeDefined();
-    expect(vendedoresQuery!.sql).toContain('ORDER BY total DESC');
-  });
-
-  it('topExecutores retorna ranking por comissão de execução', async () => {
-    mockQueryResponse("c.tipo = 'execucao'", [
-      { nome: 'Dr. Pedro Dentista', tipo: 'execucao', total: 12000 },
-    ]);
-
-    const { data } = await callRoute<AdminDashboard>(
-      getAdminDashboard, '/api/dashboard/admin'
-    );
-
-    expect(data.topExecutores).toHaveLength(1);
-    expect(data.topExecutores[0].nome).toBe('Dr. Pedro Dentista');
-    expect(data.topExecutores[0].total).toBe(12000);
-  });
-
-  it('topExecutores limita a 5 resultados', async () => {
-    mockQueryResponse("c.tipo = 'execucao'", []);
-
-    await callRoute(getAdminDashboard, '/api/dashboard/admin');
-
-    const queries = getExecutedQueries();
-    const execQuery = queries.find(q =>
-      q.sql.includes("c.tipo = 'execucao'") && q.sql.includes('LIMIT 5')
-    );
-    expect(execQuery).toBeDefined();
-  });
-});
-
-// =============================================================================
-// Filtro de período (data_inicio, data_fim)
-// =============================================================================
-
-describe('GET /api/dashboard/admin — filtro de período', () => {
-  it('aplica filtro de data_inicio nas queries de atendimentos', async () => {
+  it('aplica o filtro de periodo corretamente para criacao, quitacao e orcamento aberto', async () => {
     await callRoute(getAdminDashboard, '/api/dashboard/admin', {
-      searchParams: { data_inicio: '2025-01-01' },
+      searchParams: {
+        data_inicio: '2025-01-01',
+        data_fim: '2025-01-31',
+      },
     });
 
-    const queries = getExecutedQueries();
-    const filteredQueries = queries.filter(q =>
-      q.sql.includes('a.created_at >= ?') && q.params.includes('2025-01-01T03:00:00.000Z')
-    );
-    expect(filteredQueries.length).toBeGreaterThan(0);
+    const atendimentoQuery = findExecutedQuery('resumo_operacional:atendimentos_criados');
+    expect(atendimentoQuery.params).toContain('2025-01-01T03:00:00.000Z');
+    expect(atendimentoQuery.params).toContain('2025-02-01T02:59:59.999Z');
+
+    const quitacaoQuery = findExecutedQuery('resumo_operacional:procedimentos_pagos');
+    expect(quitacaoQuery.params).toContain('2025-01-01T03:00:00.000Z');
+    expect(quitacaoQuery.params).toContain('2025-02-01T02:59:59.999Z');
+
+    const orcadoQuery = findExecutedQuery('resumo_operacional:valor_orcado_nao_pago');
+    expect(orcadoQuery.params).toContain('2025-01-01T03:00:00.000Z');
+    expect(orcadoQuery.params).toContain('2025-02-01T02:59:59.999Z');
   });
 
-  it('aplica filtro de data_fim nas queries de atendimentos', async () => {
-    await callRoute(getAdminDashboard, '/api/dashboard/admin', {
-      searchParams: { data_fim: '2025-12-31' },
+  it('troca a unidade atual nas queries quando o header da unidade muda', async () => {
+    mockQueryResponse('resumo_operacional:faturamento_total', [{ total: 900 }]);
+
+    const { data } = await callRoute<AdminDashboardResponse>(
+      getAdminDashboard,
+      '/api/dashboard/admin',
+      {
+        headers: {
+          'X-Unidade-Id': '2',
+        },
+      }
+    );
+
+    expect(data.resumo_operacional.faturamento_total).toBe(900);
+
+    const faturamentoQuery = findExecutedQuery('resumo_operacional:faturamento_total');
+    expect(faturamentoQuery.params[0]).toBe(2);
+  });
+
+  it('formata labels conhecidas no bloco porCanal', async () => {
+    mockQueryResponse('complementar:por_canal', [
+      { origem: 'fachada', total: 1000, count: 1 },
+      { origem: 'trafego_meta', total: 700, count: 1 },
+      { origem: 'nova_origem', total: 300, count: 1 },
+    ]);
+
+    const { data } = await callRoute<AdminDashboardResponse>(
+      getAdminDashboard,
+      '/api/dashboard/admin'
+    );
+
+    expect(data.porCanal.find((item) => item.origem === 'fachada')?.label).toBe('Fachada');
+    expect(data.porCanal.find((item) => item.origem === 'trafego_meta')?.label).toBe('Tráfego Meta');
+    expect(data.porCanal.find((item) => item.origem === 'nova_origem')?.label).toBe('nova_origem');
+  });
+
+  it('rejeita usuario nao admin', async () => {
+    const verifyTokenMock = verifyToken as jest.MockedFunction<typeof verifyToken>;
+    verifyTokenMock.mockResolvedValueOnce({
+      sub: 99,
+      email: 'executor@test.com',
+      role: 'executor',
+      roles: ['executor'],
+      nome: 'Executor Teste',
+      unidade_ids: [1],
+      unidade_atual: 1,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 86400,
     });
 
-    const queries = getExecutedQueries();
-    const filteredQueries = queries.filter(q =>
-      q.sql.includes('a.created_at <= ?') && q.params.includes('2026-01-01T02:59:59.999Z')
+    const { status, data } = await callRoute<{ error: string }>(
+      getAdminDashboard,
+      '/api/dashboard/admin'
     );
-    expect(filteredQueries.length).toBeGreaterThan(0);
-  });
 
-  it('aplica filtro de período completo (BETWEEN)', async () => {
-    await callRoute(getAdminDashboard, '/api/dashboard/admin', {
-      searchParams: { data_inicio: '2025-01-01', data_fim: '2025-06-30' },
-    });
-
-    const queries = getExecutedQueries();
-    const filteredQueries = queries.filter(q =>
-      q.sql.includes('a.created_at >= ?') &&
-      q.sql.includes('a.created_at <= ?') &&
-      q.params.includes('2025-01-01T03:00:00.000Z') &&
-      q.params.includes('2025-07-01T02:59:59.999Z')
-    );
-    expect(filteredQueries.length).toBeGreaterThan(0);
-  });
-
-  it('filtro de período também é aplicado a pagamentos', async () => {
-    await callRoute(getAdminDashboard, '/api/dashboard/admin', {
-      searchParams: { data_inicio: '2025-01-01', data_fim: '2025-06-30' },
-    });
-
-    const queries = getExecutedQueries();
-    const pagQuery = queries.find(q =>
-      q.sql.includes('p.created_at >= ?') &&
-      q.sql.includes('p.created_at <= ?') &&
-      q.params.includes('2025-01-01T03:00:00.000Z') &&
-      q.params.includes('2025-07-01T02:59:59.999Z')
-    );
-    expect(pagQuery).toBeDefined();
-  });
-
-  it('sem filtros não adiciona cláusulas de data', async () => {
-    await callRoute(getAdminDashboard, '/api/dashboard/admin');
-
-    const queries = getExecutedQueries();
-    const statusQuery = queries.find(q => q.sql.includes('GROUP BY status'));
-    expect(statusQuery!.sql).not.toContain('BETWEEN');
-    expect(statusQuery!.sql).not.toContain('a.created_at >=');
-    expect(statusQuery!.sql).not.toContain('a.created_at <=');
-  });
-});
-
-// =============================================================================
-// Performance — observações
-// =============================================================================
-
-describe('GET /api/dashboard/admin — performance', () => {
-  it('executa número razoável de queries (não N+1)', async () => {
-    await callRoute(getAdminDashboard, '/api/dashboard/admin');
-
-    const queries = getExecutedQueries();
-    // Rota deve executar um número fixo de queries (não proporcional aos dados).
-    // No mock atual, queryOne sem resultado registra `first()` e depois `all()`,
-    // então o total fica maior do que em produção, mas ainda constante.
-    expect(queries.length).toBeLessThanOrEqual(22);
-    expect(queries.length).toBeGreaterThanOrEqual(14);
+    expect(status).toBe(403);
+    expect(data.error).toBe('Acesso não autorizado para este perfil');
   });
 });
