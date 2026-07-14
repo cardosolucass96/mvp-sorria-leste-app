@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { execute, query, queryOne } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { buscarEtapasComValor, recalcularFinanceiroItens, roundMoney } from '@/lib/helpers/pagamentoFlow';
+import { nowUtcIso } from '@/lib/time';
 import {
   buscarFormaPagamentoDaUnidade,
   calcularValorLiquido,
@@ -382,14 +383,16 @@ async function criarGrupoDePagamentos({
   alocacoes: NormalizedAlocacao[];
   itensMap: Map<number, ItemPagamentoRow>;
 }) {
+  const createdAt = nowUtcIso();
   const grupoResult = await execute(
     `INSERT INTO pagamentos_grupos (
       atendimento_id,
       recebido_por_id,
       valor_total,
-      observacoes
-    ) VALUES (?, ?, ?, ?)`,
-    [atendimentoId, recebidoPorId, valorTotal, observacoes]
+      observacoes,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?)`,
+    [atendimentoId, recebidoPorId, valorTotal, observacoes, createdAt]
   );
 
   const pagamentoGrupoId = Number(grupoResult.lastInsertRowid);
@@ -416,8 +419,9 @@ async function criarGrupoDePagamentos({
         taxa_fixa_snapshot,
         valor_taxa,
         valor_liquido,
-        observacoes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        observacoes,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         atendimentoId,
         pagamentoGrupoId,
@@ -432,6 +436,7 @@ async function criarGrupoDePagamentos({
         forma.valor_taxa,
         forma.valor_liquido,
         observacoes,
+        createdAt,
       ]
     );
 
@@ -464,8 +469,9 @@ async function criarGrupoDePagamentos({
            valor_alocado,
            criado_por_id,
            origem_comissao,
-           percentual_comissao
-         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           percentual_comissao,
+           created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           pagamentoId,
           alocacao.item_id,
@@ -474,6 +480,7 @@ async function criarGrupoDePagamentos({
           item?.criado_por_id ?? null,
           origemComissao,
           percentualComissao,
+          createdAt,
         ]
       );
       alocacaoIdsGeradas.push(Number(alocacaoResult.lastInsertRowid));

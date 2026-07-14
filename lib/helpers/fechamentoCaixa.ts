@@ -1,6 +1,7 @@
 import { execute, query, queryOne } from '@/lib/db';
 import {
   getClinicDayUtcRange,
+  getSqlUtcInstantExpression,
   nowUtcIso,
   parseStoredUtcInstant,
   SQLITE_UTC_NOW_EXPRESSION,
@@ -767,6 +768,10 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
     [unidadeId]
   );
   const { start: dayStartUtc, endExclusive: dayEndUtc } = getClinicDayUtcRange(dataReferencia);
+  const pagamentoCreatedAtExpr = getSqlUtcInstantExpression('p.created_at');
+  const pagamentoGrupoCreatedAtExpr = getSqlUtcInstantExpression('pg.created_at');
+  const pagamentoOrderExpr = `COALESCE(${pagamentoGrupoCreatedAtExpr}, ${pagamentoCreatedAtExpr})`;
+  const alocacaoCreatedAtExpr = getSqlUtcInstantExpression('pa.created_at');
 
   const profissionaisAtivos = await query<UsuarioClinicoRow>(
     `SELECT DISTINCT u.id, u.nome, u.valor_diaria
@@ -793,8 +798,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      INNER JOIN atendimentos a ON a.id = p.atendimento_id
      WHERE a.unidade_id = ?
        AND p.cancelado = 0
-       AND p.created_at >= ?
-       AND p.created_at < ?`,
+       AND ${pagamentoCreatedAtExpr} >= ?
+       AND ${pagamentoCreatedAtExpr} < ?`,
     [unidadeId, dayStartUtc, dayEndUtc]
   );
 
@@ -807,8 +812,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      INNER JOIN atendimentos a ON a.id = p.atendimento_id
      WHERE a.unidade_id = ?
        AND p.cancelado = 0
-       AND p.created_at >= ?
-       AND p.created_at < ?
+       AND ${pagamentoCreatedAtExpr} >= ?
+       AND ${pagamentoCreatedAtExpr} < ?
      GROUP BY p.metodo
      ORDER BY total DESC`,
     [unidadeId, dayStartUtc, dayEndUtc]
@@ -822,8 +827,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      INNER JOIN atendimentos a ON a.id = p.atendimento_id
      WHERE a.unidade_id = ?
        AND p.cancelado = 1
-       AND p.created_at >= ?
-       AND p.created_at < ?`,
+       AND ${pagamentoCreatedAtExpr} >= ?
+       AND ${pagamentoCreatedAtExpr} < ?`,
     [unidadeId, dayStartUtc, dayEndUtc]
   );
 
@@ -860,9 +865,9 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      LEFT JOIN usuarios u ON u.id = p.recebido_por_id
      LEFT JOIN pagamentos_grupos pg ON pg.id = p.pagamento_grupo_id
      WHERE a.unidade_id = ?
-       AND p.created_at >= ?
-       AND p.created_at < ?
-     ORDER BY COALESCE(pg.created_at, p.created_at) DESC, p.created_at DESC, p.id DESC`,
+       AND ${pagamentoCreatedAtExpr} >= ?
+       AND ${pagamentoCreatedAtExpr} < ?
+     ORDER BY ${pagamentoOrderExpr} DESC, ${pagamentoCreatedAtExpr} DESC, p.id DESC`,
     [unidadeId, dayStartUtc, dayEndUtc]
   );
 
@@ -896,8 +901,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      WHERE a.unidade_id = ?
        AND pg.cancelado = 0
        AND pa.item_atendimento_id IS NOT NULL
-       AND pa.created_at >= ?
-       AND pa.created_at < ?
+       AND ${alocacaoCreatedAtExpr} >= ?
+       AND ${alocacaoCreatedAtExpr} < ?
 
      UNION ALL
 
@@ -930,8 +935,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      WHERE ag.unidade_id = ?
        AND pg.cancelado = 0
        AND pa.agendamento_id IS NOT NULL
-       AND pa.created_at >= ?
-       AND pa.created_at < ?`,
+       AND ${alocacaoCreatedAtExpr} >= ?
+       AND ${alocacaoCreatedAtExpr} < ?`,
     [unidadeId, dayStartUtc, dayEndUtc, unidadeId, dayStartUtc, dayEndUtc]
   );
 
