@@ -1,5 +1,10 @@
 import { queryOne } from '@/lib/db';
 import { FOLLOWUP_TIPO_CONFIG } from '@/lib/constants/followup';
+import {
+  clinicDateTimeInputToUtcIso,
+  clinicDateTimeInputToUtcIsoEndOfDay,
+  parseStoredUtcInstant,
+} from '@/lib/time';
 import type { FollowupTarefa, FollowupTarefaCompleta, FollowupTipo } from '@/lib/types';
 
 export const FOLLOWUP_DETAIL_SQL = `
@@ -23,44 +28,19 @@ export function isFollowupTipo(value: unknown): value is FollowupTipo {
 }
 
 export function normalizeDateTimeInput(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const input = value.trim();
-  if (!input) return null;
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(input)) {
-    return `${input.replace('T', ' ')}:00`;
-  }
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(input)) {
-    return input.replace('T', ' ');
-  }
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(input)) {
-    return `${input}:00`;
-  }
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(input)) {
-    return input;
-  }
-  return null;
+  return typeof value === 'string' ? clinicDateTimeInputToUtcIso(value) : null;
 }
 
 export function normalizeRangeStart(value: string | null): string | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return `${trimmed} 00:00:00`;
-  return normalizeDateTimeInput(trimmed);
+  return clinicDateTimeInputToUtcIso(value);
 }
 
 export function normalizeRangeEnd(value: string | null): string | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return `${trimmed} 23:59:59`;
-  return normalizeDateTimeInput(trimmed);
+  return clinicDateTimeInputToUtcIsoEndOfDay(value);
 }
 
 export function parseLocalDateTime(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  const date = new Date(value.replace(' ', 'T'));
-  return Number.isNaN(date.getTime()) ? null : date;
+  return parseStoredUtcInstant(value);
 }
 
 export function isTaskMutable(task: Pick<FollowupTarefa, 'status' | 'excluida_em'>): boolean {

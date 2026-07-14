@@ -4,89 +4,44 @@
  */
 
 import { getFaceDisplay, type FaceNome } from '@/lib/utils/denteFaces';
+import {
+  CLINIC_TIME_ZONE,
+  getClinicDateTimeLocalValue,
+  getClinicTimeLabel,
+  isClinicDateTimeInputInPast,
+  isDateOnlyString,
+  parseClinicLocalDateTime,
+  parseStoredUtcInstant,
+  toClinicDateTimeLocalInput,
+} from '@/lib/time';
 
 /** Formata número como moeda brasileira (R$ 1.234,56) */
 export function formatarMoeda(valor: number): string {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-const SQLITE_NAIVE_DATETIME_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?(?:\.\d+)?$/;
 const DATETIME_LOCAL_PREFIX_REGEX = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2})(?::\d{2})?)?/;
-const CLINIC_TIME_ZONE = 'America/Fortaleza';
 
-/**
- * Converte timestamps gerados pelo sistema para Date.
- *
- * Regras:
- * - `YYYY-MM-DD` continua sendo tratado como data local.
- * - `YYYY-MM-DD HH:MM:SS` vindo do banco é tratado como UTC sem offset explícito.
- *
- * Isso corrige o caso do D1/Cloudflare gravar timestamps "naive" em UTC, que antes eram
- * reinterpretados como horário local na UI e apareciam ~3 horas adiantados no Brasil.
- */
-function parseSqliteDate(data: string | null | undefined): Date | null {
-  if (!data) return null;
-  const texto = data.trim();
-  if (!texto) return null;
+function formatClinicDateOnly(date: Date): string {
+  return date.toLocaleDateString('pt-BR', {
+    timeZone: CLINIC_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
 
-  if (DATE_ONLY_REGEX.test(texto)) {
-    return new Date(`${texto}T00:00:00`);
-  }
+function formatUtcInstantInClinic(
+  data: string | null | undefined,
+  options: Intl.DateTimeFormatOptions,
+): string {
+  const parsed = parseStoredUtcInstant(data);
+  if (!parsed || Number.isNaN(parsed.getTime())) return '-';
 
-  if (SQLITE_NAIVE_DATETIME_REGEX.test(texto)) {
-    const utcLike = `${texto.replace(' ', 'T').replace(/(\.\d{3})\d+$/, '$1')}Z`;
-    const parsedUtc = new Date(utcLike);
-    if (!Number.isNaN(parsedUtc.getTime())) {
-      return parsedUtc;
-    }
-  }
-
-  const candidatos = new Set<string>();
-  const adicionar = (valor?: string | null): void => {
-    if (!valor) return;
-    const limpo = valor.trim();
-    if (limpo) candidatos.add(limpo);
-  };
-
-  const normalizarOffset = (valor: string): string => {
-    // Corrige offset sem dois-pontos: +0000 => +00:00
-    return valor.replace(/([+-]\d{2})(\d{2})(?!:)/g, '$1:$2');
-  };
-
-  const normalizarMicros = (valor: string): string => {
-    // Mantém apenas milissegundos (3 casas) para evitar parser estrito quebrar
-    return valor.replace(/(\.\d{3})\d+(?=(Z|[+-]\d{2}:?\d{2}|$))/, '$1');
-  };
-
-  const variantes = [
-    texto,
-    texto.replace(' ', 'T'),
-    normalizarOffset(texto),
-    normalizarOffset(texto.replace(' ', 'T')),
-    normalizarMicros(texto),
-    normalizarMicros(texto.replace(' ', 'T')),
-    normalizarMicros(normalizarOffset(texto)),
-    normalizarMicros(normalizarOffset(texto.replace(' ', 'T'))),
-  ];
-
-  for (const base of variantes) {
-    adicionar(base);
-    // Aceita offsets com espaço entre horário e UTC: "14:00:00 +0000"
-    adicionar(base.replace(/\s(?=[+-]\d{2}:?\d{2}$)/, ''));
-    // Versão sem timezone, útil para casos com formato não padrão
-    adicionar(base.replace(/[Zz]$/, ''));
-    adicionar(base.replace(/[Zz]$/, '').replace(/\s(?=[+-]\d{2}:?\d{2}$)/, ''));
-  }
-
-  for (const candidato of candidatos) {
-    const d = new Date(candidato);
-    if (!Number.isNaN(d.getTime())) {
-      return d;
-    }
-  }
-
-  return null;
+  return parsed.toLocaleDateString('pt-BR', {
+    timeZone: CLINIC_TIME_ZONE,
+    ...options,
+  });
 }
 
 /**
@@ -94,38 +49,21 @@ function parseSqliteDate(data: string | null | undefined): Date | null {
  * Use para `data_agendada`, `vencimento_em` e outros campos de agenda/follow-up.
  */
 export function parseLocalDateTimeValue(data: string | null | undefined): Date | null {
-  if (!data) return null;
-  const texto = data.trim();
-  if (!texto) return null;
-
-  if (DATE_ONLY_REGEX.test(texto)) {
-    return new Date(`${texto}T00:00:00`);
-  }
-
-  const normalizado = texto.includes(' ') ? texto.replace(' ', 'T') : texto;
-  const semMicros = normalizado.replace(/(\.\d{3})\d+(?=(Z|[+-]\d{2}:?\d{2}|$))/, '$1');
-  const candidatos = [
-    semMicros,
-    normalizado,
-    normalizado.replace(/[Zz]$/, ''),
-    texto,
-  ];
-
-  for (const candidato of candidatos) {
-    const d = new Date(candidato);
-    if (!Number.isNaN(d.getTime())) {
-      return d;
-    }
-  }
-
-  return null;
+  return parseClinicLocalDateTime(data);
 }
 
 /** Formata data como dd/mm/aaaa */
 export function formatarData(data: string | null | undefined): string {
-  const d = parseSqliteDate(data);
-  if (!d || isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  if (typeof data === 'string' && isDateOnlyString(data.trim())) {
+    const parsed = parseClinicLocalDateTime(data);
+    return parsed ? formatClinicDateOnly(parsed) : '-';
+  }
+
+  return formatUtcInstantInClinic(data, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 }
 
 /**
@@ -138,30 +76,49 @@ export function formatarDataAgendada(data: string | null | undefined): string {
   const s = data.trim();
   const temHora = (s.includes('T') || s.includes(' ')) &&
     !/T00:00(:\d{2})?$/.test(s) && !/ 00:00(:\d{2})?$/.test(s);
-  const d = parseLocalDateTimeValue(data);
-  if (!d || isNaN(d.getTime())) return '-';
-  if (temHora) {
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  if (isDateOnlyString(s)) {
+    const parsedDate = parseClinicLocalDateTime(s);
+    return parsedDate ? formatClinicDateOnly(parsedDate) : '-';
   }
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  const d = parseStoredUtcInstant(data);
+  if (!d || Number.isNaN(d.getTime())) return '-';
+
+  if (temHora) {
+    return d.toLocaleDateString('pt-BR', {
+      timeZone: CLINIC_TIME_ZONE,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+  return d.toLocaleDateString('pt-BR', {
+    timeZone: CLINIC_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 }
 
 /**
  * Converte valor de data/datetime armazenado para o formato do input datetime-local (YYYY-MM-DDTHH:mm).
  */
 export function toDateTimeLocal(data: string | null | undefined): string {
-  if (!data) return '';
-  const s = data.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s + 'T00:00';
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) return s.replace(' ', 'T').substring(0, 16);
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.substring(0, 16);
-  return s;
+  return toClinicDateTimeLocalInput(data);
 }
 
-function getDatePartsInTimeZone(
-  date: Date,
-  timeZone: string
-): Record<'year' | 'month' | 'day' | 'hour' | 'minute', string> {
+/**
+ * Retorna a string `YYYY-MM-DDTHH:mm` no fuso operacional da clinica.
+ * Use para `min` de inputs `datetime-local` e para comparacoes no backend.
+ */
+export function getCurrentDateTimeLocalValue(date: Date = new Date(), timeZone: string = CLINIC_TIME_ZONE): string {
+  if (timeZone === CLINIC_TIME_ZONE) {
+    return getClinicDateTimeLocalValue(date);
+  }
+
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
@@ -186,16 +143,7 @@ function getDatePartsInTimeZone(
     }
   }
 
-  return values;
-}
-
-/**
- * Retorna a string `YYYY-MM-DDTHH:mm` no fuso operacional da clinica.
- * Use para `min` de inputs `datetime-local` e para comparacoes no backend.
- */
-export function getCurrentDateTimeLocalValue(date: Date = new Date(), timeZone: string = CLINIC_TIME_ZONE): string {
-  const { year, month, day, hour, minute } = getDatePartsInTimeZone(date, timeZone);
-  return `${year}-${month}-${day}T${hour}:${minute}`;
+  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
 }
 
 /**
@@ -208,11 +156,11 @@ export function normalizeDateTimeLocalValue(data: string | null | undefined): st
   const texto = data.trim();
   if (!texto) return null;
 
-  if (DATE_ONLY_REGEX.test(texto)) {
+  if (isDateOnlyString(texto)) {
     return `${texto}T00:00`;
   }
 
-  const match = texto.match(DATETIME_LOCAL_PREFIX_REGEX);
+  const match = DATETIME_LOCAL_PREFIX_REGEX.exec(texto);
   if (!match) return null;
 
   const [, date, hour = '00', minute = '00'] = match;
@@ -227,18 +175,14 @@ export function normalizeDateTimeLocalValue(data: string | null | undefined): st
 export function isDateTimeLocalValueInPast(
   data: string | null | undefined,
   now: Date = new Date(),
-  timeZone: string = CLINIC_TIME_ZONE
+  _timeZone: string = CLINIC_TIME_ZONE
 ): boolean {
-  const normalized = normalizeDateTimeLocalValue(data);
-  if (!normalized) return false;
-  return normalized < getCurrentDateTimeLocalValue(now, timeZone);
+  return isClinicDateTimeInputInPast(data, now);
 }
 
 /** Formata data como dd/mm/aaaa HH:mm */
 export function formatarDataHora(data: string | null | undefined): string {
-  const d = parseSqliteDate(data);
-  if (!d || isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('pt-BR', {
+  return formatUtcInstantInClinic(data, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -250,21 +194,15 @@ export function formatarDataHora(data: string | null | undefined): string {
 /** Formata data/hora local digitada pelo usuário sem converter de UTC */
 export function formatarDataHoraLocal(data: string | null | undefined): string {
   const d = parseLocalDateTimeValue(data);
-  if (!d || isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  if (!d || Number.isNaN(d.getTime())) return '-';
+  return `${formatClinicDateOnly(d)} ${getClinicTimeLabel(d)}`;
 }
 
 /** Formata data completa com segundos (para logs/prontuário) */
 export function formatarDataCompleta(data: string | null | undefined): string {
-  const d = parseSqliteDate(data);
-  if (!d || isNaN(d.getTime())) return '-';
-  return d.toLocaleString('pt-BR');
+  const d = parseStoredUtcInstant(data);
+  if (!d || Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleString('pt-BR', { timeZone: CLINIC_TIME_ZONE });
 }
 
 /** Formata CPF: 123.456.789-00 */
@@ -398,9 +336,9 @@ export function formatarPorcentagem(valor: number): string {
  * Ex: "há 5 min", "há 2h 30min", "há 3 dias"
  */
 export function tempoDecorrido(inicio: string | null | undefined, fim?: string | null): string {
-  const d = parseSqliteDate(inicio);
-  if (!d || isNaN(d.getTime())) return '-';
-  const fimDate = fim ? (parseSqliteDate(fim) ?? new Date()) : new Date();
+  const d = parseStoredUtcInstant(inicio);
+  if (!d || Number.isNaN(d.getTime())) return '-';
+  const fimDate = fim ? (parseStoredUtcInstant(fim) ?? new Date()) : new Date();
   const diffMs = fimDate.getTime() - d.getTime();
   if (diffMs < 0) return '-';
   const mins = Math.floor(diffMs / 60000);

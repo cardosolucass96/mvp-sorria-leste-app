@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import {
+  clinicDateTimeInputToUtcIso,
+  clinicDateTimeInputToUtcIsoEndOfDay,
+  getClinicMonthKey,
+  parseStoredUtcInstant,
+} from '@/lib/time';
 
 interface FaturamentoResult {
   total: number;
@@ -39,6 +45,52 @@ interface ComissaoResult {
   total: number;
 }
 
+interface PagamentoMensalRow {
+  created_at: string;
+  valor: number;
+  atendimento_id: number;
+}
+
+function buildUtcColumnFilter(
+  column: string,
+  dataInicio: string | null,
+  dataFim: string | null,
+): { sql: string; params: string[] } {
+  const clauses: string[] = [];
+  const params: string[] = [];
+
+  const inicioUtc = clinicDateTimeInputToUtcIso(dataInicio);
+  if (inicioUtc) {
+    clauses.push(`${column} >= ?`);
+    params.push(inicioUtc);
+  }
+
+  const fimUtc = clinicDateTimeInputToUtcIsoEndOfDay(dataFim);
+  if (fimUtc) {
+    clauses.push(`${column} <= ?`);
+    params.push(fimUtc);
+  }
+
+  return {
+    sql: clauses.length > 0 ? ` AND ${clauses.join(' AND ')}` : '',
+    params,
+  };
+}
+
+function getTrailingMonthsStartUtc(months: number, now: Date = new Date()): string {
+  const monthKey = getClinicMonthKey(now);
+  const [year, month] = monthKey.split('-').map(Number);
+  const base = new Date(Date.UTC(year, month - 1, 1, 12));
+  base.setUTCMonth(base.getUTCMonth() - (months - 1));
+
+  const startKey = `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, '0')}-01T00:00:00`;
+  const startUtc = clinicDateTimeInputToUtcIso(startKey);
+  if (!startUtc) {
+    throw new Error(`Não foi possível calcular o range de ${months} meses`);
+  }
+  return startUtc;
+}
+
 // GET /api/dashboard/admin - Estatísticas completas do dashboard admin (filtrado por unidade)
 export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
@@ -47,43 +99,17 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const dataFim = searchParams.get('data_fim');
     const uid = context.unidadeId;
 
-    // Construir filtro de data
-    let filtroData = '';
-    const params: (string | number)[] = [];
-
-    if (dataInicio && dataFim) {
-      filtroData = " AND DATE(a.created_at) BETWEEN ? AND ?";
-      params.push(dataInicio, dataFim);
-    } else if (dataInicio) {
-      filtroData = " AND DATE(a.created_at) >= ?";
-      params.push(dataInicio);
-    } else if (dataFim) {
-      filtroData = " AND DATE(a.created_at) <= ?";
-      params.push(dataFim);
-    }
-
-    // Filtro para pagamentos (JOIN com atendimentos para filtrar por unidade)
-    let filtroDataPag = '';
-    const paramsPag: (string | number)[] = [uid];
-    if (dataInicio && dataFim) {
-      filtroDataPag = " AND DATE(p.created_at) BETWEEN ? AND ?";
-      paramsPag.push(dataInicio, dataFim);
-    } else if (dataInicio) {
-      filtroDataPag = " AND DATE(p.created_at) >= ?";
-      paramsPag.push(dataInicio);
-    } else if (dataFim) {
-      filtroDataPag = " AND DATE(p.created_at) <= ?";
-      paramsPag.push(dataFim);
-    }
+    const filtroData = buildUtcColumnFilter('a.created_at', dataInicio, dataFim);
+    const filtroDataPag = buildUtcColumnFilter('p.created_at', dataInicio, dataFim);
 
     // 1. Faturamento Total (pagamentos recebidos, filtrado por unidade)
     const faturamentoQuery = `
       SELECT COALESCE(SUM(p.valor), 0) as total
       FROM pagamentos p
       INNER JOIN atendimentos a ON p.atendimento_id = a.id
-      WHERE a.unidade_id = ? ${filtroDataPag}
+      WHERE a.unidade_id = ?${filtroDataPag.sql}
     `;
-    const faturamento = await queryOne<FaturamentoResult>(faturamentoQuery, paramsPag);
+    const faturamento = await queryOne<FaturamentoResult>(faturamentoQuery, [uid, ...filtroDataPag.params]);
 
     // 2. A Receber (valor dos itens - valor pago)
     const aReceberQuery = `
@@ -98,7 +124,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const statusQuery = `
       SELECT status, COUNT(*) as count
       FROM atendimentos a
-      WHERE a.unidade_id = ? ${filtroData}
+      WHERE a.unidade_id = ?${filtroData.sql}
       GROUP BY status
       ORDER BY
         CASE status
@@ -110,7 +136,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
           WHEN 'encerrado' THEN 6
         END
     `;
-    const porStatus = await query<StatusResult>(statusQuery, [uid, ...params]);
+    const porStatus = await query<StatusResult>(statusQuery, [uid, ...filtroData.params]);
 
     // 5. Faturamento por Canal de Aquisição
     const canaisQuery = `
@@ -136,34 +162,53 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       FROM itens_atendimento i
       INNER JOIN procedimentos pr ON i.procedimento_id = pr.id
       INNER JOIN atendimentos a ON i.atendimento_id = a.id
-      WHERE a.unidade_id = ? ${filtroData}
+      WHERE a.unidade_id = ?${filtroData.sql}
       GROUP BY pr.id, pr.nome
       ORDER BY total DESC
       LIMIT 10
     `;
-    const topProcedimentos = await query<ProcedimentoResult>(procedimentosQuery, [uid, ...params]);
+    const topProcedimentos = await query<ProcedimentoResult>(procedimentosQuery, [uid, ...filtroData.params]);
 
     // 7. Faturamento Mensal (últimos 6 meses)
     const mensalQuery = `
       SELECT
-        strftime('%Y-%m', p.created_at) as mes,
-        SUM(p.valor) as faturamento,
-        COUNT(DISTINCT p.atendimento_id) as atendimentos
+        p.created_at,
+        p.valor,
+        p.atendimento_id
       FROM pagamentos p
       INNER JOIN atendimentos a ON p.atendimento_id = a.id
-      WHERE p.created_at >= DATE('now', '-6 months') AND a.unidade_id = ?
-      GROUP BY strftime('%Y-%m', p.created_at)
-      ORDER BY mes ASC
+      WHERE p.created_at >= ? AND a.unidade_id = ?
+      ORDER BY p.created_at ASC
     `;
-    const faturamentoMensal = await query<MensalResult>(mensalQuery, [uid]);
+    const pagamentosMensais = await query<PagamentoMensalRow>(mensalQuery, [getTrailingMonthsStartUtc(6), uid]);
+    const mensalMap = new Map<string, { faturamento: number; atendimentoIds: Set<number> }>();
+
+    for (const pagamento of pagamentosMensais) {
+      const createdAt = parseStoredUtcInstant(pagamento.created_at);
+      if (!createdAt) continue;
+
+      const mes = getClinicMonthKey(createdAt);
+      const entry = mensalMap.get(mes) ?? { faturamento: 0, atendimentoIds: new Set<number>() };
+      entry.faturamento += Number(pagamento.valor ?? 0);
+      entry.atendimentoIds.add(pagamento.atendimento_id);
+      mensalMap.set(mes, entry);
+    }
+
+    const faturamentoMensal: MensalResult[] = Array.from(mensalMap.entries())
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([mes, values]) => ({
+        mes,
+        faturamento: values.faturamento,
+        atendimentos: values.atendimentoIds.size,
+      }));
 
     // 8. Total de Atendimentos
     const totalAtendimentosQuery = `
       SELECT COUNT(*) as count
       FROM atendimentos a
-      WHERE a.unidade_id = ? ${filtroData}
+      WHERE a.unidade_id = ?${filtroData.sql}
     `;
-    const totalAtendimentos = await queryOne<CountResult>(totalAtendimentosQuery, [uid, ...params]);
+    const totalAtendimentos = await queryOne<CountResult>(totalAtendimentosQuery, [uid, ...filtroData.params]);
 
     // 9. Total de Clientes (compartilhado entre unidades)
     const totalClientesQuery = `SELECT COUNT(*) as count FROM clientes`;
@@ -222,9 +267,9 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       FROM atendimentos a
       WHERE status IN ('finalizado', 'encerrado')
         AND a.unidade_id = ?
-        AND COALESCE(a.motivo_saida, '') != 'continuacao' ${filtroData}
+        AND COALESCE(a.motivo_saida, '') != 'continuacao'${filtroData.sql}
     `;
-    const finalizados = await queryOne<CountResult>(finalizadosQuery, [uid, ...params]);
+    const finalizados = await queryOne<CountResult>(finalizadosQuery, [uid, ...filtroData.params]);
     const taxaConversao = totalAtendimentos?.count
       ? ((finalizados?.count || 0) / totalAtendimentos.count * 100).toFixed(1)
       : '0';

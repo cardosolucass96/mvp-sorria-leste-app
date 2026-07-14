@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS fechamentos_caixa (
   fechado_por_id INTEGER,
   fechado_em TEXT,
   updated_by_id INTEGER,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id),
   FOREIGN KEY (fechado_por_id) REFERENCES usuarios(id),
   FOREIGN KEY (updated_by_id) REFERENCES usuarios(id)
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS fechamento_caixa_eventos (
   depois_json TEXT,
   motivo TEXT,
   usuario_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );

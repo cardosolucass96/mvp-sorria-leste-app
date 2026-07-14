@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { nowUtcIso } from '@/lib/time';
 
 interface ItemAtendimento {
   id: number;
@@ -82,8 +83,8 @@ export const POST = withUnit(async (
     }
 
     await execute(
-      `UPDATE atendimentos SET status = 'finalizado', finalizado_at = datetime('now', 'localtime'), motivo_saida = ? WHERE id = ?`,
-      [motivo_saida, atendimentoId]
+      `UPDATE atendimentos SET status = 'finalizado', finalizado_at = ?, motivo_saida = ? WHERE id = ?`,
+      [nowUtcIso(), motivo_saida, atendimentoId]
     );
 
     return NextResponse.json({

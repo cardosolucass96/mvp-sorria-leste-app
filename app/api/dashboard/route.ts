@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { getClinicDayUtcRange, getClinicMonthUtcRange } from '@/lib/time';
 
 interface DashboardStats {
   totalClientes: number;
@@ -23,6 +24,8 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const usuarioId = searchParams.get('usuario_id');
     const role = searchParams.get('role');
     const uid = context.unidadeId;
+    const hojeRange = getClinicDayUtcRange();
+    const mesAtualRange = getClinicMonthUtcRange();
 
     // Stats gerais (clientes são compartilhados, sem filtro de unidade)
     const totalClientes = (await query<{ count: number }>(
@@ -31,8 +34,8 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 
     const atendimentosHoje = (await query<{ count: number }>(
       `SELECT COUNT(*) as count FROM atendimentos
-       WHERE DATE(created_at) = DATE('now', 'localtime') AND unidade_id = ?`,
-      [uid]
+       WHERE created_at >= ? AND created_at < ? AND unidade_id = ?`,
+      [hojeRange.start, hojeRange.endExclusive, uid]
     ))[0]?.count || 0;
 
     const aguardandoPagamento = (await query<{ count: number }>(
@@ -43,11 +46,12 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 
     const finalizadosHoje = (await query<{ count: number }>(
       `SELECT COUNT(*) as count FROM atendimentos
-       WHERE status IN ('finalizado', 'encerrado')
+       WHERE status = 'finalizado'
          AND unidade_id = ?
          AND COALESCE(motivo_saida, '') != 'continuacao'
-         AND DATE(finalizado_at) = DATE('now', 'localtime')`,
-      [uid]
+         AND finalizado_at >= ?
+         AND finalizado_at < ?`,
+      [uid, hojeRange.start, hojeRange.endExclusive]
     ))[0]?.count || 0;
 
     const emExecucao = (await query<{ count: number }>(
@@ -75,8 +79,8 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         `SELECT COALESCE(SUM(co.valor_comissao), 0) as total FROM comissoes co
          INNER JOIN atendimentos a ON co.atendimento_id = a.id
          WHERE co.usuario_id = ? AND a.unidade_id = ?
-         AND strftime('%Y-%m', co.created_at) = strftime('%Y-%m', 'now', 'localtime')`,
-        [parseInt(usuarioId), uid]
+         AND co.created_at >= ? AND co.created_at < ?`,
+        [parseInt(usuarioId), uid, mesAtualRange.start, mesAtualRange.endExclusive]
       ))[0]?.total || 0;
 
       // Para Executor: procedimentos

@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS unidades (
   endereco TEXT,
   telefone TEXT,
   ativo INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 -- Tabela ponte: usuários <-> unidades (N:N)
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS usuario_unidades (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   usuario_id INTEGER NOT NULL,
   unidade_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id),
   UNIQUE(usuario_id, unidade_id)

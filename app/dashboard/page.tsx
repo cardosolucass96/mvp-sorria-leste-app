@@ -13,6 +13,7 @@ import { formatarMoeda } from '@/lib/utils/formatters';
 import { STATUS_CONFIG } from '@/lib/constants/status';
 import type { AtendimentoStatus } from '@/lib/types';
 import { PageHeader, Card, Button, Input, StatCard, EmptyState, LoadingState, Alert } from '@/components/ui';
+import { addDaysToClinicDateKey, getClinicDateKey } from '@/lib/time';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface DashboardData {
@@ -32,6 +33,37 @@ interface DashboardData {
   faturamentoMensal: { mes: string; faturamento: number; atendimentos: number }[];
   topVendedores: { nome: string; total: number }[];
   topExecutores: { nome: string; total: number }[];
+}
+
+function parseDateKeyAsUtcNoon(dateKey: string): Date {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12));
+}
+
+function formatUtcDateKey(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function shiftDateKey(
+  dateKey: string,
+  adjustments: { days?: number; months?: number; years?: number }
+): string {
+  const date = parseDateKeyAsUtcNoon(dateKey);
+
+  if (adjustments.years) {
+    date.setUTCFullYear(date.getUTCFullYear() + adjustments.years);
+  }
+  if (adjustments.months) {
+    date.setUTCMonth(date.getUTCMonth() + adjustments.months);
+  }
+  if (adjustments.days) {
+    date.setUTCDate(date.getUTCDate() + adjustments.days);
+  }
+
+  return formatUtcDateKey(date);
 }
 
 export default function DashboardAdminPage() {
@@ -80,33 +112,25 @@ export default function DashboardAdminPage() {
 
   const aplicarPeriodo = (periodo: string) => {
     setPeriodoSelecionado(periodo);
-    const hoje = new Date();
+    const hoje = getClinicDateKey();
     let inicio = '';
-    let fim = hoje.toISOString().split('T')[0];
+    let fim = hoje;
 
     switch (periodo) {
       case 'hoje':
         inicio = fim;
         break;
       case 'semana':
-        const semanaAtras = new Date(hoje);
-        semanaAtras.setDate(semanaAtras.getDate() - 7);
-        inicio = semanaAtras.toISOString().split('T')[0];
+        inicio = addDaysToClinicDateKey(hoje, -7);
         break;
       case 'mes':
-        const mesAtras = new Date(hoje);
-        mesAtras.setMonth(mesAtras.getMonth() - 1);
-        inicio = mesAtras.toISOString().split('T')[0];
+        inicio = shiftDateKey(hoje, { months: -1 });
         break;
       case 'trimestre':
-        const trimestreAtras = new Date(hoje);
-        trimestreAtras.setMonth(trimestreAtras.getMonth() - 3);
-        inicio = trimestreAtras.toISOString().split('T')[0];
+        inicio = shiftDateKey(hoje, { months: -3 });
         break;
       case 'ano':
-        const anoAtras = new Date(hoje);
-        anoAtras.setFullYear(anoAtras.getFullYear() - 1);
-        inicio = anoAtras.toISOString().split('T')[0];
+        inicio = shiftDateKey(hoje, { years: -1 });
         break;
       case 'todos':
         inicio = '';

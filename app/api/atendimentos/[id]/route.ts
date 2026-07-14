@@ -5,6 +5,7 @@ import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@
 import { PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 import { validarUsuarioPorRoles } from '../_helpers';
 import { garantirCamposEmpresaUnidades } from '@/lib/helpers/unidadesEmpresa';
+import { nowUtcIso } from '@/lib/time';
 
 interface Atendimento {
   id: number;
@@ -344,6 +345,7 @@ export const PUT = withUnit(async (request: NextRequest, context: UnitAuthentica
     // Monta query de update
     const updates: string[] = [];
     const updateParams: (string | number | null)[] = [];
+    const timestamp = nowUtcIso();
     
     if (status) {
       updates.push('status = ?');
@@ -353,7 +355,8 @@ export const PUT = withUnit(async (request: NextRequest, context: UnitAuthentica
       if (status === 'em_execucao' && atendimento.status === 'aguardando_pagamento') {
         updates.push('liberado_por_id = ?');
         updateParams.push(context.user.sub);
-        updates.push('liberado_em = datetime(\'now\', \'localtime\')');
+        updates.push('liberado_em = ?');
+        updateParams.push(timestamp);
       }
 
       // Ao voltar de execução para pagamento, limpa o contexto de liberação anterior.
@@ -366,7 +369,8 @@ export const PUT = withUnit(async (request: NextRequest, context: UnitAuthentica
       
       // Se finalizando, marca a data e motivo de saída (se fornecido)
       if (status === 'finalizado') {
-        updates.push('finalizado_at = CURRENT_TIMESTAMP');
+        updates.push('finalizado_at = ?');
+        updateParams.push(timestamp);
         if (motivo_saida) {
           updates.push('motivo_saida = ?');
           updateParams.push(motivo_saida);
@@ -547,9 +551,9 @@ export const DELETE = withUnit(async (_request: NextRequest, context: UnitAuthen
              NULLIF(observacoes_encerramento, ''),
              'Atendimento desconsiderado/arquivado manualmente.'
            ),
-           finalizado_at = COALESCE(finalizado_at, datetime('now', 'localtime'))
+           finalizado_at = COALESCE(finalizado_at, ?)
        WHERE id = ?`,
-      [atendimentoId]
+      [nowUtcIso(), atendimentoId]
     );
 
     return NextResponse.json({ success: true, archived: true });

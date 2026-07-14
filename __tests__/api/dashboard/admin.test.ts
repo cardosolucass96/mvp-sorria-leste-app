@@ -318,10 +318,13 @@ describe('GET /api/dashboard/admin — top procedimentos', () => {
 
 describe('GET /api/dashboard/admin — faturamento mensal', () => {
   it('retorna faturamento agrupado por mês', async () => {
-    mockQueryResponse("strftime('%y-%m', p.created_at)", [
-      { mes: '2025-07', faturamento: 20000, atendimentos: 15 },
-      { mes: '2025-08', faturamento: 25000, atendimentos: 18 },
-      { mes: '2025-09', faturamento: 22000, atendimentos: 16 },
+    mockQueryResponse('where p.created_at >= ? and a.unidade_id = ?', [
+      { created_at: '2025-07-10T15:00:00.000Z', valor: 12000, atendimento_id: 10 },
+      { created_at: '2025-07-20T15:00:00.000Z', valor: 8000, atendimento_id: 11 },
+      { created_at: '2025-08-12T15:00:00.000Z', valor: 25000, atendimento_id: 20 },
+      { created_at: '2025-09-03T15:00:00.000Z', valor: 10000, atendimento_id: 30 },
+      { created_at: '2025-09-25T15:00:00.000Z', valor: 12000, atendimento_id: 31 },
+      { created_at: '2025-09-26T15:00:00.000Z', valor: 5000, atendimento_id: 31 },
     ]);
 
     const { data } = await callRoute<AdminDashboard>(
@@ -331,20 +334,22 @@ describe('GET /api/dashboard/admin — faturamento mensal', () => {
     expect(data.faturamentoMensal).toHaveLength(3);
     expect(data.faturamentoMensal[0].mes).toBe('2025-07');
     expect(data.faturamentoMensal[0].faturamento).toBe(20000);
-    expect(data.faturamentoMensal[0].atendimentos).toBe(15);
+    expect(data.faturamentoMensal[0].atendimentos).toBe(2);
+    expect(data.faturamentoMensal[1]).toEqual({ mes: '2025-08', faturamento: 25000, atendimentos: 1 });
+    expect(data.faturamentoMensal[2]).toEqual({ mes: '2025-09', faturamento: 27000, atendimentos: 2 });
   });
 
   it('query busca últimos 6 meses', async () => {
-    mockQueryResponse("strftime('%y-%m', p.created_at)", []);
+    mockQueryResponse('where p.created_at >= ? and a.unidade_id = ?', []);
 
     await callRoute(getAdminDashboard, '/api/dashboard/admin');
 
     const queries = getExecutedQueries();
     const mensalQuery = queries.find(q =>
-      q.sql.includes("-6 months")
+      q.sql.includes('WHERE p.created_at >= ? AND a.unidade_id = ?')
     );
     expect(mensalQuery).toBeDefined();
-    expect(mensalQuery!.sql).toContain('ORDER BY mes ASC');
+    expect(mensalQuery!.sql).toContain('ORDER BY p.created_at ASC');
   });
 });
 
@@ -482,9 +487,8 @@ describe('GET /api/dashboard/admin — filtro de período', () => {
     });
 
     const queries = getExecutedQueries();
-    // Verifica que queries de atendimentos usam o filtro
     const filteredQueries = queries.filter(q =>
-      q.sql.includes('DATE(a.created_at) >= ?') && q.params.includes('2025-01-01')
+      q.sql.includes('a.created_at >= ?') && q.params.includes('2025-01-01T03:00:00.000Z')
     );
     expect(filteredQueries.length).toBeGreaterThan(0);
   });
@@ -496,7 +500,7 @@ describe('GET /api/dashboard/admin — filtro de período', () => {
 
     const queries = getExecutedQueries();
     const filteredQueries = queries.filter(q =>
-      q.sql.includes('DATE(a.created_at) <= ?') && q.params.includes('2025-12-31')
+      q.sql.includes('a.created_at <= ?') && q.params.includes('2026-01-01T02:59:59.999Z')
     );
     expect(filteredQueries.length).toBeGreaterThan(0);
   });
@@ -508,9 +512,10 @@ describe('GET /api/dashboard/admin — filtro de período', () => {
 
     const queries = getExecutedQueries();
     const filteredQueries = queries.filter(q =>
-      q.sql.includes('BETWEEN ? AND ?') &&
-      q.params.includes('2025-01-01') &&
-      q.params.includes('2025-06-30')
+      q.sql.includes('a.created_at >= ?') &&
+      q.sql.includes('a.created_at <= ?') &&
+      q.params.includes('2025-01-01T03:00:00.000Z') &&
+      q.params.includes('2025-07-01T02:59:59.999Z')
     );
     expect(filteredQueries.length).toBeGreaterThan(0);
   });
@@ -522,7 +527,10 @@ describe('GET /api/dashboard/admin — filtro de período', () => {
 
     const queries = getExecutedQueries();
     const pagQuery = queries.find(q =>
-      q.sql.includes('DATE(p.created_at) BETWEEN') && q.params.includes('2025-01-01')
+      q.sql.includes('p.created_at >= ?') &&
+      q.sql.includes('p.created_at <= ?') &&
+      q.params.includes('2025-01-01T03:00:00.000Z') &&
+      q.params.includes('2025-07-01T02:59:59.999Z')
     );
     expect(pagQuery).toBeDefined();
   });
@@ -531,11 +539,10 @@ describe('GET /api/dashboard/admin — filtro de período', () => {
     await callRoute(getAdminDashboard, '/api/dashboard/admin');
 
     const queries = getExecutedQueries();
-    // Status query não deve ter BETWEEN nem >= nem <=
     const statusQuery = queries.find(q => q.sql.includes('GROUP BY status'));
     expect(statusQuery!.sql).not.toContain('BETWEEN');
-    expect(statusQuery!.sql).not.toContain('DATE(a.created_at) >=');
-    expect(statusQuery!.sql).not.toContain('DATE(a.created_at) <=');
+    expect(statusQuery!.sql).not.toContain('a.created_at >=');
+    expect(statusQuery!.sql).not.toContain('a.created_at <=');
   });
 });
 

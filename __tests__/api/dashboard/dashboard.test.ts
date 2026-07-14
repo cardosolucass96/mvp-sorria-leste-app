@@ -94,7 +94,7 @@ describe('GET /api/dashboard — stats gerais', () => {
   });
 
   it('atendimentosHoje conta apenas do dia atual', async () => {
-    mockQueryResponse("date(created_at) = date('now'", [{ count: 5 }]);
+    mockQueryResponse('where created_at >= ? and created_at < ? and unidade_id = ?', [{ count: 5 }]);
 
     const { data } = await callRoute<DashboardStats>(getDashboard, '/api/dashboard');
     expect(data.atendimentosHoje).toBe(5);
@@ -296,7 +296,7 @@ describe('GET /api/dashboard — comissões do usuário', () => {
     // Verifica que filtra por mês corrente
     const queries = getExecutedQueries();
     const comissaoQuery = queries.find(q =>
-      q.sql.includes('comissoes') && q.sql.includes("strftime('%Y-%m'")
+      q.sql.includes('comissoes') && q.sql.includes('co.created_at >= ?') && q.sql.includes('co.created_at < ?')
     );
     expect(comissaoQuery).toBeDefined();
     expect(comissaoQuery!.params).toContain(3);

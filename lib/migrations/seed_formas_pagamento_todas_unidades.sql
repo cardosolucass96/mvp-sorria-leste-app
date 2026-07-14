@@ -56,8 +56,8 @@ SELECT
   source.subgrupo,
   source.metodo_base,
   source.ativo,
-  datetime('now', 'localtime'),
-  datetime('now', 'localtime')
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM unidades u
 CROSS JOIN source
 LEFT JOIN formas_pagamento fp
@@ -117,7 +117,7 @@ SET metodo_base = (
       WHERE source.grupo = formas_pagamento.grupo
         AND source.subgrupo = formas_pagamento.subgrupo
     ),
-    updated_at = datetime('now', 'localtime')
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE EXISTS (
     SELECT 1
     FROM source
@@ -178,7 +178,7 @@ VALUES
   ('Planos', 'OdontoPrime', 'crediario', 0, 0, 1)
 )
 UPDATE formas_pagamento_historico
-SET vigente_ate = datetime('now', 'localtime')
+SET vigente_ate = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id IN (
   SELECT h.id
   FROM formas_pagamento_historico h
@@ -245,10 +245,10 @@ SELECT
   fp.id,
   source.taxa_percentual,
   source.taxa_fixa,
-  datetime('now', 'localtime'),
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
   NULL,
   NULL,
-  datetime('now', 'localtime')
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM formas_pagamento fp
 JOIN source
   ON source.grupo = fp.grupo

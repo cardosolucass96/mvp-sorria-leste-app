@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS termos (
   ativo INTEGER NOT NULL DEFAULT 1,
   created_by INTEGER,
   updated_by INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (created_by) REFERENCES usuarios(id),
   FOREIGN KEY (updated_by) REFERENCES usuarios(id)
 );

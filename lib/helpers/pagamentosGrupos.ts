@@ -1,4 +1,5 @@
 import { execute, query, queryOne } from '@/lib/db';
+import { SQLITE_UTC_NOW_EXPRESSION } from '@/lib/time';
 
 interface SQLiteTabela {
   name: string;
@@ -26,7 +27,7 @@ export async function garantirEsquemaPagamentosGrupos() {
       observacoes TEXT,
       cancelado INTEGER NOT NULL DEFAULT 0,
       motivo_cancelamento TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+      created_at TEXT NOT NULL DEFAULT (${SQLITE_UTC_NOW_EXPRESSION}),
       FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
       FOREIGN KEY (recebido_por_id) REFERENCES usuarios(id)
     )

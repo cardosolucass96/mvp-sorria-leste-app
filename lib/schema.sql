@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   role TEXT NOT NULL CHECK (role IN ('atendente', 'avaliador', 'executor', 'admin')),
   ativo INTEGER NOT NULL DEFAULT 1,
   valor_diaria REAL NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 -- M2M: roles efetivas do usuário (source of truth de autorização)
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS usuario_roles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
   role TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE (usuario_id, role)
 );
 
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS categorias (
   ativo INTEGER NOT NULL DEFAULT 1,
   ordem INTEGER NOT NULL DEFAULT 0,
   pula_avaliacao INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 -- Roles que atendem cada categoria
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS categoria_roles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   categoria_id INTEGER NOT NULL REFERENCES categorias(id) ON DELETE CASCADE,
   role TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE (categoria_id, role)
 );
 
@@ -57,8 +57,8 @@ CREATE TABLE IF NOT EXISTS termos (
   ativo INTEGER NOT NULL DEFAULT 1,
   created_by INTEGER,
   updated_by INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (created_by) REFERENCES usuarios(id),
   FOREIGN KEY (updated_by) REFERENCES usuarios(id)
 );
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS clientes (
   sexo TEXT CHECK (sexo IN ('masculino', 'feminino', 'outro')),
   plano_odontologico TEXT CHECK (plano_odontologico IN ('Clin', 'Prime', 'OdontoArt')),
   observacoes TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 -- Catálogo de Procedimentos Odontológicos
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS procedimentos (
   tem_face INTEGER NOT NULL DEFAULT 0, -- 1 se a seleção de faces do dente é obrigatória (apenas para por_dente)
   categoria_id INTEGER REFERENCES categorias(id),
   ativo INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 -- Modelo de etapas/sessões de um procedimento
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS atendimentos (
   motivo_saida TEXT,
   observacoes TEXT,
   observacoes_encerramento TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   liberado_em TEXT, -- Data/hora da liberação para execução
   finalizado_at TEXT,
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS itens_atendimento (
     CHECK (status IN ('pendente', 'pago', 'executando', 'concluido')),
   adicionado_em_execucao INTEGER NOT NULL DEFAULT 0, -- 1 se foi adicionado pelo executor durante a execução (pode ser concluído antes do pagamento)
   observacoes TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   concluido_at TEXT,
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS pagamentos_grupos (
   observacoes TEXT,
   cancelado INTEGER NOT NULL DEFAULT 0,
   motivo_cancelamento TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (recebido_por_id) REFERENCES usuarios(id)
 );
@@ -197,8 +197,8 @@ CREATE TABLE IF NOT EXISTS formas_pagamento (
   subgrupo TEXT NOT NULL DEFAULT '',
   metodo_base TEXT NOT NULL CHECK (metodo_base IN ('dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'crediario', 'afins_sorria')),
   ativo INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id),
   UNIQUE (unidade_id, grupo, subgrupo)
 );
@@ -208,10 +208,10 @@ CREATE TABLE IF NOT EXISTS formas_pagamento_historico (
   forma_pagamento_id INTEGER NOT NULL,
   taxa_percentual REAL NOT NULL DEFAULT 0,
   taxa_fixa REAL NOT NULL DEFAULT 0,
-  vigente_de TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  vigente_de TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   vigente_ate TEXT,
   alterado_por_id INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (forma_pagamento_id) REFERENCES formas_pagamento(id) ON DELETE CASCADE,
   FOREIGN KEY (alterado_por_id) REFERENCES usuarios(id)
 );
@@ -234,7 +234,7 @@ CREATE TABLE IF NOT EXISTS pagamentos (
   observacoes TEXT,
   cancelado INTEGER DEFAULT 0,
   motivo_cancelamento TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (recebido_por_id) REFERENCES usuarios(id)
 );
@@ -249,7 +249,7 @@ CREATE TABLE IF NOT EXISTS pagamentos_alocacoes (
   criado_por_id INTEGER,
   origem_comissao TEXT CHECK (origem_comissao IN ('avaliacao', 'acrescimo')),
   percentual_comissao REAL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (pagamento_id) REFERENCES pagamentos(id),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
   FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id),
@@ -273,8 +273,8 @@ CREATE TABLE IF NOT EXISTS itens_atendimento_destinos (
     CHECK (destino_status IN ('indefinido', 'fazer_hoje', 'agendar', 'pago_sem_data', 'nao_pago_sem_data')),
   data_agendada TEXT,
   executor_id INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE (item_atendimento_id, etapa_modelo_id),
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
@@ -294,7 +294,7 @@ CREATE TABLE IF NOT EXISTS comissoes (
   percentual REAL NOT NULL, -- % da comissão aplicada
   valor_base REAL NOT NULL, -- Valor do procedimento
   valor_comissao REAL NOT NULL, -- Valor calculado da comissão
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
   FOREIGN KEY (pagamento_alocacao_id) REFERENCES pagamentos_alocacoes(id),
@@ -311,7 +311,7 @@ CREATE TABLE IF NOT EXISTS notas_execucao (
   item_atendimento_id INTEGER NOT NULL,
   usuario_id INTEGER NOT NULL, -- Quem escreveu a nota
   texto TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
@@ -326,7 +326,7 @@ CREATE TABLE IF NOT EXISTS anexos_execucao (
   caminho TEXT NOT NULL, -- Caminho no R2 ou local
   tamanho INTEGER NOT NULL, -- Tamanho em bytes
   descricao TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
@@ -341,7 +341,7 @@ CREATE TABLE IF NOT EXISTS anexos_cliente (
   caminho TEXT NOT NULL, -- Chave no R2
   tamanho INTEGER NOT NULL, -- Tamanho em bytes
   descricao TEXT, -- Observação do atendente sobre o arquivo
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
@@ -353,8 +353,8 @@ CREATE TABLE IF NOT EXISTS prontuarios (
   usuario_id INTEGER NOT NULL, -- Executor que preencheu
   descricao TEXT NOT NULL, -- Descrição detalhada do procedimento realizado (mínimo 50 caracteres)
   observacoes TEXT, -- Observações adicionais opcionais
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
@@ -383,8 +383,8 @@ CREATE TABLE IF NOT EXISTS agendamentos (
   unidade_id INTEGER,
   legado_fonte TEXT,
   legado_id TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
   FOREIGN KEY (atendimento_origem_id) REFERENCES atendimentos(id),
   FOREIGN KEY (item_atendimento_origem_id) REFERENCES itens_atendimento(id),
@@ -419,8 +419,8 @@ CREATE TABLE IF NOT EXISTS followup_tarefas (
   excluida_em TEXT,
   legado_fonte TEXT,
   legado_id TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id),
   FOREIGN KEY (responsavel_usuario_id) REFERENCES usuarios(id),
@@ -434,7 +434,7 @@ CREATE TABLE IF NOT EXISTS saldo_clientes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   cliente_id INTEGER NOT NULL UNIQUE,
   saldo REAL NOT NULL DEFAULT 0,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id)
 );
 
@@ -454,7 +454,7 @@ CREATE TABLE IF NOT EXISTS movimentacoes_saldo (
   atendimento_id INTEGER,
   cliente_destino_id INTEGER,
   observacoes TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
   FOREIGN KEY (pagamento_id) REFERENCES pagamentos(id),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
@@ -477,7 +477,7 @@ CREATE TABLE IF NOT EXISTS fechamentos_caixa (
   fechado_por_id INTEGER,
   fechado_em TEXT,
   updated_by_id INTEGER,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id),
   FOREIGN KEY (fechado_por_id) REFERENCES usuarios(id),
   FOREIGN KEY (updated_by_id) REFERENCES usuarios(id)
@@ -496,7 +496,7 @@ CREATE TABLE IF NOT EXISTS fechamento_caixa_eventos (
   depois_json TEXT,
   motivo TEXT,
   usuario_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
@@ -507,7 +507,7 @@ CREATE TABLE IF NOT EXISTS vinculos_clientes (
   cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
   cliente_vinculado_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
   observacao TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   CHECK (cliente_id != cliente_vinculado_id)
 );
 
@@ -523,7 +523,7 @@ CREATE TABLE IF NOT EXISTS unidades (
   responsavel TEXT,
   recibo_rodape TEXT,
   ativo INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 -- Tabela ponte: usuários <-> unidades (N:N)
@@ -531,7 +531,7 @@ CREATE TABLE IF NOT EXISTS usuario_unidades (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   usuario_id INTEGER NOT NULL,
   unidade_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id),
   UNIQUE(usuario_id, unidade_id)

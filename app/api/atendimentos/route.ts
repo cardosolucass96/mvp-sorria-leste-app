@@ -3,6 +3,7 @@ import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { validarUsuarioPorRoles } from './_helpers';
 import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
+import { getClinicDayUtcRange, getClinicTrailingDaysUtcRange } from '@/lib/time';
 import type { AtendimentoStatus } from '@/lib/types';
 
 interface Atendimento {
@@ -37,10 +38,6 @@ const STATUSES_EM_FLUXO: AtendimentoStatus[] = [
   'em_execucao',
 ];
 
-const DATA_HOJE_SQL = "date('now', 'localtime')";
-const FINALIZADO_HOJE_SQL = `(a.status = ? AND date(COALESCE(a.finalizado_at, a.created_at)) = ${DATA_HOJE_SQL})`;
-const CRIADO_HOJE_SEM_ENCERRADO_SQL = `(a.status NOT IN (?, ?) AND date(a.created_at) = ${DATA_HOJE_SQL})`;
-
 // GET /api/atendimentos - Lista atendimentos da unidade atual
 export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
@@ -49,6 +46,9 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const clienteId = searchParams.get('cliente_id');
     const busca = searchParams.get('busca');
     const periodo = searchParams.get('periodo') as AtendimentoPeriodoFiltro | null;
+    const hojeRange = getClinicDayUtcRange();
+    const ultimos7DiasRange = getClinicTrailingDaysUtcRange(7);
+    const ultimos30DiasRange = getClinicTrailingDaysUtcRange(30);
 
     let sql = `
       SELECT
@@ -76,19 +76,50 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     switch (periodo) {
       case 'hoje_ou_fluxo':
         conditions.push(
-          `(${CRIADO_HOJE_SEM_ENCERRADO_SQL} OR ${FINALIZADO_HOJE_SQL} OR a.status IN (${STATUSES_EM_FLUXO.map(() => '?').join(', ')}))`
+          `(
+            (a.status NOT IN (?, ?) AND a.created_at >= ? AND a.created_at < ?)
+            OR
+            (a.status = ? AND COALESCE(a.finalizado_at, a.created_at) >= ? AND COALESCE(a.finalizado_at, a.created_at) < ?)
+            OR
+            a.status IN (${STATUSES_EM_FLUXO.map(() => '?').join(', ')})
+          )`
         );
-        params.push('finalizado', 'encerrado', 'finalizado', ...STATUSES_EM_FLUXO);
+        params.push(
+          'finalizado',
+          'encerrado',
+          hojeRange.start,
+          hojeRange.endExclusive,
+          'finalizado',
+          hojeRange.start,
+          hojeRange.endExclusive,
+          ...STATUSES_EM_FLUXO,
+        );
         break;
       case 'hoje':
-        conditions.push(`(${CRIADO_HOJE_SEM_ENCERRADO_SQL} OR ${FINALIZADO_HOJE_SQL})`);
-        params.push('finalizado', 'encerrado', 'finalizado');
+        conditions.push(
+          `(
+            (a.status NOT IN (?, ?) AND a.created_at >= ? AND a.created_at < ?)
+            OR
+            (a.status = ? AND COALESCE(a.finalizado_at, a.created_at) >= ? AND COALESCE(a.finalizado_at, a.created_at) < ?)
+          )`
+        );
+        params.push(
+          'finalizado',
+          'encerrado',
+          hojeRange.start,
+          hojeRange.endExclusive,
+          'finalizado',
+          hojeRange.start,
+          hojeRange.endExclusive,
+        );
         break;
       case '7dias':
-        conditions.push("date(a.created_at) >= date('now', 'localtime', '-6 days')");
+        conditions.push('a.created_at >= ? AND a.created_at < ?');
+        params.push(ultimos7DiasRange.start, ultimos7DiasRange.endExclusive);
         break;
       case '30dias':
-        conditions.push("date(a.created_at) >= date('now', 'localtime', '-29 days')");
+        conditions.push('a.created_at >= ? AND a.created_at < ?');
+        params.push(ultimos30DiasRange.start, ultimos30DiasRange.endExclusive);
         break;
       default:
         break;

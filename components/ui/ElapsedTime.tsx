@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { parseStoredUtcInstant } from '@/lib/time';
 import { tempoDecorrido } from '@/lib/utils/formatters';
 
 interface ElapsedTimeProps {
@@ -10,29 +11,7 @@ interface ElapsedTimeProps {
 }
 
 function parseDateFallback(valor: string): Date | null {
-  const texto = valor.trim();
-  if (!texto) return null;
-
-  const normalizado = texto.includes(' ')
-    ? texto.replace(' ', 'T')
-    : texto;
-
-  const semMicros = normalizado.replace(/(\.\d{3})\d+(?=(Z|[+-]\d{2}:\d{2}|$))/, '$1');
-  const candidatos = [
-    semMicros,
-    normalizado,
-    normalizado.replace('Z', ''),
-    texto,
-  ];
-
-  for (const candidato of candidatos) {
-    const d = new Date(candidato);
-    if (!Number.isNaN(d.getTime())) {
-      return d;
-    }
-  }
-
-  return null;
+  return parseStoredUtcInstant(valor);
 }
 
 function formatarDuracao(diffMs: number): string {

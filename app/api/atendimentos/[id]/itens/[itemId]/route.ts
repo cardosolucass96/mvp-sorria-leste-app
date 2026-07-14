@@ -3,6 +3,7 @@ import { queryOne, execute, query } from '@/lib/db';
 import { gerarComissoesExecucaoItem } from '@/lib/helpers/gerarComissoes';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
+import { nowUtcIso } from '@/lib/time';
 
 interface ItemAtendimento {
   id: number;
@@ -369,7 +370,8 @@ export const PUT = withUnit(async (
       
       // Se concluindo, marca a data
       if (status === 'concluido') {
-        updates.push('concluido_at = CURRENT_TIMESTAMP');
+        updates.push('concluido_at = ?');
+        updateParams.push(nowUtcIso());
       }
     }
     
@@ -421,10 +423,11 @@ export const PUT = withUnit(async (
           );
           atendimentoVoltouParaPagamento = res.changes > 0;
         } else {
+          const finalizadoAt = nowUtcIso();
           const res = await execute(
-            `UPDATE atendimentos SET status = 'finalizado', finalizado_at = datetime('now','localtime')
+            `UPDATE atendimentos SET status = 'finalizado', finalizado_at = ?
              WHERE id = ? AND status = 'em_execucao'`,
-            [parseInt(id)]
+            [finalizadoAt, parseInt(id)]
           );
           atendimentoFinalizado = res.changes > 0;
         }

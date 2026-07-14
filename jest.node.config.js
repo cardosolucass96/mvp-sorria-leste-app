@@ -1,10 +1,11 @@
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
-  displayName: 'components',
+  displayName: 'node',
   preset: 'ts-jest',
-  testEnvironment: 'jsdom',
+  testEnvironment: 'node',
+  setupFiles: ['<rootDir>/__tests__/setup-env.ts'],
   roots: ['<rootDir>'],
-  testMatch: ['**/__tests__/components/**/*.test.tsx'],
+  testMatch: ['**/__tests__/**/*.test.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     '^@opennextjs/cloudflare$': '<rootDir>/__mocks__/opennextjs-cloudflare.ts',
@@ -20,4 +21,8 @@ module.exports = {
     '<rootDir>/tmp/',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  collectCoverageFrom: [
+    'lib/**/*.ts',
+    '!lib/**/*.d.ts',
+  ],
 };

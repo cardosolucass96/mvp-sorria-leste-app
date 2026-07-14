@@ -155,7 +155,7 @@ describe('Sprint 8 - Execução (Dentista Executor)', () => {
         'utf-8'
       );
       expect(content).toContain('concluido_at');
-      expect(content).toContain('CURRENT_TIMESTAMP');
+      expect(content).toContain('concluido_at = ?');
     });
 
     test('API deve validar permissões para executar', () => {

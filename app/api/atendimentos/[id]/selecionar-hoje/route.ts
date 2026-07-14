@@ -3,6 +3,7 @@ import { execute, query, queryOne } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
 import { resolverExecutorDestinoId } from '@/lib/utils/destinoExecutor';
+import { clinicDateTimeInputToUtcIso, nowUtcIso } from '@/lib/time';
 
 type DestinoStatus = 'fazer_hoje' | 'agendar' | 'pago_sem_data' | 'nao_pago_sem_data';
 type AcaoFinal = 'liberar_execucao' | 'finalizar_continuacao';
@@ -154,6 +155,17 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     const atendimentoId = parseInt(params!.id as string);
     const body = await request.json();
     const destinos = (body.destinos ?? []) as DestinoInput[];
+    const destinosNormalizados = destinos.map((destino) => {
+      const dataAgendadaUtc = clinicDateTimeInputToUtcIso(destino.data_agendada);
+      if (destino.data_agendada && !dataAgendadaUtc) {
+        throw new Error(`Data agendada inválida para o item ${destino.item_id}`);
+      }
+
+      return {
+        ...destino,
+        data_agendada: dataAgendadaUtc,
+      };
+    });
     const acaoFinal = (body.acao_final ?? 'liberar_execucao') as AcaoFinal;
 
     if (!Array.isArray(destinos) || destinos.length === 0) {
@@ -178,7 +190,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     }
 
     const executorIds = [...new Set(
-      destinos
+      destinosNormalizados
         .map((destino) => destino.executor_id)
         .filter((executorId): executorId is number => typeof executorId === 'number' && Number.isFinite(executorId))
     )];
@@ -195,7 +207,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     await execute('DELETE FROM itens_atendimento_destinos WHERE atendimento_id = ?', [atendimentoId]);
 
-    for (const destino of destinos) {
+    for (const destino of destinosNormalizados) {
       await execute(
         `INSERT INTO itens_atendimento_destinos
           (atendimento_id, item_atendimento_id, etapa_modelo_id, destino_status, data_agendada, executor_id)
@@ -216,7 +228,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       [atendimentoId]
     );
     const destinosPorItem = new Map<number, DestinoInput[]>();
-    for (const destino of destinos) {
+    for (const destino of destinosNormalizados) {
       const atual = destinosPorItem.get(destino.item_id) ?? [];
       atual.push(destino);
       destinosPorItem.set(destino.item_id, atual);
@@ -421,15 +433,16 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     }
 
     if (acaoFinal === 'finalizar_continuacao') {
+      const finalizadoAt = nowUtcIso();
       await execute(
         `UPDATE atendimentos
          SET status = 'finalizado',
-             finalizado_at = datetime('now', 'localtime'),
+             finalizado_at = ?,
              motivo_saida = 'continuacao',
              liberado_por_id = NULL,
              liberado_em = NULL
          WHERE id = ? AND unidade_id = ?`,
-        [atendimentoId, context.unidadeId]
+        [finalizadoAt, atendimentoId, context.unidadeId]
       );
     }
 

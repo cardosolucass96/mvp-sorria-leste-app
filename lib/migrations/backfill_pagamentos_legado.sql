@@ -179,7 +179,7 @@ SELECT
   printf('Backfill legado automático (%d)', ar.atendimento_id),
   COALESCE(
     (SELECT MAX(i.created_at) FROM itens_atendimento i WHERE i.atendimento_id = ar.atendimento_id AND COALESCE(i.valor_pago, 0) > 0),
-    datetime('now', 'localtime')
+    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   )
 FROM atendimento_remaining ar
 WHERE ar.residual_total > 0.004

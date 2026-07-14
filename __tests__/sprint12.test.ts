@@ -680,8 +680,8 @@ describe('Schema SQL — completude e integridade', () => {
     expect(schema).toContain('item_atendimento_id INTEGER NOT NULL UNIQUE');
   });
 
-  test('todos os timestamps usam datetime(\'now\', \'localtime\')', () => {
-    const defaultTimestamps = (schema.match(/DEFAULT \(datetime\('now', 'localtime'\)\)/g) || []).length;
+  test('todos os timestamps usam default UTC ISO no schema', () => {
+    const defaultTimestamps = (schema.match(/DEFAULT \(strftime\('%Y-%m-%dT%H:%M:%fZ', 'now'\)\)/g) || []).length;
     // Cada tabela com created_at (12 tabelas) + prontuarios.updated_at = 13
     expect(defaultTimestamps).toBeGreaterThanOrEqual(12);
   });

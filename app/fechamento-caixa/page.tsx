@@ -49,6 +49,7 @@ import {
   calculateFechamentoPagamentoTotais,
   createEmptyFechamentoCaixaDraft,
 } from '@/lib/fechamento-caixa/compute';
+import { addDaysToClinicDateKey, getClinicDateKey, parseStoredUtcInstant } from '@/lib/time';
 import type {
   FechamentoCaixaDraft,
   FechamentoCaixaLancamentoManual,
@@ -77,20 +78,16 @@ function getPagamentoFormaLabel(forma: {
 }
 
 function todayIso(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getClinicDateKey();
 }
 
 function addDaysIso(value: string, delta: number): string {
-  const date = new Date(`${value}T12:00:00`);
-  date.setDate(date.getDate() + delta);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return addDaysToClinicDateKey(value, delta);
+}
+
+function getStoredInstantTime(value: string | null | undefined): number {
+  const parsed = parseStoredUtcInstant(value);
+  return parsed ? parsed.getTime() : 0;
 }
 
 function escapeHtml(value: unknown): string {
@@ -259,8 +256,8 @@ function buildAvaliadosPorDentista(
 
   grouped.forEach((itemsByKey, usuarioId) => {
     const sortedItems = Array.from(itemsByKey.values()).sort((a, b) => {
-      const dateA = a.pago_em ? new Date(a.pago_em.replace(' ', 'T')).getTime() : 0;
-      const dateB = b.pago_em ? new Date(b.pago_em.replace(' ', 'T')).getTime() : 0;
+      const dateA = getStoredInstantTime(a.pago_em);
+      const dateB = getStoredInstantTime(b.pago_em);
       if (dateB !== dateA) return dateB - dateA;
       return a.procedimento_label.localeCompare(b.procedimento_label, 'pt-BR');
     });

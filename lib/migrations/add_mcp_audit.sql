@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS mcp_audit_log (
   ferramenta TEXT NOT NULL,
   unidade_id INTEGER,
   sucesso INTEGER NOT NULL CHECK (sucesso IN (0, 1)),
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id)
 );

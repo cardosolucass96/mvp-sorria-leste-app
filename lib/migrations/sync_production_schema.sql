@@ -43,8 +43,8 @@ CREATE TABLE IF NOT EXISTS agendamentos_new (
   etapa_modelo_id INTEGER,
   pago INTEGER NOT NULL DEFAULT 0,
   unidade_id INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
   FOREIGN KEY (atendimento_origem_id) REFERENCES atendimentos(id),
   FOREIGN KEY (item_atendimento_origem_id) REFERENCES itens_atendimento(id),
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS pagamentos_grupos (
   observacoes TEXT,
   cancelado INTEGER NOT NULL DEFAULT 0,
   motivo_cancelamento TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (recebido_por_id) REFERENCES usuarios(id)
 );

@@ -4,7 +4,7 @@ import React, { useState, useEffect, use, useCallback } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatarMoeda, formatarDataHora, formatarDataHoraLocal, tempoDecorrido, nomeProcedimentoItem, formatarDenteUnicoComFaces, formatarDentes, formatarCPF, formatarCNPJ } from '@/lib/utils/formatters';
+import { formatarMoeda, formatarDataHora, tempoDecorrido, nomeProcedimentoItem, formatarDenteUnicoComFaces, formatarDentes, formatarCPF, formatarCNPJ } from '@/lib/utils/formatters';
 import { STATUS_CONFIG, PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 import type { AtendimentoStatus, AtendimentoTipo } from '@/lib/types';
 import { StatusBadge, StatusPipeline } from '@/components/domain';
@@ -985,7 +985,7 @@ export default function AtendimentoDetalhePage({
             dente_unico: alocacao.dente_unico,
           });
           const complemento = alocacao.agendamento_id && alocacao.data_agendada
-            ? ` · agendado para ${formatarDataHoraLocal(alocacao.data_agendada)}`
+            ? ` · agendado para ${formatarDataHora(alocacao.data_agendada)}`
             : '';
 
           return `

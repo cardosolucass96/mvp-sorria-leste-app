@@ -3,6 +3,7 @@ import { query, queryOne, execute } from '@/lib/db';
 import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento } from '@/lib/types';
 import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
+import { getClinicDayUtcRange } from '@/lib/time';
 
 interface ItemOrigem {
   criado_por_id: number;
@@ -53,6 +54,7 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
   try {
     const { id } = await context.params!;
     const agendamentoId = parseInt(id as string);
+    const hojeRange = getClinicDayUtcRange();
 
     // 1. Buscar agendamento disparador e validar status
     const agendamento = await queryOne<Agendamento>(
@@ -89,10 +91,10 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
          AND status IN ('pendente', 'agendado')
          AND (
            id = ?
-           OR date(data_agendada) = date('now','localtime')
+           OR (data_agendada >= ? AND data_agendada < ?)
          )
        ORDER BY id ASC`,
-      [agendamento.cliente_id, unidadeId, agendamentoId]
+      [agendamento.cliente_id, unidadeId, agendamentoId, hojeRange.start, hojeRange.endExclusive]
     );
 
     // Garante que o disparador sempre está incluído (caso data_agendada seja null)
@@ -272,8 +274,8 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
       const atendimentoAberto = await queryOne<AtendimentoExistente>(
         `SELECT id FROM atendimentos
          WHERE cliente_id = ? AND status NOT IN ('finalizado', 'encerrado')
-         AND date(created_at) = date('now','localtime') AND unidade_id = ?`,
-        [agendamento.cliente_id, unidadeId]
+         AND created_at >= ? AND created_at < ? AND unidade_id = ?`,
+        [agendamento.cliente_id, hojeRange.start, hojeRange.endExclusive, unidadeId]
       );
 
       if (atendimentoAberto) {
@@ -311,8 +313,8 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
       const atendimentoAberto = await queryOne<AtendimentoExistente>(
         `SELECT id FROM atendimentos
          WHERE cliente_id = ? AND status NOT IN ('finalizado', 'encerrado')
-         AND date(created_at) = date('now','localtime') AND unidade_id = ?`,
-        [agendamento.cliente_id, unidadeId]
+         AND created_at >= ? AND created_at < ? AND unidade_id = ?`,
+        [agendamento.cliente_id, hojeRange.start, hojeRange.endExclusive, unidadeId]
       );
 
       if (atendimentoAberto) {

@@ -1,4 +1,5 @@
 import { execute, query, queryOne } from '@/lib/db';
+import { SQLITE_UTC_NOW_EXPRESSION } from '@/lib/time';
 
 interface SQLiteRow {
   name: string;
@@ -27,8 +28,8 @@ export async function garantirTermosSchema() {
         ativo INTEGER NOT NULL DEFAULT 1,
         created_by INTEGER,
         updated_by INTEGER,
-        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        created_at TEXT NOT NULL DEFAULT (${SQLITE_UTC_NOW_EXPRESSION}),
+        updated_at TEXT NOT NULL DEFAULT (${SQLITE_UTC_NOW_EXPRESSION}),
         FOREIGN KEY (created_by) REFERENCES usuarios (id),
         FOREIGN KEY (updated_by) REFERENCES usuarios (id)
       )

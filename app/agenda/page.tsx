@@ -43,6 +43,7 @@ import {
   startOfAgendaMonth,
   startOfAgendaWeek,
 } from '@/lib/utils/agendaCalendar';
+import { addDaysToClinicDateKey, getClinicDateKey } from '@/lib/time';
 
 interface Agendamento {
   id: number;
@@ -157,10 +158,6 @@ const GROUP_EXECUTOR_CLEAR_VALUE = '__clear__';
 
 function isAgendamentoAtivo(status: string) {
   return status === 'pendente' || status === 'agendado';
-}
-
-function formatDate(d: Date) {
-  return d.toISOString().slice(0, 10);
 }
 
 function getDateTimeLocalMinValue() {
@@ -835,24 +832,22 @@ export default function AgendaPage() {
   // ─── Filtros rápidos ─────────────────────────────────────────
 
   const aplicarFiltroRapido = (tipo: string) => {
-    const hoje = new Date();
+    const hoje = getClinicDateKey();
     switch (tipo) {
       case 'hoje':
-        setDataInicio(formatDate(hoje));
-        setDataFim(formatDate(hoje));
+        setDataInicio(hoje);
+        setDataFim(hoje);
         break;
       case 'amanha': {
-        const amanha = new Date(hoje);
-        amanha.setDate(amanha.getDate() + 1);
-        setDataInicio(formatDate(amanha));
-        setDataFim(formatDate(amanha));
+        const amanha = addDaysToClinicDateKey(hoje, 1);
+        setDataInicio(amanha);
+        setDataFim(amanha);
         break;
       }
       case 'semana': {
-        const fimSemana = new Date(hoje);
-        fimSemana.setDate(fimSemana.getDate() + (7 - fimSemana.getDay()));
-        setDataInicio(formatDate(hoje));
-        setDataFim(formatDate(fimSemana));
+        const fimSemana = formatAgendaDateKey(endOfAgendaWeek(parseAgendaDateKey(hoje)));
+        setDataInicio(hoje);
+        setDataFim(fimSemana);
         break;
       }
       case 'todos':
@@ -868,7 +863,7 @@ export default function AgendaPage() {
   const agrupados = useMemo<GrupoCliente[]>(() => {
     const map = new Map<string, GrupoCliente>();
     for (const ag of agendamentos) {
-      const dataKey = ag.data_agendada ? ag.data_agendada.slice(0, 10) : 'sem-data';
+      const dataKey = getAgendaDateKey(ag.data_agendada) ?? 'sem-data';
       const key = `${ag.cliente_id}_${dataKey}`;
       if (!map.has(key)) {
         map.set(key, {

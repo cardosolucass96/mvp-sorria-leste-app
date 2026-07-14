@@ -1,4 +1,10 @@
 import { execute, query, queryOne } from '@/lib/db';
+import {
+  getClinicDayUtcRange,
+  nowUtcIso,
+  parseStoredUtcInstant,
+  SQLITE_UTC_NOW_EXPRESSION,
+} from '@/lib/time';
 import { nomeProcedimentoItem } from '@/lib/utils/formatters';
 import {
   applyFechamentoCaixaDraft,
@@ -170,15 +176,13 @@ function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function nowSqlite(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+function nowUtcTimestamp(): string {
+  return nowUtcIso();
+}
+
+function getStoredInstantTime(value: string | null | undefined): number {
+  const parsed = parseStoredUtcInstant(value);
+  return parsed ? parsed.getTime() : 0;
 }
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -435,7 +439,7 @@ function normalizeDraft(value: unknown): FechamentoCaixaDraft {
     descricao: normalizeText(item.descricao),
     valor: normalizeOptionalNumber(item.valor) ?? 0,
     motivo: normalizeText(item.motivo),
-    created_at: normalizeText(item.created_at) || nowSqlite(),
+    created_at: normalizeText(item.created_at) || nowUtcTimestamp(),
   }));
 
   return {
@@ -702,7 +706,7 @@ export async function garantirSchemaFechamentoCaixa() {
       fechado_por_id INTEGER,
       fechado_em TEXT,
       updated_by_id INTEGER,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+      updated_at TEXT NOT NULL DEFAULT (${SQLITE_UTC_NOW_EXPRESSION}),
       FOREIGN KEY (unidade_id) REFERENCES unidades(id),
       FOREIGN KEY (fechado_por_id) REFERENCES usuarios(id),
       FOREIGN KEY (updated_by_id) REFERENCES usuarios(id)
@@ -726,7 +730,7 @@ export async function garantirSchemaFechamentoCaixa() {
       depois_json TEXT,
       motivo TEXT,
       usuario_id INTEGER NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+      created_at TEXT NOT NULL DEFAULT (${SQLITE_UTC_NOW_EXPRESSION}),
       FOREIGN KEY (unidade_id) REFERENCES unidades(id),
       FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
     )
@@ -745,7 +749,7 @@ export async function garantirSchemaFechamentoCaixa() {
   }
   const temUpdatedAt = fechamentoColunas.some((coluna) => coluna.name === 'updated_at');
   if (!temUpdatedAt) {
-    await execute("ALTER TABLE fechamentos_caixa ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))");
+    await execute(`ALTER TABLE fechamentos_caixa ADD COLUMN updated_at TEXT NOT NULL DEFAULT (${SQLITE_UTC_NOW_EXPRESSION})`);
   }
 
   schemaGarantido = true;
@@ -762,6 +766,7 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
     'SELECT nome FROM unidades WHERE id = ?',
     [unidadeId]
   );
+  const { start: dayStartUtc, endExclusive: dayEndUtc } = getClinicDayUtcRange(dataReferencia);
 
   const profissionaisAtivos = await query<UsuarioClinicoRow>(
     `SELECT DISTINCT u.id, u.nome, u.valor_diaria
@@ -788,8 +793,9 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      INNER JOIN atendimentos a ON a.id = p.atendimento_id
      WHERE a.unidade_id = ?
        AND p.cancelado = 0
-       AND DATE(p.created_at) = ?`,
-    [unidadeId, dataReferencia]
+       AND p.created_at >= ?
+       AND p.created_at < ?`,
+    [unidadeId, dayStartUtc, dayEndUtc]
   );
 
   const faturamentoPorMetodo = await query<PagamentoMetodoRow>(
@@ -801,10 +807,11 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      INNER JOIN atendimentos a ON a.id = p.atendimento_id
      WHERE a.unidade_id = ?
        AND p.cancelado = 0
-       AND DATE(p.created_at) = ?
+       AND p.created_at >= ?
+       AND p.created_at < ?
      GROUP BY p.metodo
      ORDER BY total DESC`,
-    [unidadeId, dataReferencia]
+    [unidadeId, dayStartUtc, dayEndUtc]
   );
 
   const canceladosRow = await queryOne<PagamentoCanceladoRow>(
@@ -815,8 +822,9 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      INNER JOIN atendimentos a ON a.id = p.atendimento_id
      WHERE a.unidade_id = ?
        AND p.cancelado = 1
-       AND DATE(p.created_at) = ?`,
-    [unidadeId, dataReferencia]
+       AND p.created_at >= ?
+       AND p.created_at < ?`,
+    [unidadeId, dayStartUtc, dayEndUtc]
   );
 
   const pagamentosRecebidosRows = await query<PagamentoRecebidoRow>(
@@ -852,9 +860,10 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      LEFT JOIN usuarios u ON u.id = p.recebido_por_id
      LEFT JOIN pagamentos_grupos pg ON pg.id = p.pagamento_grupo_id
      WHERE a.unidade_id = ?
-       AND DATE(p.created_at) = ?
+       AND p.created_at >= ?
+       AND p.created_at < ?
      ORDER BY COALESCE(pg.created_at, p.created_at) DESC, p.created_at DESC, p.id DESC`,
-    [unidadeId, dataReferencia]
+    [unidadeId, dayStartUtc, dayEndUtc]
   );
 
   const avaliacoesPagasRows = await query<AvaliacaoPagaRow>(
@@ -887,6 +896,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      WHERE a.unidade_id = ?
        AND pg.cancelado = 0
        AND pa.item_atendimento_id IS NOT NULL
+       AND pa.created_at >= ?
+       AND pa.created_at < ?
 
      UNION ALL
 
@@ -918,8 +929,10 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      LEFT JOIN usuarios u ON u.id = pa.criado_por_id
      WHERE ag.unidade_id = ?
        AND pg.cancelado = 0
-       AND pa.agendamento_id IS NOT NULL`,
-    [unidadeId, unidadeId]
+       AND pa.agendamento_id IS NOT NULL
+       AND pa.created_at >= ?
+       AND pa.created_at < ?`,
+    [unidadeId, dayStartUtc, dayEndUtc, unidadeId, dayStartUtc, dayEndUtc]
   );
 
   const procedimentosRows = await query<ProcedimentoRow>(
@@ -951,9 +964,10 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      WHERE a.unidade_id = ?
        AND i.status = 'concluido'
        AND i.concluido_at IS NOT NULL
-       AND DATE(i.concluido_at) = ?
+       AND i.concluido_at >= ?
+       AND i.concluido_at < ?
      ORDER BY i.concluido_at DESC, i.id DESC`,
-    [unidadeId, dataReferencia]
+    [unidadeId, dayStartUtc, dayEndUtc]
   );
 
   const comissoesRows = await query<ComissaoRow>(
@@ -973,8 +987,9 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
      WHERE a.unidade_id = ?
        AND i.status = 'concluido'
        AND i.concluido_at IS NOT NULL
-       AND DATE(i.concluido_at) = ?`,
-    [unidadeId, dataReferencia]
+       AND i.concluido_at >= ?
+       AND i.concluido_at < ?`,
+    [unidadeId, dayStartUtc, dayEndUtc]
   );
 
   const dentistasMap = new Map<number, FechamentoCaixaVisao['dentistas'][number]>();
@@ -1054,14 +1069,13 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
     };
 
     current.valor_base = roundMoney(current.valor_base + valorAlocado);
-    if (row.pago_em && (!current.pago_em || row.pago_em.localeCompare(current.pago_em) > 0)) {
+    if (row.pago_em && getStoredInstantTime(row.pago_em) > getStoredInstantTime(current.pago_em)) {
       current.pago_em = row.pago_em;
     }
     avaliacoesPagasAgrupadas.set(key, current);
   });
 
   const avaliacoesPagasDia = Array.from(avaliacoesPagasAgrupadas.values())
-    .filter((row) => row.pago_em?.slice(0, 10) === dataReferencia)
     .map((row) => ({
       key: row.key,
       usuario_id: row.usuario_id,
@@ -1077,7 +1091,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
       manualmente_editado: false,
       ajustes: [],
     }))
-    .sort((a, b) => (b.pago_em || '').localeCompare(a.pago_em || '') || a.procedimento_label.localeCompare(b.procedimento_label, 'pt-BR'));
+    .sort((a, b) => getStoredInstantTime(b.pago_em) - getStoredInstantTime(a.pago_em)
+      || a.procedimento_label.localeCompare(b.procedimento_label, 'pt-BR'));
 
   avaliacoesPagasDia.forEach((avaliacao) => {
     const dentista = dentistasMap.get(avaliacao.usuario_id);
@@ -1163,8 +1178,8 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
     ...dentista,
     total_dia: roundMoney(dentista.valor_diaria + dentista.comissao_avaliacao),
     procedimentos_executados: dentista.procedimentos_executados.sort((a, b) => {
-      const dateA = a.concluido_at ? new Date(a.concluido_at.replace(' ', 'T')).getTime() : 0;
-      const dateB = b.concluido_at ? new Date(b.concluido_at.replace(' ', 'T')).getTime() : 0;
+      const dateA = getStoredInstantTime(a.concluido_at);
+      const dateB = getStoredInstantTime(b.concluido_at);
       return dateB - dateA;
     }),
   }));
@@ -1275,7 +1290,7 @@ async function saveFechamentoRow(params: {
       params.fechadoPorId ?? null,
       params.fechadoEm ?? null,
       params.updatedById,
-      nowSqlite(),
+      nowUtcTimestamp(),
     ]
   );
 }
@@ -1409,7 +1424,7 @@ export async function fecharFechamentoCaixa(params: {
   validateDraft(draft);
   const base = await construirBaseFechamentoCaixa(params.unidadeId, params.dataReferencia);
   const snapshot = applyFechamentoCaixaDraft(base, draft);
-  const fechadoEm = nowSqlite();
+  const fechadoEm = nowUtcTimestamp();
 
   await saveFechamentoRow({
     unidadeId: params.unidadeId,

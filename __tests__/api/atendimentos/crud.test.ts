@@ -93,8 +93,8 @@ describe('GET /api/atendimentos', () => {
     });
 
     const queries = getExecutedQueries();
-    expect(queries[0].sql).toContain("date(a.created_at) = date('now', 'localtime')");
-    expect(queries[0].sql).toContain("date(COALESCE(a.finalizado_at, a.created_at)) = date('now', 'localtime')");
+    expect(queries[0].sql).toContain('a.created_at >= ? AND a.created_at < ?');
+    expect(queries[0].sql).toContain('COALESCE(a.finalizado_at, a.created_at) >= ? AND COALESCE(a.finalizado_at, a.created_at) < ?');
     expect(queries[0].sql).toContain('a.status NOT IN (?, ?)');
     expect(queries[0].sql).toContain('a.status IN (?, ?, ?, ?)');
     expect(queries[0].params).toEqual(
@@ -110,8 +110,8 @@ describe('GET /api/atendimentos', () => {
     });
 
     const queries = getExecutedQueries();
-    expect(queries[0].sql).toContain("date(a.created_at) = date('now', 'localtime')");
-    expect(queries[0].sql).toContain("date(COALESCE(a.finalizado_at, a.created_at)) = date('now', 'localtime')");
+    expect(queries[0].sql).toContain('a.created_at >= ? AND a.created_at < ?');
+    expect(queries[0].sql).toContain('COALESCE(a.finalizado_at, a.created_at) >= ? AND COALESCE(a.finalizado_at, a.created_at) < ?');
     expect(queries[0].sql).toContain('a.status NOT IN (?, ?)');
     expect(queries[0].params).toEqual(
       expect.arrayContaining(['finalizado', 'encerrado'])
@@ -126,7 +126,7 @@ describe('GET /api/atendimentos', () => {
     });
 
     const queries = getExecutedQueries();
-    expect(queries[0].sql).toContain("date(a.created_at) >= date('now', 'localtime', '-6 days')");
+    expect(queries[0].sql).toContain('a.created_at >= ? AND a.created_at < ?');
   });
 
   it('filtra por cliente_id', async () => {

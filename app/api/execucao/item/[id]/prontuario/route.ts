@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db';
+import { nowUtcIso } from '@/lib/time';
 
 interface Prontuario {
   id: number;
@@ -78,12 +79,13 @@ export async function POST(
     );
 
     if (existente) {
+      const updatedAt = nowUtcIso();
       // Atualiza
       await execute(
         `UPDATE prontuarios 
-         SET descricao = ?, observacoes = ?, updated_at = datetime('now', 'localtime')
+         SET descricao = ?, observacoes = ?, updated_at = ?
          WHERE item_atendimento_id = ?`,
-        [descricao.trim(), observacoes?.trim() || null, parseInt(id)]
+        [descricao.trim(), observacoes?.trim() || null, updatedAt, parseInt(id)]
       );
     } else {
       // Cria novo

@@ -5,6 +5,7 @@ import { AgendamentoCompleto } from '@/lib/types';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
 import { isDateTimeLocalValueInPast } from '@/lib/utils/formatters';
+import { clinicDateTimeInputToUtcIso, clinicDateTimeInputToUtcIsoEndOfDay } from '@/lib/time';
 
 interface CriarAgendamentoBody {
   cliente_id?: number;
@@ -102,12 +103,14 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       conditions.push('a.data_agendada IS NULL');
     } else {
       if (dataInicio) {
+        const dataInicioUtc = clinicDateTimeInputToUtcIso(dataInicio);
         conditions.push('a.data_agendada >= ?');
-        params.push(dataInicio);
+        params.push(dataInicioUtc ?? dataInicio);
       }
       if (dataFim) {
+        const dataFimUtc = clinicDateTimeInputToUtcIsoEndOfDay(dataFim);
         conditions.push('a.data_agendada <= ?');
-        params.push(dataFim);
+        params.push(dataFimUtc ?? dataFim);
       }
     }
 
@@ -181,6 +184,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       procedimento_id,
       executor_id,
     } = body;
+    const dataAgendadaUtc = clinicDateTimeInputToUtcIso(data_agendada);
     let valorAgendamento: number | null = null;
     let valorPagoAgendamento = 0;
 
@@ -198,6 +202,9 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     // Não permite agendar no passado
     if (data_agendada) {
+      if (!dataAgendadaUtc) {
+        return NextResponse.json({ error: 'data_agendada inválida' }, { status: 400 });
+      }
       if (isDateTimeLocalValueInPast(data_agendada)) {
         return NextResponse.json({ error: 'Não é possível agendar para uma data no passado' }, { status: 400 });
       }
@@ -334,7 +341,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       }
     }
 
-    const statusInicial = data_agendada ? 'agendado' : 'pendente';
+    const statusInicial = dataAgendadaUtc ? 'agendado' : 'pendente';
 
     const tipoAgendamento = isAvaliacao ? 'avaliacao' : 'procedimento';
     const pagoCalculado = valorAgendamento != null
@@ -352,7 +359,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         item_atendimento_origem_id || null,
         executor_id || null,
         tipoAgendamento,
-        data_agendada || null,
+        dataAgendadaUtc,
         statusInicial,
         observacoes || null,
         reagendado_de_id || null,

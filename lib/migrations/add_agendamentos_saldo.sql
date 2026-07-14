@@ -16,8 +16,8 @@ CREATE TABLE agendamentos (
   observacoes TEXT,
   motivo_cancelamento TEXT,
   reagendado_de_id INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
   FOREIGN KEY (atendimento_origem_id) REFERENCES atendimentos(id),
   FOREIGN KEY (item_atendimento_origem_id) REFERENCES itens_atendimento(id),
@@ -36,7 +36,7 @@ CREATE TABLE saldo_clientes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   cliente_id INTEGER NOT NULL UNIQUE,
   saldo REAL NOT NULL DEFAULT 0,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id)
 );
 
@@ -54,7 +54,7 @@ CREATE TABLE movimentacoes_saldo (
   atendimento_id INTEGER,
   cliente_destino_id INTEGER,
   observacoes TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),
   FOREIGN KEY (pagamento_id) REFERENCES pagamentos(id),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),

@@ -3,6 +3,7 @@ import { queryOne, execute } from '@/lib/db';
 import { withRole } from '@/lib/auth/middleware';
 import { TermoTemplate } from '@/lib/types';
 import { garantirTermosSchema } from '@/lib/helpers/garantirTermosSchema';
+import { nowUtcIso } from '@/lib/time';
 
 const SLUG_REGEX = /^[a-z0-9-]+$/;
 
@@ -95,7 +96,7 @@ export const PUT = withRole(['admin'], async (request: NextRequest, ctx) => {
              conteudo_html = ?,
              ativo = ?,
              updated_by = ?,
-             updated_at = (datetime('now', 'localtime'))
+             updated_at = ?
        WHERE slug = ?`,
       [
         slugNovo,
@@ -103,6 +104,7 @@ export const PUT = withRole(['admin'], async (request: NextRequest, ctx) => {
         conteudoHtml ?? termo.conteudo_html,
         ativo ?? termo.ativo,
         ctx.user.sub,
+        nowUtcIso(),
         slugAtual,
       ]
     );

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS categorias (
   ativo INTEGER NOT NULL DEFAULT 1,
   ordem INTEGER NOT NULL DEFAULT 0,
   pula_avaliacao INTEGER NOT NULL DEFAULT 0, -- 1 = atendimento nasce direto em aguardando_pagamento
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_categorias_slug  ON categorias(slug);
 CREATE INDEX IF NOT EXISTS idx_categorias_ativo ON categorias(ativo);
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS categoria_roles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   categoria_id INTEGER NOT NULL REFERENCES categorias(id) ON DELETE CASCADE,
   role TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE (categoria_id, role)
 );
 CREATE INDEX IF NOT EXISTS idx_categoria_roles_cat  ON categoria_roles(categoria_id);
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS usuario_roles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
   role TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE (usuario_id, role)
 );
 CREATE INDEX IF NOT EXISTS idx_usuario_roles_usuario ON usuario_roles(usuario_id);

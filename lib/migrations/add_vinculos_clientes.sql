@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS vinculos_clientes (
   cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
   cliente_vinculado_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
   observacao TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   CHECK (cliente_id != cliente_vinculado_id)
 );
 

@@ -13,7 +13,7 @@ CREATE TABLE pagamentos_new (
   observacoes TEXT,
   cancelado INTEGER DEFAULT 0,
   motivo_cancelamento TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
   FOREIGN KEY (recebido_por_id) REFERENCES usuarios(id)
 );

@@ -3,6 +3,7 @@ import { queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { AgendamentoCompleto } from '@/lib/types';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
+import { clinicDateTimeInputToUtcIso, isClinicDateTimeInputInPast } from '@/lib/time';
 
 interface AtendimentoBase {
   id: number;
@@ -30,12 +31,26 @@ export const POST = withUnit(async (
       data_agendada,
       observacoes,
     } = body;
+    const dataAgendadaUtc = clinicDateTimeInputToUtcIso(data_agendada);
 
     if (!procedimento_id) {
       return NextResponse.json(
         { error: 'procedimento_id é obrigatório' },
         { status: 400 }
       );
+    }
+
+    if (data_agendada) {
+      if (!dataAgendadaUtc) {
+        return NextResponse.json({ error: 'data_agendada inválida' }, { status: 400 });
+      }
+
+      if (isClinicDateTimeInputInPast(data_agendada)) {
+        return NextResponse.json(
+          { error: 'Não é possível agendar para uma data no passado' },
+          { status: 400 }
+        );
+      }
     }
 
     // Verifica atendimento existe e pertence à unidade
@@ -68,7 +83,7 @@ export const POST = withUnit(async (
       }
     }
 
-    const statusInicial = data_agendada ? 'agendado' : 'pendente';
+    const statusInicial = dataAgendadaUtc ? 'agendado' : 'pendente';
 
     const result = await execute(
       `INSERT INTO agendamentos
@@ -80,7 +95,7 @@ export const POST = withUnit(async (
         procedimento_id,
         item_atendimento_id || null,
         executor_id || null,
-        data_agendada || null,
+        dataAgendadaUtc || null,
         statusInicial,
         observacoes || null,
         atendimento.unidade_id,

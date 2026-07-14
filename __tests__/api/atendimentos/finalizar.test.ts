@@ -186,7 +186,7 @@ describe('POST /api/atendimentos/[id]/finalizar — novo fluxo', () => {
     );
     expect(updateAtendimento).toBeDefined();
     expect(updateAtendimento!.sql).toContain('finalizado_at');
-    expect(updateAtendimento!.sql).toContain("datetime('now', 'localtime')");
+    expect(updateAtendimento!.sql).toContain('finalizado_at = ?');
     expect(updateAtendimento!.sql).toContain('motivo_saida');
     expect(updateAtendimento!.params).toContain('sem_tratamento');
   });

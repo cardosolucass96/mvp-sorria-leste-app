@@ -266,10 +266,10 @@ export interface FormaPagamentoHistorico {
   forma_pagamento_id: number;
   taxa_percentual: number;
   taxa_fixa: number;
-  vigente_de: string;
-  vigente_ate: string | null;
+  vigente_de: string; // UTC instant ISO 8601
+  vigente_ate: string | null; // UTC instant ISO 8601
   alterado_por_id: number | null;
-  created_at: string;
+  created_at: string; // UTC instant ISO 8601
 }
 
 export interface FormaPagamentoComTaxa extends FormaPagamento {
@@ -310,8 +310,8 @@ export interface TermoTemplate {
   ativo: number;
   created_by: number | null;
   updated_by: number | null;
-  created_at: string;
-  updated_at: string;
+  created_at: string; // UTC instant ISO 8601
+  updated_at: string; // UTC instant ISO 8601
 }
 
 // Tipos com joins para exibição
@@ -338,7 +338,7 @@ export interface Agendamento {
   executor_id: number | null;
   tipo?: 'avaliacao' | 'procedimento';
   status: AgendamentoStatus;
-  data_agendada: string | null;
+  data_agendada: string | null; // UTC instant ISO 8601; inputs continuam sendo datetime-local da clínica
   observacoes: string | null;
   motivo_cancelamento: string | null;
   reagendado_de_id: number | null;
@@ -346,8 +346,8 @@ export interface Agendamento {
   unidade_id: number;
   legado_fonte?: string | null;
   legado_id?: string | null;
-  created_at: string;
-  updated_at: string;
+  created_at: string; // UTC instant ISO 8601
+  updated_at: string; // UTC instant ISO 8601
 }
 
 export interface AgendamentoCompleto extends Agendamento {
@@ -372,14 +372,14 @@ export interface FollowupTarefa {
   titulo: string;
   descricao: string | null;
   status: FollowupStatus;
-  vencimento_em: string;
+  vencimento_em: string; // UTC instant ISO 8601; inputs continuam sendo datetime-local da clínica
   nota_conclusao: string | null;
-  concluida_em: string | null;
-  excluida_em: string | null;
+  concluida_em: string | null; // UTC instant ISO 8601
+  excluida_em: string | null; // UTC instant ISO 8601
   legado_fonte?: string | null;
   legado_id?: string | null;
-  created_at: string;
-  updated_at: string;
+  created_at: string; // UTC instant ISO 8601
+  updated_at: string; // UTC instant ISO 8601
 }
 
 export interface FollowupTarefaCompleta extends FollowupTarefa {

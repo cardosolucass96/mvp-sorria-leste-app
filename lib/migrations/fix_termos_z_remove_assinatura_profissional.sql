@@ -8,5 +8,5 @@ SET conteudo_html = REPLACE(
   '<p>(Assinatura e carimbo CRO do profissional)</p>',
   ''
 ),
-updated_at = datetime('now', 'localtime')
+updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE conteudo_html LIKE '%(Assinatura e carimbo CRO do profissional)%';

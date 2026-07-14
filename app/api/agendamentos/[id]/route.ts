@@ -4,6 +4,7 @@ import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento, AgendamentoCompleto } from '@/lib/types';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 import { isDateTimeLocalValueInPast } from '@/lib/utils/formatters';
+import { clinicDateTimeInputToUtcIso } from '@/lib/time';
 
 interface AtualizarAgendamentoBody {
   data_agendada?: string | null;
@@ -73,17 +74,21 @@ export const PUT = withUnit(async (
 
     // Caso: agendar/reagendar com data
     if (body.data_agendada !== undefined) {
+      const dataAgendadaUtc = clinicDateTimeInputToUtcIso(body.data_agendada);
       if (body.data_agendada) {
+        if (!dataAgendadaUtc) {
+          return NextResponse.json({ error: 'data_agendada inválida' }, { status: 400 });
+        }
         if (isDateTimeLocalValueInPast(body.data_agendada)) {
           return NextResponse.json({ error: 'Não é possível agendar para uma data no passado' }, { status: 400 });
         }
       }
       updates.push('data_agendada = ?');
-      params.push(body.data_agendada);
+      params.push(dataAgendadaUtc);
 
       // Sem status explícito, sincroniza o status com a presença de data.
       if (body.status === undefined) {
-        updates.push(body.data_agendada ? "status = 'agendado'" : "status = 'pendente'");
+        updates.push(dataAgendadaUtc ? "status = 'agendado'" : "status = 'pendente'");
       }
     }
 

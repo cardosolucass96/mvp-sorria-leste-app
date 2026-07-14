@@ -5,8 +5,8 @@ CREATE TABLE IF NOT EXISTS formas_pagamento (
   subgrupo TEXT NOT NULL DEFAULT '',
   metodo_base TEXT NOT NULL CHECK (metodo_base IN ('dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'crediario', 'afins_sorria')),
   ativo INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id),
   UNIQUE (unidade_id, grupo, subgrupo)
 );
@@ -19,10 +19,10 @@ CREATE TABLE IF NOT EXISTS formas_pagamento_historico (
   forma_pagamento_id INTEGER NOT NULL,
   taxa_percentual REAL NOT NULL DEFAULT 0,
   taxa_fixa REAL NOT NULL DEFAULT 0,
-  vigente_de TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  vigente_de TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   vigente_ate TEXT,
   alterado_por_id INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (forma_pagamento_id) REFERENCES formas_pagamento(id) ON DELETE CASCADE,
   FOREIGN KEY (alterado_por_id) REFERENCES usuarios(id)
 );

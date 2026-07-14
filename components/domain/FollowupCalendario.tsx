@@ -13,9 +13,11 @@ import {
 } from '@/lib/constants/followup';
 import {
   formatLocalDateKey,
+  getFollowupDateKey,
   getFollowupUrgencia,
   parseFollowupDateTime,
 } from '@/lib/utils/followup';
+import { getClinicTimeLabel } from '@/lib/time';
 
 interface FollowupMinimal {
   titulo: string;
@@ -88,7 +90,7 @@ function getTaskLabel(task: FollowupMinimal): string {
   const parsed = parseFollowupDateTime(task.vencimento_em);
   if (!parsed) return task.titulo;
 
-  const time = `${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
+  const time = getClinicTimeLabel(parsed);
   return `${time} ${task.titulo}`;
 }
 
@@ -103,7 +105,7 @@ export default function FollowupCalendario<T extends FollowupMinimal>({
     const map = new Map<string, FollowupDayInfo<T>>();
 
     for (const tarefa of tarefas) {
-      const vencimento = tarefa.vencimento_em.slice(0, 10);
+      const vencimento = getFollowupDateKey(tarefa.vencimento_em);
       if (!vencimento) continue;
 
       const urgencia = getFollowupUrgencia(tarefa);

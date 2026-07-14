@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS atendimentos_new (
     CHECK (tipo IN ('normal','sessao','orto')),
   observacoes TEXT,
   motivo_saida TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   liberado_em TEXT,
   finalizado_at TEXT,
   FOREIGN KEY (cliente_id) REFERENCES clientes(id),

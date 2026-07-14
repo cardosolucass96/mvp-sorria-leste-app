@@ -23,7 +23,7 @@ import {
 } from '@/components/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
-import { formatarDataHora, formatarDataHoraLocal, formatarMoeda, formatarTelefone } from '@/lib/utils/formatters';
+import { formatarDataHora, formatarMoeda, formatarTelefone } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 type SituacaoAgendamento = 'sem_agendamento' | 'agendamento_sem_data' | 'agendado_com_data';
@@ -130,7 +130,7 @@ function getProcedimentoLabel(procedimento: ProcedimentoItem) {
 
 function getAgendamentoResumo(procedimento: ProcedimentoItem) {
   if (procedimento.data_agendada) {
-    return `Data agendada: ${formatarDataHoraLocal(procedimento.data_agendada)}`;
+    return `Data agendada: ${formatarDataHora(procedimento.data_agendada)}`;
   }
 
   if (procedimento.agendamentos_ativos > 0) {

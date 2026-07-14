@@ -938,7 +938,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
 
     const queries = getExecutedQueries();
     const update = queries.find(q => q.sql.includes('UPDATE itens_atendimento'));
-    expect(update!.sql).toContain('concluido_at = CURRENT_TIMESTAMP');
+    expect(update!.sql).toContain('concluido_at = ?');
   });
 
   it('ao voltar automaticamente para aguardando_pagamento limpa contexto de liberação da execução', async () => {

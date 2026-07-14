@@ -39,9 +39,10 @@ import {
 } from '@/lib/constants/followup';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import type { FollowupTarefaCompleta } from '@/lib/types';
-import { formatarData, formatarDataHora, formatarDataHoraLocal, formatarTelefone, toDateTimeLocal } from '@/lib/utils/formatters';
+import { formatarData, formatarDataHora, formatarTelefone, toDateTimeLocal } from '@/lib/utils/formatters';
 import {
   formatLocalDateKey,
+  getFollowupDateKey,
   getFollowupBucket,
   getFollowupUrgencia,
   parseFollowupDateTime,
@@ -360,7 +361,7 @@ export default function FollowupPage() {
   const tarefasVisiveis = useMemo(() => {
     if (viewMode === 'calendario' && selectedDay) {
       const key = formatLocalDateKey(selectedDay);
-      return tarefas.filter((tarefa) => tarefa.vencimento_em.slice(0, 10) === key);
+      return tarefas.filter((tarefa) => getFollowupDateKey(tarefa.vencimento_em) === key);
     }
     return tarefas;
   }, [selectedDay, tarefas, viewMode]);
@@ -1027,7 +1028,7 @@ export default function FollowupPage() {
               <p className="font-medium text-foreground">{taskToConclude.titulo}</p>
               <p className="text-muted-foreground">{taskToConclude.cliente_nome}</p>
               <p className="text-muted-foreground">
-                Vencimento: {formatarDataHoraLocal(taskToConclude.vencimento_em)}
+                Vencimento: {formatarDataHora(taskToConclude.vencimento_em)}
               </p>
             </div>
           )}
@@ -1126,7 +1127,7 @@ function FollowupTaskCard({
             <p className="text-muted-foreground">
               Vencimento:{' '}
               <span className="font-medium text-foreground">
-                {vencimento ? formatarDataHoraLocal(task.vencimento_em) : '—'}
+                {vencimento ? formatarDataHora(task.vencimento_em) : '—'}
               </span>
             </p>
             {task.concluida_em && (

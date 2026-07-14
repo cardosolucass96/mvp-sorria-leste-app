@@ -154,7 +154,7 @@ describe('POST /api/execucao/item/[id]/prontuario', () => {
     const queries = getExecutedQueries();
     const updateQ = queries.find(q => q.sql.includes('UPDATE prontuarios'));
     expect(updateQ).toBeDefined();
-    expect(updateQ!.sql).toContain("updated_at = datetime('now', 'localtime')");
+    expect(updateQ!.sql).toContain('updated_at = ?');
   });
 
   it('rejeita descrição com menos de 10 caracteres', async () => {

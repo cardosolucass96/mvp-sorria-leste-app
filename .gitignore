@@ -53,3 +53,4 @@ exportados-simplifica/
 lib/*.report.json
 lib/*.preview.sql
 lib/*.import-all.sql
+backups/

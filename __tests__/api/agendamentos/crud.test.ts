@@ -552,7 +552,7 @@ describe('PUT /api/agendamentos/[id]', () => {
     expect(status).toBe(200);
     const queries = getExecutedQueries();
     const update = queries.find(q => q.sql.includes('UPDATE agendamentos'));
-    expect(update!.params).toContain('2027-04-20T11:00');
+    expect(update!.params).toContain('2027-04-20T14:00:00.000Z');
   });
 
   it('remove a data e volta o status para pendente quando nao recebe status explicito', async () => {

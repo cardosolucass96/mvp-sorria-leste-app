@@ -1,7 +1,43 @@
+import {
+  CLINIC_TIME_ZONE,
+  addDaysToClinicDateKey,
+  getClinicDateKey,
+  getClinicTimeLabel,
+  getDatePartsInTimeZone,
+  isDateOnlyString,
+  parseClinicLocalDateTime,
+  parseStoredUtcInstant,
+} from '@/lib/time';
+
 export type AgendaCalendarView = 'mes' | 'semana';
 
-const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-const LOCAL_DATE_TIME_REGEX = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/;
+const EXPLICIT_TIME_REGEX = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/;
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+function parseClinicDateKeyAsMidday(dateKey: string): Date {
+  const parsed = parseClinicLocalDateTime(`${dateKey}T12:00:00`);
+  if (!parsed) {
+    throw new Error(`Data inválida para agenda: ${dateKey}`);
+  }
+  return parsed;
+}
+
+function getClinicWeekday(date: Date): number {
+  const label = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    timeZone: CLINIC_TIME_ZONE,
+  }).format(date);
+
+  return WEEKDAY_INDEX[label] ?? 0;
+}
 
 export function parseAgendaDateTime(data: string | null | undefined): Date | null {
   if (!data) return null;
@@ -9,32 +45,24 @@ export function parseAgendaDateTime(data: string | null | undefined): Date | nul
   const value = data.trim();
   if (!value) return null;
 
-  if (DATE_ONLY_REGEX.test(value)) {
-    return new Date(`${value}T00:00:00`);
+  if (isDateOnlyString(value)) {
+    return parseClinicLocalDateTime(`${value}T12:00:00`);
   }
 
-  if (LOCAL_DATE_TIME_REGEX.test(value)) {
-    return new Date(value.replace(' ', 'T'));
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return parseStoredUtcInstant(value);
 }
 
 export function hasAgendaExplicitTime(data: string | null | undefined): boolean {
   if (!data) return false;
-  return LOCAL_DATE_TIME_REGEX.test(data.trim());
+  return EXPLICIT_TIME_REGEX.test(data.trim());
 }
 
 export function formatAgendaDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getClinicDateKey(date);
 }
 
 export function parseAgendaDateKey(dateKey: string): Date {
-  return new Date(`${dateKey}T00:00:00`);
+  return parseClinicDateKeyAsMidday(dateKey);
 }
 
 export function getAgendaDateKey(data: string | null | undefined): string | null {
@@ -45,48 +73,52 @@ export function getAgendaDateKey(data: string | null | undefined): string | null
 
 export function getAgendaTimeLabel(data: string | null | undefined): string {
   const parsed = parseAgendaDateTime(data);
-  if (!parsed) return 'Sem hora';
-  if (!hasAgendaExplicitTime(data)) return 'Sem hora';
-  return `${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
+  if (!parsed || !hasAgendaExplicitTime(data)) return 'Sem hora';
+  return getClinicTimeLabel(parsed);
 }
 
 export function getAgendaHourNumber(data: string | null | undefined): number | null {
   const parsed = parseAgendaDateTime(data);
   if (!parsed || !hasAgendaExplicitTime(data)) return null;
-  return parsed.getHours();
+  return Number(getDatePartsInTimeZone(parsed).hour);
 }
 
 export function getAgendaSortMinutes(data: string | null | undefined): number {
   const parsed = parseAgendaDateTime(data);
   if (!parsed || !hasAgendaExplicitTime(data)) return -1;
-  return parsed.getHours() * 60 + parsed.getMinutes();
+
+  const parts = getDatePartsInTimeZone(parsed);
+  return Number(parts.hour) * 60 + Number(parts.minute);
 }
 
 export function startOfAgendaMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
+  const [year, month] = formatAgendaDateKey(date).split('-').map(Number);
+  return parseClinicDateKeyAsMidday(`${year}-${String(month).padStart(2, '0')}-01`);
 }
 
 export function endOfAgendaMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  const [year, month] = formatAgendaDateKey(date).split('-').map(Number);
+  const nextMonthStart = month === 12
+    ? `${year + 1}-01-01`
+    : `${year}-${String(month + 1).padStart(2, '0')}-01`;
+
+  return parseClinicDateKeyAsMidday(addDaysToClinicDateKey(nextMonthStart, -1));
 }
 
 export function startOfAgendaWeek(date: Date): Date {
-  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  result.setDate(result.getDate() - result.getDay());
-  return result;
+  const dateKey = formatAgendaDateKey(date);
+  const anchor = parseClinicDateKeyAsMidday(dateKey);
+  return parseClinicDateKeyAsMidday(addDaysToClinicDateKey(dateKey, -getClinicWeekday(anchor)));
 }
 
 export function endOfAgendaWeek(date: Date): Date {
-  const result = startOfAgendaWeek(date);
-  result.setDate(result.getDate() + 6);
-  return result;
+  const start = startOfAgendaWeek(date);
+  return parseClinicDateKeyAsMidday(addDaysToClinicDateKey(formatAgendaDateKey(start), 6));
 }
 
 export function isAgendaDateInRange(date: Date, start: Date, end: Date): boolean {
-  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  const startAt = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
-  const endAt = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
-  return target >= startAt && target <= endAt;
+  const target = formatAgendaDateKey(date);
+  return target >= formatAgendaDateKey(start) && target <= formatAgendaDateKey(end);
 }
 
 export function formatAgendaRangeStart(date: Date): string {

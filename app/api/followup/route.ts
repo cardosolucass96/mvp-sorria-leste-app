@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { execute, query, queryOne } from '@/lib/db';
 import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { getClinicDateKey, getClinicDayUtcRange, getClinicMonthUtcRange } from '@/lib/time';
 import type { FollowupTarefaCompleta } from '@/lib/types';
 import {
   getFollowupTaskDetail,
@@ -12,14 +13,9 @@ import {
   parseLocalDateTime,
 } from './_helpers';
 
-function isSameLocalDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
-}
-
 function buildSummary(items: FollowupTarefaCompleta[]) {
   const now = new Date();
+  const todayKey = getClinicDateKey(now);
   return items.reduce(
     (acc, item) => {
       if (item.status === 'aberta') {
@@ -28,14 +24,14 @@ function buildSummary(items: FollowupTarefaCompleta[]) {
         if (!vencimento) return acc;
         if (vencimento.getTime() < now.getTime()) {
           acc.atrasadas += 1;
-        } else if (isSameLocalDay(vencimento, now)) {
+        } else if (getClinicDateKey(vencimento) === todayKey) {
           acc.vencem_hoje += 1;
         }
         return acc;
       }
 
       const concluidaEm = parseLocalDateTime(item.concluida_em);
-      if (concluidaEm && isSameLocalDay(concluidaEm, now)) {
+      if (concluidaEm && getClinicDateKey(concluidaEm) === todayKey) {
         acc.concluidas_hoje += 1;
       }
       return acc;
@@ -98,12 +94,14 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
       params.push(vencimentoAte);
     }
     if (mes) {
-      conditions.push('substr(f.vencimento_em, 1, 7) = ?');
-      params.push(mes);
+      const mesRange = getClinicMonthUtcRange(mes);
+      conditions.push('f.vencimento_em >= ? AND f.vencimento_em < ?');
+      params.push(mesRange.start, mesRange.endExclusive);
     }
     if (dia) {
-      conditions.push('substr(f.vencimento_em, 1, 10) = ?');
-      params.push(dia);
+      const diaRange = getClinicDayUtcRange(dia);
+      conditions.push('f.vencimento_em >= ? AND f.vencimento_em < ?');
+      params.push(diaRange.start, diaRange.endExclusive);
     }
 
     const whereClause = `WHERE ${conditions.join(' AND ')}`;

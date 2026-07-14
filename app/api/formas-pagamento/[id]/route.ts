@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { execute, queryOne } from '@/lib/db';
 import { withUnitRole } from '@/lib/auth/middleware';
+import { nowUtcIso } from '@/lib/time';
 import {
   buscarFormaPagamentoDaUnidade,
   garantirEsquemaFormasPagamento,
@@ -90,15 +91,16 @@ export const PUT = withUnitRole(['admin'], async (request: NextRequest, context)
       return NextResponse.json({ error: 'Já existe uma forma com este grupo e subgrupo nesta unidade' }, { status: 409 });
     }
 
+    const timestamp = nowUtcIso();
     await execute(
       `UPDATE formas_pagamento
        SET grupo = ?,
            subgrupo = ?,
            metodo_base = ?,
            ativo = ?,
-           updated_at = datetime('now', 'localtime')
+           updated_at = ?
        WHERE id = ?`,
-      [grupo, subgrupo, metodoBase, ativo, formaId]
+      [grupo, subgrupo, metodoBase, ativo, timestamp, formaId]
     );
 
     const taxaMudou = Number(taxaPercentual) !== Number(existente.taxa_percentual)
@@ -107,10 +109,10 @@ export const PUT = withUnitRole(['admin'], async (request: NextRequest, context)
     if (taxaMudou) {
       await execute(
         `UPDATE formas_pagamento_historico
-         SET vigente_ate = datetime('now', 'localtime')
+         SET vigente_ate = ?
          WHERE forma_pagamento_id = ?
            AND vigente_ate IS NULL`,
-        [formaId]
+        [timestamp, formaId]
       );
 
       await execute(

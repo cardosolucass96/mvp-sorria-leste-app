@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, batch } from '@/lib/db';
+import { nowUtcIso } from '@/lib/time';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -63,24 +64,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const saldoOrigemNovo = saldoOrigemAnterior - valor;
     const saldoDestinoNovo = saldoDestinoAnterior + valor;
+    const timestamp = nowUtcIso();
 
     await batch([
       // Decrementar saldo da origem
       {
         sql: `INSERT INTO saldo_clientes (cliente_id, saldo, updated_at)
-              VALUES (?, ?, datetime('now', 'localtime'))
+              VALUES (?, ?, ?)
               ON CONFLICT(cliente_id) DO UPDATE SET
-                saldo = ?, updated_at = datetime('now', 'localtime')`,
-        params: [clienteOrigemId, saldoOrigemNovo, saldoOrigemNovo],
+                saldo = ?, updated_at = ?`,
+        params: [clienteOrigemId, saldoOrigemNovo, timestamp, saldoOrigemNovo, timestamp],
       },
       // Incrementar saldo do destino (upsert)
       {
         sql: `INSERT INTO saldo_clientes (cliente_id, saldo, updated_at)
-              VALUES (?, ?, datetime('now', 'localtime'))
+              VALUES (?, ?, ?)
               ON CONFLICT(cliente_id) DO UPDATE SET
                 saldo = saldo + excluded.saldo,
-                updated_at = datetime('now', 'localtime')`,
-        params: [cliente_destino_id, valor],
+                updated_at = ?`,
+        params: [cliente_destino_id, valor, timestamp, timestamp],
       },
       // Movimentação de saída (origem)
       {

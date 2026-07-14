@@ -1,28 +1,7 @@
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
-  preset: 'ts-jest',
-  testEnvironment: 'node',
-  setupFiles: ['<rootDir>/__tests__/setup-env.ts'],
-  roots: ['<rootDir>'],
-  testMatch: ['**/__tests__/**/*.test.ts'],
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/$1',
-    '^@opennextjs/cloudflare$': '<rootDir>/__mocks__/opennextjs-cloudflare.ts',
-  },
-  transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: 'tsconfig.json',
-    }],
-  },
-  modulePathIgnorePatterns: [
-    '<rootDir>/.next/',
-    '<rootDir>/.open-next/',
-    '<rootDir>/tmp/',
+  projects: [
+    '<rootDir>/jest.node.config.js',
+    '<rootDir>/jest.components.config.js',
   ],
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  collectCoverageFrom: [
-    'lib/**/*.ts',
-    '!lib/**/*.d.ts',
-  ],
-  verbose: true,
 };

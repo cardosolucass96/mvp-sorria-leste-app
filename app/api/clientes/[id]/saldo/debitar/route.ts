@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, batch } from '@/lib/db';
+import { nowUtcIso } from '@/lib/time';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -65,14 +66,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const saldoNovo = saldoAnterior - valorRestante;
+    const timestamp = nowUtcIso();
 
     await batch([
       {
         sql: `INSERT INTO saldo_clientes (cliente_id, saldo, updated_at)
-              VALUES (?, ?, datetime('now', 'localtime'))
+              VALUES (?, ?, ?)
               ON CONFLICT(cliente_id) DO UPDATE SET
-                saldo = ?, updated_at = datetime('now', 'localtime')`,
-        params: [clienteId, saldoNovo, saldoNovo],
+                saldo = ?, updated_at = ?`,
+        params: [clienteId, saldoNovo, timestamp, saldoNovo, timestamp],
       },
       {
         sql: `INSERT INTO movimentacoes_saldo

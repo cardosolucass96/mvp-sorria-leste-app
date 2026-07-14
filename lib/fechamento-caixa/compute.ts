@@ -9,6 +9,7 @@ import type {
   FechamentoCaixaProcedimento,
   FechamentoCaixaVisao,
 } from './types';
+import { parseStoredUtcInstant } from '@/lib/time';
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -25,6 +26,11 @@ function toFiniteNumber(value: unknown): number {
 
 function toKey(id: number | string): string {
   return String(id);
+}
+
+function getStoredInstantTime(value: string | null | undefined): number {
+  const parsed = parseStoredUtcInstant(value);
+  return parsed ? parsed.getTime() : 0;
 }
 
 function createAjuste(
@@ -76,8 +82,8 @@ function sortDentistas(dentistas: FechamentoCaixaDentista[]) {
 function sortProcedimentos(procedimentos: FechamentoCaixaProcedimento[]) {
   procedimentos.sort((a, b) => {
     if (a.included !== b.included) return a.included ? -1 : 1;
-    const dateA = a.concluido_at ? new Date(a.concluido_at.replace(' ', 'T')).getTime() : 0;
-    const dateB = b.concluido_at ? new Date(b.concluido_at.replace(' ', 'T')).getTime() : 0;
+    const dateA = getStoredInstantTime(a.concluido_at);
+    const dateB = getStoredInstantTime(b.concluido_at);
     return dateB - dateA;
   });
 }
@@ -85,8 +91,8 @@ function sortProcedimentos(procedimentos: FechamentoCaixaProcedimento[]) {
 function sortAvaliacoesPagas(avaliacoes: FechamentoCaixaAvaliacaoPagaDia[]) {
   avaliacoes.sort((a, b) => {
     if (a.included !== b.included) return a.included ? -1 : 1;
-    const dateA = a.pago_em ? new Date(a.pago_em.replace(' ', 'T')).getTime() : 0;
-    const dateB = b.pago_em ? new Date(b.pago_em.replace(' ', 'T')).getTime() : 0;
+    const dateA = getStoredInstantTime(a.pago_em);
+    const dateB = getStoredInstantTime(b.pago_em);
     if (dateB !== dateA) return dateB - dateA;
     return a.procedimento_label.localeCompare(b.procedimento_label, 'pt-BR');
   });

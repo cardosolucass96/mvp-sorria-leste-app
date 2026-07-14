@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { execute, queryOne } from '@/lib/db';
 import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { nowUtcIso } from '@/lib/time';
 import {
   getFollowupTask,
   getFollowupTaskDetail,
@@ -33,6 +34,7 @@ export const PUT = withUnitRole(['atendente'], async (
 
     const updates: string[] = [];
     const params: unknown[] = [];
+    const updatedAt = nowUtcIso();
 
     if (body.cliente_id !== undefined) {
       const cliente = await queryOne<{ id: number }>('SELECT id FROM clientes WHERE id = ?', [body.cliente_id]);
@@ -92,7 +94,8 @@ export const PUT = withUnitRole(['atendente'], async (
       return NextResponse.json({ error: 'Nenhum campo para atualizar' }, { status: 400 });
     }
 
-    updates.push("updated_at = datetime('now','localtime')");
+    updates.push('updated_at = ?');
+    params.push(updatedAt);
     params.push(followupId);
 
     await execute(
@@ -130,13 +133,14 @@ export const DELETE = withUnitRole(['atendente'], async (
       );
     }
 
+    const timestamp = nowUtcIso();
     await execute(
       `UPDATE followup_tarefas
-          SET excluida_em = datetime('now','localtime'),
+          SET excluida_em = ?,
               excluida_por_id = ?,
-              updated_at = datetime('now','localtime')
+              updated_at = ?
         WHERE id = ?`,
-      [context.user.sub, followupId]
+      [timestamp, context.user.sub, timestamp, followupId]
     );
 
     return NextResponse.json({ success: true });

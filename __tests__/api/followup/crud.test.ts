@@ -7,6 +7,7 @@ import {
   setLastInsertId,
   getExecutedQueries,
 } from '../../helpers/db-mock';
+import { clinicDateTimeInputToUtcIso } from '@/lib/time';
 
 jest.mock('@/lib/auth/jwt', () => ({
   extractToken: jest.fn().mockReturnValue('mock-token'),
@@ -42,10 +43,7 @@ function pad(value: number) {
 }
 
 function formatSqliteDate(date: Date): string {
-  return [
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
-    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
-  ].join(' ');
+  return date.toISOString();
 }
 
 function addMinutes(date: Date, minutes: number): Date {
@@ -98,10 +96,12 @@ beforeEach(() => {
 afterEach(() => {
   teardownCloudflareContextMock();
   jest.clearAllMocks();
+  jest.useRealTimers();
 });
 
 describe('GET /api/followup', () => {
   it('retorna lista com summary e aplica filtros principais', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-13T15:00:00.000Z'));
     const now = new Date();
     const overdueTask = makeTask({
       id: 1,
@@ -160,8 +160,7 @@ describe('GET /api/followup', () => {
     expect(selectQuery?.sql).toContain('f.status IN');
     expect(selectQuery?.sql).toContain('f.tipo = ?');
     expect(selectQuery?.sql).toContain('c.nome LIKE ?');
-    expect(selectQuery?.sql).toContain('substr(f.vencimento_em, 1, 7) = ?');
-    expect(selectQuery?.sql).toContain('substr(f.vencimento_em, 1, 10) = ?');
+    expect(selectQuery?.sql).toContain('f.vencimento_em >= ? AND f.vencimento_em < ?');
     expect(selectQuery?.params[0]).toBe(2);
   });
 
@@ -224,7 +223,7 @@ describe('POST /api/followup', () => {
       'cobranca',
       'Cobrar retorno',
       'Paciente sem resposta no WhatsApp',
-      '2026-05-30 14:30:00',
+      clinicDateTimeInputToUtcIso('2026-05-30T14:30'),
     ]);
   });
 
@@ -317,7 +316,8 @@ describe('PUT /api/followup/[id]', () => {
       'orcamento',
       'Título atualizado',
       'Descrição revisada',
-      '2026-06-01 16:45:00',
+      clinicDateTimeInputToUtcIso('2026-06-01T16:45'),
+      expect.any(String),
       31,
     ]);
   });
@@ -389,7 +389,7 @@ describe('POST /api/followup/[id]/concluir', () => {
     expect(data.nota_conclusao).toBe('Contato concluído');
 
     const updateQuery = getExecutedQueries().find((entry) => entry.sql.includes("SET status = 'concluida'"));
-    expect(updateQuery?.params).toEqual(['Contato concluído', 2, 41]);
+    expect(updateQuery?.params).toEqual(['Contato concluído', expect.any(String), 2, expect.any(String), 41]);
   });
 
   it('permite admin responsável concluir a própria tarefa', async () => {
@@ -425,7 +425,7 @@ describe('POST /api/followup/[id]/concluir', () => {
     expect(data.status).toBe('concluida');
 
     const updateQuery = getExecutedQueries().find((entry) => entry.sql.includes("SET status = 'concluida'"));
-    expect(updateQuery?.params).toEqual(['Admin concluiu', 9, 42]);
+    expect(updateQuery?.params).toEqual(['Admin concluiu', expect.any(String), 9, expect.any(String), 42]);
   });
 
   it('bloqueia admin que não é o responsável da tarefa', async () => {
@@ -464,7 +464,7 @@ describe('DELETE /api/followup/[id]', () => {
     expect(data.success).toBe(true);
 
     const updateQuery = getExecutedQueries().find((entry) => entry.sql.includes('SET excluida_em ='));
-    expect(updateQuery?.params).toEqual([2, 51]);
+    expect(updateQuery?.params).toEqual([expect.any(String), 2, expect.any(String), 51]);
   });
 
   it('impede excluir tarefa já concluída', async () => {

@@ -11,7 +11,7 @@ CREATE TABLE atendimentos_new (
   status TEXT NOT NULL DEFAULT 'triagem'
     CHECK (status IN ('triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao', 'finalizado', 'encerrado')),
   observacoes TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   liberado_em TEXT,
   finalizado_at TEXT,
   agendamento_id INTEGER REFERENCES agendamentos(id),

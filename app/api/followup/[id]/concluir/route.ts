@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { execute } from '@/lib/db';
 import { getUserRoles, withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { nowUtcIso } from '@/lib/time';
 import { getFollowupTask, getFollowupTaskDetail, isTaskMutable } from '../../_helpers';
 
 // POST /api/followup/[id]/concluir - Conclui tarefa aberta com nota obrigatória
@@ -42,15 +43,16 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
       );
     }
 
+    const timestamp = nowUtcIso();
     await execute(
       `UPDATE followup_tarefas
           SET status = 'concluida',
               nota_conclusao = ?,
-              concluida_em = datetime('now','localtime'),
+              concluida_em = ?,
               concluida_por_id = ?,
-              updated_at = datetime('now','localtime')
+              updated_at = ?
         WHERE id = ?`,
-      [notaConclusao, context.user.sub, followupId]
+      [notaConclusao, timestamp, context.user.sub, timestamp, followupId]
     );
 
     const updated = await getFollowupTaskDetail(followupId, context.unidadeId);
