@@ -1,5 +1,6 @@
 import { batch, execute, query, queryOne } from '@/lib/db';
 import { garantirSchemaComissoesOrigem, garantirSchemaProcedimentosComissaoAcrescimo } from '@/lib/helpers/garantirComissaoSchema';
+import { nowUtcIso } from '@/lib/time';
 
 interface ItemExecucaoComComissao {
   id: number;
@@ -50,12 +51,13 @@ export async function gerarComissoesExecucaoItem(itemId: number): Promise<void> 
 
   const valorBase = Number(item.valor || 0);
   const valorComissao = Number((valorBase * (item.comissao_execucao / 100)).toFixed(2));
+  const createdAt = nowUtcIso();
 
   await execute(
     `INSERT INTO comissoes
-      (atendimento_id, item_atendimento_id, usuario_id, tipo, origem, percentual, valor_base, valor_comissao)
-     VALUES (?, ?, ?, 'execucao', 'execucao', ?, ?, ?)`,
-    [item.atendimento_id, itemId, item.executor_id, item.comissao_execucao, valorBase, valorComissao]
+      (atendimento_id, item_atendimento_id, usuario_id, tipo, origem, percentual, valor_base, valor_comissao, created_at)
+     VALUES (?, ?, ?, 'execucao', 'execucao', ?, ?, ?, ?)`,
+    [item.atendimento_id, itemId, item.executor_id, item.comissao_execucao, valorBase, valorComissao, createdAt]
   );
 }
 

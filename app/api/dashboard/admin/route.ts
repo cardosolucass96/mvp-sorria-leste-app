@@ -5,6 +5,7 @@ import {
   clinicDateTimeInputToUtcIso,
   clinicDateTimeInputToUtcIsoEndOfDay,
   getClinicMonthKey,
+  getSqlUtcInstantExpression,
   parseStoredUtcInstant,
 } from '@/lib/time';
 
@@ -98,9 +99,10 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
     const uid = context.unidadeId;
+    const pagamentoCreatedAtExpr = getSqlUtcInstantExpression('p.created_at');
 
     const filtroData = buildUtcColumnFilter('a.created_at', dataInicio, dataFim);
-    const filtroDataPag = buildUtcColumnFilter('p.created_at', dataInicio, dataFim);
+    const filtroDataPag = buildUtcColumnFilter(pagamentoCreatedAtExpr, dataInicio, dataFim);
 
     // 1. Faturamento Total (pagamentos recebidos, filtrado por unidade)
     const faturamentoQuery = `
@@ -177,8 +179,8 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         p.atendimento_id
       FROM pagamentos p
       INNER JOIN atendimentos a ON p.atendimento_id = a.id
-      WHERE p.created_at >= ? AND a.unidade_id = ?
-      ORDER BY p.created_at ASC
+      WHERE ${pagamentoCreatedAtExpr} >= ? AND a.unidade_id = ?
+      ORDER BY ${pagamentoCreatedAtExpr} ASC
     `;
     const pagamentosMensais = await query<PagamentoMensalRow>(mensalQuery, [getTrailingMonthsStartUtc(6), uid]);
     const mensalMap = new Map<string, { faturamento: number; atendimentoIds: Set<number> }>();

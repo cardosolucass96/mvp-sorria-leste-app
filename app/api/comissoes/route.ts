@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { garantirSchemaComissoesOrigem } from '@/lib/helpers/garantirComissaoSchema';
+import {
+  clinicDateTimeInputToUtcIso,
+  clinicDateTimeInputToUtcIsoEndOfDay,
+  getSqlUtcInstantExpression,
+} from '@/lib/time';
 
 interface Comissao {
   id: number;
@@ -46,6 +51,9 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const dataFim = searchParams.get('data_fim');
     const resumo = searchParams.get('resumo') === 'true';
     const origemExpr = "COALESCE(c.origem, CASE WHEN c.tipo = 'execucao' THEN 'execucao' ELSE 'avaliacao' END)";
+    const comissaoCreatedAtExpr = getSqlUtcInstantExpression('c.created_at');
+    const dataInicioUtc = clinicDateTimeInputToUtcIso(dataInicio);
+    const dataFimUtc = clinicDateTimeInputToUtcIsoEndOfDay(dataFim);
 
     // Se pediu resumo, retorna agregado por usuário
     if (resumo) {
@@ -71,14 +79,14 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         paramsResumo.push(parseInt(usuarioId));
       }
 
-      if (dataInicio) {
-        sqlResumo += ' AND c.created_at >= ?';
-        paramsResumo.push(dataInicio);
+      if (dataInicioUtc) {
+        sqlResumo += ` AND ${comissaoCreatedAtExpr} >= ?`;
+        paramsResumo.push(dataInicioUtc);
       }
 
-      if (dataFim) {
-        sqlResumo += ' AND c.created_at <= ?';
-        paramsResumo.push(dataFim + ' 23:59:59');
+      if (dataFimUtc) {
+        sqlResumo += ` AND ${comissaoCreatedAtExpr} <= ?`;
+        paramsResumo.push(dataFimUtc);
       }
 
       sqlResumo += ' GROUP BY c.usuario_id, u.nome ORDER BY total_geral DESC';
@@ -118,17 +126,17 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       params.push(parseInt(usuarioId));
     }
 
-    if (dataInicio) {
-      sql += ' AND c.created_at >= ?';
-      params.push(dataInicio);
+    if (dataInicioUtc) {
+      sql += ` AND ${comissaoCreatedAtExpr} >= ?`;
+      params.push(dataInicioUtc);
     }
 
-    if (dataFim) {
-      sql += ' AND c.created_at <= ?';
-      params.push(dataFim + ' 23:59:59');
+    if (dataFimUtc) {
+      sql += ` AND ${comissaoCreatedAtExpr} <= ?`;
+      params.push(dataFimUtc);
     }
 
-    sql += ' ORDER BY c.created_at DESC';
+    sql += ` ORDER BY ${comissaoCreatedAtExpr} DESC`;
 
     const comissoes = await query<Comissao>(sql, params);
 

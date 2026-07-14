@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
-import { getClinicDayUtcRange, getClinicMonthUtcRange } from '@/lib/time';
+import { getClinicDayUtcRange, getClinicMonthUtcRange, getSqlUtcInstantExpression } from '@/lib/time';
 
 interface DashboardStats {
   totalClientes: number;
@@ -26,6 +26,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const uid = context.unidadeId;
     const hojeRange = getClinicDayUtcRange();
     const mesAtualRange = getClinicMonthUtcRange();
+    const comissaoCreatedAtExpr = getSqlUtcInstantExpression('co.created_at');
 
     // Stats gerais (clientes são compartilhados, sem filtro de unidade)
     const totalClientes = (await query<{ count: number }>(
@@ -79,7 +80,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         `SELECT COALESCE(SUM(co.valor_comissao), 0) as total FROM comissoes co
          INNER JOIN atendimentos a ON co.atendimento_id = a.id
          WHERE co.usuario_id = ? AND a.unidade_id = ?
-         AND co.created_at >= ? AND co.created_at < ?`,
+         AND ${comissaoCreatedAtExpr} >= ? AND ${comissaoCreatedAtExpr} < ?`,
         [parseInt(usuarioId), uid, mesAtualRange.start, mesAtualRange.endExclusive]
       ))[0]?.total || 0;
 

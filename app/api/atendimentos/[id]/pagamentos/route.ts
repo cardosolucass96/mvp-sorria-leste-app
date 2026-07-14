@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { execute, query, queryOne } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { buscarEtapasComValor, recalcularFinanceiroItens, roundMoney } from '@/lib/helpers/pagamentoFlow';
-import { nowUtcIso } from '@/lib/time';
+import { getSqlUtcInstantExpression, nowUtcIso, parseStoredUtcInstant } from '@/lib/time';
 import {
   buscarFormaPagamentoDaUnidade,
   calcularValorLiquido,
@@ -222,6 +222,7 @@ async function normalizarFormasPagamento(
 }
 
 async function buscarAlocacoesPagamentos(atendimentoId: number) {
+  const alocacaoCreatedAtExpr = getSqlUtcInstantExpression('pa.created_at');
   const alocacoes = await query<PagamentoAlocacaoResponse>(
     `SELECT
        pa.id,
@@ -245,7 +246,7 @@ async function buscarAlocacoesPagamentos(atendimentoId: number) {
      LEFT JOIN procedimentos p_ag ON p_ag.id = ag.procedimento_id
      LEFT JOIN procedimento_etapas_modelo etapa ON etapa.id = COALESCE(pa.etapa_modelo_id, ag.etapa_modelo_id, i.etapa_modelo_id)
      WHERE pg.atendimento_id = ?
-     ORDER BY pa.created_at ASC, pa.id ASC`,
+     ORDER BY ${alocacaoCreatedAtExpr} ASC, pa.id ASC`,
     [atendimentoId]
   );
 
@@ -310,7 +311,11 @@ function agruparPagamentos(
     });
   }
 
-  return Array.from(grupos.values()).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return Array.from(grupos.values()).sort((a, b) => {
+    const left = parseStoredUtcInstant(a.created_at)?.getTime() ?? 0;
+    const right = parseStoredUtcInstant(b.created_at)?.getTime() ?? 0;
+    return right - left;
+  });
 }
 
 async function validarAlocacoes(
@@ -519,12 +524,13 @@ export const GET = withUnit(async (
 
     if (!grouped) {
       const alocacoesPorPagamento = await buscarAlocacoesPagamentos(atendimentoId);
+      const pagamentoCreatedAtExpr = getSqlUtcInstantExpression('p.created_at');
       const pagamentos = await query<Pagamento & { recebido_por_nome: string | null }>(
         `SELECT p.*, u.nome as recebido_por_nome
          FROM pagamentos p
          LEFT JOIN usuarios u ON p.recebido_por_id = u.id
          WHERE p.atendimento_id = ?
-         ORDER BY p.created_at DESC`,
+         ORDER BY ${pagamentoCreatedAtExpr} DESC, p.id DESC`,
         [atendimentoId]
       );
 
@@ -534,6 +540,8 @@ export const GET = withUnit(async (
       })));
     }
 
+    const pagamentoCreatedAtExpr = getSqlUtcInstantExpression('p.created_at');
+    const pagamentoGrupoCreatedAtExpr = getSqlUtcInstantExpression('pg.created_at');
     const pagamentos = await query<PagamentoAgrupadoRow>(
       `SELECT
          p.*,
@@ -547,7 +555,7 @@ export const GET = withUnit(async (
        LEFT JOIN usuarios u ON p.recebido_por_id = u.id
        LEFT JOIN pagamentos_grupos pg ON pg.id = p.pagamento_grupo_id
        WHERE p.atendimento_id = ?
-       ORDER BY COALESCE(pg.created_at, p.created_at) DESC, p.created_at DESC, p.id DESC`,
+       ORDER BY COALESCE(${pagamentoGrupoCreatedAtExpr}, ${pagamentoCreatedAtExpr}) DESC, ${pagamentoCreatedAtExpr} DESC, p.id DESC`,
       [atendimentoId]
     );
 
