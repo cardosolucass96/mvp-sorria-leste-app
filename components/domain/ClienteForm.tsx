@@ -153,7 +153,7 @@ export default function ClienteForm({
             />
             {formData.data_nascimento && (() => {
               const idade = calculateAgeFromDateOnly(formData.data_nascimento);
-              return idade >= 0 ? (
+              return idade !== null ? (
                 <p className="text-sm text-muted-foreground mt-1">{idade} anos</p>
               ) : null;
             })()}

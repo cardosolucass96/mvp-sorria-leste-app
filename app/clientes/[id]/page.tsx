@@ -1462,7 +1462,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                       {cliente.data_nascimento ? formatarData(cliente.data_nascimento) : '-'}
                       {cliente.data_nascimento && (() => {
                         const idade = calculateAgeFromDateOnly(cliente.data_nascimento);
-                        return idade >= 0 ? <span className="text-sm text-muted ml-1">({idade} anos)</span> : null;
+                        return idade !== null ? <span className="text-sm text-muted ml-1">({idade} anos)</span> : null;
                       })()}
                     </p>
                   </div>
