@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
-import { withAuth } from '@/lib/auth/middleware';
-import { TermoTemplate, Cliente } from '@/lib/types';
+import { withUnit } from '@/lib/auth/middleware';
+import { TermoTemplate, Cliente, Unidade } from '@/lib/types';
 import { garantirTermosSchema } from '@/lib/helpers/garantirTermosSchema';
-import { buildTermoContext, renderTermoTemplate } from '@/lib/helpers/termosPlaceholder';
+import { buildTermoContext, normalizeLegacyTermoTemplateHtml, renderTermoTemplate } from '@/lib/helpers/termosPlaceholder';
+import { garantirCamposEmpresaUnidades, UNIDADE_EMPRESA_SELECT } from '@/lib/helpers/unidadesEmpresa';
 
 const SLUG_REGEX = /^[a-z0-9-]+$/;
 
-export const POST = withAuth(async (request: NextRequest, ctx) => {
+export const POST = withUnit(async (request: NextRequest, ctx) => {
   try {
     const { id, slug } = await (ctx.params as Promise<{ id: string; slug: string }>);
 
@@ -25,6 +26,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     }
 
     await garantirTermosSchema();
+    await garantirCamposEmpresaUnidades();
 
     const termo = await queryOne<TermoTemplate>(
       'SELECT id, slug, titulo, conteudo_html, ativo, created_by, updated_by, created_at, updated_at FROM termos WHERE slug = ?',
@@ -35,9 +37,17 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       return NextResponse.json({ error: 'Termo não encontrado ou inativo.' }, { status: 404 });
     }
 
+    const unidade = await queryOne<Unidade>(
+      `SELECT ${UNIDADE_EMPRESA_SELECT} FROM unidades WHERE id = ?`,
+      [ctx.unidadeId]
+    );
+
     const body = (await request.json().catch(() => ({}))) as { placeholders?: Record<string, unknown> };
-    const context = buildTermoContext(cliente, body.placeholders);
-    const { html, placeholdersNaoEncontrados } = renderTermoTemplate(termo.conteudo_html, context);
+    const context = buildTermoContext(cliente, body.placeholders, unidade);
+    const { html, placeholdersNaoEncontrados } = renderTermoTemplate(
+      normalizeLegacyTermoTemplateHtml(termo.conteudo_html),
+      context
+    );
 
     return NextResponse.json({
       html,

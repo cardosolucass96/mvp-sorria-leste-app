@@ -3,6 +3,7 @@ import { query, queryOne, execute } from '@/lib/db';
 import { withRole } from '@/lib/auth/middleware';
 import { TermoTemplate } from '@/lib/types';
 import { garantirTermosSchema } from '@/lib/helpers/garantirTermosSchema';
+import { normalizeLegacyTermoTemplateHtml } from '@/lib/helpers/termosPlaceholder';
 
 function normalizarSlug(value: string): string {
   return value
@@ -50,7 +51,7 @@ export const POST = withRole(['admin'], async (request: NextRequest, context) =>
     const body = await request.json();
     const titulo = String(body?.titulo || '').trim();
     const slugEntrada = String(body?.slug || '').trim();
-    const conteudoHtml = String(body?.conteudo_html || '').trim();
+    const conteudoHtml = normalizeLegacyTermoTemplateHtml(String(body?.conteudo_html || '').trim());
     const ativo = toAtivoBoolean(body?.ativo, true);
 
     if (!titulo) {

@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 
 import { buildTermoPrintableDocument, formatTermoHtmlContent } from '@/lib/helpers/termosDocumento';
-import { buildSampleTermoContext, renderTermoTemplate } from '@/lib/helpers/termosPlaceholder';
+import { buildSampleTermoContext, normalizeLegacyTermoTemplateHtml, renderTermoTemplate } from '@/lib/helpers/termosPlaceholder';
 
 describe('termosDocumento', () => {
   it('aplica hierarquia visual para titulos, secoes e assinaturas', () => {
@@ -71,5 +71,25 @@ describe('termosDocumento', () => {
     expect(formatted).toContain('termo-fill-line termo-fill-line--short');
     expect(formatted).toContain('data-placeholder="campo_livre"');
     expect(placeholdersNaoEncontrados).toContain('campo_livre');
+  });
+
+  it('normaliza enderecos legados para o placeholder da unidade', () => {
+    const template = '<p>Atendimento na Clínica Sorria Leste, situada na Avenida Presidente Castelo Branco, nº 5185 B, Barra do Ceará, Fortaleza/CE.</p>';
+    const normalized = normalizeLegacyTermoTemplateHtml(template);
+    const { html } = renderTermoTemplate(normalized, buildSampleTermoContext());
+
+    expect(normalized).toContain('{{unidade_endereco}}');
+    expect(html).toContain('<strong class="termo-variable">Avenida Presidente Castelo Branco, 5185 B, Barra do Ceará, Fortaleza/CE</strong>');
+  });
+
+  it('expõe placeholders de unidade no contexto do termo', () => {
+    const { html } = renderTermoTemplate(
+      '<p>Unidade: {{unidade_nome}}</p><p>Contato: {{unidade_telefone}}</p><p>CNPJ: {{unidade_cnpj}}</p>',
+      buildSampleTermoContext()
+    );
+
+    expect(html).toContain('<strong class="termo-variable">Barra do Ceará</strong>');
+    expect(html).toContain('<strong class="termo-variable">(85) 99123-4567</strong>');
+    expect(html).toContain('<strong class="termo-variable">46.261.849/0001-10</strong>');
   });
 });

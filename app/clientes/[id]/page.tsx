@@ -583,7 +583,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
 
     setIsAbrindoTermo(true);
     try {
-      const res = await fetch(`/api/clientes/${id}/termos/${encodeURIComponent(termoSelecionado)}/render`, {
+      const res = await unitFetch(`/api/clientes/${id}/termos/${encodeURIComponent(termoSelecionado)}/render`, {
         method: 'POST',
       });
       const data = await res.json();

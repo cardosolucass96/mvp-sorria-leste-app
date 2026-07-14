@@ -1,5 +1,5 @@
-import { Cliente } from '@/lib/types';
-import { formatarCPF, formatarTelefone, formatarData, formatarDataHora, formatarAgoraDaClinica, formatarDateNaClinica } from '@/lib/utils/formatters';
+import { Cliente, Unidade } from '@/lib/types';
+import { formatarCPF, formatarTelefone, formatarCNPJ, formatarData, formatarDataHora, formatarAgoraDaClinica, formatarDateNaClinica } from '@/lib/utils/formatters';
 import { getOrigemLabel } from '@/lib/constants/origens';
 
 interface RenderConfig {
@@ -7,6 +7,9 @@ interface RenderConfig {
 }
 
 const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9._-]+)\s*\}\}/g;
+const LEGACY_UNIDADE_ENDERECO_RE = /Avenida Presidente Castelo Branco,?\s*(?:n[ºo]\s*)?5185\s*b(?:,?\s*Barra do Ceará,?\s*Fortaleza\/CE)?/gi;
+
+type TermoUnitContext = Pick<Unidade, 'nome' | 'razao_social' | 'cnpj' | 'endereco' | 'telefone' | 'email' | 'responsavel' | 'recibo_rodape'> | null;
 
 function escapeHtml(value: string) {
   return value
@@ -18,6 +21,16 @@ function escapeHtml(value: string) {
 }
 
 export const TERMO_PLACEHOLDER_KEYS = [
+  'unidade_nome',
+  'unidade_razao_social',
+  'unidade_cnpj',
+  'unidade_cnpj_raw',
+  'unidade_endereco',
+  'unidade_telefone',
+  'unidade_telefone_raw',
+  'unidade_email',
+  'unidade_responsavel',
+  'unidade_recibo_rodape',
   'cliente_nome',
   'cliente_id',
   'cliente_cpf',
@@ -102,8 +115,23 @@ function renderPlaceholderFillLine(key: string) {
   return `<span class="termo-fill-line termo-fill-line--${variant}" data-placeholder="${escapeHtml(key)}"></span>`;
 }
 
-export function buildTermoContext(cliente: Cliente, overrides: RenderConfig = {}): Record<string, string> {
+export function normalizeLegacyTermoTemplateHtml(html: string): string {
+  if (!html) return '';
+  return html.replace(LEGACY_UNIDADE_ENDERECO_RE, '{{unidade_endereco}}');
+}
+
+export function buildTermoContext(cliente: Cliente, overrides: RenderConfig = {}, unidade: TermoUnitContext = null): Record<string, string> {
   const base: Record<string, string> = {
+    unidade_nome: normalizarValor(unidade?.nome),
+    unidade_razao_social: normalizarValor(unidade?.razao_social),
+    unidade_cnpj: unidade?.cnpj ? normalizarValor(formatarCNPJ(unidade.cnpj)) : '',
+    unidade_cnpj_raw: normalizarValor(unidade?.cnpj),
+    unidade_endereco: normalizarValor(unidade?.endereco),
+    unidade_telefone: unidade?.telefone ? normalizarValor(formatarTelefone(unidade.telefone)) : '',
+    unidade_telefone_raw: normalizarValor(unidade?.telefone),
+    unidade_email: normalizarValor(unidade?.email),
+    unidade_responsavel: normalizarValor(unidade?.responsavel),
+    unidade_recibo_rodape: normalizarValor(unidade?.recibo_rodape),
     cliente_nome: normalizarValor(cliente.nome),
     cliente_id: normalizarValor(cliente.id),
     cliente_cpf: normalizarValor(formatarCPF(cliente.cpf || '')),
@@ -152,10 +180,21 @@ export function buildSampleTermoContext(overrides: RenderConfig = {}) {
     created_at: '2026-07-01 09:30:00',
   };
 
+  const unidadeExemplo: TermoUnitContext = {
+    nome: 'Barra do Ceará',
+    razao_social: 'Clínica Odontológica Sorria Leste Ltda.',
+    cnpj: '46261849000110',
+    endereco: 'Avenida Presidente Castelo Branco, 5185 B, Barra do Ceará, Fortaleza/CE',
+    telefone: '85991234567',
+    email: 'barra@sorrialeste.com',
+    responsavel: 'Alanna Regina Bezerra Nobre',
+    recibo_rodape: 'Clínica Sorria Leste - Barra do Ceará',
+  };
+
   return buildTermoContext(clienteExemplo, {
     ...SAMPLE_TERMO_OVERRIDES,
     ...overrides,
-  });
+  }, unidadeExemplo);
 }
 
 export function renderTermoTemplate(html: string, context: Record<string, string>) {

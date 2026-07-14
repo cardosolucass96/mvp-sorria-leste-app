@@ -3,6 +3,7 @@ import { queryOne, execute } from '@/lib/db';
 import { withRole } from '@/lib/auth/middleware';
 import { TermoTemplate } from '@/lib/types';
 import { garantirTermosSchema } from '@/lib/helpers/garantirTermosSchema';
+import { normalizeLegacyTermoTemplateHtml } from '@/lib/helpers/termosPlaceholder';
 import { nowUtcIso } from '@/lib/time';
 
 const SLUG_REGEX = /^[a-z0-9-]+$/;
@@ -51,7 +52,9 @@ export const PUT = withRole(['admin'], async (request: NextRequest, ctx) => {
     const body = await request.json();
     const titulo = body?.titulo !== undefined ? String(body.titulo).trim() : null;
     const slugNovoEntrada = body?.slug !== undefined ? String(body.slug).trim() : null;
-    const conteudoHtml = body?.conteudo_html !== undefined ? String(body.conteudo_html).trim() : null;
+    const conteudoHtml = body?.conteudo_html !== undefined
+      ? normalizeLegacyTermoTemplateHtml(String(body.conteudo_html).trim())
+      : null;
     const ativo = body?.ativo === undefined ? null : Number(Boolean(body.ativo));
 
     const termo = await queryOne<TermoTemplate>(

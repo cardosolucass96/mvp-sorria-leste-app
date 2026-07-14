@@ -7,7 +7,7 @@ import { TermoTemplate } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader, Card, Button, Input, Textarea, Checkbox, Alert, LoadingState, ConfirmDialog } from '@/components/ui';
 import { buildTermoPrintableDocument } from '@/lib/helpers/termosDocumento';
-import { buildSampleTermoContext, renderTermoTemplate, TERMO_PLACEHOLDER_KEYS } from '@/lib/helpers/termosPlaceholder';
+import { buildSampleTermoContext, normalizeLegacyTermoTemplateHtml, renderTermoTemplate, TERMO_PLACEHOLDER_KEYS } from '@/lib/helpers/termosPlaceholder';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface TermoForm {
@@ -60,7 +60,7 @@ export default function TermosPage() {
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
   const previewHtml = form.conteudo_html.trim()
-    ? renderTermoTemplate(form.conteudo_html, buildSampleTermoContext()).html
+    ? renderTermoTemplate(normalizeLegacyTermoTemplateHtml(form.conteudo_html), buildSampleTermoContext()).html
     : '';
   const previewDocument = buildTermoPrintableDocument(form.titulo || 'Previa do termo', previewHtml);
 
