@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { MENU_ITEMS } from '@/lib/constants/navigation';
+import { useCategoriasFila } from '@/lib/hooks/useCategoriasFila';
 import {
   Home,
   ClipboardList,
@@ -15,6 +16,7 @@ import {
   Users,
   MoreHorizontal,
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Sheet,
@@ -27,6 +29,11 @@ interface BottomNavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+}
+
+function resolveIcon(name: string): LucideIcon {
+  const icons = LucideIcons as unknown as Record<string, LucideIcon>;
+  return icons[name] ?? Activity;
 }
 
 function getBottomNavItems(effectiveRole: string | null): BottomNavItem[] {
@@ -70,19 +77,28 @@ function getBottomNavItems(effectiveRole: string | null): BottomNavItem[] {
 export default function BottomNav() {
   const pathname = usePathname();
   const { user, hasRole, effectiveRole } = useAuth();
+  const categoriasFila = useCategoriasFila();
   const [moreOpen, setMoreOpen] = useState(false);
 
   if (!user) return null;
 
   const mainItems = getBottomNavItems(effectiveRole);
   const mainHrefs = new Set(mainItems.map((i) => i.href));
+  const filaItems: BottomNavItem[] = categoriasFila.map((categoria) => ({
+    href: `/fila/${categoria.slug}`,
+    label: `Fila ${categoria.nome}`,
+    icon: resolveIcon(categoria.icone),
+  }));
 
   // "Mais" items = all visible menu items NOT in the bottom bar
-  const moreItems = MENU_ITEMS.filter((item) => {
-    if (mainHrefs.has(item.href)) return false;
-    if (!item.roles) return true;
-    return hasRole(item.roles);
-  });
+  const moreItems = [
+    ...MENU_ITEMS.filter((item) => {
+      if (mainHrefs.has(item.href)) return false;
+      if (!item.roles) return true;
+      return hasRole(item.roles);
+    }),
+    ...filaItems.filter((item) => !mainHrefs.has(item.href)),
+  ];
 
   return (
     <>
