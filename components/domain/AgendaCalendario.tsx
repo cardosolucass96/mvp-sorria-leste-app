@@ -63,10 +63,10 @@ const WEEK_END_HOUR = 20;
 const LEGEND_STATUSES = ['agendado', 'faltou', 'realizado', 'cancelado'] as const;
 
 const STATUS_EVENT_STYLES: Record<string, string> = {
-  faltou: 'border-warning-200 bg-warning-50 text-warning-900 dark:border-warning-900/45 dark:bg-warning-900/25 dark:text-warning-100',
+  faltou: 'border-warning-200 bg-warning-50 text-warning-900 dark:border-warning-500/65 dark:bg-warning-500/18 dark:text-warning-50',
   pendente: 'border-muted bg-muted/65 text-muted-foreground dark:border-muted dark:bg-muted/55',
   agendado: 'border-primary/40 bg-primary/10 text-primary dark:border-primary/70 dark:bg-primary/18',
-  realizado: 'border-success-200 bg-success-50 text-success-900 dark:border-success-900/45 dark:bg-success-900/25 dark:text-success-100',
+  realizado: 'border-success-200 bg-success-50 text-success-900 dark:border-success-500/65 dark:bg-success-500/18 dark:text-success-50',
   cancelado: 'border-error-200 bg-error-50 text-error-900 dark:border-error-900/45 dark:bg-error-900/25 dark:text-error-100',
 };
 
@@ -377,9 +377,9 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                     data-selected-single={isSelected ? true : undefined}
                     data-testid={`agenda-month-day-${dayKey}`}
                     className={cn(
-                      'flex h-[92px] w-full min-w-0 flex-col items-start justify-between overflow-hidden rounded-2xl border border-border/70 bg-background/90 p-2.5 text-left transition-all duration-200 hover:border-primary/30 hover:bg-primary-50/55 sm:h-[102px] sm:p-3 lg:h-[112px]',
+                      'flex h-[92px] w-full min-w-0 flex-col items-start justify-between overflow-hidden rounded-2xl border border-border/70 bg-background/90 p-2.5 text-left transition-all duration-200 hover:border-primary/30 hover:bg-primary-50/55 dark:hover:border-primary/55 dark:hover:bg-primary/16 sm:h-[102px] sm:p-3 lg:h-[112px]',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2',
-                      isSelected && 'border-primary/45 bg-primary-50 ring-2 ring-primary/15 shadow-[0_12px_24px_-18px_rgba(37,99,235,0.8)]',
+                      isSelected && 'border-primary/45 bg-primary-50 ring-2 ring-primary/15 shadow-[0_12px_24px_-18px_rgba(37,99,235,0.8)] dark:border-primary/70 dark:bg-primary/20 dark:ring-primary/35',
                       className
                     )}
                   >
@@ -390,7 +390,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                           modifiers.today
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-background/90 text-foreground',
-                        isSelected && !modifiers.today && 'bg-primary/12 text-primary ring-primary/20'
+                        isSelected && !modifiers.today && 'bg-primary/12 text-primary ring-primary/20 dark:bg-primary/25 dark:text-primary-50 dark:ring-primary/45'
                         )}
                       >
                         {day.date.getDate()}
@@ -450,7 +450,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                           key={`untimed-${dateKey}`}
                           className={cn(
                             'min-h-16 rounded-2xl border border-border/70 bg-background/88 p-2',
-                            selectedDayKey === dateKey && 'border-primary/40 bg-primary-50/55'
+                            selectedDayKey === dateKey && 'border-primary/40 bg-primary-50/55 dark:border-primary/60 dark:bg-primary/16'
                           )}
                           onClick={() => onSelectDay(date)}
                           onKeyDown={(event) => {
@@ -505,8 +505,8 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                         data-testid={`agenda-week-day-${dateKey}`}
                         onClick={() => onSelectDay(date)}
                         className={cn(
-                          'rounded-2xl border border-border/70 bg-background/88 px-3 py-2 text-left shadow-sm transition-colors hover:border-primary/35 hover:bg-primary-50/55',
-                          selectedDayKey === dateKey && 'border-primary/45 bg-primary-50'
+                          'rounded-2xl border border-border/70 bg-background/88 px-3 py-2 text-left shadow-sm transition-colors hover:border-primary/35 hover:bg-primary-50/55 dark:hover:border-primary/55 dark:hover:bg-primary/16',
+                          selectedDayKey === dateKey && 'border-primary/45 bg-primary-50 dark:border-primary/65 dark:bg-primary/20'
                         )}
                       >
                         <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -534,7 +534,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                             data-testid={`agenda-week-cell-${dateKey}-${hour}`}
                             className={cn(
                               'min-h-20 rounded-2xl border border-border/70 bg-background/88 p-2 shadow-sm transition-colors',
-                              selectedDayKey === dateKey && 'border-primary/40 bg-primary-50/55'
+                              selectedDayKey === dateKey && 'border-primary/40 bg-primary-50/55 dark:border-primary/60 dark:bg-primary/16'
                             )}
                             onClick={() => onSelectDay(date)}
                             onKeyDown={(event) => {

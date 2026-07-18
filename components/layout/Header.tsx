@@ -191,6 +191,7 @@ export default function Header() {
               alt="Sorria Leste"
               width={32}
               height={32}
+              className="h-8 w-auto"
             />
             <span className="hidden sm:block text-base font-bold tracking-tight text-foreground">
               Sorria Leste

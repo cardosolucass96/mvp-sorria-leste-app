@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Moon, Sun } from 'lucide-react';
@@ -12,6 +12,8 @@ import Alert from '@/components/ui/Alert';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { UserRole } from '@/lib/types';
 
+const subscribe = () => () => {};
+
 export default function LoginPage() {
   usePageTitle('Login');
   const [email, setEmail] = useState('');
@@ -21,7 +23,9 @@ export default function LoginPage() {
   const { login, devQuickLogin } = useAuth();
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
-  const isDarkMode = resolvedTheme === 'dark';
+  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
+  const isDarkMode = mounted && resolvedTheme === 'dark';
+  const themeActionLabel = isDarkMode ? 'Modo claro' : 'Modo escuro';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,8 +70,9 @@ export default function LoginPage() {
         type="button"
         onClick={() => setTheme(isDarkMode ? 'light' : 'dark')}
         className="absolute right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/80 bg-card/20 text-foreground shadow-lg backdrop-blur transition-colors hover:bg-card/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-border/50 dark:bg-background/30"
-        aria-label={isDarkMode ? 'Ativar modo claro' : 'Ativar modo escuro'}
-        title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
+        aria-label={`Ativar ${themeActionLabel.toLowerCase()}`}
+        title={themeActionLabel}
+        disabled={!mounted}
       >
         {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </button>

@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, use, useCallback } from 'react';
+import { useState, useEffect, use, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { AgendamentoCompleto, Cliente, FollowupTarefaCompleta, VinculoCliente } from '@/lib/types';
+import { AgendamentoCompleto, Cliente, FollowupTarefaCompleta, TermoCampoDraft, TermoDigital, VinculoCliente } from '@/lib/types';
 import {
   User,
   ClipboardList,
@@ -20,8 +20,10 @@ import {
   MessageCircle,
   Paperclip,
   Printer,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
-import { PageHeader, Card, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal } from '@/components/ui';
+import { PageHeader, Card, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal, Input, Textarea } from '@/components/ui';
 import { StatusBadge, ClienteForm, ClienteFormData, AnexosGallery } from '@/components/domain';
 import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarCNPJ, formatarTelefone, formatarDentes, parseDentesLabels, nomeProcedimentoItem, formatarAgoraDaClinica } from '@/lib/utils/formatters';
 import { finalizarJanelaDeImpressao } from '@/lib/utils/print';
@@ -56,6 +58,22 @@ const HISTORICO_CONFIG: Record<string, { label: string; cor: string }> = {
   estorno:                { label: 'Estorno',                cor: 'bg-warning-600' },
   transferencia_saida:    { label: 'Transf. enviada',        cor: 'bg-error-400' },
   transferencia_entrada:  { label: 'Transf. recebida',       cor: 'bg-success-400' },
+};
+
+const TERMO_DIGITAL_STATUS_LABELS: Record<string, string> = {
+  criado: 'Aguardando assinatura',
+  visualizado: 'Visualizado',
+  assinado: 'Assinado',
+  recusado: 'Recusado',
+  concluido: 'Concluído',
+};
+
+const TERMO_DIGITAL_STATUS_CLASSES: Record<string, string> = {
+  criado: 'bg-warning-100 text-warning-800 border-warning-200',
+  visualizado: 'bg-info-100 text-info-800 border-info-200',
+  assinado: 'bg-success-100 text-success-800 border-success-200',
+  recusado: 'bg-error-100 text-error-800 border-error-200',
+  concluido: 'bg-success-200 text-success-900 border-success-300',
 };
 
 interface Atendimento {
@@ -177,7 +195,31 @@ interface ClienteTermoLista {
   id: number;
   slug: string;
   titulo: string;
+  permite_autentique?: number;
 }
+
+interface TermoDraftApi {
+  campos: TermoCampoDraft[];
+  pendentes: string[];
+  placeholdersUsados: string[];
+}
+
+interface TermoRenderApiResponse {
+  html: string;
+  titulo: string;
+  slug: string;
+  placeholdersNaoEncontrados: string[];
+  draft?: TermoDraftApi;
+}
+
+interface TermoDigitalGerado {
+  documentoId: string;
+  signaturePublicId: string;
+  shortLink: string;
+  status: string;
+}
+
+type ModoGeracaoTermo = 'impressao' | 'digital';
 
 interface FichaData {
   atendimentos: Atendimento[];
@@ -252,6 +294,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [termoModalError, setTermoModalError] = useState('');
+  const [termoModalSuccess, setTermoModalSuccess] = useState('');
   const [abaAtiva, setAbaAtiva] = useState('dados');
   const [modalProcedimento, setModalProcedimento] = useState<ItemProcedimento | null>(null);
   const [modalPagamento, setModalPagamento] = useState<Pagamento | null>(null);
@@ -285,10 +329,22 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const [termos, setTermos] = useState<ClienteTermoLista[]>([]);
   const [isLoadingTermos, setIsLoadingTermos] = useState(false);
   const [isAbrindoTermo, setIsAbrindoTermo] = useState(false);
+  const [isGerandoTermoDigital, setIsGerandoTermoDigital] = useState(false);
+  const [isCarregandoPreviewTermo, setIsCarregandoPreviewTermo] = useState(false);
   const [modalTermoAberto, setModalTermoAberto] = useState(false);
   const [termoSelecionado, setTermoSelecionado] = useState('');
+  const [modoGeracaoTermo, setModoGeracaoTermo] = useState<ModoGeracaoTermo>('impressao');
+  const [termoDraft, setTermoDraft] = useState<TermoDraftApi | null>(null);
+  const [termoPlaceholders, setTermoPlaceholders] = useState<Record<string, string>>({});
+  const [termoPreviewHtml, setTermoPreviewHtml] = useState('');
+  const [termoPreviewTitulo, setTermoPreviewTitulo] = useState('');
+  const [termoDigitalGerado, setTermoDigitalGerado] = useState<TermoDigitalGerado | null>(null);
+  const [termoTentouGerarDigital, setTermoTentouGerarDigital] = useState(false);
+  const [termosDigitais, setTermosDigitais] = useState<TermoDigital[]>([]);
+  const [isLoadingTermosDigitais, setIsLoadingTermosDigitais] = useState(false);
+  const termoPreviewRequestRef = useRef(0);
 
-  const router = useRouter();
+  const { push } = useRouter();
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -303,6 +359,36 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const openConfirm = (config: Omit<typeof confirmDialog, 'isOpen'>) => {
     setConfirmDialog({ ...config, isOpen: true });
   };
+
+  const arePlaceholderMapsEqual = useCallback((current: Record<string, string>, next: Record<string, string>) => {
+    const currentKeys = Object.keys(current);
+    const nextKeys = Object.keys(next);
+    if (currentKeys.length !== nextKeys.length) return false;
+    return currentKeys.every((key) => (current[key] ?? '') === (next[key] ?? ''));
+  }, []);
+
+  const resetTermoDigitalState = useCallback((options?: { keepMode?: boolean }) => {
+    termoPreviewRequestRef.current += 1;
+    setTermoDraft(null);
+    setTermoPlaceholders({});
+    setTermoPreviewHtml('');
+    setTermoPreviewTitulo('');
+    setTermoDigitalGerado(null);
+    setTermoTentouGerarDigital(false);
+    setTermoModalError('');
+    setTermoModalSuccess('');
+    setIsCarregandoPreviewTermo(false);
+    setIsGerandoTermoDigital(false);
+    if (!options?.keepMode) {
+      setModoGeracaoTermo('impressao');
+    }
+  }, []);
+
+  const fecharModalTermo = useCallback(() => {
+    setModalTermoAberto(false);
+    setTermoSelecionado('');
+    resetTermoDigitalState();
+  }, [resetTermoDigitalState]);
 
   const loadVinculos = useCallback(async () => {
     const res = await fetch(`/api/clientes/${id}/vinculos`);
@@ -333,6 +419,81 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       setIsLoadingTermos(false);
     }
   }, [id]);
+
+  const carregarTermosDigitais = useCallback(async () => {
+    setIsLoadingTermosDigitais(true);
+    try {
+      const res = await fetch(`/api/clientes/${id}/termos-digitais`);
+      if (res.ok) {
+        setTermosDigitais(await res.json() as TermoDigital[]);
+      } else {
+        setTermosDigitais([]);
+      }
+    } catch {
+      setTermosDigitais([]);
+    } finally {
+      setIsLoadingTermosDigitais(false);
+    }
+  }, [id]);
+
+  const carregarPreviewTermoDigital = useCallback(async (
+    slug: string,
+    placeholders: Record<string, string>,
+    options?: { silencioso?: boolean }
+  ) => {
+    if (!slug) return;
+
+    const requestId = ++termoPreviewRequestRef.current;
+    if (!options?.silencioso) {
+      setIsCarregandoPreviewTermo(true);
+    }
+
+    try {
+      const res = await unitFetch(`/api/clientes/${id}/termos/${encodeURIComponent(slug)}/render`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placeholders }),
+      });
+      const payload = await res.json() as TermoRenderApiResponse | { error?: string };
+
+      if (requestId !== termoPreviewRequestRef.current) {
+        return;
+      }
+
+      if (!res.ok) {
+        setTermoModalSuccess('');
+        setTermoModalError(('error' in payload && payload.error) || 'Erro ao preparar termo digital.');
+        return;
+      }
+
+      const data = payload as TermoRenderApiResponse;
+
+      setTermoModalError('');
+      setTermoPreviewHtml(String(data.html || '').trim());
+      setTermoPreviewTitulo(String(data.titulo || 'Prévia do termo'));
+
+      if (data.draft) {
+        setTermoDraft(data.draft);
+        const nextPlaceholders = Object.fromEntries(
+          data.draft.campos.map((campo: TermoCampoDraft) => [campo.key, campo.value ?? ''])
+        );
+        setTermoPlaceholders((prev) => (
+          arePlaceholderMapsEqual(prev, nextPlaceholders) ? prev : nextPlaceholders
+        ));
+      } else {
+        setTermoDraft(null);
+      }
+    } catch {
+      if (requestId === termoPreviewRequestRef.current) {
+        setTermoModalSuccess('');
+        setTermoModalError('Erro ao preparar termo digital.');
+      }
+    } finally {
+      if (requestId === termoPreviewRequestRef.current) {
+        setIsCarregandoPreviewTermo(false);
+      }
+    }
+  }, [arePlaceholderMapsEqual, id, unitFetch]);
 
   const carregarAnexos = useCallback(async (prontuarios: ItemProntuario[] = []) => {
     setAnexosLoading(true);
@@ -428,7 +589,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           fetch(`/api/clientes/${id}`),
           fetch(`/api/clientes/${id}/ficha`),
         ]);
-        if (!resCliente.ok) { router.push('/clientes'); return; }
+        if (!resCliente.ok) { push('/clientes'); return; }
         setCliente(await resCliente.json());
         if (resFicha.ok) {
           const fichaData = await resFicha.json() as FichaData;
@@ -437,6 +598,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         }
         await Promise.all([
           carregarTermosCliente(),
+          carregarTermosDigitais(),
           loadVinculos(),
           carregarSaldo(),
           carregarAgendamentos(),
@@ -449,7 +611,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       }
     };
     load();
-  }, [id, router, loadVinculos, carregarSaldo, carregarAgendamentos, carregarFollowups, carregarAnexos, carregarTermosCliente]);
+  }, [id, push, loadVinculos, carregarSaldo, carregarAgendamentos, carregarFollowups, carregarAnexos, carregarTermosCliente, carregarTermosDigitais]);
 
   useEffect(() => {
     if (!vinculoBusca.trim()) { setVinculoBuscaResultados([]); return; }
@@ -503,6 +665,35 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     return () => { clearTimeout(t); setTransferBuscando(false); };
   }, [transferBusca, id]);
 
+  useEffect(() => {
+    if (abaAtiva !== 'anexos') return;
+    void carregarTermosDigitais();
+  }, [abaAtiva, carregarTermosDigitais]);
+
+  useEffect(() => {
+    const termoSelecionadoAtual = termos.find((termo) => termo.slug === termoSelecionado);
+    const termoPermiteAutentique = termoSelecionadoAtual ? termoSelecionadoAtual.permite_autentique !== 0 : true;
+
+    if (!modalTermoAberto || modoGeracaoTermo !== 'digital' || !termoSelecionado || termoDigitalGerado || !termoPermiteAutentique) {
+      return;
+    }
+
+    const delay = Object.keys(termoPlaceholders).length > 0 ? 300 : 0;
+    const timer = setTimeout(() => {
+      void carregarPreviewTermoDigital(termoSelecionado, termoPlaceholders, { silencioso: delay > 0 });
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [
+    modalTermoAberto,
+    modoGeracaoTermo,
+    termoSelecionado,
+    termos,
+    termoPlaceholders,
+    termoDigitalGerado,
+    carregarPreviewTermoDigital,
+  ]);
+
   const handleSubmit = async (formData: ClienteFormData) => {
     setError('');
     setIsSaving(true);
@@ -549,7 +740,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           const res = await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
           const data = await res.json();
           if (!res.ok) { setError(data.error || 'Erro ao excluir'); return; }
-          router.push('/clientes');
+          push('/clientes');
         } catch {
           setError('Erro ao excluir cliente');
         }
@@ -570,18 +761,53 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     if (termos.length === 0 && !isLoadingTermos) {
       await carregarTermosCliente();
     }
+    resetTermoDigitalState();
     setTermoSelecionado('');
     setModalTermoAberto(true);
   };
 
-  const gerarTermo = async () => {
+  const handleModoGeracaoTermoChange = (modo: ModoGeracaoTermo) => {
+    resetTermoDigitalState({ keepMode: true });
+    setModoGeracaoTermo(modo);
+  };
+
+  const handleSelecionarTermo = (slug: string) => {
+    setTermoSelecionado(slug);
+    resetTermoDigitalState({ keepMode: true });
+  };
+
+  const handleChangeCampoTermo = (key: string, value: string) => {
+    setTermoDigitalGerado(null);
+    setTermoModalError('');
+    setTermoModalSuccess('');
+    setTermoPlaceholders((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const copiarLinkTermoDigital = async (shortLink: string) => {
+    try {
+      await navigator.clipboard.writeText(shortLink);
+      setTermoModalError('');
+      setTermoModalSuccess('Link copiado com sucesso.');
+    } catch {
+      setTermoModalSuccess('');
+      setTermoModalError('Não foi possível copiar o link.');
+    }
+  };
+
+  const gerarTermoImpressao = async () => {
     if (!cliente) return;
     if (!termoSelecionado) {
-      setError('Selecione um termo para gerar.');
+      setTermoModalSuccess('');
+      setTermoModalError('Selecione um termo para gerar.');
       return;
     }
 
     setIsAbrindoTermo(true);
+    setTermoModalError('');
+    setTermoModalSuccess('');
     try {
       const res = await unitFetch(`/api/clientes/${id}/termos/${encodeURIComponent(termoSelecionado)}/render`, {
         method: 'POST',
@@ -589,31 +815,91 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data?.error || 'Erro ao gerar termo.');
+        setTermoModalError(data?.error || 'Erro ao gerar termo.');
         return;
       }
 
       const html = String(data.html || '').trim();
       if (!html) {
-        setError('Termo vazio.');
+        setTermoModalError('Termo vazio.');
         return;
       }
 
       const titulo = String(data.titulo || 'Termo');
       const janela = window.open('', '_blank');
       if (!janela) {
-        setError('Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-up está ativo.');
+        setTermoModalError('Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-up está ativo.');
         return;
       }
 
       janela.document.write(buildTermoPrintableDocument(titulo, html));
       finalizarJanelaDeImpressao(janela);
-      setModalTermoAberto(false);
+      fecharModalTermo();
       setSuccess('Termo pronto para impressão.');
     } catch {
-      setError('Erro ao gerar termo.');
+      setTermoModalError('Erro ao gerar termo.');
     } finally {
       setIsAbrindoTermo(false);
+    }
+  };
+
+  const gerarTermoDigital = async () => {
+    if (!cliente) return;
+    if (!termoSelecionado) {
+      setTermoModalSuccess('');
+      setTermoModalError('Selecione um termo para gerar.');
+      return;
+    }
+
+    const termoAtual = termos.find((termo) => termo.slug === termoSelecionado);
+    if (termoAtual && termoAtual.permite_autentique === 0) {
+      setTermoModalSuccess('');
+      setTermoModalError('Este termo está disponível apenas para impressão.');
+      return;
+    }
+
+    if (!termoDraft) {
+      setTermoModalSuccess('');
+      setTermoModalError('Aguarde a preparação da revisão do termo.');
+      return;
+    }
+
+    setTermoTentouGerarDigital(true);
+    const pendentes = termoDraft.campos.filter((campo) => !(termoPlaceholders[campo.key] ?? '').trim());
+    if (pendentes.length > 0) {
+      setTermoModalSuccess('');
+      setTermoModalError(`Preencha os campos obrigatórios antes de gerar o link: ${pendentes.map((campo) => campo.label).join(', ')}.`);
+      return;
+    }
+
+    setIsGerandoTermoDigital(true);
+    setTermoModalError('');
+    setTermoModalSuccess('');
+    try {
+      const res = await unitFetch(`/api/clientes/${id}/termos/${encodeURIComponent(termoSelecionado)}/autentique`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placeholders: termoPlaceholders }),
+      });
+      const data = await res.json() as TermoDigitalGerado & { error?: string };
+
+      if (!res.ok) {
+        setTermoModalError(data?.error || 'Erro ao gerar termo digital.');
+        return;
+      }
+
+      setTermoDigitalGerado({
+        documentoId: data.documentoId,
+        signaturePublicId: data.signaturePublicId,
+        shortLink: data.shortLink,
+        status: data.status,
+      });
+      setTermoModalSuccess('Link de assinatura gerado com sucesso.');
+      await carregarTermosDigitais();
+    } catch {
+      setTermoModalError('Erro ao gerar termo digital.');
+    } finally {
+      setIsGerandoTermoDigital(false);
     }
   };
 
@@ -1270,7 +1556,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       icon={<User className="w-7 h-7" />}
       title="Cliente não encontrado"
       actionLabel="Voltar para lista"
-      onAction={() => router.push('/clientes')}
+      onAction={() => push('/clientes')}
     />
   );
 
@@ -1385,10 +1671,18 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     { key: 'agendamentos', label: 'Agendamentos', count: agendamentos.length },
     { key: 'followups', label: 'Followups', count: followups.length },
     { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
-    { key: 'anexos', label: 'Anexos', count: anexosCliente.length + anexosProntuario.length },
+    { key: 'anexos', label: 'Anexos', count: anexosCliente.length + anexosProntuario.length + termosDigitais.length },
     { key: 'historico', label: 'Histórico', count: ficha?.historico.length },
     { key: 'vinculados', label: 'Vinculados', count: vinculos.length },
   ];
+
+  const camposPendentesTermo = termoDraft?.campos.filter((campo) => !(termoPlaceholders[campo.key] ?? '').trim()) ?? [];
+  const camposPendentesResumoTermo = camposPendentesTermo.map((campo) => campo.label).join(', ');
+  const termoPreviewDocumento = termoPreviewHtml
+    ? buildTermoPrintableDocument(termoPreviewTitulo || 'Prévia do termo', termoPreviewHtml)
+    : '';
+  const termoSelecionadoAtual = termos.find((termo) => termo.slug === termoSelecionado) ?? null;
+  const termoSelecionadoPermiteAutentique = termoSelecionadoAtual ? termoSelecionadoAtual.permite_autentique !== 0 : true;
 
   return (
     <div className="space-y-6">
@@ -1774,7 +2068,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <CalendarDays className="w-5 h-5" /> Agendamentos
             </h2>
             <Button
-              onClick={() => router.push(`/agenda?open=1&cliente_id=${id}`)}
+              onClick={() => push(`/agenda?open=1&cliente_id=${id}`)}
               variant="secondary"
             >
               <Plus className="w-4 h-4 mr-1.5" /> Novo Agendamento
@@ -1843,7 +2137,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <MessageCircle className="w-5 h-5" /> Followups
             </h2>
             <Button
-              onClick={() => router.push(`/followup?open=1&cliente_id=${id}`)}
+              onClick={() => push(`/followup?open=1&cliente_id=${id}`)}
               variant="secondary"
             >
               <Plus className="w-4 h-4 mr-1.5" /> Nova Followup
@@ -1996,6 +2290,93 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               maxSizeMB={10}
               acceptTypes="image/*,.pdf,.doc,.docx,.mp4,.webm,.mov"
             />
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="w-5 h-5" /> Termos Digitais
+              </h2>
+              <span className="text-sm text-muted">
+                {termosDigitais.length} termo(s)
+              </span>
+            </div>
+
+            {isLoadingTermosDigitais ? (
+              <LoadingState mode="spinner" text="Carregando termos digitais..." />
+            ) : termosDigitais.length === 0 ? (
+              <p className="text-center py-8 text-muted">Nenhum termo digital gerado para este cliente.</p>
+            ) : (
+              <div className="space-y-3">
+                {termosDigitais.map((termoDigital) => (
+                  <div key={termoDigital.id} className="rounded-xl border border-border bg-surface p-4 space-y-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-foreground">{termoDigital.termo_titulo}</p>
+                          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${TERMO_DIGITAL_STATUS_CLASSES[termoDigital.status] || 'bg-muted text-foreground border-border'}`}>
+                            {TERMO_DIGITAL_STATUS_LABELS[termoDigital.status] || termoDigital.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted">
+                          Signatário: <span className="text-foreground">{termoDigital.signatario_nome}</span>
+                        </p>
+                        <p className="text-xs text-muted">
+                          Criado em {formatarDataHora(termoDigital.created_at)}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon={<Copy className="w-3.5 h-3.5" />}
+                          onClick={() => copiarLinkTermoDigital(termoDigital.autentique_short_link)}
+                        >
+                          Copiar link
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon={<ExternalLink className="w-3.5 h-3.5" />}
+                          onClick={() => window.open(termoDigital.autentique_short_link, '_blank', 'noopener,noreferrer')}
+                        >
+                          Abrir link
+                        </Button>
+                        {termoDigital.pdf_assinado_url && (
+                          <Button
+                            size="sm"
+                            icon={<ExternalLink className="w-3.5 h-3.5" />}
+                            onClick={() => window.open(termoDigital.pdf_assinado_url!, '_blank', 'noopener,noreferrer')}
+                          >
+                            PDF assinado
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted mb-1">Slug</p>
+                        <p>{termoDigital.termo_slug}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted mb-1">Visualizado em</p>
+                        <p>{termoDigital.viewed_at ? formatarDataHora(termoDigital.viewed_at) : 'Ainda não'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted mb-1">Assinado em</p>
+                        <p>{termoDigital.signed_at ? formatarDataHora(termoDigital.signed_at) : 'Ainda não'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted mb-1">Concluído em</p>
+                        <p>{termoDigital.finished_at ? formatarDataHora(termoDigital.finished_at) : 'Aguardando'}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
 
           <Card>
@@ -2384,47 +2765,221 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
 
       <Modal
         isOpen={modalTermoAberto}
-        onClose={() => {
-          setModalTermoAberto(false);
-          setTermoSelecionado('');
-        }}
+        onClose={fecharModalTermo}
         title="Gerar termo"
-        size="md"
+        size={modoGeracaoTermo === 'digital' ? 'xl' : 'md'}
         footer={
-          <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => {
-              setModalTermoAberto(false);
-              setTermoSelecionado('');
-            }}>
-              Fechar
-            </Button>
-            <Button onClick={gerarTermo} disabled={isAbrindoTermo || !termoSelecionado}>
-              {isAbrindoTermo ? 'Gerando...' : 'Gerar e abrir'}
-            </Button>
+          <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-h-[20px] flex-1">
+              {termoModalError ? (
+                <p className="text-sm font-medium text-error-600">{termoModalError}</p>
+              ) : termoModalSuccess ? (
+                <p className="text-sm font-medium text-success-700">{termoModalSuccess}</p>
+              ) : null}
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={fecharModalTermo}>
+                Fechar
+              </Button>
+              {modoGeracaoTermo === 'digital' && termoDigitalGerado ? (
+                <>
+                  <Button variant="outline" onClick={() => copiarLinkTermoDigital(termoDigitalGerado.shortLink)}>
+                    Copiar link
+                  </Button>
+                  <Button onClick={() => window.open(termoDigitalGerado.shortLink, '_blank', 'noopener,noreferrer')}>
+                    Abrir link
+                  </Button>
+                </>
+              ) : modoGeracaoTermo === 'digital' ? (
+                <Button
+                  onClick={gerarTermoDigital}
+                  disabled={
+                    isGerandoTermoDigital
+                    || !termoSelecionado
+                    || !termoSelecionadoPermiteAutentique
+                    || isCarregandoPreviewTermo
+                    || !termoDraft
+                  }
+                >
+                  {!termoSelecionadoPermiteAutentique
+                    ? 'Disponível só para impressão'
+                    : isGerandoTermoDigital
+                    ? 'Gerando link...'
+                    : !termoDraft && termoSelecionado
+                      ? 'Preparando revisão...'
+                      : 'Gerar link no Autentique'}
+                </Button>
+              ) : (
+                <Button onClick={gerarTermoImpressao} disabled={isAbrindoTermo || !termoSelecionado}>
+                  {isAbrindoTermo ? 'Gerando...' : 'Gerar e abrir'}
+                </Button>
+              )}
+            </div>
           </div>
         }
       >
         <div className="space-y-4">
-          <p className="text-sm text-muted">Selecione um termo abaixo para gerar a versão do cliente em PDF.</p>
+          <p className="text-sm text-muted">
+            Escolha se você quer gerar a versão para impressão ou montar o termo digital com revisão antes de enviar ao Autentique.
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={modoGeracaoTermo === 'impressao' ? 'primary' : 'outline'}
+              onClick={() => handleModoGeracaoTermoChange('impressao')}
+            >
+              Impressão
+            </Button>
+            <Button
+              variant={modoGeracaoTermo === 'digital' ? 'primary' : 'outline'}
+              onClick={() => handleModoGeracaoTermoChange('digital')}
+            >
+              Digital no Autentique
+            </Button>
+          </div>
+
           {termos.length === 0 && !isLoadingTermos ? (
             <p className="text-sm text-muted">Nenhum termo ativo disponível no momento.</p>
           ) : (
-            <label className="block">
-              <span className="block text-sm font-medium mb-1">Termo</span>
-              <select
-                value={termoSelecionado}
-                onChange={(e) => setTermoSelecionado(e.target.value)}
-                className="field-control w-full"
-                required
-              >
-                <option value="">Selecione...</option>
-                {termos.map((termo) => (
-                  <option key={termo.id} value={termo.slug}>
-                    {termo.titulo}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <>
+              <label className="block">
+                <span className="block text-sm font-medium mb-1">Termo</span>
+                <select
+                  value={termoSelecionado}
+                  onChange={(e) => handleSelecionarTermo(e.target.value)}
+                  className="field-control w-full"
+                  required
+                >
+                  <option value="">Selecione...</option>
+                  {termos.map((termo) => (
+                    <option key={termo.id} value={termo.slug}>
+                      {termo.titulo}{termo.permite_autentique === 0 ? ' (somente impressão)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {modoGeracaoTermo === 'impressao' ? (
+                <p className="text-sm text-muted">A impressão usa o mesmo fluxo atual em PDF, pronto para abrir e imprimir.</p>
+              ) : termoDigitalGerado ? (
+                <div className="rounded-xl tone-success p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold text-success-700 dark:text-success-200">Link de assinatura criado</p>
+                    <p className="text-sm text-foreground">
+                      O termo digital foi enviado para o Autentique e já está disponível para assinatura por link.
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-success-500/25 bg-card p-3">
+                    <p className="text-xs uppercase tracking-wide text-success-700 dark:text-success-300 mb-1">Link</p>
+                    <p className="text-sm break-all text-foreground">{termoDigitalGerado.shortLink}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    O acompanhamento desse termo ficará disponível na aba Anexos, na seção Termos digitais.
+                  </p>
+                </div>
+              ) : termoSelecionado && !termoSelecionadoPermiteAutentique ? (
+                <div className="rounded-xl border border-warning-400/35 bg-warning-100/70 p-4 space-y-2">
+                  <p className="text-sm font-medium text-warning-900">Este termo é somente para impressão</p>
+                  <p className="text-sm text-warning-900/90">
+                    A referência de implante permanece com linhas e tabela para preenchimento manual, então ela não entra no fluxo digital do Autentique.
+                  </p>
+                </div>
+              ) : termoSelecionado ? (
+                <div className="space-y-4">
+                  {isCarregandoPreviewTermo && !termoPreviewHtml ? (
+                    <LoadingState mode="spinner" text="Preparando revisão do termo..." />
+                  ) : (
+                    <>
+                      <div className="rounded-xl border border-border bg-surface-secondary/60 p-4 space-y-2">
+                        <p className="text-sm font-medium">Revisão antes do envio</p>
+                        <p className="text-sm text-muted">
+                          Revise os campos abaixo. Só aparecem os placeholders usados neste termo específico.
+                        </p>
+                        <p className="text-xs text-muted">
+                          {camposPendentesTermo.length > 0
+                            ? `${camposPendentesTermo.length} campo(s) pendente(s): ${camposPendentesResumoTermo}.`
+                            : 'Todos os campos necessários já estão preenchidos.'}
+                        </p>
+                      </div>
+
+                      {termoDraft?.campos.length ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {termoDraft.campos.map((campo) => {
+                            const value = termoPlaceholders[campo.key] ?? '';
+                            const campoError = termoTentouGerarDigital && campo.required && !value.trim()
+                              ? 'Campo obrigatório.'
+                              : undefined;
+                            const hint = campo.source === 'cliente'
+                              ? 'Valor puxado do cadastro do paciente.'
+                              : campo.source === 'unidade'
+                                ? 'Valor puxado da unidade atual.'
+                                : 'Campo manual deste termo.';
+
+                            if (campo.tipo === 'textarea') {
+                              return (
+                                <Textarea
+                                  key={campo.key}
+                                  label={campo.label}
+                                  name={campo.key}
+                                  value={value}
+                                  onChange={(nextValue) => handleChangeCampoTermo(campo.key, nextValue)}
+                                  required={campo.required}
+                                  error={campoError}
+                                  hint={campoError ? undefined : hint}
+                                  rows={4}
+                                />
+                              );
+                            }
+
+                            return (
+                              <Input
+                                key={campo.key}
+                                label={campo.label}
+                                name={campo.key}
+                                value={value}
+                                onChange={(nextValue) => handleChangeCampoTermo(campo.key, nextValue)}
+                                required={campo.required}
+                                error={campoError}
+                                hint={campoError ? undefined : hint}
+                                type={campo.tipo === 'email' ? 'email' : campo.tipo === 'tel' ? 'tel' : 'text'}
+                                mask={campo.tipo === 'cpf' ? 'cpf' : campo.tipo === 'tel' ? 'telefone' : undefined}
+                              />
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted">Esse termo não possui campos variáveis para revisão manual.</p>
+                      )}
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium">Prévia que será enviada ao Autentique</p>
+                          {isCarregandoPreviewTermo && (
+                            <p className="text-xs text-muted">Atualizando prévia...</p>
+                          )}
+                        </div>
+                        <div className="overflow-hidden rounded-xl border border-border bg-muted/20 p-3 sm:p-4">
+                          {termoPreviewDocumento ? (
+                            <div className="overflow-hidden rounded-lg border border-border/70 bg-white shadow-sm">
+                              <iframe
+                                title="Prévia do termo digital"
+                                srcDoc={termoPreviewDocumento}
+                                className="h-[760px] w-full bg-white"
+                              />
+                            </div>
+                          ) : (
+                            <div className="p-6 text-sm text-muted">Selecione um termo para carregar a prévia.</div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted">Selecione um termo para abrir a revisão digital.</p>
+              )}
+            </>
           )}
         </div>
       </Modal>

@@ -1,3 +1,5 @@
+import { formatarDateNaClinica } from '@/lib/utils/formatters';
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -165,7 +167,103 @@ export function formatTermoHtmlContent(rawHtml: string) {
   return root.innerHTML;
 }
 
-const TERMO_PRINT_STYLES = `
+type TermoDocumentVariant = 'preview' | 'autentique';
+
+function normalizeForMatch(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function buildAutentiqueIssuedAtLabel(date: Date = new Date()) {
+  const data = formatarDateNaClinica(date, {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+  const hora = formatarDateNaClinica(date, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  return `Documento preparado para assinatura eletrônica em ${data}, ${hora}.`;
+}
+
+function transformAutentiqueRawHtml(rawHtml: string, date: Date = new Date()) {
+  const issuedAtLabel = escapeHtml(buildAutentiqueIssuedAtLabel(date));
+  let replacedDateLine = false;
+
+  return rawHtml
+    .replace(/<p>\s*_{3,}[\s\S]*?20_{2,}\.?\s*<\/p>/gi, () => {
+      if (replacedDateLine) {
+        return '';
+      }
+      replacedDateLine = true;
+      return `<p>${issuedAtLabel}</p>`;
+    })
+    .replace(/<p>\s*\(([^<]*(assinatura|carimbo|cpf)[^<]*)\)\s*<\/p>/gi, (_match, content: string) => {
+      const normalized = normalizeForMatch(content);
+      const isClinicInternal = /socio|administrador|profissional|cirurgiao|dentista|carimbo/.test(normalized)
+        && !/paciente|responsavel/.test(normalized);
+
+      if (isClinicInternal) {
+        return '<p>Assinatura interna da clínica registrada fora deste fluxo digital.</p>';
+      }
+
+      return '<p>Assinatura eletrônica do(a) paciente/responsável via Autentique.</p>';
+    });
+}
+
+function buildTermoDocumentStyles(variant: TermoDocumentVariant) {
+  const variantStyles = variant === 'preview'
+    ? `
+  @media screen {
+    body {
+      padding: 20px;
+      background: #f8fafc;
+    }
+
+    .termo-document {
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 15mm 16mm 18mm;
+      background: #ffffff;
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    }
+  }
+
+  @media print {
+    body {
+      padding: 0;
+      background: #ffffff;
+    }
+
+    .termo-document {
+      max-width: none;
+      margin: 0;
+      padding: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+  }
+`
+    : `
+  body {
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .termo-document {
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 16mm 17mm 19mm;
+    background: #ffffff;
+  }
+`;
+
+  return `
   :root {
     color-scheme: light;
   }
@@ -199,6 +297,8 @@ const TERMO_PRINT_STYLES = `
     width: 100%;
   }
 
+${variantStyles}
+
   .termo-body > :first-child {
     margin-top: 0;
   }
@@ -227,6 +327,7 @@ const TERMO_PRINT_STYLES = `
     text-wrap: pretty;
     orphans: 3;
     widows: 3;
+    word-break: break-word;
   }
 
   .termo-eyebrow,
@@ -351,10 +452,14 @@ const TERMO_PRINT_STYLES = `
     color: #020617;
   }
 `;
+}
 
-export function buildTermoPrintableDocument(title: string, rawHtml: string) {
+function buildTermoDocument(title: string, rawHtml: string, variant: TermoDocumentVariant) {
   const safeTitle = escapeHtml(title || 'Termo');
-  const bodyHtml = formatTermoHtmlContent(rawHtml);
+  const sourceHtml = variant === 'autentique'
+    ? transformAutentiqueRawHtml(rawHtml)
+    : rawHtml;
+  const bodyHtml = formatTermoHtmlContent(sourceHtml);
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -362,7 +467,7 @@ export function buildTermoPrintableDocument(title: string, rawHtml: string) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${safeTitle}</title>
-    <style>${TERMO_PRINT_STYLES}</style>
+    <style>${buildTermoDocumentStyles(variant)}</style>
   </head>
   <body>
     <article class="termo-document">
@@ -370,4 +475,12 @@ export function buildTermoPrintableDocument(title: string, rawHtml: string) {
     </article>
   </body>
 </html>`;
+}
+
+export function buildTermoPrintableDocument(title: string, rawHtml: string) {
+  return buildTermoDocument(title, rawHtml, 'preview');
+}
+
+export function buildTermoAutentiqueDocument(title: string, rawHtml: string) {
+  return buildTermoDocument(title, rawHtml, 'autentique');
 }
