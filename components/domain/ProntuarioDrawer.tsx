@@ -130,12 +130,23 @@ export default function ProntuarioDrawer({
     }
   }, [open, clienteId, carregar, safeInitialTab]);
 
+  useEffect(() => {
+    if (
+      isDentistPatientView
+      && abaAtiva === 'prontuario'
+      && (ficha?.prontuarios.length ?? 0) === 0
+      && anexosCliente.length > 0
+    ) {
+      setAbaAtiva('anexos');
+    }
+  }, [isDentistPatientView, abaAtiva, ficha?.prontuarios.length, anexosCliente.length]);
+
   const abas = [
     { key: 'dados', label: 'Dados' },
     { key: 'atendimentos', label: 'Atendim.', count: ficha?.atendimentos.length },
     { key: 'procedimentos', label: 'Proced.', count: ficha?.procedimentos.length },
-    { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
     { key: 'anexos', label: 'Anexos', count: anexosCliente.length },
+    { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
     ...(
       isDentistPatientView
         ? []
