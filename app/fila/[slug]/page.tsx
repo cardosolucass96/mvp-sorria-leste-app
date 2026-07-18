@@ -5,9 +5,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter, useParams } from 'next/navigation';
 import { Activity, LayoutList, Users, FileText } from 'lucide-react';
-import { PageHeader, Card, LoadingState, EmptyState, Alert, ConfirmDialog } from '@/components/ui';
+import { PageHeader, Card, LoadingState, EmptyState, Alert, ConfirmDialog, Badge, Button } from '@/components/ui';
 import { StatusBadge, ProntuarioDrawer } from '@/components/domain';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import { cn } from '@/lib/utils';
 
 interface Procedimento {
   id: number;
@@ -32,12 +33,12 @@ function NomeProcedimento({ proc }: { proc: Procedimento }) {
     <span className="inline-flex items-center gap-1.5 flex-wrap">
       <span>{base}</span>
       {proc.tem_etapas === 1 && proc.etapa_label && (
-        <span className="text-xs bg-primary-100 text-primary-700 dark:bg-primary-900/50 dark:text-primary-200 px-1.5 py-0.5 rounded font-medium">
+        <Badge color="orange" size="sm" className="rounded-md px-1.5 py-0.5">
           {proc.etapa_label}
-        </span>
+        </Badge>
       )}
       {!proc.tem_etapas && proc.etapa_label && (
-        <span className="text-xs text-muted">— {proc.etapa_label}</span>
+        <span className="text-xs text-muted-foreground">— {proc.etapa_label}</span>
       )}
     </span>
   );
@@ -164,25 +165,31 @@ export default function FilaPage() {
         title={`Fila ${fila.categoria.nome}`}
         description={`${totalProcedimentos} procedimento${totalProcedimentos !== 1 ? 's' : ''}`}
         actions={
-          <div className="flex rounded-lg border border-border overflow-hidden text-sm">
+          <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-sm shadow-xs">
             <button
               onClick={() => setVisualizacao('procedimento')}
-                className={`flex items-center gap-1.5 px-3 py-2 transition-colors
-                  ${visualizacao === 'procedimento'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-surface text-muted hover:bg-surface-secondary'}`}
+              aria-pressed={visualizacao === 'procedimento'}
+              className={cn(
+                'inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                visualizacao === 'procedimento'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              )}
             >
-              <LayoutList className="w-4 h-4" />
+              <LayoutList className="size-4" />
               Procedimento
             </button>
             <button
               onClick={() => setVisualizacao('paciente')}
-                className={`flex items-center gap-1.5 px-3 py-2 transition-colors border-l border-border
-                  ${visualizacao === 'paciente'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-surface text-muted hover:bg-surface-secondary'}`}
+              aria-pressed={visualizacao === 'paciente'}
+              className={cn(
+                'inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                visualizacao === 'paciente'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              )}
             >
-              <Users className="w-4 h-4" />
+              <Users className="size-4" />
               Paciente
             </button>
           </div>
@@ -196,7 +203,7 @@ export default function FilaPage() {
           description="Quando houver procedimentos pagos, eles aparecerão aqui."
         />
       ) : visualizacao === 'procedimento' ? (
-        <div className="space-y-8 mt-6">
+        <div className="mt-6 flex flex-col gap-8">
           {(() => {
             const porAtendimento = todos.reduce<Record<number, Procedimento[]>>((acc, p) => {
               if (!acc[p.atendimento_id]) acc[p.atendimento_id] = [];
@@ -209,7 +216,7 @@ export default function FilaPage() {
                 <Section
                   label="Meus Procedimentos"
                   count={fila.meusProcedimentos.length}
-                  badgeClass="bg-info-100 text-info-800 dark:bg-info-900/30 dark:text-info-100"
+                  badgeColor="blue"
                   empty="Nenhum procedimento atribuído a você ainda."
                 >
                   {fila.meusProcedimentos.map(proc => (
@@ -225,7 +232,7 @@ export default function FilaPage() {
                 <Section
                   label="Disponíveis para Pegar"
                   count={fila.disponiveis.length}
-                  badgeClass="bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-100"
+                  badgeColor="yellow"
                   empty="Nenhum procedimento disponível no momento."
                 >
                   {fila.disponiveis.map(proc => (
@@ -248,10 +255,10 @@ export default function FilaPage() {
           const pacientesDisp = sorted.filter(g => g.itens.every(p => p.executor_id !== user?.id));
 
           return (
-            <div className="space-y-8 mt-6">
+            <div className="mt-6 flex flex-col gap-8">
               <PacienteSection
                 label="Meus Pacientes"
-                badgeClass="bg-info-100 text-info-800 dark:bg-info-900/30 dark:text-info-100"
+                badgeColor="blue"
                 grupos={meusPacientes}
                 empty="Nenhum paciente atribuído a você ainda."
                 userId={user?.id}
@@ -262,7 +269,7 @@ export default function FilaPage() {
               />
               <PacienteSection
                 label="Pacientes Disponíveis"
-                badgeClass="bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-100"
+                badgeColor="yellow"
                 grupos={pacientesDisp}
                 empty="Nenhum paciente disponível no momento."
                 userId={user?.id}
@@ -295,24 +302,26 @@ export default function FilaPage() {
 }
 
 function Section({
-  label, count, badgeClass, empty, children,
+  label, count, badgeColor, empty, children,
 }: {
   label: string;
   count: number;
-  badgeClass: string;
+  badgeColor: 'blue' | 'yellow';
   empty: string;
   children: React.ReactNode;
 }) {
   return (
     <section>
       <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-        <span className={`px-3 py-1 rounded-full text-sm ${badgeClass}`}>{label}</span>
-        <span className="text-muted text-sm font-normal">({count})</span>
+        <Badge color={badgeColor} className="px-3 py-1 text-sm shadow-xs">
+          {label}
+        </Badge>
+        <span className="text-muted-foreground text-sm font-normal">({count})</span>
       </h2>
       {count === 0 ? (
-        <div className="bg-surface-secondary p-4 rounded-lg text-center text-muted">{empty}</div>
+        <div className="surface-panel-muted p-4 text-center text-muted-foreground">{empty}</div>
       ) : (
-        <div className="space-y-3">{children}</div>
+        <div className="flex flex-col gap-3">{children}</div>
       )}
     </section>
   );
@@ -326,10 +335,10 @@ interface GrupoPaciente {
 }
 
 function PacienteSection({
-  label, badgeClass, grupos, empty, userId, pegando, onPegarTodos, onVerProcedimento, onVerProntuario,
+  label, badgeColor, grupos, empty, userId, pegando, onPegarTodos, onVerProcedimento, onVerProntuario,
 }: {
   label: string;
-  badgeClass: string;
+  badgeColor: 'blue' | 'yellow';
   grupos: GrupoPaciente[];
   empty: string;
   userId?: number;
@@ -341,61 +350,66 @@ function PacienteSection({
   return (
     <section>
       <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-        <span className={`px-3 py-1 rounded-full text-sm ${badgeClass}`}>{label}</span>
-        <span className="text-muted text-sm font-normal">({grupos.length})</span>
+        <Badge color={badgeColor} className="px-3 py-1 text-sm shadow-xs">
+          {label}
+        </Badge>
+        <span className="text-muted-foreground text-sm font-normal">({grupos.length})</span>
       </h2>
       {grupos.length === 0 ? (
-        <div className="bg-surface-secondary p-4 rounded-lg text-center text-muted">{empty}</div>
+        <div className="surface-panel-muted p-4 text-center text-muted-foreground">{empty}</div>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {grupos.map(grupo => {
             const meus = grupo.itens.filter(p => p.executor_id === userId);
             const disp = grupo.itens.filter(p => p.executor_id !== userId);
             const carregandoEste = pegando === grupo.atendimento_id;
             return (
               <Card key={grupo.atendimento_id} variant="outlined">
-                <div className="flex items-start justify-between mb-3">
+                <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="text-base font-semibold text-foreground">{grupo.cliente_nome}</h3>
-                    <p className="text-xs text-muted">Atendimento #{grupo.atendimento_id}</p>
+                    <p className="text-xs text-muted-foreground">Atendimento #{grupo.atendimento_id}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                    <Button
                       onClick={() => onVerProntuario(grupo.cliente_id)}
-                      className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1.5 rounded-lg border border-border text-muted hover:text-primary hover:border-primary-300 hover:bg-primary-50 transition-colors dark:hover:bg-primary/40 dark:hover:border-primary-300/70 dark:hover:text-primary-200"
+                      variant="outline"
+                      size="xs"
+                      className="shrink-0 text-muted-foreground hover:border-primary hover:text-accent-foreground"
                       title="Ver prontuário"
                     >
-                      <FileText className="w-3.5 h-3.5" />
+                      <FileText className="size-3.5" />
                       <span className="hidden sm:inline">Prontuário</span>
-                    </button>
+                    </Button>
                     {disp.length > 0 && (
-                      <button
+                      <Button
                         onClick={() => onPegarTodos(grupo.atendimento_id, grupo.cliente_nome, disp)}
                         disabled={carregandoEste}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 disabled:opacity-50 transition-colors"
+                        size="xs"
+                        className="shrink-0 font-semibold"
                       >
                         {carregandoEste
                           ? 'Pegando...'
                           : `Pegar todos${disp.length < grupo.itens.length ? ` (${disp.length})` : ''}`}
-                      </button>
+                      </Button>
                     )}
-                    <span className="text-xs text-muted bg-surface-secondary px-2 py-1 rounded-full">
+                    <Badge color="gray" size="sm" className="shrink-0">
                       {grupo.itens.length} proc.
-                    </span>
+                    </Badge>
                   </div>
                 </div>
-                <div className="space-y-1">
+                <div className="flex flex-col gap-1">
                   {[...meus, ...disp].map(proc => (
                     <button
                       key={proc.id}
                       onClick={() => onVerProcedimento(proc.id)}
-                      className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg hover:bg-surface-secondary transition-colors text-left group"
+                      className="group flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         {proc.executor_id === userId && (
-                          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-info-500" title="Meu procedimento" />
+                          <span className="size-1.5 shrink-0 rounded-full bg-info-500" title="Meu procedimento" />
                         )}
-                        <span className="text-sm font-medium text-foreground group-hover:text-primary">
+                        <span className="text-sm font-medium text-foreground group-hover:text-accent-foreground">
                           <NomeProcedimento proc={proc} />
                         </span>
                       </div>
@@ -415,8 +429,8 @@ function PacienteSection({
 function ProcedimentoCard({ proc, irmaos, onClick }: { proc: Procedimento; irmaos: Procedimento[]; onClick: () => void }) {
   return (
     <Card variant="outlined" borderColor="border-info-500" onClick={onClick}>
-      <div className="flex justify-between items-start">
-        <div className="flex-1">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
           <h3 className="text-lg font-semibold text-foreground">
             <NomeProcedimento proc={proc} />
           </h3>
@@ -427,8 +441,8 @@ function ProcedimentoCard({ proc, irmaos, onClick }: { proc: Procedimento; irmao
       </div>
       {irmaos.length > 0 && (
         <div className="mt-3 pt-3 border-t border-border-light">
-          <p className="text-xs text-muted font-medium mb-1.5">Outros procedimentos deste paciente:</p>
-          <div className="space-y-1">
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">Outros procedimentos deste paciente:</p>
+          <div className="flex flex-col gap-1">
             {irmaos.map(irmao => (
               <div key={irmao.id} className="flex items-center justify-between gap-2">
                 <span className="text-xs text-muted-foreground">
