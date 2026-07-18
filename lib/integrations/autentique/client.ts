@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { getRequiredRuntimeEnv } from '@/lib/env';
+import { getOptionalRuntimeEnv, getRequiredRuntimeEnv } from '@/lib/env';
 
 const AUTENTIQUE_GRAPHQL_URL = 'https://api.autentique.com.br/v2/graphql';
 
@@ -39,6 +39,7 @@ export interface AutentiqueCreateDocumentPayload {
   title: string;
   html: string;
   signer: AutentiqueSignerPayload;
+  folderId?: string | null;
 }
 
 export interface AutentiqueCreatedDocument {
@@ -99,17 +100,47 @@ async function executeAutentiqueGraphql<T>(query: string, variables: Record<stri
   return parseAutentiqueResponse<T>(response);
 }
 
-async function createDocument(title: string, html: string, signer: AutentiqueSignerPayload) {
+function normalizeUnitName(value: string | null | undefined) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+export function getAutentiqueFolderIdForUnit(unitName: string | null | undefined) {
+  const normalized = normalizeUnitName(unitName);
+  if (!normalized) return null;
+
+  if (normalized === 'vila uniao') {
+    return getOptionalRuntimeEnv('AUTENTIQUE_FOLDER_ID_VILA_UNIAO');
+  }
+
+  if (normalized === 'barra do ceara') {
+    return getOptionalRuntimeEnv('AUTENTIQUE_FOLDER_ID_BARRA_DO_CEARA');
+  }
+
+  if (normalized === 'pirambu') {
+    return getOptionalRuntimeEnv('AUTENTIQUE_FOLDER_ID_PIRAMBU');
+  }
+
+  return null;
+}
+
+async function createDocument(title: string, html: string, signer: AutentiqueSignerPayload, folderId?: string | null) {
+  const hasFolderId = Boolean(folderId);
+  const folderVariableDefinition = hasFolderId ? ',\n      $folder_id: UUID' : '';
+  const folderArgument = hasFolderId ? '\n        folder_id: $folder_id' : '';
   const mutation = `
     mutation CreateDocumentMutation(
       $document: DocumentInput!,
       $signers: [SignerInput!]!,
-      $file: Upload!
+      $file: Upload!${folderVariableDefinition}
     ) {
       createDocument(
         document: $document,
         signers: $signers,
-        file: $file
+        file: $file${folderArgument}
       ) {
         id
         name
@@ -131,15 +162,16 @@ async function createDocument(title: string, html: string, signer: AutentiqueSig
     query: mutation,
     variables: {
       document: { name: title },
-        signers: [
-          {
-            name: signer.name,
-            delivery_method: 'DELIVERY_METHOD_LINK',
-            action: 'SIGN',
-            ...(normalizeCpf(signer.cpf) ? { configs: { cpf: normalizeCpf(signer.cpf) } } : {}),
-          },
-        ],
-        file: null,
+      ...(hasFolderId ? { folder_id: folderId } : {}),
+      signers: [
+        {
+          name: signer.name,
+          delivery_method: 'DELIVERY_METHOD_LINK',
+          action: 'SIGN',
+          ...(normalizeCpf(signer.cpf) ? { configs: { cpf: normalizeCpf(signer.cpf) } } : {}),
+        },
+      ],
+      file: null,
     },
   }));
   formData.set('map', JSON.stringify({ '0': ['variables.file'] }));
@@ -179,7 +211,7 @@ export async function createAutentiqueSignatureLink(publicId: string) {
 }
 
 export async function createAutentiqueDocumentFromHtml(payload: AutentiqueCreateDocumentPayload): Promise<AutentiqueCreatedDocument> {
-  const created = await createDocument(payload.title, payload.html, payload.signer);
+  const created = await createDocument(payload.title, payload.html, payload.signer, payload.folderId);
   const documentId = created.createDocument?.id;
   const signature = created.createDocument?.signatures?.find((item) => item.action?.name)
     ?? created.createDocument?.signatures?.find((item) => item.link?.short_link)

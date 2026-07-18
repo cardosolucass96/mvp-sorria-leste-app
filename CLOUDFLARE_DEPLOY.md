@@ -114,7 +114,12 @@ Para habilitar a geração de termos digitais com assinatura por link, configure
 ```bash
 npx wrangler secret put AUTENTIQUE_API_TOKEN
 npx wrangler secret put AUTENTIQUE_WEBHOOK_SECRET
+npx wrangler secret put AUTENTIQUE_FOLDER_ID_VILA_UNIAO
+npx wrangler secret put AUTENTIQUE_FOLDER_ID_BARRA_DO_CEARA
+npx wrangler secret put AUTENTIQUE_FOLDER_ID_PIRAMBU
 ```
+
+Quando esses `folder_id` estiverem preenchidos, os termos digitais já serão criados automaticamente dentro da pasta correta de cada unidade no Autentique.
 
 Opcionalmente, defina a URL base pública do sistema:
 

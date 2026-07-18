@@ -29,6 +29,29 @@ describe('termosDocumento', () => {
     expect(formatted).toContain('termo-signature-caption');
   });
 
+  it('mantem a formatacao do termo no caminho server-side usado pelo Autentique', () => {
+    const originalDomParser = globalThis.DOMParser;
+    // Simula o runtime server-side onde o HTML do Autentique eh montado.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).DOMParser = undefined;
+
+    try {
+      const formatted = formatTermoHtmlContent(`
+        <p>REQUERIMENTO PARA DEVOLUCAO DE VALORES</p>
+        <p>CLINICA SORRIA LESTE</p>
+        <p>DADOS BANCARIOS PARA DEVOLUCAO:</p>
+        <p>(Assinatura e CPF do(a) paciente/responsavel)</p>
+      `);
+
+      expect(formatted).toContain('class="termo-eyebrow"');
+      expect(formatted).toContain('class="termo-title"');
+      expect(formatted).toContain('termo-section-title');
+      expect(formatted).toContain('termo-signature-caption');
+    } finally {
+      globalThis.DOMParser = originalDomParser;
+    }
+  });
+
   it('gera um documento completo para impressao', () => {
     const documentHtml = buildTermoPrintableDocument(
       'Termo Teste',

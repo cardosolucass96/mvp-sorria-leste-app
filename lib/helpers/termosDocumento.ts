@@ -46,6 +46,10 @@ function shouldHighlightClause(text: string) {
   return hasUppercaseLettersOnly(match[1]);
 }
 
+function isElementNode(node: unknown): node is Element {
+  return Boolean(node) && typeof node === 'object' && 'nodeType' in (node as Record<string, unknown>) && (node as { nodeType: number }).nodeType === 1;
+}
+
 function replaceElementTag<T extends Element>(element: T, tagName: string) {
   const replacement = element.ownerDocument.createElement(tagName);
   replacement.innerHTML = element.innerHTML;
@@ -71,24 +75,133 @@ function decorateClause(paragraph: HTMLParagraphElement) {
   paragraph.classList.add('termo-clause');
 }
 
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;/gi, "'");
+}
+
+function stripHtmlTags(value: string) {
+  return decodeHtmlEntities(value.replace(/<[^>]+>/g, ' '));
+}
+
+function decorateClauseHtml(innerHtml: string) {
+  const colonIndex = innerHtml.indexOf(':');
+  if (colonIndex <= 0) return innerHtml;
+
+  const label = innerHtml.slice(0, colonIndex + 1).trim();
+  const remainder = innerHtml.slice(colonIndex + 1).trim();
+  if (!remainder) return innerHtml;
+
+  return `<span class="termo-clause-label">${label}</span> ${remainder}`;
+}
+
+function formatTermoHtmlContentWithoutDom(html: string) {
+  const blocks = html.match(/<(p|h[1-6]|ul|ol|table)[^>]*>[\s\S]*?<\/\1>/gi);
+  if (!blocks?.length) {
+    return html;
+  }
+
+  let titleCount = 0;
+  let foundBodyStart = false;
+  let previousTag = '';
+  const result: string[] = [];
+
+  for (const block of blocks) {
+    const match = block.match(/^<([a-z0-9]+)([^>]*)>([\s\S]*?)<\/\1>$/i);
+    if (!match) {
+      result.push(block);
+      previousTag = '';
+      continue;
+    }
+
+    const [, tagNameRaw, attrsRaw, innerHtmlRaw] = match;
+    const tagName = tagNameRaw.toLowerCase();
+    const innerHtml = innerHtmlRaw.trim();
+    const text = normalizeText(stripHtmlTags(innerHtml));
+    const classes: string[] = [];
+    let outputTag = tagName;
+    let outputInnerHtml = innerHtml;
+
+    if (tagName === 'p') {
+      if (!text) {
+        continue;
+      }
+
+      classes.push('termo-paragraph');
+
+      if (isUppercaseTitle(text) && titleCount < 3) {
+        classes.length = 0;
+        classes.push(titleCount === 0 ? 'termo-eyebrow' : titleCount === 1 ? 'termo-title' : 'termo-subtitle');
+        titleCount += 1;
+      } else if (isStandaloneSectionTitle(text)) {
+        outputTag = 'h2';
+        classes.length = 0;
+        classes.push('termo-section-title');
+      } else {
+        if (isDateLine(text)) {
+          classes.push('termo-date-line', 'termo-no-indent');
+        }
+
+        if (isSignatureCaption(text)) {
+          classes.push('termo-signature-caption', 'termo-no-indent');
+        }
+
+        if (isDataLine(text)) {
+          classes.push('termo-data-line', 'termo-no-indent');
+        }
+
+        if (shouldHighlightClause(text)) {
+          outputInnerHtml = decorateClauseHtml(innerHtml);
+          classes.push('termo-clause');
+        }
+
+        if (!foundBodyStart || previousTag === 'h2') {
+          classes.push('termo-no-indent');
+          foundBodyStart = true;
+        }
+      }
+    } else if (/^h[1-6]$/.test(tagName)) {
+      outputTag = 'h2';
+      classes.push('termo-section-title');
+    } else if (tagName === 'ul' || tagName === 'ol') {
+      classes.push('termo-list');
+    }
+
+    const existingClassMatch = attrsRaw.match(/\sclass=(['"])(.*?)\1/i);
+    const existingClasses = existingClassMatch?.[2]?.trim() ? existingClassMatch[2].trim().split(/\s+/) : [];
+    const mergedClasses = Array.from(new Set([...existingClasses, ...classes])).filter(Boolean);
+    const attrsWithoutClass = attrsRaw.replace(/\sclass=(['"])(.*?)\1/i, '');
+    const classAttr = mergedClasses.length ? ` class="${mergedClasses.join(' ')}"` : '';
+    result.push(`<${outputTag}${attrsWithoutClass}${classAttr}>${outputInnerHtml}</${outputTag}>`);
+    previousTag = outputTag;
+  }
+
+  return result.join('\n');
+}
+
 export function formatTermoHtmlContent(rawHtml: string) {
   const html = rawHtml.trim();
   if (!html) {
     return '<p class="termo-paragraph termo-note">Conteudo do termo vazio.</p>';
   }
 
-  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
-    return html;
+  if (typeof DOMParser === 'undefined') {
+    return formatTermoHtmlContentWithoutDom(html);
   }
 
   const parsed = new DOMParser().parseFromString(`<div id="termo-root">${html}</div>`, 'text/html');
   const root = parsed.getElementById('termo-root');
-  if (!root) return html;
+  if (!root) return formatTermoHtmlContentWithoutDom(html);
 
   let titleCount = 0;
 
   Array.from(root.children).forEach((node) => {
-    if (!(node instanceof Element)) return;
+    if (!isElementNode(node)) return;
 
     if (node.tagName === 'P') {
       const paragraph = node as HTMLParagraphElement;
@@ -149,7 +262,7 @@ export function formatTermoHtmlContent(rawHtml: string) {
 
   let foundBodyStart = false;
   Array.from(root.children).forEach((node) => {
-    if (!(node instanceof Element)) return;
+    if (!isElementNode(node)) return;
     if (!node.classList.contains('termo-paragraph')) return;
 
     const previous = node.previousElementSibling as HTMLElement | null;

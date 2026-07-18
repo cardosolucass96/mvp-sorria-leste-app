@@ -9,5 +9,8 @@ interface CloudflareEnv {
   ENVIRONMENT: string;
   AUTENTIQUE_API_TOKEN?: string;
   AUTENTIQUE_WEBHOOK_SECRET?: string;
+  AUTENTIQUE_FOLDER_ID_VILA_UNIAO?: string;
+  AUTENTIQUE_FOLDER_ID_BARRA_DO_CEARA?: string;
+  AUTENTIQUE_FOLDER_ID_PIRAMBU?: string;
   APP_BASE_URL?: string;
 }

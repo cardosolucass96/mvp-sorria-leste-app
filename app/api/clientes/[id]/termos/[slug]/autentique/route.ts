@@ -3,7 +3,7 @@ import { execute, queryOne } from '@/lib/db';
 import { withUnit } from '@/lib/auth/middleware';
 import { garantirTermosDigitaisSchema } from '@/lib/helpers/garantirTermosDigitaisSchema';
 import { carregarTermoRenderizadoParaCliente } from '@/lib/helpers/termosCliente';
-import { createAutentiqueDocumentFromHtml } from '@/lib/integrations/autentique/client';
+import { createAutentiqueDocumentFromHtml, getAutentiqueFolderIdForUnit } from '@/lib/integrations/autentique/client';
 import { buildTermoAutentiqueDocument } from '@/lib/helpers/termosDocumento';
 import { Cliente } from '@/lib/types';
 
@@ -69,10 +69,12 @@ export const POST = withUnit(async (request: NextRequest, ctx) => {
       termoRenderizado.termo.titulo,
       termoRenderizado.html,
     );
+    const folderId = getAutentiqueFolderIdForUnit(termoRenderizado.unidade?.nome);
 
     const created = await createAutentiqueDocumentFromHtml({
       title: `${termoRenderizado.termo.titulo} - ${termoRenderizado.cliente.nome}`,
       html: htmlAutentique,
+      folderId,
       signer: {
         name: termoRenderizado.cliente.nome,
         cpf: termoRenderizado.cliente.cpf,

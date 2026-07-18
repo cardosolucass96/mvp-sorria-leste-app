@@ -14,6 +14,7 @@ import { POST as renderTermoRoute } from '@/app/api/clientes/[id]/termos/[slug]/
 import { POST as gerarTermoDigitalRoute } from '@/app/api/clientes/[id]/termos/[slug]/autentique/route';
 import { GET as listarTermosDigitaisRoute } from '@/app/api/clientes/[id]/termos-digitais/route';
 import { POST as webhookAutentiqueRoute } from '@/app/api/webhooks/autentique/route';
+import type { TermoDigital } from '@/lib/types';
 
 interface TermoCampoDraftResponse {
   key: string;
@@ -127,6 +128,9 @@ beforeEach(() => {
   setMockCloudflareEnv({
     AUTENTIQUE_API_TOKEN: 'autentique-token-teste',
     AUTENTIQUE_WEBHOOK_SECRET: 'autentique-webhook-secret',
+    AUTENTIQUE_FOLDER_ID_VILA_UNIAO: 'folder-vila-uniao',
+    AUTENTIQUE_FOLDER_ID_BARRA_DO_CEARA: 'folder-barra-do-ceara',
+    AUTENTIQUE_FOLDER_ID_PIRAMBU: 'folder-pirambu',
   });
   jest.restoreAllMocks();
 });
@@ -165,6 +169,9 @@ describe('termos digitais do cliente', () => {
         const operations = JSON.parse(String((init?.body as FormData).get('operations')));
         expect(String(operations.query)).toContain('action {');
         expect(String(operations.query)).toContain('link {');
+        expect(String(operations.query)).toContain('folder_id: $folder_id');
+        expect(operations.variables.document).toEqual({ name: 'Termo de Consentimento - Maria Teste' });
+        expect(operations.variables.folder_id).toBe('folder-barra-do-ceara');
         expect(operations.variables.signers).toEqual([
           expect.objectContaining({
             name: 'Maria Teste',
@@ -262,6 +269,44 @@ describe('termos digitais do cliente', () => {
       shortLink: 'https://assina.ae/assinatura-2',
       status: 'criado',
     });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('envia o folder_id da unidade atual quando a pasta do Autentique está configurada', async () => {
+    setupClienteTermoMocks('<p>{{cliente_nome}}</p>', { titulo: 'Termo da Unidade' });
+    mockQueryResponse("select name from sqlite_master where type='table' and name='termos_digitais'", { name: 'termos_digitais' });
+    mockQueryResponse("select name from sqlite_master where type='table' and name='autentique_webhook_events'", { name: 'autentique_webhook_events' });
+
+    const fetchSpy = jest.spyOn(global, 'fetch')
+      .mockImplementationOnce(async (_input, init) => {
+        const operations = JSON.parse(String((init?.body as FormData).get('operations')));
+        expect(String(operations.query)).toContain('$folder_id: UUID');
+        expect(operations.variables.document).toEqual({ name: 'Termo da Unidade - Maria Teste' });
+        expect(operations.variables.folder_id).toBe('folder-barra-do-ceara');
+        return mockJsonResponse({
+          data: {
+            createDocument: {
+              id: 'doc-autentique-folder',
+              name: 'Termo da Unidade - Maria Teste',
+              signatures: [
+                { public_id: 'signature-folder', action: { name: 'SIGN' }, link: { short_link: 'https://assina.ae/folder' } },
+              ],
+            },
+          },
+        });
+      });
+
+    const { status } = await callRoute<TermoDigitalGerado>(
+      gerarTermoDigitalRoute,
+      '/api/clientes/1/termos/termo-consentimento/autentique',
+      {
+        method: 'POST',
+        body: { placeholders: {} },
+      },
+      createRouteContext({ id: '1', slug: 'termo-consentimento' })
+    );
+
+    expect(status).toBe(201);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
