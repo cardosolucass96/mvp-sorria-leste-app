@@ -52,6 +52,12 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const resumo = searchParams.get('resumo') === 'true';
     const origemExpr = "COALESCE(c.origem, CASE WHEN c.tipo = 'execucao' THEN 'execucao' ELSE 'avaliacao' END)";
     const comissaoCreatedAtExpr = getSqlUtcInstantExpression('c.created_at');
+    const pagamentoCreatedAtExpr = getSqlUtcInstantExpression('pg.created_at');
+    const alocacaoCreatedAtExpr = getSqlUtcInstantExpression('pa.created_at');
+    const comissaoDataEfetivaExpr = `CASE
+      WHEN c.tipo = 'venda' THEN COALESCE(${pagamentoCreatedAtExpr}, ${alocacaoCreatedAtExpr}, ${comissaoCreatedAtExpr})
+      ELSE ${comissaoCreatedAtExpr}
+    END`;
     const dataInicioUtc = clinicDateTimeInputToUtcIso(dataInicio);
     const dataFimUtc = clinicDateTimeInputToUtcIsoEndOfDay(dataFim);
 
@@ -68,6 +74,8 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
           SUM(c.valor_comissao) as total_geral,
           COUNT(*) as quantidade
         FROM comissoes c
+        LEFT JOIN pagamentos_alocacoes pa ON pa.id = c.pagamento_alocacao_id
+        LEFT JOIN pagamentos pg ON pg.id = pa.pagamento_id
         INNER JOIN usuarios u ON c.usuario_id = u.id
         INNER JOIN atendimentos a ON c.atendimento_id = a.id
         WHERE a.unidade_id = ?
@@ -80,12 +88,12 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       }
 
       if (dataInicioUtc) {
-        sqlResumo += ` AND ${comissaoCreatedAtExpr} >= ?`;
+        sqlResumo += ` AND ${comissaoDataEfetivaExpr} >= ?`;
         paramsResumo.push(dataInicioUtc);
       }
 
       if (dataFimUtc) {
-        sqlResumo += ` AND ${comissaoCreatedAtExpr} <= ?`;
+        sqlResumo += ` AND ${comissaoDataEfetivaExpr} <= ?`;
         paramsResumo.push(dataFimUtc);
       }
 
@@ -110,8 +118,10 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         c.valor_comissao,
         p.nome as procedimento_nome,
         cl.nome as cliente_nome,
-        c.created_at
+        ${comissaoDataEfetivaExpr} as created_at
       FROM comissoes c
+      LEFT JOIN pagamentos_alocacoes pa ON pa.id = c.pagamento_alocacao_id
+      LEFT JOIN pagamentos pg ON pg.id = pa.pagamento_id
       INNER JOIN usuarios u ON c.usuario_id = u.id
       INNER JOIN itens_atendimento i ON c.item_atendimento_id = i.id
       INNER JOIN procedimentos p ON i.procedimento_id = p.id
@@ -127,16 +137,16 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     }
 
     if (dataInicioUtc) {
-      sql += ` AND ${comissaoCreatedAtExpr} >= ?`;
+      sql += ` AND ${comissaoDataEfetivaExpr} >= ?`;
       params.push(dataInicioUtc);
     }
 
     if (dataFimUtc) {
-      sql += ` AND ${comissaoCreatedAtExpr} <= ?`;
+      sql += ` AND ${comissaoDataEfetivaExpr} <= ?`;
       params.push(dataFimUtc);
     }
 
-    sql += ` ORDER BY ${comissaoCreatedAtExpr} DESC`;
+    sql += ` ORDER BY ${comissaoDataEfetivaExpr} DESC`;
 
     const comissoes = await query<Comissao>(sql, params);
 

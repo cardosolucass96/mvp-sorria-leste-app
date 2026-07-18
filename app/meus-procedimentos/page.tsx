@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useAuth } from '@/contexts/AuthContext';
-import { ClipboardList, Search, Activity, FileText } from 'lucide-react';
-import { PageHeader, StatCard, Badge, LoadingState, Tabs, Alert, Table } from '@/components/ui';
+import { ClipboardList, Search, Activity, FileText, Layers3, ListTree } from 'lucide-react';
+import { PageHeader, StatCard, Badge, LoadingState, Tabs, Alert, Table, Button, Input, Select } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { StatusBadge, ProntuarioDrawer } from '@/components/domain';
 import { formatarData, formatarDentes } from '@/lib/utils/formatters';
+import { getClinicDateKey, getClinicMonthKey, getStoredUtcInstantMillis } from '@/lib/time';
 import usePageTitle from '@/lib/utils/usePageTitle';
 interface Procedimento {
   id: number;
@@ -24,6 +25,18 @@ interface Procedimento {
   concluido_at: string | null;
 }
 
+type PeriodoProcedimentos = 'hoje' | 'mes' | 'todos' | 'custom';
+type ModoVisualizacao = 'procedimentos' | 'clientes';
+
+interface ClienteAgrupado {
+  cliente_id: number;
+  cliente_nome: string;
+  quantidade: number;
+  quantidade_avaliacao: number;
+  quantidade_execucao: number;
+  procedimentos: Procedimento[];
+}
+
 export default function MeusProcedimentosPage() {
   usePageTitle('Meus Procedimentos');
   const { user, hasRole } = useAuth();
@@ -33,6 +46,11 @@ export default function MeusProcedimentosPage() {
   const [error, setError] = useState('');
   const [filtro, setFiltro] = useState<string>('todos');
   const [drawerClienteId, setDrawerClienteId] = useState<number | null>(null);
+  const [filtroDataInicio, setFiltroDataInicio] = useState<string>(() => getClinicDateKey());
+  const [filtroDataFim, setFiltroDataFim] = useState<string>(() => getClinicDateKey());
+  const [periodoSelecionado, setPeriodoSelecionado] = useState<PeriodoProcedimentos>('hoje');
+  const [modoVisualizacao, setModoVisualizacao] = useState<ModoVisualizacao>('clientes');
+  const [filtroStatus, setFiltroStatus] = useState<string>('');
 
   const carregarProcedimentos = useCallback(async () => {
     if (!user) return;
@@ -53,16 +71,96 @@ export default function MeusProcedimentosPage() {
     carregarProcedimentos();
   }, [carregarProcedimentos]);
 
+  const aplicarPeriodo = useCallback((periodo: Exclude<PeriodoProcedimentos, 'custom'>) => {
+    const hoje = getClinicDateKey();
+
+    if (periodo === 'hoje') {
+      setFiltroDataInicio(hoje);
+      setFiltroDataFim(hoje);
+      setPeriodoSelecionado('hoje');
+      return;
+    }
+
+    if (periodo === 'todos') {
+      setFiltroDataInicio('');
+      setFiltroDataFim('');
+      setPeriodoSelecionado('todos');
+      return;
+    }
+
+    const inicioMes = `${getClinicMonthKey()}-01`;
+    setFiltroDataInicio(inicioMes);
+    setFiltroDataFim(hoje);
+    setPeriodoSelecionado('mes');
+  }, []);
+
+  function handleChangeDataInicio(value: string) {
+    setFiltroDataInicio(value);
+    setPeriodoSelecionado('custom');
+  }
+
+  function handleChangeDataFim(value: string) {
+    setFiltroDataFim(value);
+    setPeriodoSelecionado('custom');
+  }
+
+  function isProcedimentoDentroDoPeriodo(procedimento: Procedimento) {
+    const dataReferencia = procedimento.concluido_at || procedimento.created_at;
+    const timestamp = getStoredUtcInstantMillis(dataReferencia);
+    if (timestamp === null) return false;
+
+    if (filtroDataInicio) {
+      const inicio = getStoredUtcInstantMillis(`${filtroDataInicio}T00:00:00.000Z`);
+      if (inicio !== null && timestamp < inicio) return false;
+    }
+
+    if (filtroDataFim) {
+      const fim = getStoredUtcInstantMillis(`${filtroDataFim}T23:59:59.999Z`);
+      if (fim !== null && timestamp > fim) return false;
+    }
+
+    return true;
+  }
+
   const procedimentosFiltrados = procedimentos.filter((p) => {
+    if (!isProcedimentoDentroDoPeriodo(p)) return false;
+    if (filtroStatus && p.status !== filtroStatus) return false;
     if (filtro === 'todos') return true;
     return p.tipo === filtro;
   });
 
-  const totalAvaliados = procedimentos.filter(p => p.tipo === 'avaliacao').length;
-  const totalExecutados = procedimentos.filter(p => p.tipo === 'execucao').length;
+  const totalAvaliados = procedimentosFiltrados.filter(p => p.tipo === 'avaliacao').length;
+  const totalExecutados = procedimentosFiltrados.filter(p => p.tipo === 'execucao').length;
+
+  const procedimentosAgrupadosPorCliente = useMemo<ClienteAgrupado[]>(() => {
+    const grupos = new Map<number, ClienteAgrupado>();
+
+    for (const procedimento of procedimentosFiltrados) {
+      const atual = grupos.get(procedimento.cliente_id) ?? {
+        cliente_id: procedimento.cliente_id,
+        cliente_nome: procedimento.cliente_nome,
+        quantidade: 0,
+        quantidade_avaliacao: 0,
+        quantidade_execucao: 0,
+        procedimentos: [],
+      };
+
+      atual.quantidade += 1;
+      atual.quantidade_avaliacao += procedimento.tipo === 'avaliacao' ? 1 : 0;
+      atual.quantidade_execucao += procedimento.tipo === 'execucao' ? 1 : 0;
+      atual.procedimentos.push(procedimento);
+
+      grupos.set(procedimento.cliente_id, atual);
+    }
+
+    return Array.from(grupos.values()).sort((a, b) => {
+      if (b.quantidade !== a.quantidade) return b.quantidade - a.quantidade;
+      return a.cliente_nome.localeCompare(b.cliente_nome, 'pt-BR');
+    });
+  }, [procedimentosFiltrados]);
 
   const tabs = [
-    { key: 'todos', label: 'Todos', count: procedimentos.length },
+    { key: 'todos', label: 'Todos', count: procedimentosFiltrados.length },
     ...(hasRole(['avaliador', 'admin']) ? [{ key: 'avaliacao', label: 'Avaliações', count: totalAvaliados }] : []),
     ...(hasRole(['executor', 'admin']) ? [{ key: 'execucao', label: 'Execuções', count: totalExecutados }] : []),
   ];
@@ -86,7 +184,7 @@ export default function MeusProcedimentosPage() {
         <StatCard
           icon={<ClipboardList className="w-6 h-6" />}
           label="Total de Procedimentos"
-          value={procedimentos.length}
+          value={procedimentosFiltrados.length}
           color="border-info-400"
         />
         
@@ -110,77 +208,253 @@ export default function MeusProcedimentosPage() {
       </div>
 
       {/* Filtros */}
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-4">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={periodoSelecionado === 'hoje' ? 'primary' : 'secondary'}
+            onClick={() => aplicarPeriodo('hoje')}
+          >
+            Hoje
+          </Button>
+          <Button
+            size="sm"
+            variant={periodoSelecionado === 'mes' ? 'primary' : 'secondary'}
+            onClick={() => aplicarPeriodo('mes')}
+          >
+            Deste mês
+          </Button>
+          <Button
+            size="sm"
+            variant={periodoSelecionado === 'todos' ? 'primary' : 'secondary'}
+            onClick={() => aplicarPeriodo('todos')}
+          >
+            Todos
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="w-44">
+            <Input
+              label="Data início"
+              name="dataInicio"
+              type="date"
+              value={filtroDataInicio}
+              onChange={handleChangeDataInicio}
+            />
+          </div>
+          <div className="w-44">
+            <Input
+              label="Data fim"
+              name="dataFim"
+              type="date"
+              value={filtroDataFim}
+              onChange={handleChangeDataFim}
+            />
+          </div>
+          <div className="w-52">
+            <Select
+              label="Status"
+              name="status"
+              value={filtroStatus}
+              onChange={setFiltroStatus}
+              placeholder="Todos"
+              options={[
+                { value: 'pendente', label: 'Pendente' },
+                { value: 'pago', label: 'Pago' },
+                { value: 'executando', label: 'Executando' },
+                { value: 'concluido', label: 'Concluído' },
+              ]}
+            />
+          </div>
+        </div>
+      </div>
+
       <Tabs tabs={tabs} activeTab={filtro} onTabChange={setFiltro} variant="pills" />
 
-      {/* Lista de procedimentos */}
-      <Table<Procedimento>
-        columns={[
-          {
-            key: 'procedimento',
-            label: 'Procedimento',
-            render: (proc) => (
-              <div>
-                <div className="font-medium text-foreground">{proc.procedimento_nome}</div>
-                <div className="text-xs text-muted">Atendimento #{proc.atendimento_id}</div>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4">
+        <div>
+          <p className="text-sm font-medium text-foreground">Visualização</p>
+          <p className="text-xs text-muted-foreground">
+            Alterne entre a lista detalhada por procedimento e o agrupamento por cliente.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={modoVisualizacao === 'clientes' ? 'primary' : 'secondary'}
+            onClick={() => setModoVisualizacao('clientes')}
+          >
+            <Layers3 className="mr-2 h-4 w-4" />
+            Por cliente
+          </Button>
+          <Button
+            size="sm"
+            variant={modoVisualizacao === 'procedimentos' ? 'primary' : 'secondary'}
+            onClick={() => setModoVisualizacao('procedimentos')}
+          >
+            <ListTree className="mr-2 h-4 w-4" />
+            Por procedimento
+          </Button>
+        </div>
+      </div>
+
+      {modoVisualizacao === 'procedimentos' ? (
+        <Table<Procedimento>
+          columns={[
+            {
+              key: 'procedimento',
+              label: 'Procedimento',
+              render: (proc) => (
+                <div>
+                  <div className="font-medium text-foreground">{proc.procedimento_nome}</div>
+                  <div className="text-xs text-muted">Atendimento #{proc.atendimento_id}</div>
+                </div>
+              ),
+            },
+            {
+              key: 'cliente',
+              label: 'Paciente',
+              render: (proc) => <span className="text-foreground">{proc.cliente_nome}</span>,
+            },
+            {
+              key: 'tipo',
+              label: 'Tipo',
+              align: 'center',
+              render: (proc) => proc.tipo === 'avaliacao'
+                ? <Badge color="evaluation">Avaliação</Badge>
+                : <Badge color="green">Execução</Badge>,
+            },
+            {
+              key: 'dentes',
+              label: 'Dentes',
+              align: 'center',
+              render: (proc) => proc.dentes
+                ? <span className="text-primary-600 font-medium">{formatarDentes(proc.dentes)}</span>
+                : <span className="text-muted-foreground">-</span>,
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              align: 'center',
+              render: (proc) => <StatusBadge type="item" status={proc.status} showIcon />,
+            },
+            {
+              key: 'data',
+              label: 'Data',
+              align: 'right',
+              render: (proc) => <span className="text-sm text-muted">{formatarData(proc.concluido_at || proc.created_at)}</span>,
+            },
+            {
+              key: 'acoes',
+              label: '',
+              align: 'right',
+              render: (proc) => (
+                <button
+                  type="button"
+                  onClick={() => setDrawerClienteId(proc.cliente_id)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 px-2 py-1 rounded-md transition-colors"
+                  title="Ver prontuário"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Prontuário</span>
+                </button>
+              ),
+            },
+          ] as TableColumn<Procedimento>[]}
+          data={procedimentosFiltrados}
+          keyExtractor={(proc) => `${proc.tipo}-${proc.item_id}`}
+          emptyMessage="Nenhum procedimento encontrado"
+          emptyIcon="📭"
+          caption="Meus procedimentos por procedimento"
+        />
+      ) : procedimentosAgrupadosPorCliente.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">
+          Nenhum procedimento encontrado.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {procedimentosAgrupadosPorCliente.map((grupo) => (
+            <details
+              key={grupo.cliente_id}
+              className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+              open
+            >
+              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-4">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{grupo.cliente_nome}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {grupo.quantidade} procedimento(s)
+                    {grupo.quantidade_avaliacao > 0 ? ` · ${grupo.quantidade_avaliacao} avaliação` : ''}
+                    {grupo.quantidade_execucao > 0 ? ` · ${grupo.quantidade_execucao} execução` : ''}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setDrawerClienteId(grupo.cliente_id);
+                  }}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Prontuário
+                </Button>
+              </summary>
+
+              <div className="border-t border-border px-4 py-4">
+                <Table<Procedimento>
+                  columns={[
+                    {
+                      key: 'procedimento',
+                      label: 'Procedimento',
+                      render: (proc) => (
+                        <div>
+                          <div className="font-medium text-foreground">{proc.procedimento_nome}</div>
+                          <div className="text-xs text-muted">Atendimento #{proc.atendimento_id}</div>
+                        </div>
+                      ),
+                    },
+                    {
+                      key: 'tipo',
+                      label: 'Tipo',
+                      align: 'center',
+                      render: (proc) => proc.tipo === 'avaliacao'
+                        ? <Badge color="evaluation">Avaliação</Badge>
+                        : <Badge color="green">Execução</Badge>,
+                    },
+                    {
+                      key: 'dentes',
+                      label: 'Dentes',
+                      align: 'center',
+                      render: (proc) => proc.dentes
+                        ? <span className="text-primary-600 font-medium">{formatarDentes(proc.dentes)}</span>
+                        : <span className="text-muted-foreground">-</span>,
+                    },
+                    {
+                      key: 'status',
+                      label: 'Status',
+                      align: 'center',
+                      render: (proc) => <StatusBadge type="item" status={proc.status} showIcon />,
+                    },
+                    {
+                      key: 'data',
+                      label: 'Data',
+                      align: 'right',
+                      render: (proc) => <span className="text-sm text-muted">{formatarData(proc.concluido_at || proc.created_at)}</span>,
+                    },
+                  ] as TableColumn<Procedimento>[]}
+                  data={grupo.procedimentos}
+                  keyExtractor={(proc) => `${proc.tipo}-${proc.item_id}`}
+                  emptyMessage="Nenhum procedimento para este paciente"
+                  caption={`Procedimentos do paciente ${grupo.cliente_nome}`}
+                  className="border-0 shadow-none"
+                />
               </div>
-            ),
-          },
-          {
-            key: 'cliente',
-            label: 'Paciente',
-            render: (proc) => <span className="text-foreground">{proc.cliente_nome}</span>,
-          },
-          {
-            key: 'tipo',
-            label: 'Tipo',
-            align: 'center',
-            render: (proc) => proc.tipo === 'avaliacao'
-              ? <Badge color="evaluation">Avaliação</Badge>
-              : <Badge color="green">Execução</Badge>,
-          },
-          {
-            key: 'dentes',
-            label: 'Dentes',
-            align: 'center',
-            render: (proc) => proc.dentes
-              ? <span className="text-primary-600 font-medium">{formatarDentes(proc.dentes)}</span>
-              : <span className="text-muted-foreground">-</span>,
-          },
-          {
-            key: 'status',
-            label: 'Status',
-            align: 'center',
-            render: (proc) => <StatusBadge type="item" status={proc.status} showIcon />,
-          },
-          {
-            key: 'data',
-            label: 'Data',
-            align: 'right',
-            render: (proc) => <span className="text-sm text-muted">{formatarData(proc.concluido_at || proc.created_at)}</span>,
-          },
-          {
-            key: 'acoes',
-            label: '',
-            align: 'right',
-            render: (proc) => (
-              <button
-                type="button"
-                onClick={() => setDrawerClienteId(proc.cliente_id)}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 px-2 py-1 rounded-md transition-colors"
-                title="Ver prontuário"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Prontuário</span>
-              </button>
-            ),
-          },
-        ] as TableColumn<Procedimento>[]}
-        data={procedimentosFiltrados}
-        keyExtractor={(proc) => `${proc.tipo}-${proc.item_id}`}
-        emptyMessage="Nenhum procedimento encontrado"
-        emptyIcon="📭"
-        caption="Meus procedimentos"
-      />
+            </details>
+          ))}
+        </div>
+      )}
 
       <ProntuarioDrawer
         clienteId={drawerClienteId}

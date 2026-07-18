@@ -183,7 +183,8 @@ describe('GET /api/comissoes — listagem detalhada', () => {
     const queries = getExecutedQueries();
     const selectQuery = queries.find(q => q.sql.includes('FROM comissoes c'));
     expect(selectQuery).toBeDefined();
-    expect(selectQuery!.sql).toContain('ORDER BY c.created_at DESC');
+    expect(selectQuery!.sql).toContain("WHEN c.tipo = 'venda'");
+    expect(selectQuery!.sql).toContain('ORDER BY');
   });
 
   it('totais corretos com apenas comissões de venda', async () => {
@@ -268,8 +269,9 @@ describe('GET /api/comissoes — filtro por período', () => {
 
     const queries = getExecutedQueries();
     const selectQuery = queries.find(q => q.sql.includes('FROM comissoes c'));
-    expect(selectQuery!.sql).toContain('c.created_at >= ?');
-    expect(selectQuery!.params).toContain('2024-06-16');
+    expect(selectQuery!.sql).toContain("WHEN c.tipo = 'venda'");
+    expect(selectQuery!.sql).toContain('>= ?');
+    expect(selectQuery!.params).toContain('2024-06-16T03:00:00.000Z');
   });
 
   it('filtra por data_fim com 23:59:59 adicionado', async () => {
@@ -281,8 +283,9 @@ describe('GET /api/comissoes — filtro por período', () => {
 
     const queries = getExecutedQueries();
     const selectQuery = queries.find(q => q.sql.includes('FROM comissoes c'));
-    expect(selectQuery!.sql).toContain('c.created_at <= ?');
-    expect(selectQuery!.params).toContain('2024-06-15 23:59:59');
+    expect(selectQuery!.sql).toContain("WHEN c.tipo = 'venda'");
+    expect(selectQuery!.sql).toContain('<= ?');
+    expect(selectQuery!.params).toContain('2024-06-16T02:59:59.999Z');
   });
 
   it('filtra por período completo (data_inicio + data_fim)', async () => {
@@ -294,10 +297,29 @@ describe('GET /api/comissoes — filtro por período', () => {
 
     const queries = getExecutedQueries();
     const selectQuery = queries.find(q => q.sql.includes('FROM comissoes c'));
-    expect(selectQuery!.sql).toContain('c.created_at >= ?');
-    expect(selectQuery!.sql).toContain('c.created_at <= ?');
-    expect(selectQuery!.params).toContain('2024-06-15');
-    expect(selectQuery!.params).toContain('2024-06-16 23:59:59');
+    expect(selectQuery!.sql).toContain("WHEN c.tipo = 'venda'");
+    expect(selectQuery!.sql).toContain('>= ?');
+    expect(selectQuery!.sql).toContain('<= ?');
+    expect(selectQuery!.params).toContain('2024-06-15T03:00:00.000Z');
+    expect(selectQuery!.params).toContain('2024-06-17T02:59:59.999Z');
+  });
+
+  it('usa a data do pagamento para filtrar comissão de venda', async () => {
+    mockQueryResponse('FROM comissoes c', [{
+      ...comissaoVenda1,
+      created_at: '2024-06-18T12:00:00.000Z',
+    }]);
+
+    await callRoute(getComissoes, '/api/comissoes', {
+      searchParams: { data_inicio: '2024-06-18', data_fim: '2024-06-18' },
+    });
+
+    const queries = getExecutedQueries();
+    const selectQuery = queries.find(q => q.sql.includes('FROM comissoes c'));
+    expect(selectQuery).toBeDefined();
+    expect(selectQuery!.sql).toContain('LEFT JOIN pagamentos_alocacoes pa ON pa.id = c.pagamento_alocacao_id');
+    expect(selectQuery!.sql).toContain('LEFT JOIN pagamentos pg ON pg.id = pa.pagamento_id');
+    expect(selectQuery!.sql).toContain("WHEN c.tipo = 'venda' THEN COALESCE");
   });
 });
 
@@ -320,11 +342,12 @@ describe('GET /api/comissoes — filtros combinados', () => {
     const queries = getExecutedQueries();
     const selectQuery = queries.find(q => q.sql.includes('FROM comissoes c'));
     expect(selectQuery!.sql).toContain('c.usuario_id = ?');
-    expect(selectQuery!.sql).toContain('c.created_at >= ?');
-    expect(selectQuery!.sql).toContain('c.created_at <= ?');
+    expect(selectQuery!.sql).toContain("WHEN c.tipo = 'venda'");
+    expect(selectQuery!.sql).toContain('>= ?');
+    expect(selectQuery!.sql).toContain('<= ?');
     expect(selectQuery!.params).toContain(3);
-    expect(selectQuery!.params).toContain('2024-06-01');
-    expect(selectQuery!.params).toContain('2024-06-30 23:59:59');
+    expect(selectQuery!.params).toContain('2024-06-01T03:00:00.000Z');
+    expect(selectQuery!.params).toContain('2024-07-01T02:59:59.999Z');
   });
 });
 
@@ -413,10 +436,11 @@ describe('GET /api/comissoes — modo resumo', () => {
 
     const queries = getExecutedQueries();
     const resumoQuery = queries.find(q => q.sql.includes('GROUP BY'));
-    expect(resumoQuery!.sql).toContain('c.created_at >= ?');
-    expect(resumoQuery!.sql).toContain('c.created_at <= ?');
-    expect(resumoQuery!.params).toContain('2024-06-01');
-    expect(resumoQuery!.params).toContain('2024-06-30 23:59:59');
+    expect(resumoQuery!.sql).toContain("WHEN c.tipo = 'venda'");
+    expect(resumoQuery!.sql).toContain('>= ?');
+    expect(resumoQuery!.sql).toContain('<= ?');
+    expect(resumoQuery!.params).toContain('2024-06-01T03:00:00.000Z');
+    expect(resumoQuery!.params).toContain('2024-07-01T02:59:59.999Z');
   });
 
   it('resumo vazio retorna array vazio', async () => {
