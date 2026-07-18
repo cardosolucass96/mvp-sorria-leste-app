@@ -209,9 +209,11 @@ export default function AgendaPage() {
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedAgendamentos, setHasLoadedAgendamentos] = useState(false);
   const [error, setError] = useState('');
 
   const [busca, setBusca] = useState('');
+  const [buscaInput, setBuscaInput] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('pendente,agendado,faltou,realizado');
   const [filtroDentista, setFiltroDentista] = useState('');
   const [dataInicio, setDataInicio] = useState('');
@@ -407,6 +409,7 @@ export default function AgendaPage() {
     } catch {
       setError('Erro ao carregar agendamentos');
     } finally {
+      setHasLoadedAgendamentos(true);
       setLoading(false);
     }
   }, [
@@ -825,6 +828,14 @@ export default function AgendaPage() {
 
   const handleBuscar = (e: React.FormEvent) => {
     e.preventDefault();
+    const buscaNormalizada = buscaInput.trim();
+
+    if (busca !== buscaNormalizada) {
+      setBusca(buscaNormalizada);
+      setPage(1);
+      return;
+    }
+
     if (page !== 1) setPage(1);
     else carregarAgendamentos();
   };
@@ -1406,7 +1417,7 @@ export default function AgendaPage() {
     );
   };
 
-  if (loading) return <LoadingState />;
+  if (loading && !hasLoadedAgendamentos) return <LoadingState />;
 
   return (
     <div className="space-y-6">
@@ -1441,8 +1452,8 @@ export default function AgendaPage() {
             <Input
               label="Buscar cliente"
               name="busca"
-              value={busca}
-              onChange={setBusca}
+              value={buscaInput}
+              onChange={setBuscaInput}
               placeholder="Nome do cliente..."
             />
           </div>
