@@ -94,7 +94,10 @@ export default function ProntuarioDrawer({
         setAnexosCliente(anexosRaw.map((anexo) => ({
           id: anexo.id,
           nome: anexo.nome_arquivo,
-          url: `/api/files/${encodeURIComponent(anexo.caminho)}`,
+          url: `/api/arquivos/${anexo.caminho
+            .split('/')
+            .map((segmento) => encodeURIComponent(segmento))
+            .join('/')}`,
           tipo: anexo.tipo_arquivo,
           tamanho: anexo.tamanho,
           descricao: anexo.descricao,
