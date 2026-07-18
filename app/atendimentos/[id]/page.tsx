@@ -7,8 +7,8 @@ import Link from 'next/link';
 import { formatarMoeda, formatarDataHora, tempoDecorrido, nomeProcedimentoItem, formatarDenteUnicoComFaces, formatarDentes, formatarCPF, formatarCNPJ, formatarAgoraDaClinica } from '@/lib/utils/formatters';
 import { STATUS_CONFIG, PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 import type { AtendimentoStatus, AtendimentoTipo } from '@/lib/types';
-import { StatusBadge, StatusPipeline } from '@/components/domain';
-import { ClipboardList, ChevronDown, ChevronRight, X, Trash2, CalendarPlus, Info, Pencil, Printer } from 'lucide-react';
+import { AnexosGallery, StatusBadge, StatusPipeline, type AnexoData } from '@/components/domain';
+import { ClipboardList, ChevronDown, ChevronRight, X, Trash2, CalendarPlus, Info, Pencil, Printer, Paperclip } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Button, Card, EmptyState, ConfirmDialog, Modal, Select, Input, Textarea, useToast } from '@/components/ui';
 import ElapsedTime from '@/components/ui/ElapsedTime';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -70,7 +70,18 @@ interface ItemAtendimento {
   group_id: string | null;
   dentes?: string | null;
   dente_unico: string | null;
+  observacoes: string | null;
   progresso_etapas: ProgressoEtapa[] | null;
+}
+
+interface AnexoClienteApi {
+  id: number;
+  nome_arquivo: string;
+  tipo_arquivo: string;
+  caminho: string;
+  tamanho: number;
+  created_at: string;
+  descricao?: string | null;
 }
 
 interface Atendimento {
@@ -248,6 +259,10 @@ export default function AtendimentoDetalhePage({
   const [execId, setExecId] = useState('');
   const [valorCustom, setValorCustom] = useState('');
   const [dentesFaces, setDentesFaces] = useState<DenteFaceInput[]>([]);
+  const [procObservacoes, setProcObservacoes] = useState('');
+  const [anexosCliente, setAnexosCliente] = useState<AnexoData[]>([]);
+  const [anexosClienteLoading, setAnexosClienteLoading] = useState(false);
+  const [anexosClienteUploading, setAnexosClienteUploading] = useState(false);
   const [adicionando, setAdicionando] = useState(false);
   const [errorModal, setErrorModal] = useState('');
 
@@ -299,6 +314,107 @@ export default function AtendimentoDetalhePage({
         return roles.includes('executor') || roles.includes('ortodontista');
       }));
     } catch {}
+  };
+
+  const carregarAnexosCliente = async (clienteId: number) => {
+    setAnexosClienteLoading(true);
+    try {
+      const res = await fetch(`/api/clientes/${clienteId}/anexos`);
+      if (!res.ok) {
+        setAnexosCliente([]);
+        return;
+      }
+
+      const data = await res.json() as AnexoClienteApi[];
+      setAnexosCliente(
+        data.map((anexo) => ({
+          id: anexo.id,
+          nome: anexo.nome_arquivo,
+          url: `/api/arquivos/${anexo.caminho}`,
+          tipo: anexo.tipo_arquivo,
+          tamanho: anexo.tamanho,
+          created_at: anexo.created_at,
+          descricao: anexo.descricao || null,
+        }))
+      );
+    } catch {
+      setAnexosCliente([]);
+    } finally {
+      setAnexosClienteLoading(false);
+    }
+  };
+
+  const handleUploadAnexoCliente = async ({ file }: { file: File; titulo?: string; descricao?: string }) => {
+    if (!user || !atendimento) return;
+
+    setAnexosClienteUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('arquivo', file);
+      formData.append('usuario_id', String(user.id));
+
+      const res = await fetch(`/api/clientes/${atendimento.cliente_id}/anexos`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Erro ao enviar anexo');
+        return;
+      }
+
+      await carregarAnexosCliente(atendimento.cliente_id);
+      toast.success('Foto adicionada com sucesso');
+    } catch {
+      toast.error('Erro ao enviar anexo');
+    } finally {
+      setAnexosClienteUploading(false);
+    }
+  };
+
+  const handleDeleteAnexoCliente = async (anexo: AnexoData) => {
+    if (!atendimento) return;
+
+    try {
+      const res = await fetch(`/api/clientes/${atendimento.cliente_id}/anexos?anexo_id=${anexo.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Erro ao remover anexo');
+        return;
+      }
+
+      await carregarAnexosCliente(atendimento.cliente_id);
+      toast.success('Anexo removido com sucesso');
+    } catch {
+      toast.error('Erro ao remover anexo');
+    }
+  };
+
+  const handleUpdateAnexoCliente = async (
+    anexo: AnexoData,
+    data: { titulo?: string; descricao?: string }
+  ) => {
+    if (!atendimento) return;
+
+    const res = await fetch(`/api/clientes/${atendimento.cliente_id}/anexos`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        anexo_id: anexo.id,
+        titulo: data.titulo,
+        descricao: data.descricao,
+      }),
+    });
+    const responseData = await res.json();
+    if (!res.ok) {
+      toast.error(responseData.error || 'Erro ao atualizar anexo');
+      return;
+    }
+
+    await carregarAnexosCliente(atendimento.cliente_id);
+    toast.success('Anexo atualizado com sucesso');
   };
 
   const handleTrocarExecutor = async (itemId: number, novoExecutorId: number | null) => {
@@ -580,6 +696,9 @@ export default function AtendimentoDetalhePage({
 
   const abrirModalProcedimento = async () => {
     setModalProcedimento(true);
+    if (atendimento?.cliente_id) {
+      void carregarAnexosCliente(atendimento.cliente_id);
+    }
     if (procedimentos.length > 0) return;
     setLoadingDadosProc(true);
     try {
@@ -606,6 +725,7 @@ export default function AtendimentoDetalhePage({
     setExecId('');
     setValorCustom('');
     setDentesFaces([]);
+    setProcObservacoes('');
     setErrorModal('');
   };
 
@@ -642,12 +762,14 @@ export default function AtendimentoDetalhePage({
           valor: valorBase * quantidade,
           dentes: dentesParaSalvar,
           quantidade,
+          observacoes: procObservacoes || null,
         }),
       });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Erro ao adicionar');
       }
+      toast.success('Procedimento adicionado com sucesso');
       fecharModalProcedimento();
       await carregarAtendimento();
     } catch (err) {
@@ -1862,6 +1984,9 @@ export default function AtendimentoDetalhePage({
                       <tr key={item.id}>
                         <td className="px-4 py-3">
                           <div>{nomeProcedimentoItem(item)}</div>
+                          {item.observacoes && (
+                            <p className="mt-1 text-xs text-muted-foreground">{item.observacoes}</p>
+                          )}
                           {item.progresso_etapas && item.progresso_etapas.length > 0 && (
                             <ProgressoEtapas etapas={item.progresso_etapas} />
                           )}
@@ -1936,6 +2061,9 @@ export default function AtendimentoDetalhePage({
                               {grupoItens.length} {grupoItens.length === 1 ? 'dente' : 'dentes'}
                             </span>
                           </div>
+                          {primeiro.observacoes && (
+                            <p className="ml-6 mt-1 text-xs text-muted-foreground">{primeiro.observacoes}</p>
+                          )}
                           {primeiro.progresso_etapas && primeiro.progresso_etapas.length > 0 && (
                             <div className="ml-6">
                               <ProgressoEtapas etapas={primeiro.progresso_etapas} />
@@ -2113,6 +2241,31 @@ export default function AtendimentoDetalhePage({
                 const proc = procedimentos.find(p => p.id === parseInt(procId));
                 return proc ? `Padrão: ${proc.valor}` : 'Selecione um procedimento';
               })()}
+            />
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold text-foreground">Fotos e anexos da avaliação</h3>
+              </div>
+              <AnexosGallery
+                anexos={anexosCliente}
+                onUpload={handleUploadAnexoCliente}
+                onDelete={handleDeleteAnexoCliente}
+                onUpdate={handleUpdateAnexoCliente}
+                loading={anexosClienteLoading}
+                uploading={anexosClienteUploading}
+                maxSizeMB={10}
+                acceptTypes="image/*,.pdf,.doc,.docx,.mp4,.webm,.mov"
+              />
+            </div>
+            <Textarea
+              label="Obs / Laudo (opcional)"
+              name="procObservacoes"
+              value={procObservacoes}
+              onChange={setProcObservacoes}
+              placeholder="Observações ou laudo do procedimento..."
+              rows={3}
+              disabled={adicionando}
             />
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="secondary" onClick={fecharModalProcedimento}>Cancelar</Button>
