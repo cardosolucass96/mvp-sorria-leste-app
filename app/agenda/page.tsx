@@ -204,6 +204,7 @@ export default function AgendaPage() {
   const isAdminOrAtendente = hasRole(['admin', 'atendente']);
   // Dentistas veem apenas os próprios agendamentos. Admin/atendente com role extra mantém visão completa.
   const isDentista = hasRole(['avaliador', 'executor', 'ortodontista']) && !isAdminOrAtendente;
+  const canManageAgenda = isAdminOrAtendente;
 
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [total, setTotal] = useState(0);
@@ -481,6 +482,7 @@ export default function AgendaPage() {
   }, []);
 
   const abrirNovoAgendamento = useCallback(async (options: AbrirNovoAgendamentoOptions = {}) => {
+    if (!canManageAgenda) return;
     const tipoInicial = options.tipo === 'procedimento' || options.procedimentoId || options.itemOrigemId
       ? 'procedimento'
       : 'avaliacao';
@@ -529,7 +531,7 @@ export default function AgendaPage() {
       }
     }
     void carregarProfissionaisAgenda();
-  }, [novoProcedimentos.length, carregarProfissionaisAgenda]);
+  }, [canManageAgenda, novoProcedimentos.length, carregarProfissionaisAgenda]);
 
   useEffect(() => {
     if (openAgenda !== '1') {
@@ -650,7 +652,7 @@ export default function AgendaPage() {
   }, [novoClienteSelecionado, novoDialog, novoTipo, unitFetch]);
 
   const abrirEditarAgendamento = useCallback(async (agendamento: Agendamento) => {
-    if (!isAdminOrAtendente || !isAgendamentoAtivo(agendamento.status)) return;
+    if (!canManageAgenda || !isAgendamentoAtivo(agendamento.status)) return;
     await carregarProfissionaisAgenda();
     setEditarAgendamentoDialog({
       isOpen: true,
@@ -661,7 +663,7 @@ export default function AgendaPage() {
       salvando: false,
       error: '',
     });
-  }, [carregarProfissionaisAgenda, isAdminOrAtendente]);
+  }, [canManageAgenda, carregarProfissionaisAgenda]);
 
   useEffect(() => {
     if (!isAdminOrAtendente || !editAgendamentoId) {
@@ -721,6 +723,10 @@ export default function AgendaPage() {
   };
 
   const handleCriarAgendamento = async () => {
+    if (!canManageAgenda) {
+      setNovoError('Seu perfil pode apenas visualizar a própria agenda');
+      return;
+    }
     if (!novoClienteSelecionado) {
       setNovoError('Selecione um cliente');
       return;
@@ -772,6 +778,7 @@ export default function AgendaPage() {
   };
 
   const handleSalvarEdicaoAgendamento = async () => {
+    if (!canManageAgenda) return;
     const { agendamento, executorId, data, observacoes } = editarAgendamentoDialog;
     if (!agendamento) return;
 
@@ -1288,7 +1295,7 @@ export default function AgendaPage() {
                 <MessageCircle className="w-4 h-4" />
               </a>
             )}
-            {temAtivo && (
+            {canManageAgenda && temAtivo && (
               <>
                 <Button
                   variant="ghost"
@@ -1391,7 +1398,7 @@ export default function AgendaPage() {
                   {ag.tipo !== 'avaliacao' && (
                     ag.pago ? <Badge color="green" size="sm">Pago</Badge> : <Badge color="gray" size="sm">A pagar</Badge>
                   )}
-                  {podEditar && (
+                  {canManageAgenda && podEditar && (
                     <Button
                       variant="ghost"
                       size="xs"
@@ -1437,10 +1444,12 @@ export default function AgendaPage() {
               active={viewMode}
               onChange={(key) => setViewMode(key as 'lista' | 'calendario')}
             />
-            <Button onClick={() => { void abrirNovoAgendamento(); }}>
-              <Plus className="w-4 h-4 mr-1" />
-              <span className="hidden sm:inline">Novo Agendamento</span>
-            </Button>
+            {canManageAgenda && (
+              <Button onClick={() => { void abrirNovoAgendamento(); }}>
+                <Plus className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Novo Agendamento</span>
+              </Button>
+            )}
           </div>
         }
       />
@@ -1918,7 +1927,7 @@ export default function AgendaPage() {
       />
 
       {/* Novo agendamento */}
-      <Modal isOpen={novoDialog} onClose={() => setNovoDialog(false)} title="Novo Agendamento" size="md">
+      <Modal isOpen={canManageAgenda && novoDialog} onClose={() => setNovoDialog(false)} title="Novo Agendamento" size="md">
         {novoError && <Alert type="error" dismissible onDismiss={() => setNovoError('')}>{novoError}</Alert>}
 
         {/* Busca e seleção de cliente */}

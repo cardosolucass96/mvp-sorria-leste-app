@@ -61,6 +61,13 @@ export const PUT = withUnit(async (
   context: UnitAuthenticatedContext
 ) => {
   try {
+    if (isRestrictedDentistPatientView(context.user)) {
+      return NextResponse.json(
+        { error: 'Seu perfil pode apenas visualizar a própria agenda' },
+        { status: 403 }
+      );
+    }
+
     const { id } = await context.params!;
     const agendamentoId = parseInt(id as string);
     const body = await request.json() as AtualizarAgendamentoBody;
@@ -72,14 +79,6 @@ export const PUT = withUnit(async (
 
     if (!agendamento) {
       return NextResponse.json({ error: 'Agendamento não encontrado' }, { status: 404 });
-    }
-
-    if (isRestrictedDentistPatientView(context.user) && agendamento.executor_id !== context.user.sub) {
-      return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
-    }
-
-    if (isRestrictedDentistPatientView(context.user) && body.executor_id !== undefined && body.executor_id !== context.user.sub) {
-      return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
     }
 
     const updates: string[] = [];

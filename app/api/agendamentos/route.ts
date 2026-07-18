@@ -182,6 +182,13 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 // POST /api/agendamentos - Cria agendamento
 export const POST = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
+    if (isRestrictedDentistPatientView(context.user)) {
+      return NextResponse.json(
+        { error: 'Seu perfil pode apenas visualizar a própria agenda' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json() as CriarAgendamentoBody;
     const {
       cliente_id,
@@ -196,6 +203,8 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     let {
       atendimento_origem_id,
       procedimento_id,
+    } = body;
+    const {
       executor_id,
     } = body;
     const dataAgendadaUtc = clinicDateTimeInputToUtcIso(data_agendada);
@@ -203,11 +212,6 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     let valorPagoAgendamento = 0;
 
     const isAvaliacao = tipo === 'avaliacao';
-
-    // Dentista restrito só pode criar agendamento para si mesmo
-    if (isRestrictedDentistPatientView(context.user)) {
-      executor_id = context.user.sub;
-    }
 
     if (!cliente_id) {
       return NextResponse.json({ error: 'cliente_id é obrigatório' }, { status: 400 });

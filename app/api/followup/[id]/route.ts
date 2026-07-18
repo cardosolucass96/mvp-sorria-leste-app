@@ -12,7 +12,7 @@ import {
 } from '../_helpers';
 
 // PUT /api/followup/[id] - Edita tarefa aberta
-export const PUT = withUnitRole(['atendente'], async (
+export const PUT = withUnitRole(['admin', 'atendente'], async (
   request: NextRequest,
   context: UnitAuthenticatedContext
 ) => {
@@ -52,7 +52,7 @@ export const PUT = withUnitRole(['atendente'], async (
       );
       if (!responsavelValido) {
         return NextResponse.json(
-          { error: 'Responsável deve ser um atendente ativo da unidade atual' },
+          { error: 'Responsável deve ser um atendente ou admin ativo da unidade atual' },
           { status: 400 }
         );
       }
@@ -114,7 +114,7 @@ export const PUT = withUnitRole(['atendente'], async (
 });
 
 // DELETE /api/followup/[id] - Exclusão lógica de tarefa aberta
-export const DELETE = withUnitRole(['atendente'], async (
+export const DELETE = withUnitRole(['admin', 'atendente'], async (
   _request: NextRequest,
   context: UnitAuthenticatedContext
 ) => {

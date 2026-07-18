@@ -105,6 +105,8 @@ interface ItemProcedimento {
   valor_pago: number;
   status: string;
   dentes: string | null;
+  dente_unico?: string | null;
+  group_id?: string | null;
   quantidade: number;
   observacoes: string | null;
   created_at: string;
@@ -229,6 +231,20 @@ interface FichaData {
   historico: EventoHistorico[];
   prontuarios: ItemProntuario[];
   movimentacoes: Movimentacao[];
+}
+
+interface ProcedimentoGrupoFicha {
+  key: string;
+  atendimento_id: number;
+  procedimento_nome: string;
+  grupo_label: string;
+  itens: ItemProcedimento[];
+  total_valor: number;
+  total_pago: number;
+  possui_pago: boolean;
+  possui_pendente: boolean;
+  ultimo_evento_em: string;
+  executor_nome: string | null;
 }
 
 interface UnidadeImpressao {
@@ -1561,6 +1577,64 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   );
 
   const totalGasto = ficha?.pagamentos.filter(p => !p.cancelado).reduce((s, p) => s + p.valor, 0) ?? 0;
+  const atendimentosPorId = new Map((ficha?.atendimentos ?? []).map((atendimento) => [atendimento.id, atendimento] as const));
+  const procedimentosAgrupados: ProcedimentoGrupoFicha[] = (() => {
+    const grupos = new Map<string, ProcedimentoGrupoFicha>();
+
+    for (const item of ficha?.procedimentos ?? []) {
+      const dentesLabel = formatarDentes(item.dentes) || item.dente_unico || null;
+      const grupoBase = item.group_id?.trim()
+        || `${item.atendimento_id}:${item.procedimento_nome}:${item.etapa_label || 'sem-etapa'}`;
+      const key = `${grupoBase}:${dentesLabel ? 'dentes' : 'livre'}`;
+      const grupoLabel = item.etapa_label
+        ? `${item.procedimento_nome} — ${item.etapa_label}`
+        : item.procedimento_nome;
+      const atual = grupos.get(key) ?? {
+        key,
+        atendimento_id: item.atendimento_id,
+        procedimento_nome: item.procedimento_nome,
+        grupo_label: grupoLabel,
+        itens: [],
+        total_valor: 0,
+        total_pago: 0,
+        possui_pago: false,
+        possui_pendente: false,
+        ultimo_evento_em: item.concluido_at || item.created_at,
+        executor_nome: item.executor_nome || null,
+      };
+
+      atual.itens.push(item);
+      atual.total_valor += item.valor;
+      atual.total_pago += item.valor_pago;
+      atual.possui_pago = atual.possui_pago || item.valor_pago > 0;
+      atual.possui_pendente = atual.possui_pendente || item.status === 'pendente';
+      atual.ultimo_evento_em = (item.concluido_at || item.created_at) > atual.ultimo_evento_em
+        ? (item.concluido_at || item.created_at)
+        : atual.ultimo_evento_em;
+      if (!atual.executor_nome && item.executor_nome) {
+        atual.executor_nome = item.executor_nome;
+      }
+
+      grupos.set(key, atual);
+    }
+
+    return Array.from(grupos.values())
+      .map((grupo) => ({
+        ...grupo,
+        total_valor: Number(grupo.total_valor.toFixed(2)),
+        total_pago: Number(grupo.total_pago.toFixed(2)),
+        itens: grupo.itens.sort((a, b) => {
+          const dataA = a.concluido_at || a.created_at;
+          const dataB = b.concluido_at || b.created_at;
+          return dataA > dataB ? -1 : dataA < dataB ? 1 : a.id - b.id;
+        }),
+      }))
+      .sort((a, b) => {
+        if (a.atendimento_id !== b.atendimento_id) return b.atendimento_id - a.atendimento_id;
+        if (a.ultimo_evento_em !== b.ultimo_evento_em) return a.ultimo_evento_em > b.ultimo_evento_em ? -1 : 1;
+        return a.grupo_label.localeCompare(b.grupo_label, 'pt-BR');
+      });
+  })();
 
   const handleAddVinculo = async () => {
     if (!vinculoClienteSelecionado) return;
@@ -1890,56 +1964,174 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       {/* ABA: PROCEDIMENTOS */}
       {abaAtiva === 'procedimentos' && (
         <Card>
-          <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
-            <Activity className="w-5 h-5" /> Procedimentos
-          </h2>
+          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Activity className="w-5 h-5" /> Procedimentos
+              </h2>
+              <p className="text-sm text-muted mt-1">
+                Agora a leitura fica por grupo clínico dentro do atendimento, com os itens por dente/sessão abertos só quando necessário.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-muted">
+              <span>{procedimentosAgrupados.length} grupo(s)</span>
+              <span>{ficha?.procedimentos.length ?? 0} item(ns)</span>
+            </div>
+          </div>
           {!ficha?.procedimentos.length ? (
             <p className="text-center py-8 text-muted">Nenhum procedimento registrado</p>
           ) : (
-            <table className="detail-table">
-              <thead>
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Procedimento</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Atend.</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Executor</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Valor Pago</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ficha.procedimentos.map(p => {
-                  const podeEstornar = p.valor_pago > 0 && p.status !== 'concluido';
-                  return (
-                  <tr key={p.id} className="hover:bg-surface-secondary">
-                    <td className="px-4 py-3 font-medium">
-                      {p.etapa_label ? `${p.procedimento_nome} — ${p.etapa_label}` : p.procedimento_nome}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <Link href={`/atendimentos/${p.atendimento_id}`} className="text-info-600 hover:text-info-800">#{p.atendimento_id}</Link>
-                    </td>
-                    <td className="px-4 py-3 text-sm">{p.executor_nome || '-'}</td>
-                    <td className="px-4 py-3 text-right font-medium">{formatarMoeda(p.valor_pago)}</td>
-                    <td className="px-4 py-3 text-center"><StatusBadge type="item" status={p.status} /></td>
-                    <td className="px-4 py-3 text-sm text-muted">{formatarData(p.created_at)}</td>
-                    <td className="px-4 py-3 text-right space-x-3">
-                      {podeEstornar && (
-                        <button
-                          onClick={() => handleEstornarProcedimento(p)}
-                          disabled={estornandoItemId === p.id}
-                          className="text-sm text-warning-600 hover:text-warning-800 font-medium disabled:opacity-50"
-                        >
-                          {estornandoItemId === p.id ? 'Gerando...' : 'Gerar estorno'}
-                        </button>
-                      )}
-                      <button onClick={() => setModalProcedimento(p)} className="text-sm text-info-600 hover:text-info-800">Ver →</button>
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="space-y-4">
+              {procedimentosAgrupados.map((grupo) => {
+                const atendimento = atendimentosPorId.get(grupo.atendimento_id);
+                const itemPrincipal = grupo.itens[0];
+                const dentesGrupo = Array.from(new Set(
+                  grupo.itens
+                    .flatMap((item) => parseDentesLabels(item.dentes))
+                    .concat(grupo.itens.map((item) => item.dente_unico || '').filter(Boolean))
+                ));
+
+                return (
+                  <details
+                    key={grupo.key}
+                    className="rounded-xl border border-border/70 bg-surface-secondary/35 open:bg-surface-secondary/55"
+                    open={grupo.itens.length <= 2}
+                  >
+                    <summary className="cursor-pointer list-none px-4 py-4">
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-base font-semibold">{grupo.grupo_label}</h3>
+                            <StatusBadge
+                              type="item"
+                              status={grupo.itens.every((item) => item.status === 'concluido')
+                                ? 'concluido'
+                                : grupo.itens.some((item) => item.status === 'executando')
+                                  ? 'executando'
+                                  : grupo.itens.some((item) => item.status === 'pago')
+                                    ? 'pago'
+                                    : 'pendente'}
+                            />
+                            <span className="rounded-full bg-muted/70 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                              {grupo.itens.length} item(ns)
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted">
+                            <span>
+                              Atendimento{' '}
+                              <Link href={`/atendimentos/${grupo.atendimento_id}`} className="text-info-600 hover:text-info-800">
+                                #{grupo.atendimento_id}
+                              </Link>
+                            </span>
+                            <span>Executor: {grupo.executor_nome || itemPrincipal.executor_nome || '-'}</span>
+                            <span>Pago: <span className="font-medium text-foreground">{formatarMoeda(grupo.total_pago)}</span></span>
+                            <span>Total: <span className="font-medium text-foreground">{formatarMoeda(grupo.total_valor)}</span></span>
+                          </div>
+                          {(dentesGrupo.length > 0 || atendimento) && (
+                            <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted">
+                              {dentesGrupo.length > 0 && (
+                                <span>Dentes: {dentesGrupo.join(', ')}</span>
+                              )}
+                              {atendimento?.unidade_nome && <span>Unidade: {atendimento.unidade_nome}</span>}
+                              <span>Último movimento: {formatarDataHora(grupo.ultimo_evento_em)}</span>
+                            </div>
+                          )}
+                        </div>
+                        {grupo.itens.length === 1 && (
+                          <div className="flex items-center gap-3 xl:pl-6">
+                            {itemPrincipal.valor_pago > 0 && itemPrincipal.status !== 'concluido' && (
+                              <button
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  void handleEstornarProcedimento(itemPrincipal);
+                                }}
+                                disabled={estornandoItemId === itemPrincipal.id}
+                                className="text-sm text-warning-600 hover:text-warning-800 font-medium disabled:opacity-50"
+                              >
+                                {estornandoItemId === itemPrincipal.id ? 'Gerando...' : 'Gerar estorno'}
+                              </button>
+                            )}
+                            <button
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setModalProcedimento(itemPrincipal);
+                              }}
+                              className="text-sm text-info-600 hover:text-info-800"
+                            >
+                              Ver →
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </summary>
+
+                    <div className="border-t border-border/60 px-4 py-3">
+                      <div className="overflow-x-auto">
+                        <table className="detail-table">
+                          <thead>
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Item</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Criado por</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Executor</th>
+                              <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Valor</th>
+                              <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Pago</th>
+                              <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase">Status</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
+                              <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {grupo.itens.map((item) => {
+                              const podeEstornar = item.valor_pago > 0 && item.status !== 'concluido';
+                              const nomeItem = nomeProcedimentoItem({
+                                procedimento_nome: item.procedimento_nome,
+                                etapa_label: item.etapa_label,
+                                dentes: item.dentes,
+                                dente_unico: item.dente_unico,
+                              });
+                              return (
+                                <tr key={item.id} className="hover:bg-surface-secondary">
+                                  <td className="px-4 py-3">
+                                    <div className="font-medium">{nomeItem}</div>
+                                    {item.observacoes && (
+                                      <p className="mt-1 text-xs text-muted line-clamp-2">{item.observacoes}</p>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm">{item.criado_por_nome || '-'}</td>
+                                  <td className="px-4 py-3 text-sm">{item.executor_nome || '-'}</td>
+                                  <td className="px-4 py-3 text-right font-medium">{formatarMoeda(item.valor)}</td>
+                                  <td className="px-4 py-3 text-right font-medium">{formatarMoeda(item.valor_pago)}</td>
+                                  <td className="px-4 py-3 text-center"><StatusBadge type="item" status={item.status} /></td>
+                                  <td className="px-4 py-3 text-sm text-muted">
+                                    {formatarData(item.concluido_at || item.created_at)}
+                                  </td>
+                                  <td className="px-4 py-3 text-right space-x-3">
+                                    {podeEstornar && (
+                                      <button
+                                        onClick={() => handleEstornarProcedimento(item)}
+                                        disabled={estornandoItemId === item.id}
+                                        className="text-sm text-warning-600 hover:text-warning-800 font-medium disabled:opacity-50"
+                                      >
+                                        {estornandoItemId === item.id ? 'Gerando...' : 'Gerar estorno'}
+                                      </button>
+                                    )}
+                                    <button onClick={() => setModalProcedimento(item)} className="text-sm text-info-600 hover:text-info-800">
+                                      Ver →
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
           )}
         </Card>
       )}

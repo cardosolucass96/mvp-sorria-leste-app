@@ -16,28 +16,76 @@ import {
 function buildSummary(items: FollowupTarefaCompleta[]) {
   const now = new Date();
   const todayKey = getClinicDateKey(now);
-  return items.reduce(
+  const porResponsavel = new Map<number, {
+    responsavel_usuario_id: number;
+    responsavel_usuario_nome: string;
+    abertas_hoje: number;
+    criadas_hoje: number;
+    atrasadas: number;
+    vencem_hoje: number;
+    concluidas_hoje: number;
+  }>();
+
+  const summary = items.reduce(
     (acc, item) => {
+      const createdAt = parseLocalDateTime(item.created_at);
+      const createdToday = createdAt && getClinicDateKey(createdAt) === todayKey;
+      const responsavel = porResponsavel.get(item.responsavel_usuario_id) ?? {
+        responsavel_usuario_id: item.responsavel_usuario_id,
+        responsavel_usuario_nome: item.responsavel_usuario_nome,
+        abertas_hoje: 0,
+        criadas_hoje: 0,
+        atrasadas: 0,
+        vencem_hoje: 0,
+        concluidas_hoje: 0,
+      };
+
+      if (createdToday) {
+        acc.criadas_hoje += 1;
+        responsavel.criadas_hoje += 1;
+      }
+
       if (item.status === 'aberta') {
-        acc.abertas += 1;
-        const vencimento = parseLocalDateTime(item.vencimento_em);
-        if (!vencimento) return acc;
-        if (vencimento.getTime() < now.getTime()) {
-          acc.atrasadas += 1;
-        } else if (getClinicDateKey(vencimento) === todayKey) {
-          acc.vencem_hoje += 1;
+        if (createdToday) {
+          acc.abertas_hoje += 1;
+          responsavel.abertas_hoje += 1;
         }
+
+        const vencimento = parseLocalDateTime(item.vencimento_em);
+        if (vencimento) {
+          if (vencimento.getTime() < now.getTime()) {
+            acc.atrasadas += 1;
+            responsavel.atrasadas += 1;
+          } else if (getClinicDateKey(vencimento) === todayKey) {
+            acc.vencem_hoje += 1;
+            responsavel.vencem_hoje += 1;
+          }
+        }
+
+        porResponsavel.set(item.responsavel_usuario_id, responsavel);
         return acc;
       }
 
       const concluidaEm = parseLocalDateTime(item.concluida_em);
       if (concluidaEm && getClinicDateKey(concluidaEm) === todayKey) {
         acc.concluidas_hoje += 1;
+        responsavel.concluidas_hoje += 1;
       }
+
+      porResponsavel.set(item.responsavel_usuario_id, responsavel);
       return acc;
     },
-    { abertas: 0, atrasadas: 0, vencem_hoje: 0, concluidas_hoje: 0 }
+    { abertas_hoje: 0, criadas_hoje: 0, atrasadas: 0, vencem_hoje: 0, concluidas_hoje: 0 }
   );
+
+  return {
+    ...summary,
+    por_responsavel: Array.from(porResponsavel.values()).sort((a, b) => {
+      if (b.abertas_hoje !== a.abertas_hoje) return b.abertas_hoje - a.abertas_hoje;
+      if (b.criadas_hoje !== a.criadas_hoje) return b.criadas_hoje - a.criadas_hoje;
+      return a.responsavel_usuario_nome.localeCompare(b.responsavel_usuario_nome);
+    }),
+  };
 }
 
 // GET /api/followup - Lista tarefas de followup da unidade atual

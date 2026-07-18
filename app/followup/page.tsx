@@ -50,10 +50,20 @@ import {
 import usePageTitle from '@/lib/utils/usePageTitle';
 
 interface FollowupSummary {
-  abertas: number;
+  abertas_hoje: number;
+  criadas_hoje: number;
   atrasadas: number;
   vencem_hoje: number;
   concluidas_hoje: number;
+  por_responsavel: Array<{
+    responsavel_usuario_id: number;
+    responsavel_usuario_nome: string;
+    abertas_hoje: number;
+    criadas_hoje: number;
+    atrasadas: number;
+    vencem_hoje: number;
+    concluidas_hoje: number;
+  }>;
 }
 
 interface ClienteBusca {
@@ -138,7 +148,7 @@ export default function FollowupPage() {
   );
   const canAccess = hasRole(['admin', 'atendente']);
   const canCreate = canAccess;
-  const canMutate = currentUserRoles.includes('atendente');
+  const canMutate = currentUserRoles.includes('atendente') || currentUserRoles.includes('admin');
   const currentUserId = Number(user?.id);
   const fallbackResponsaveis = useMemo<ResponsavelOption[]>(() => {
     const currentUserId = Number(user?.id);
@@ -150,10 +160,12 @@ export default function FollowupPage() {
 
   const [tarefas, setTarefas] = useState<FollowupTarefaCompleta[]>([]);
   const [summary, setSummary] = useState<FollowupSummary>({
-    abertas: 0,
+    abertas_hoje: 0,
+    criadas_hoje: 0,
     atrasadas: 0,
     vencem_hoje: 0,
     concluidas_hoje: 0,
+    por_responsavel: [],
   });
   const [responsaveis, setResponsaveis] = useState<ResponsavelOption[]>([]);
   const [clienteResultados, setClienteResultados] = useState<ClienteBusca[]>([]);
@@ -232,7 +244,11 @@ export default function FollowupPage() {
       };
 
       try {
-        const res = await fetch(`/api/usuarios?unidade_id=${currentUnidade}`);
+        const params = new URLSearchParams({
+          unidade_id: String(currentUnidade),
+          roles: 'admin,atendente',
+        });
+        const res = await fetch(`/api/usuarios?${params.toString()}`);
         if (!res.ok) {
           aplicarResponsaveis(fallbackResponsaveis);
           return;
@@ -340,10 +356,12 @@ export default function FollowupPage() {
       setTarefas(data.items ?? []);
       setSummary(
         data.summary ?? {
-          abertas: 0,
+          abertas_hoje: 0,
+          criadas_hoje: 0,
           atrasadas: 0,
           vencem_hoje: 0,
           concluidas_hoje: 0,
+          por_responsavel: [],
         }
       );
     } catch {
@@ -416,10 +434,7 @@ export default function FollowupPage() {
 
   function canConcludeTask(task: FollowupTarefaCompleta) {
     if (task.status !== 'aberta') return false;
-    if (canMutate) return true;
-    return currentUserRoles.includes('admin')
-      && !Number.isNaN(currentUserId)
-      && task.responsavel_usuario_id === currentUserId;
+    return canMutate;
   }
 
   function limparFiltros() {
@@ -722,12 +737,19 @@ export default function FollowupPage() {
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         <StatCard
           icon={<ClipboardList className="w-5 h-5" />}
-          label="Abertas"
-          value={summary.abertas}
+          label="Abertas hoje"
+          value={summary.abertas_hoje}
           color="border-primary/40"
+        />
+        <StatCard
+          icon={<Plus className="w-5 h-5" />}
+          label="Criadas hoje"
+          value={summary.criadas_hoje}
+          color="border-info-500/40"
+          iconColor="text-info-600"
         />
         <StatCard
           icon={<Clock3 className="w-5 h-5" />}
@@ -751,6 +773,49 @@ export default function FollowupPage() {
           iconColor="text-success-600"
         />
       </div>
+
+      {currentUserRoles.includes('admin') && summary.por_responsavel.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-foreground">Resumo por funcionário</h2>
+            <p className="text-sm text-muted-foreground">
+              Acompanhamento diário por responsável de followup.
+            </p>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
+            {[
+              { key: 'abertas_hoje', label: 'Abertas hoje' },
+              { key: 'criadas_hoje', label: 'Criadas hoje' },
+              { key: 'concluidas_hoje', label: 'Concluídas hoje' },
+              { key: 'atrasadas', label: 'Atrasadas' },
+            ].map((grupo) => (
+              <div key={grupo.key} className="rounded-xl border border-border bg-background px-4 py-3">
+                <h3 className="text-sm font-semibold text-foreground">{grupo.label}</h3>
+                <div className="mt-3 space-y-2">
+                  {summary.por_responsavel
+                    .filter((responsavel) => Number(responsavel[grupo.key as keyof typeof responsavel]) > 0)
+                    .map((responsavel) => (
+                      <div
+                        key={`${grupo.key}-${responsavel.responsavel_usuario_id}`}
+                        className="flex items-center justify-between gap-3 text-sm"
+                      >
+                        <span className="text-muted-foreground">{responsavel.responsavel_usuario_nome}</span>
+                        <Badge color="blue">
+                          {responsavel[grupo.key as keyof typeof responsavel] as number}
+                        </Badge>
+                      </div>
+                    ))}
+
+                  {!summary.por_responsavel.some(
+                    (responsavel) => Number(responsavel[grupo.key as keyof typeof responsavel]) > 0
+                  ) && <p className="text-sm text-muted-foreground">Nenhum</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <FilterBar
         fields={[

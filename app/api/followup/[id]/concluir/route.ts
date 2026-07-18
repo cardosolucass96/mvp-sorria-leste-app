@@ -32,13 +32,11 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
     }
 
     const userRoles = getUserRoles(context.user);
-    const isAtendente = userRoles.includes('atendente');
-    const isAdminResponsavel = userRoles.includes('admin')
-      && Number(context.user.sub) === tarefa.responsavel_usuario_id;
+    const canConclude = userRoles.includes('atendente') || userRoles.includes('admin');
 
-    if (!isAtendente && !isAdminResponsavel) {
+    if (!canConclude) {
       return NextResponse.json(
-        { error: 'Apenas atendentes ou o admin responsável podem concluir esta tarefa' },
+        { error: 'Apenas atendentes ou admins podem concluir esta tarefa' },
         { status: 403 }
       );
     }

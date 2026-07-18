@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Cliente } from '@/lib/types';
 import { formatarCPF, formatarTelefone } from '@/lib/utils/formatters';
-import { Users } from 'lucide-react';
+import { ArrowRight, Pencil, Trash2, Users } from 'lucide-react';
 import { PageHeader, Table, Button, Alert, SearchInput, Pagination, ConfirmDialog } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -123,9 +123,10 @@ export default function ClientesPage() {
       render: (cliente) => (
         <Link
           href={`/clientes/${cliente.id}`}
-          className="font-medium text-info-600 hover:text-info-800"
+          className="group inline-flex items-center gap-2 font-medium text-foreground transition-colors hover:text-primary-600"
         >
-          {cliente.nome}
+          <span>{cliente.nome}</span>
+          <ArrowRight className="h-4 w-4 opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
         </Link>
       ),
     },
@@ -149,18 +150,24 @@ export default function ClientesPage() {
       label: 'Ações',
       align: 'right',
       render: (cliente) => (
-        <div className="space-x-2">
+        <div className="flex justify-end gap-2 whitespace-nowrap">
           <Link href={`/clientes/${cliente.id}`}>
-            <Button variant="ghost" size="sm" className="text-info-600 hover:text-info-800">
-              Ver/Editar
+            <Button
+              variant="secondary"
+              size="sm"
+              className="border-border/70 bg-surface-secondary/55 text-foreground hover:bg-surface-secondary"
+            >
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Abrir
             </Button>
           </Link>
           <Button
-            variant="ghost"
+            variant="danger"
             size="sm"
             onClick={() => handleDelete(cliente.id, cliente.nome)}
-            className="text-error-600 hover:text-error-800"
+            className="bg-transparent text-error-500 hover:bg-error-500/10 hover:text-error-400"
           >
+            <Trash2 className="mr-1.5 h-4 w-4" />
             Excluir
           </Button>
         </div>

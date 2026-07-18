@@ -7,7 +7,7 @@ import { ClipboardList, Search, Activity, FileText, Layers3, ListTree } from 'lu
 import { PageHeader, StatCard, Badge, LoadingState, Tabs, Alert, Table, Button, Input, Select } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { StatusBadge, ProntuarioDrawer } from '@/components/domain';
-import { formatarData, formatarDentes } from '@/lib/utils/formatters';
+import { formatarData, formatarDentes, formatarMoeda } from '@/lib/utils/formatters';
 import { getClinicDateKey, getClinicMonthKey, getStoredUtcInstantMillis } from '@/lib/time';
 import usePageTitle from '@/lib/utils/usePageTitle';
 interface Procedimento {
@@ -21,6 +21,8 @@ interface Procedimento {
   quantidade: number;
   status: string;
   tipo: 'avaliacao' | 'execucao';
+  valor: number | null;
+  valor_final: number | null;
   created_at: string;
   concluido_at: string | null;
 }
@@ -129,7 +131,12 @@ export default function MeusProcedimentosPage() {
     return p.tipo === filtro;
   });
 
-  const totalAvaliados = procedimentosFiltrados.filter(p => p.tipo === 'avaliacao').length;
+  const procedimentosAvaliados = procedimentosFiltrados.filter((p) => p.tipo === 'avaliacao');
+  const totalAvaliados = procedimentosAvaliados.length;
+  const totalAvaliacoesRealizadas = new Set(procedimentosAvaliados.map((p) => p.cliente_id)).size;
+  const valorProcedimentosAvaliados = procedimentosAvaliados.reduce((total, procedimento) => (
+    total + Number(procedimento.valor_final ?? procedimento.valor ?? 0)
+  ), 0);
   const totalExecutados = procedimentosFiltrados.filter(p => p.tipo === 'execucao').length;
 
   const procedimentosAgrupadosPorCliente = useMemo<ClienteAgrupado[]>(() => {
@@ -161,7 +168,7 @@ export default function MeusProcedimentosPage() {
 
   const tabs = [
     { key: 'todos', label: 'Todos', count: procedimentosFiltrados.length },
-    ...(hasRole(['avaliador', 'admin']) ? [{ key: 'avaliacao', label: 'Avaliações', count: totalAvaliados }] : []),
+    ...(hasRole(['avaliador', 'admin']) ? [{ key: 'avaliacao', label: 'Avaliações', count: totalAvaliacoesRealizadas }] : []),
     ...(hasRole(['executor', 'admin']) ? [{ key: 'execucao', label: 'Execuções', count: totalExecutados }] : []),
   ];
 
@@ -180,23 +187,37 @@ export default function MeusProcedimentosPage() {
       />
 
       {/* Cards de resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard
-          icon={<ClipboardList className="w-6 h-6" />}
-          label="Total de Procedimentos"
-          value={procedimentosFiltrados.length}
-          color="border-info-400"
-        />
-        
-        {hasRole(['avaliador', 'admin']) && (
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {hasRole(['avaliador', 'admin']) ? (
+          <>
+            <StatCard
+              icon={<ClipboardList className="w-6 h-6" />}
+              label="Procedimentos Avaliados"
+              value={totalAvaliados}
+              color="border-info-400"
+            />
+            <StatCard
+              icon={<FileText className="w-6 h-6" />}
+              label="Valor em Procedimentos Avaliados"
+              value={formatarMoeda(valorProcedimentosAvaliados)}
+              color="border-primary/40"
+            />
+            <StatCard
+              icon={<Search className="w-6 h-6" />}
+              label="Avaliações Realizadas"
+              value={totalAvaliacoesRealizadas}
+              color="border-evaluation-500"
+            />
+          </>
+        ) : (
           <StatCard
-            icon={<Search className="w-6 h-6" />}
-            label="Avaliações Realizadas"
-            value={totalAvaliados}
-            color="border-evaluation-500"
+            icon={<ClipboardList className="w-6 h-6" />}
+            label="Total de Procedimentos"
+            value={procedimentosFiltrados.length}
+            color="border-info-400"
           />
         )}
-        
+
         {hasRole(['executor', 'admin']) && (
           <StatCard
             icon={<Activity className="w-6 h-6" />}

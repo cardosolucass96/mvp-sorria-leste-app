@@ -6,7 +6,8 @@ import { ALL_ROLES } from '@/lib/constants/roles';
 import { garantirSchemaUsuariosValorDiaria } from '@/lib/helpers/garantirUsuarioSchema';
 
 // GET /api/usuarios - Listar todos os usuários (com suas unidades e roles)
-// Params: ?unidade_id=X | ?categoria_id=X | ?role=X (filtra por roles válidas p/ a categoria ou pela role exata)
+// Params: ?unidade_id=X | ?categoria_id=X | ?role=X | ?roles=a,b
+// (filtra por roles válidas p/ a categoria ou pela(s) role(s) informada(s))
 export async function GET(request: NextRequest) {
   try {
     await garantirSchemaUsuariosValorDiaria();
@@ -14,10 +15,14 @@ export async function GET(request: NextRequest) {
     const unidadeId = searchParams.get('unidade_id');
     const categoriaId = searchParams.get('categoria_id');
     const role = searchParams.get('role');
+    const roles = (searchParams.get('roles') || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
 
     let usuarios: (Usuario & { unidade_ids?: number[]; roles?: string[] })[];
 
-    if (categoriaId || role || unidadeId) {
+    if (categoriaId || role || roles.length > 0 || unidadeId) {
       const conditions: string[] = [];
       const params: Array<string | number> = [];
 
@@ -50,6 +55,19 @@ export async function GET(request: NextRequest) {
         )`);
         params.push(role, role);
       }
+      if (roles.length > 0) {
+        const placeholders = roles.map(() => '?').join(', ');
+        conditions.push(`(
+          u.role IN (${placeholders})
+          OR EXISTS (
+            SELECT 1
+              FROM usuario_roles ur
+             WHERE ur.usuario_id = u.id
+               AND ur.role IN (${placeholders})
+          )
+        )`);
+        params.push(...roles, ...roles);
+      }
       if (unidadeId) {
         conditions.push(`EXISTS (
           SELECT 1
@@ -59,7 +77,7 @@ export async function GET(request: NextRequest) {
         )`);
         params.push(parseInt(unidadeId));
       }
-      if (categoriaId || role) {
+      if (categoriaId || role || roles.length > 0) {
         conditions.push('u.ativo = 1');
       }
 
@@ -74,7 +92,7 @@ export async function GET(request: NextRequest) {
       } catch (error) {
         // Bancos legados podem ainda não ter `usuario_roles`.
         // Nesse caso, fazemos fallback para a role primária em `usuarios.role`.
-        if (unidadeId || (!categoriaId && !role)) {
+        if (unidadeId || (!categoriaId && !role && roles.length === 0)) {
           throw error;
         }
 
@@ -94,6 +112,10 @@ export async function GET(request: NextRequest) {
         if (role) {
           fallbackConditions.push('u.role = ?');
           fallbackParams.push(role);
+        }
+        if (roles.length > 0) {
+          fallbackConditions.push(`u.role IN (${roles.map(() => '?').join(', ')})`);
+          fallbackParams.push(...roles);
         }
 
         fallbackConditions.push('u.ativo = 1');
