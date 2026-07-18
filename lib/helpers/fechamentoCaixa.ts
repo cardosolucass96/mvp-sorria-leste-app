@@ -186,6 +186,18 @@ function getStoredInstantTime(value: string | null | undefined): number {
   return parsed ? parsed.getTime() : 0;
 }
 
+function isStoredInstantWithinRange(
+  value: string | null | undefined,
+  startInclusive: string,
+  endExclusive: string
+): boolean {
+  const timestamp = getStoredInstantTime(value);
+  if (!timestamp) return false;
+  const startTime = getStoredInstantTime(startInclusive);
+  const endTime = getStoredInstantTime(endExclusive);
+  return timestamp >= startTime && timestamp < endTime;
+}
+
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
   try {
@@ -1038,6 +1050,10 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
   }>();
 
   avaliacoesPagasRows.forEach((row) => {
+    if (!isStoredInstantWithinRange(row.pago_em, dayStartUtc, dayEndUtc)) {
+      return;
+    }
+
     const usuarioId = Number(row.usuario_id || 0);
     const percentual = Number(row.percentual || 0);
     const valorAlocado = roundMoney(Number(row.valor_alocado || 0));

@@ -683,7 +683,7 @@ export default function FechamentoCaixaPage() {
           <div class="summary-box">
             <div><strong>Status:</strong> ${dentista.included ? 'Incluído' : 'Excluído do fechamento'}</div>
             <div><strong>Diária:</strong> ${formatarMoeda(dentista.valor_diaria)}</div>
-            <div><strong>Comissão avaliação + acréscimos:</strong> ${formatarMoeda(dentista.comissao_avaliacao)}</div>
+            <div><strong>Comissões pagas no dia:</strong> ${formatarMoeda(dentista.comissao_avaliacao)}</div>
             <div><strong>Lançamentos manuais:</strong> ${formatarMoeda(dentista.lancamentos_manuais.reduce((sum, item) => sum + item.valor, 0))}</div>
             <div><strong>Total do dia:</strong> ${formatarMoeda(dentista.total_dia)}</div>
           </div>
@@ -792,7 +792,7 @@ export default function FechamentoCaixaPage() {
             <div class="summary-card"><strong>Procedimentos executados</strong><div class="summary-value">${resultado.resumo.procedimentos_executados}</div></div>
             <div class="summary-card"><strong>Resultado final</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_final)}</div></div>
             <div class="summary-card"><strong>Diárias</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_diarias)}</div></div>
-            <div class="summary-card"><strong>Comissão avaliação + acréscimos</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_comissao_avaliacao)}</div></div>
+            <div class="summary-card"><strong>Comissões pagas no dia</strong><div class="summary-value">${formatarMoeda(resultado.resumo.total_comissao_avaliacao)}</div></div>
           </div>
 
           <section class="section">
@@ -1251,7 +1251,7 @@ export default function FechamentoCaixaPage() {
           <StatCard icon={<ClipboardList className="w-6 h-6" />} label="Procedimentos executados" value={resultado.resumo.procedimentos_executados} color="border-primary-500" />
           <StatCard icon={<Wallet className="w-6 h-6" />} label="Resultado final" value={formatarMoeda(resultado.resumo.total_final)} color="border-evaluation-500" />
           <StatCard icon={<Lock className="w-6 h-6" />} label="Diárias" value={formatarMoeda(resultado.resumo.total_diarias)} color="border-warning-500" />
-          <StatCard icon={<ShieldCheck className="w-6 h-6" />} label="Comissão avaliação + acréscimos" value={formatarMoeda(resultado.resumo.total_comissao_avaliacao)} color="border-success-500" />
+          <StatCard icon={<ShieldCheck className="w-6 h-6" />} label="Comissões pagas no dia" value={formatarMoeda(resultado.resumo.total_comissao_avaliacao)} color="border-success-500" />
         </div>
 
         <Card className="space-y-4">
@@ -1349,7 +1349,7 @@ export default function FechamentoCaixaPage() {
           </Card>
 
           <Card>
-            <h2 className="text-base font-semibold mb-4">Avaliadores por valor gerado</h2>
+            <h2 className="text-base font-semibold mb-4">Avaliadores por valor pago no dia</h2>
             <div className="space-y-3">
               {resultado.graficos.ranking_avaliadores.length > 0 ? (
                 resultado.graficos.ranking_avaliadores.slice(0, 10).map((item) => (
@@ -1367,7 +1367,7 @@ export default function FechamentoCaixaPage() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">Sem dados de avaliadores nesse dia.</p>
+                <p className="text-sm text-muted-foreground">Sem comissões pagas para avaliadores nesse dia.</p>
               )}
             </div>
           </Card>
@@ -1690,7 +1690,7 @@ export default function FechamentoCaixaPage() {
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            Diária {formatarMoeda(dentista.valor_diaria)} · Avaliação + acréscimos {formatarMoeda(dentista.comissao_avaliacao)} · {procedimentosAvaliados.length} comissionado(s) por avaliação · {dentista.procedimentos_executados.length} executado(s) · Ajustes {formatarMoeda(manualLaunchTotal)}
+                            Diária {formatarMoeda(dentista.valor_diaria)} · Comissões pagas {formatarMoeda(dentista.comissao_avaliacao)} · {procedimentosAvaliados.length} comissão(ões) paga(s) no dia · {dentista.procedimentos_executados.length} executado(s) · Ajustes {formatarMoeda(manualLaunchTotal)}
                           </p>
                         </div>
                       </div>

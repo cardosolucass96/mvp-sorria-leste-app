@@ -322,6 +322,61 @@ describe('obterFechamentoCaixaResponse', () => {
     ]);
   });
 
+  it('considera no fechamento a comissão que entrou no dia mesmo com avaliação anterior', async () => {
+    mockCommonQueries();
+    mockQueryResponse('from pagamentos_alocacoes pa', [
+      {
+        target_type: 'item',
+        target_id: 88,
+        pagamento_id: 801,
+        pagamento_grupo_id: null,
+        atendimento_id: 99,
+        usuario_id: 10,
+        usuario_nome: 'Dr. Carlos Avaliador',
+        usuario_valor_diaria: 80,
+        origem: 'avaliacao',
+        percentual: 10,
+        valor_referencia: 350,
+        valor_alocado: 350,
+        pago_em: '2026-06-07 15:20:00',
+        cliente_nome: 'Paciente Fechamento',
+        procedimento_nome: 'Prótese',
+        etapa_label: null,
+        dentes: null,
+        dente_unico: null,
+      },
+    ]);
+    mockQueryResponse('from itens_atendimento i', []);
+
+    const response = await obterFechamentoCaixaResponse(1, '2026-06-07');
+
+    expect(response.resultado.resumo.total_comissao_avaliacao).toBe(35);
+    expect(response.resultado.graficos.ranking_avaliadores).toEqual([
+      { usuario_id: 10, nome: 'Dr. Carlos Avaliador', valor_gerado: 350, quantidade: 1 },
+    ]);
+    expect(response.resultado.avaliacoes_pagas_dia).toEqual([
+      {
+        key: 'item:88:pagamento:801',
+        usuario_id: 10,
+        cliente_nome: 'Paciente Fechamento',
+        procedimento_nome: 'Prótese',
+        procedimento_label: 'Prótese',
+        origem: 'avaliacao',
+        percentual: 10,
+        valor_base: 350,
+        valor_comissao: 35,
+        pago_em: '2026-06-07 15:20:00',
+        included: true,
+        manualmente_editado: false,
+        ajustes: [],
+      },
+    ]);
+    expect(response.resultado.dentistas.find((item) => item.usuario_id === 10)).toMatchObject({
+      comissao_avaliacao: 35,
+      total_dia: 115,
+    });
+  });
+
   it('inclui os pagamentos recebidos no dia agrupando múltiplas formas da mesma cobrança', async () => {
     mockCommonQueries();
     mockQueryResponse('from itens_atendimento i', []);
