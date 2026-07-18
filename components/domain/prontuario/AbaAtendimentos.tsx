@@ -8,9 +8,10 @@ import type { AtendimentoResumo } from './types';
 
 export interface AbaAtendimentosProps {
   atendimentos: AtendimentoResumo[];
+  readOnly?: boolean;
 }
 
-export default function AbaAtendimentos({ atendimentos }: AbaAtendimentosProps) {
+export default function AbaAtendimentos({ atendimentos, readOnly = false }: AbaAtendimentosProps) {
   if (!atendimentos.length) {
     return (
       <p className="text-center py-8 text-muted text-sm">Nenhum atendimento registrado</p>
@@ -19,12 +20,8 @@ export default function AbaAtendimentos({ atendimentos }: AbaAtendimentosProps) 
 
   return (
     <div className="space-y-2">
-      {atendimentos.map(a => (
-        <Link
-          key={a.id}
-          href={`/atendimentos/${a.id}`}
-          className="block rounded-lg border border-border p-3 transition hover:bg-surface-secondary active:bg-accent/50"
-        >
+      {atendimentos.map(a => {
+        const content = (
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -44,8 +41,29 @@ export default function AbaAtendimentos({ atendimentos }: AbaAtendimentosProps) 
               </p>
             </div>
           </div>
-        </Link>
-      ))}
+        );
+
+        if (readOnly) {
+          return (
+            <div
+              key={a.id}
+              className="block rounded-lg border border-border p-3"
+            >
+              {content}
+            </div>
+          );
+        }
+
+        return (
+          <Link
+            key={a.id}
+            href={`/atendimentos/${a.id}`}
+            className="block rounded-lg border border-border p-3 transition hover:bg-surface-secondary active:bg-accent/50"
+          >
+            {content}
+          </Link>
+        );
+      })}
     </div>
   );
 }

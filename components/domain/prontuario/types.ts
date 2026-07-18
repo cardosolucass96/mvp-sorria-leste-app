@@ -82,6 +82,16 @@ export interface FichaData {
   movimentacoes: Movimentacao[];
 }
 
+export interface AnexoClienteFicha {
+  id: number;
+  nome: string;
+  url: string;
+  tipo: string;
+  tamanho: number;
+  created_at: string;
+  descricao?: string | null;
+}
+
 export const METODOS_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
   pix: 'PIX',

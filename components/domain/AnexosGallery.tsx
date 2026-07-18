@@ -34,6 +34,7 @@ export interface AnexosGalleryProps {
   onUpload: (upload: AnexoUploadData) => Promise<void>;
   onDelete: (anexo: AnexoData) => Promise<void>;
   onUpdate?: (anexo: AnexoData, data: { titulo?: string; descricao?: string }) => Promise<void>;
+  readOnly?: boolean;
   loading?: boolean;
   uploading?: boolean;
   maxSizeMB?: number;
@@ -56,6 +57,7 @@ export default function AnexosGallery({
   onUpload,
   onDelete,
   onUpdate,
+  readOnly = false,
   loading = false,
   uploading = false,
   maxSizeMB = 5,
@@ -145,50 +147,51 @@ export default function AnexosGallery({
 
   return (
     <div className={cn("space-y-4", className)}>
-      {/* Upload */}
-      <div className="space-y-2">
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => fileInputRef.current?.click()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              fileInputRef.current?.click();
-            }
-          }}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={cn(
-            "rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors cursor-pointer",
-            isDragOver
-              ? "border-primary-500 bg-primary-500/10"
-              : "border-border bg-muted/30 hover:bg-muted/50",
-            (loading || uploading) && "pointer-events-none opacity-60"
-          )}
-        >
-          <div className="space-y-2">
-            <p className="text-base font-medium text-foreground">Solte um arquivo aqui</p>
-            <p className="text-sm text-muted-foreground">
-              Ou clique para selecionar uma foto, documento ou v&iacute;deo
-            </p>
-            {uploading && (
-              <p className="text-sm font-medium text-primary-600">Enviando arquivo...</p>
+      {!readOnly && (
+        <div className="space-y-2">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={cn(
+              "rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors cursor-pointer",
+              isDragOver
+                ? "border-primary-500 bg-primary-500/10"
+                : "border-border bg-muted/30 hover:bg-muted/50",
+              (loading || uploading) && "pointer-events-none opacity-60"
             )}
+          >
+            <div className="space-y-2">
+              <p className="text-base font-medium text-foreground">Solte um arquivo aqui</p>
+              <p className="text-sm text-muted-foreground">
+                Ou clique para selecionar uma foto, documento ou v&iacute;deo
+              </p>
+              {uploading && (
+                <p className="text-sm font-medium text-primary-600">Enviando arquivo...</p>
+              )}
+            </div>
           </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={acceptTypes}
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          {uploadError && (
+            <span className="text-sm text-error-600">{uploadError}</span>
+          )}
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={acceptTypes}
-          onChange={handleFileSelect}
-          className="hidden"
-        />
-        {uploadError && (
-          <span className="text-sm text-error-600">{uploadError}</span>
-        )}
-      </div>
+      )}
 
       {/* Gallery */}
       {anexos.length === 0 ? (
@@ -227,17 +230,18 @@ export default function AnexosGallery({
                 )}
               </div>
 
-              {/* Delete button overlay */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteTarget(anexo);
-                }}
-                className="absolute top-1 right-1 w-6 h-6 bg-error-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                aria-label={`Excluir ${anexo.nome}`}
-              >
-                ×
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget(anexo);
+                  }}
+                  className="absolute top-1 right-1 w-6 h-6 bg-error-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                  aria-label={`Excluir ${anexo.nome}`}
+                >
+                  ×
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -274,8 +278,8 @@ export default function AnexosGallery({
               </div>
             )}
 
-            {onUpdate && (
-              <div className="space-y-3 border-t border-border pt-4">
+          {onUpdate && !readOnly && (
+            <div className="space-y-3 border-t border-border pt-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
                     Titulo
