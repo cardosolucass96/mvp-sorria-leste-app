@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS termos (
   titulo TEXT NOT NULL,
   conteudo_html TEXT NOT NULL,
   ativo INTEGER NOT NULL DEFAULT 1,
+  permite_autentique INTEGER NOT NULL DEFAULT 1,
   created_by INTEGER,
   updated_by INTEGER,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -158,36 +159,95 @@ INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, up
 
 INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, created_by, updated_by) VALUES (
   'implante',
-  'Termo de Consentimento para instalação de implante osseointegrado',
-  '<p>TERMO DE CONSENTIMENTO INFORMADO</p>
-<p>INSTALAÇÃO DE IMPLANTE OSSEOINTEGRADO</p>
-<p>Por este instrumento de consentimento livre e esclarecido, eu {{cliente_nome}}, na qualidade de paciente ou responsável legal (pai, mãe ou tutor) pelo(a) menor {{cliente_nome}}, CPF {{cliente_cpf}}, TELEFONE {{cliente_telefone}}, autorizo a realização do procedimento de instalação de implante osseointegrado na Clínica Sorria Leste, situada na Avenida Presidente Castelo Branco, 5185 b, sob responsabilidade do(a) profissional {{profissional_nome}}, CRO {{profissional_cro}}, nos seguintes elementos:</p>
-<p>Implantes (dentes): {{implante_elementos_dentes}}    Coroas sobre implantes: {{implante_coroas}}    Protocolo sobre implante: {{implante_protocolo}}</p>
-<p>Declaro que a ficha de anamnese foi preenchida e por mim assinada, apresentando informações que correspondem à verdade dos fatos, especialmente no que diz respeito às minhas condições de saúde geral e bucal. Não omiti qualquer dado quanto a doenças preexistentes de meu conhecimento, nem quanto ao uso de medicamentos, controlados ou não. Estou ciente de que a omissão de dados sobre minha saúde geral e bucal e sobre o uso de medicamentos pode interferir negativamente no planejamento e andamento do tratamento, na resposta biológica do meu organismo à técnica empregada, podendo ocasionar danos irreversíveis à minha saúde bucal e geral, inclusive por reações a substâncias medicamentosas utilizadas durante o procedimento ou prescritas no transcorrer do tratamento, que podem dar causa a problemas cardíacos, alérgicos e até a morte.</p>
-<p>Declaro que, considerando minha queixa principal e após avaliação clínica e de eventuais exames complementares, o(a) profissional me esclareceu sobre o diagnóstico e o planejamento de tratamento, com alternativas e informações claras sobre os objetivos e riscos do planejamento terapêutico escolhido, bem como sobre minha responsabilidade de colaborar e contribuir para o bom andamento do tratamento.</p>
-<p>Fui informado de que o tratamento proposto será realizado aproximadamente em {{previsao_inicio}}, podendo, todavia, sofrer prorrogação ou alteração de prazo, em razão de eventual complexidade que o caso apresentar no decorrer do tratamento, da resposta biológica do meu organismo à técnica empregada, da minha assiduidade às consultas e do seguimento das orientações fornecidas pelo(a) profissional.</p>
-<p>Declaro estar ciente de que devo comparecer pontualmente às sessões previamente agendadas, seguindo rigorosamente as prescrições, encaminhamentos a outros especialistas e demais orientações fornecidas pelo(a) profissional, sob pena de ser declarado interrompido o tratamento. Também é de minha responsabilidade informar ao(à) profissional qualquer alteração decorrente do tratamento realizado, insatisfações ou dúvidas sobre o tratamento em execução, mantendo meus dados cadastrais sempre atualizados.</p>
-<p>Fui assegurado(a) de que apenas procedimentos permitidos e cientificamente comprovados serão empregados, e aceito que o(a) cirurgião-dentista escolha o tipo de implante mais adequado ao meu caso. Fui também informado(a) de que pode ser necessário alterar o planejamento inicial durante o procedimento cirúrgico e/ou protético, em função de condição óssea desfavorável ou proximidade com estruturas anatômicas. Estou ciente dos riscos de exposição acidental do seio maxilar e de injúria acidental ao nervo alveolar inferior, com consequente parestesia, nos casos em que a intervenção cirúrgica ocorra próxima a essas estruturas. Todas as minhas perguntas foram claramente respondidas e recebi explicação detalhada sobre o tratamento.</p>
-<p>Declaro ter sido informado(a) de que não existem garantias absolutas de que os implantes e seus respectivos elementos protéticos se manterão estáveis durante toda a minha vida, e que o sucesso a longo prazo dependerá de manutenção regular e adequada. Em certos casos, uma parcela dos implantes pode ser perdida em decorrência de fatores como má qualidade óssea, infecções pós-operatórias ou higienização deficiente. Nessas situações, poderá ser instalado novo implante após o adequado reparo ósseo do local.</p>
-<p>Havendo qualquer alteração de meu conhecimento quanto à minha saúde bucal ou geral, bem como o surgimento de dores nos elementos dentários ou outras dores orofaciais, é de minha responsabilidade manter contato com o(a) profissional, viabilizando a necessária avaliação do meio bucal e dos fatores que possam ter influenciado ou causado eventuais danos ou alterações, os quais podem dar origem a prejuízos diversos e até à perda dos implantes e do trabalho protético instalado.</p>
-<p>Caso ocorra a perda de um ou mais implantes e a reposição seja essencial para a instalação dos elementos protéticos, concordo em arcar com os custos dos materiais empregados, cabendo ao(à) profissional a realização de nova cirurgia sem cobrança de novos honorários. Os custos do anestesista, caso eu deseje que o procedimento seja realizado sob sedação, serão de minha exclusiva responsabilidade.</p>
-<p>Fui esclarecido(a) a respeito dos cuidados pós-tratamento que devo manter para preservar a durabilidade do serviço odontológico realizado nas etapas cirúrgica e protética. O trabalho protético foi realizado com o material acordado, conforme tamanho e cor dos elementos previamente aprovados por mim.</p>
-<p>Estou ciente de que, assim como o trabalho protético, os elementos dentários naturais podem sofrer alterações e danos por questões naturais, por deficiência na higienização, doenças periodontais ou outras alterações bucais advindas de fatores biológicos ou externos, que não terão como fato causador o tratamento realizado.</p>
-<p>Estou ciente de que os implantes serão instalados de maneira precisa, observando a técnica indicada ao caso, com a devida osseointegração. Reconheço que não há garantia de que os implantes permanecerão imutáveis quanto à osseointegração, situação que pode ser agravada pelo hábito de fumar e pela deficiência na higienização.</p>
-<p>O trabalho protético sobre os implantes será instalado de forma adequada e adaptada, conforme prevê a técnica, a fim de resguardar as questões funcionais da reabilitação oral.</p>
-<p>Declaro ter conhecimento de que ao término do tratamento deverei retornar para consultas de acompanhamento, de acordo com os critérios estabelecidos pelo(a) profissional, visando preservar e manter o tratamento realizado. Reconheço que não é possível garantir o tempo de durabilidade dos procedimentos odontológicos, pois tal avaliação observará as condições de minha saúde, eventuais alterações bucais, hábitos em geral, adequada higienização oral, além de outros fatores internos ou externos que podem afetar o serviço prestado. O(a) profissional não se eximirá de avaliar eventual dano ou prejuízo alegado, reparando-o, quando o caso, dentro dos limites de sua responsabilidade.</p>
-<p>Entendo a importância da saúde bucal e me comprometo a seguir as orientações da equipe odontológica, assim como a retornar às consultas de orientação e acompanhamento programadas.</p>
-<p>Reconheço que a obrigação do cirurgião-dentista é de meio e não de resultado, conforme entendimento consolidado do Conselho Federal de Odontologia e da jurisprudência pátria, o que significa que o(a) profissional se compromete a empregar todos os recursos técnicos e científicos disponíveis para a obtenção do melhor resultado possível, sem, contudo, garantir resultado específico, dado o caráter biológico e individual de cada organismo.</p>
-<p>Fui informado do motivo da necessidade de informar meu CPF e Telefone, nos termos da Lei Geral de Proteção de Dados Pessoais (LGPD — Lei nº 13.709/2018), e que todos os meus dados serão utilizados exclusivamente para fins de atendimento clínico, ficando em total sigilo e não sendo compartilhados com terceiros, salvo obrigação legal. Declaro que consinto, de forma livre e esclarecida, com o tratamento dos meus dados pessoais pela Clínica Sorria Leste para as finalidades aqui descritas.</p>
-<p>DA GARANTIA: A Clínica Sorria Leste oferece garantia de 6 (seis) meses para implantes osseointegrados e próteses sobre implantes, contados a partir da data de instalação definitiva do trabalho protético, desde que o paciente compareça às consultas de manutenção periódica, mantenha higiene bucal adequada e não apresente hábitos parafuncionais sem o uso de placa de proteção. Para procedimentos de restauração, a garantia é de 3 (três) meses. Nos termos do art. 26, inciso II, do Código de Defesa do Consumidor, fica estipulado o prazo de 90 (noventa) dias, a partir da finalização e entrega do tratamento em perfeitas condições, para a comunicação de eventual vício aparente do serviço. A garantia não abrangerá situações decorrentes de mau uso, negligência, perda de osseointegração por fatores sistêmicos, tabagismo, higienização deficiente ou descumprimento das orientações fornecidas pelo(a) profissional.</p>
-<p>DA POLÍTICA DE CANCELAMENTO E ESTORNO: Em razão da aquisição de materiais específicos para a realização do procedimento de implantodontia, fica estabelecido que, em caso de desistência após o início da etapa cirúrgica ou após a encomenda de componentes protéticos ou laboratoriais, será retido o valor correspondente aos custos já incorridos, incluindo materiais, serviços laboratoriais e consultas realizadas. O pedido de estorno integral não será cabível nessa hipótese, sendo devolvido apenas o valor eventualmente pago que exceder os custos efetivamente suportados pela clínica.</p>
-<p>DA DESISTÊNCIA TÁCITA: Considera-se desistência tácita do tratamento a ausência injustificada do paciente por período igual ou superior a 90 (noventa) dias contados da última consulta realizada ou do último contato com a clínica, sem qualquer comunicação formal de suspensão ou reagendamento. Nessa hipótese, o tratamento será considerado encerrado por iniciativa do paciente, não sendo devida qualquer restituição de valores já pagos relativos a materiais adquiridos, serviços laboratoriais executados ou consultas realizadas. O retorno do paciente após esse prazo poderá implicar a necessidade de novo planejamento e novos custos.</p>
-<p>Este termo tem caráter irrevogável e será arquivado no prontuário do paciente, constituindo documento hábil para todos os fins de direito, inclusive em eventuais processos administrativos perante o Conselho Regional de Odontologia (CRO) ou demandas judiciais e extrajudiciais.</p>
-<p>___________________, _____ de _______________ de 20____.</p>
+  'Termo de Autorização Implante/Coroa Dentária',
+  '<p>TERMO DE AUTORIZAÇÃO IMPLANTE/COROA DENTÁRIA</p>
+<p>CLÍNICA SORRIA LESTE</p>
+<p>Pelo presente termo de consentimento livre e esclarecido, eu, {{cliente_nome}}, paciente (ou responsável legal, quando aplicável), portador(a) do CPF nº {{cliente_cpf}}, Telefone {{cliente_telefone}}, declaro que li, compreendi e aceito as condições abaixo.</p>
+<ul>
+  <li>A ficha de anamnese foi preenchida e por mim assinada, apresentando informações que correspondem à verdade dos fatos, especialmente no que diz respeito às minhas condições da saúde geral e bucal, não tendo omitido ou suprimido qualquer dado quanto a doenças preexistentes e que sejam de meu conhecimento, tão pouco quanto ao uso de medicamentos controlados ou não, ciente de que a omissão de dados sobre a minha saúde geral e bucal e sobre o uso de medicamentos pode interferir negativamente no planejamento e andamento de tratamento, na resposta biológica do meu organismo à técnica empregada, podendo ocasionar danos irreversíveis à minha saúde bucal e geral, inclusive quando do uso de substâncias medicamentosas utilizadas durante o procedimento odontológico ou prescritas no transcorrer do tratamento, que podem dar causa à problemas cardíacos, alérgicos e até a morte.</li>
+  <li>Considerando minha queixa principal e, após avaliação clínica e de eventuais exames complementares, o(a) profissional me esclareceu sobre o diagnóstico e planejamento de tratamento, com alternativas e informações claras sobre os objetivos e riscos do planejamento terapêutico escolhido, bem como sobre minha responsabilidade de colaborar e contribuir para o tratamento que será executado.</li>
+  <li>É de meu conhecimento de que o tratamento proposto será realizado aproximadamente em {{previsao_inicio}}, podendo, todavia, sofrer prorrogação ou alteração de prazo, de acordo com eventual complexidade que o caso apresentar no decorrer do tratamento, bem como pela resposta biológica do meu organismo à técnica empregada, assiduidade às consultas e seguimento das orientações fornecidas pelo(a) profissional.</li>
+</ul>
+<ul>
+  <li><strong><em>Declaro que estou ciente de que deverei comparecer pontualmente ao consultório, nas sessões previamente agendadas, devendo seguir rigorosamente as prescrições, encaminhamentos a outros especialistas da área odontológica ou profissionais da área de saúde e demais orientações fornecidas pelo(a) profissional, sob pena de ser declarado interrompido o tratamento.</em></strong></li>
+  <li><strong><em>É de meu conhecimento de que devo informar ao(à) profissional qualquer alteração em decorrência do tratamento realizado, insatisfações ou dúvidas sobre o tratamento em execução, mantendo meus dados cadastrais sempre atualizados e informando eventuais mudanças de endereço, telefone e demais contatos.</em></strong></li>
+  <li><strong><em>Fui assegurado(a) de que apenas procedimentos permitidos e cientificamente comprovados serão empregados e aceito que para meu tratamento o(a) cirurgião-dentista escolha o tipo de implante a ser usado. Fui também informado(a) de que pode ser necessário alterar o planejamento inicial durante o procedimento cirúrgico e/ou protético, em função de uma condição óssea desfavorável ou proximidade com as estruturas anatômicas. Além disso, estou ciente dos riscos relacionados a uma exposição acidental do seio maxilar ou injúria acidental ao nervo alveolar inferior, com consequente parestesia, nos casos em que a intervenção cirúrgica ocorra próxima a estas estruturas. Finalmente, todas as minhas perguntas foram claramente respondidas e uma explicação sobre os detalhes do tratamento me foi fornecida.</em></strong></li>
+  <li><strong><em>Entendo a importância da saúde bucal e me comprometo a seguir as orientações da equipe odontológica, assim como a retornar às consultas de orientações programadas.</em></strong></li>
+  <li><strong><em>Declaro ter sido informado(a) que não existem garantias absolutas de que estes implantes e seus respectivos dentes artificiais irão manter-se estáveis durante toda minha vida e que o sucesso a longo prazo dependerá de uma manutenção regular. Entendo ainda que, em certos casos, uma pequena porcentagem dos implantes poderá ser perdida em decorrência de fatores como má qualidade óssea, infecções pós-operatórias e má higienização. Nestes casos poderá ser colocado um novo implante após o adequado reparo ósseo no local.</em></strong></li>
+  <li><strong><em>Havendo qualquer alteração que seja de meu conhecimento quanto à minha saúde bucal ou geral, bem como o surgimento de dores nos elementos dentários ou outras dores orofaciais, é de minha responsabilidade manter contato com o(a) profissional, viabilizando a necessária avaliação do meio bucal e dos fatores que podem ter influenciado ou que tenham sido os causadores de eventuais danos ou alterações que, eventualmente, podem dar origem a prejuízos diversos e até a perda dos implantes e do trabalho protético instalado.</em></strong></li>
+  <li><strong><em>Caso ocorra a perda de um ou mais implantes e a reposição dos mesmos seja essencial para a instalação dos dentes artificiais, concordo em arcar com os custos do material empregado, sendo que caberá ao(à) profissional a realização de uma nova cirurgia sem a cobrança de novos honorários. Caberá a mim arcar com os custos do anestesista, caso eu deseje que o procedimento cirúrgico seja realizado sob sedação.</em></strong></li>
+  <li><strong><em>Informo que fui esclarecido(a) a respeito dos cuidados pós-tratamento reabilitadores protéticos que devo manter com o intuito de preservar a durabilidade do serviço odontológico realizado na etapa cirúrgica e na etapa protética, sendo que esta última foi realizada com o material acordado, de acordo com o tamanho e cor dos elementos dentários previamente aprovados.</em></strong></li>
+  <li><strong><em>Estou ciente de que, assim como o trabalho protético, os elementos dentários naturais podem sofrer alterações, danos e prejuízos por questões naturais, por deficiência na higienização, doenças periodontais ou outras alterações bucais advindas de fatores biológicos ou externos, que não terão como fato causador o tratamento realizado.</em></strong></li>
+  <li><strong><em>Estou ciente de que os implantes serão instalados de maneira precisa, observando o que determina a técnica empregada e indicada ao caso, com a devida osseointegração. Ainda, é de meu conhecimento que não há garantia de que os implantes permanecerão imutáveis quanto à sua osseointegração, situação que pode ser agravada pelo hábito de fumar e pela deficiência na higienização.</em></strong></li>
+  <li><strong><em>O trabalho protético sobre os implantes será instalado de forma adequada e adaptada, conforme prevê a técnica, a fim de resguardar as questões funcionais da reabilitação oral.</em></strong></li>
+  <li><strong><em>Declaro, ainda, que tenho conhecimento de que ao término do tratamento deverei retornar para consultas de acompanhamento de acordo com os critérios estabelecidos pelo(a) profissional, visando resguardar e manter o tratamento realizado, sendo certo que não é possível garantir o tempo de durabilidade dos procedimentos odontológicos, pois referida avaliação deverá observar as condições de minha saúde e eventuais alterações bucais, hábitos em geral, adequada higienização oral, além de outros fatores internos ou externos que podem danificar o serviço prestado. O profissional não se eximirá de avaliar eventual dano ou prejuízo sofrido e alegado, reparando-o, quando o caso, dentro do limite de sua responsabilidade.</em></strong></li>
+  <li><strong><em>Estou ciente que fica estipulado o prazo de 90 (noventa) dias, a partir da finalização do tratamento, conforme disposto no art. 26, inciso II, do Código de Defesa do Consumidor, para comunicação de eventual alteração do trabalho realizado e entregue em perfeitas condições, de forma que após esse prazo qualquer medida dependerá da avaliação clínica profissional.</em></strong></li>
+  <li>Além disso fui esclarecido(a) do motivo da necessidade de informar meu CPF e Telefone, conforme a LGPD, e que todos meus dados ficarão em total sigilo, não sendo compartilhados em hipótese alguma. Dessa forma declaro que consenti em informar tais dados.</li>
+</ul>
+<p>Implantes (dentes): {{implante_elementos_dentes}}</p>
+<p>Coroas sobre implantes: {{implante_coroas}}</p>
+<p>Protocolo sobre implante: {{implante_protocolo}}</p>
+<p>_________________, ____ de ______________ de __________</p>
 <p>(Assinatura e CPF do(a) paciente/responsável)</p>
-<p>CONFIRMO que li o referido termo juntamente com o(a) paciente, e todas as suas dúvidas foram esclarecidas.</p>
+<p>__________________________________________</p>
+<p>(Assinatura do profissional)</p>
 ',
   1,
+  NULL,
+  NULL
+);
+
+INSERT OR IGNORE INTO termos (slug, titulo, conteudo_html, ativo, permite_autentique, created_by, updated_by) VALUES (
+  'referencia-implante',
+  'Referência implante',
+  '<p>REFERÊNCIA IMPLANTE</p>
+<p>CLÍNICA SORRIA LESTE</p>
+<p>Nome do paciente: _________________________________________</p>
+<p>Dentista responsável: ________________________________</p>
+<table style="margin-top: 6mm; border-collapse: collapse; width: 100%; font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt;">
+  <thead>
+    <tr>
+      <th style="border: 1px solid #94a3b8; padding: 8px 10px; text-align: center; width: 16%;">DATA</th>
+      <th style="border: 1px solid #94a3b8; padding: 8px 10px; text-align: center; width: 22%;">REFERÊNCIA</th>
+      <th style="border: 1px solid #94a3b8; padding: 8px 10px; text-align: center; width: 18%;">REGIÃO</th>
+      <th style="border: 1px solid #94a3b8; padding: 8px 10px; text-align: center; width: 22%;">DENTISTA</th>
+      <th style="border: 1px solid #94a3b8; padding: 8px 10px; text-align: center; width: 22%;">PACIENTE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px; height: 18mm;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px; height: 18mm;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px; height: 18mm;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px; height: 18mm;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #94a3b8; padding: 11px 10px;">&nbsp;</td>
+    </tr>
+  </tbody>
+</table>
+',
+  1,
+  0,
   NULL,
   NULL
 );

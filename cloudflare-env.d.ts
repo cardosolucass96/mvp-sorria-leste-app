@@ -7,4 +7,7 @@ interface CloudflareEnv {
   ASSETS: Fetcher;
   WORKER_SELF_REFERENCE: Service;
   ENVIRONMENT: string;
+  AUTENTIQUE_API_TOKEN?: string;
+  AUTENTIQUE_WEBHOOK_SECRET?: string;
+  APP_BASE_URL?: string;
 }

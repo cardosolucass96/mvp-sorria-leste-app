@@ -308,10 +308,58 @@ export interface TermoTemplate {
   titulo: string;
   conteudo_html: string;
   ativo: number;
+  permite_autentique?: number | null;
   created_by: number | null;
   updated_by: number | null;
   created_at: string; // UTC instant ISO 8601
   updated_at: string; // UTC instant ISO 8601
+}
+
+export type TermoCampoTipo = 'text' | 'textarea' | 'email' | 'tel' | 'cpf' | 'date';
+export type TermoCampoSource = 'cliente' | 'unidade' | 'manual';
+
+export interface TermoCampoDraft {
+  key: string;
+  label: string;
+  tipo: TermoCampoTipo;
+  value: string;
+  required: boolean;
+  source: TermoCampoSource;
+}
+
+export interface TermoDraft {
+  campos: TermoCampoDraft[];
+  pendentes: string[];
+  placeholdersUsados: string[];
+}
+
+export type TermoDigitalStatus = 'criado' | 'visualizado' | 'assinado' | 'recusado' | 'concluido';
+
+export interface TermoDigital {
+  id: number;
+  cliente_id: number;
+  unidade_id: number;
+  termo_id: number | null;
+  termo_slug: string;
+  termo_titulo: string;
+  signatario_nome: string;
+  signatario_cpf: string | null;
+  signatario_email: string | null;
+  signatario_telefone: string | null;
+  placeholders_json: string;
+  html_renderizado: string;
+  autentique_document_id: string;
+  autentique_signature_public_id: string;
+  autentique_short_link: string;
+  status: TermoDigitalStatus;
+  pdf_assinado_url: string | null;
+  viewed_at: string | null;
+  signed_at: string | null;
+  rejected_at: string | null;
+  finished_at: string | null;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Tipos com joins para exibição

@@ -25,7 +25,11 @@ export async function middleware(
   return NextResponse.next();
 }
 
-const PUBLIC_API_PATHS = new Set(['/api/auth/login', '/api/auth/dev-login']);
+const PUBLIC_API_PATHS = new Set([
+  '/api/auth/login',
+  '/api/auth/dev-login',
+  '/api/webhooks/autentique',
+]);
 
 export const config = {
   matcher: ['/api/:path*'],

@@ -30,7 +30,7 @@ export const GET = withRole(['admin'], async (request: NextRequest) => {
     const apenasAtivos = searchParams.get('ativo') === '1';
 
     const termos = await query<TermoTemplate>(
-      `SELECT id, slug, titulo, conteudo_html, ativo, created_by, updated_by, created_at, updated_at
+      `SELECT id, slug, titulo, conteudo_html, ativo, permite_autentique, created_by, updated_by, created_at, updated_at
          FROM termos
         ${apenasAtivos ? 'WHERE ativo = 1' : ''}
         ORDER BY titulo ASC, id DESC`
@@ -53,6 +53,7 @@ export const POST = withRole(['admin'], async (request: NextRequest, context) =>
     const slugEntrada = String(body?.slug || '').trim();
     const conteudoHtml = normalizeLegacyTermoTemplateHtml(String(body?.conteudo_html || '').trim());
     const ativo = toAtivoBoolean(body?.ativo, true);
+    const permiteAutentique = toAtivoBoolean(body?.permite_autentique, true);
 
     if (!titulo) {
       return NextResponse.json({ error: 'Título é obrigatório.' }, { status: 400 });
@@ -73,13 +74,13 @@ export const POST = withRole(['admin'], async (request: NextRequest, context) =>
     }
 
     await execute(
-      `INSERT INTO termos (slug, titulo, conteudo_html, ativo, created_by, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [slug, titulo, conteudoHtml, ativo, context.user.sub, context.user.sub]
+      `INSERT INTO termos (slug, titulo, conteudo_html, ativo, permite_autentique, created_by, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [slug, titulo, conteudoHtml, ativo, permiteAutentique, context.user.sub, context.user.sub]
     );
 
     const criado = await queryOne<TermoTemplate>(
-      'SELECT id, slug, titulo, conteudo_html, ativo, created_by, updated_by, created_at, updated_at FROM termos WHERE slug = ?',
+      'SELECT id, slug, titulo, conteudo_html, ativo, permite_autentique, created_by, updated_by, created_at, updated_at FROM termos WHERE slug = ?',
       [slug]
     );
 

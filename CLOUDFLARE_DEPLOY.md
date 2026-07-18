@@ -107,6 +107,39 @@ Para produção, configure diretamente no painel da Cloudflare ou via:
 npx wrangler secret put NOME_DA_VARIAVEL
 ```
 
+### Secrets adicionais para Autentique
+
+Para habilitar a geração de termos digitais com assinatura por link, configure:
+
+```bash
+npx wrangler secret put AUTENTIQUE_API_TOKEN
+npx wrangler secret put AUTENTIQUE_WEBHOOK_SECRET
+```
+
+Opcionalmente, defina a URL base pública do sistema:
+
+```bash
+npx wrangler secret put APP_BASE_URL
+```
+
+Use esse valor quando o projeto já estiver em um domínio próprio. Sem `APP_BASE_URL`, o sistema assume o formato padrão do Workers.
+
+### URL do webhook do Autentique
+
+Cadastre no painel do Autentique:
+
+```text
+https://sorria-leste-app.<seu-subdominio>.workers.dev/api/webhooks/autentique
+```
+
+Ao criar o endpoint, configure o mesmo segredo salvo em `AUTENTIQUE_WEBHOOK_SECRET` e escute os eventos:
+
+- `signature.created`
+- `signature.viewed`
+- `signature.accepted`
+- `signature.rejected`
+- `document.finished`
+
 ## Limitações D1
 
 - **Tamanho máximo do banco**: 10GB (plano gratuito: 500MB)

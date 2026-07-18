@@ -1,4 +1,4 @@
-import { Cliente, Unidade } from '@/lib/types';
+import { Cliente, TermoCampoDraft, TermoCampoSource, TermoCampoTipo, TermoDraft, Unidade } from '@/lib/types';
 import { formatarCPF, formatarTelefone, formatarCNPJ, formatarData, formatarDataHora, formatarAgoraDaClinica, formatarDateNaClinica } from '@/lib/utils/formatters';
 import { getOrigemLabel } from '@/lib/constants/origens';
 
@@ -10,6 +10,11 @@ const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9._-]+)\s*\}\}/g;
 const LEGACY_UNIDADE_ENDERECO_RE = /Avenida Presidente Castelo Branco,?\s*(?:n[ºo]\s*)?5185\s*b(?:,?\s*Barra do Ceará,?\s*Fortaleza\/CE)?/gi;
 
 type TermoUnitContext = Pick<Unidade, 'nome' | 'razao_social' | 'cnpj' | 'endereco' | 'telefone' | 'email' | 'responsavel' | 'recibo_rodape'> | null;
+type PlaceholderMetadata = {
+  label: string;
+  tipo: TermoCampoTipo;
+  source: TermoCampoSource;
+};
 
 function escapeHtml(value: string) {
   return value
@@ -72,6 +77,58 @@ export const TERMO_PLACEHOLDER_KEYS = [
   'observacoes_protese',
 ] as const;
 
+export const TERMO_PLACEHOLDER_METADATA: Record<string, PlaceholderMetadata> = {
+  unidade_nome: { label: 'Nome da unidade', tipo: 'text', source: 'unidade' },
+  unidade_razao_social: { label: 'Razão social da unidade', tipo: 'text', source: 'unidade' },
+  unidade_cnpj: { label: 'CNPJ da unidade', tipo: 'cpf', source: 'unidade' },
+  unidade_cnpj_raw: { label: 'CNPJ da unidade (sem máscara)', tipo: 'cpf', source: 'unidade' },
+  unidade_endereco: { label: 'Endereço da unidade', tipo: 'textarea', source: 'unidade' },
+  unidade_telefone: { label: 'Telefone da unidade', tipo: 'tel', source: 'unidade' },
+  unidade_telefone_raw: { label: 'Telefone da unidade (sem máscara)', tipo: 'tel', source: 'unidade' },
+  unidade_email: { label: 'Email da unidade', tipo: 'email', source: 'unidade' },
+  unidade_responsavel: { label: 'Responsável da unidade', tipo: 'text', source: 'unidade' },
+  unidade_recibo_rodape: { label: 'Rodapé do recibo da unidade', tipo: 'textarea', source: 'unidade' },
+  cliente_nome: { label: 'Nome do paciente', tipo: 'text', source: 'cliente' },
+  cliente_id: { label: 'ID do paciente', tipo: 'text', source: 'cliente' },
+  cliente_cpf: { label: 'CPF do paciente', tipo: 'cpf', source: 'cliente' },
+  cliente_cpf_raw: { label: 'CPF do paciente (sem máscara)', tipo: 'cpf', source: 'cliente' },
+  cliente_telefone: { label: 'Telefone do paciente', tipo: 'tel', source: 'cliente' },
+  cliente_telefone_raw: { label: 'Telefone do paciente (sem máscara)', tipo: 'tel', source: 'cliente' },
+  cliente_email: { label: 'Email do paciente', tipo: 'email', source: 'cliente' },
+  cliente_endereco: { label: 'Endereço do paciente', tipo: 'textarea', source: 'cliente' },
+  cliente_origem: { label: 'Origem do paciente', tipo: 'text', source: 'cliente' },
+  cliente_origem_label: { label: 'Origem do paciente (descrição)', tipo: 'text', source: 'cliente' },
+  cliente_plano_odontologico: { label: 'Plano odontológico', tipo: 'text', source: 'cliente' },
+  cliente_sexo: { label: 'Sexo do paciente', tipo: 'text', source: 'cliente' },
+  cliente_data_nascimento: { label: 'Data de nascimento', tipo: 'date', source: 'cliente' },
+  cliente_data_nascimento_iso: { label: 'Data de nascimento (ISO)', tipo: 'date', source: 'cliente' },
+  cliente_cadastrado_em: { label: 'Data de cadastro do paciente', tipo: 'date', source: 'cliente' },
+  data_atual: { label: 'Data atual', tipo: 'date', source: 'manual' },
+  data_hora_atual: { label: 'Data e hora atuais', tipo: 'date', source: 'manual' },
+  data_hora_atual_iso: { label: 'Data e hora atuais (ISO)', tipo: 'date', source: 'manual' },
+  ano_atual: { label: 'Ano atual', tipo: 'date', source: 'manual' },
+  profissional_nome: { label: 'Nome do profissional', tipo: 'text', source: 'manual' },
+  profissional_cro: { label: 'CRO do profissional', tipo: 'text', source: 'manual' },
+  elemento_dentario_num: { label: 'Elemento dentário', tipo: 'text', source: 'manual' },
+  elementos_dentarios: { label: 'Elementos dentários', tipo: 'text', source: 'manual' },
+  implante_elementos_dentes: { label: 'Dentes do implante', tipo: 'text', source: 'manual' },
+  implante_coroas: { label: 'Quantidade de coroas', tipo: 'text', source: 'manual' },
+  implante_protocolo: { label: 'Protocolo do implante', tipo: 'text', source: 'manual' },
+  previsao_inicio: { label: 'Previsão de início', tipo: 'date', source: 'manual' },
+  valor_devolucao: { label: 'Valor da devolução', tipo: 'text', source: 'manual' },
+  valor_devolucao_extenso: { label: 'Valor da devolução por extenso', tipo: 'text', source: 'manual' },
+  data_pagamento_origem: { label: 'Data do pagamento de origem', tipo: 'date', source: 'manual' },
+  motivo_devolucao: { label: 'Motivo da devolução', tipo: 'textarea', source: 'manual' },
+  nome_favorecido: { label: 'Nome do favorecido', tipo: 'text', source: 'manual' },
+  cpf_favorecido: { label: 'CPF do favorecido', tipo: 'cpf', source: 'manual' },
+  banco_nome: { label: 'Banco', tipo: 'text', source: 'manual' },
+  banco_agencia: { label: 'Agência', tipo: 'text', source: 'manual' },
+  conta_favorecido: { label: 'Conta do favorecido', tipo: 'text', source: 'manual' },
+  data_consulta_inicial: { label: 'Data da consulta inicial', tipo: 'date', source: 'manual' },
+  escolha_protese: { label: 'Escolha da prótese', tipo: 'text', source: 'manual' },
+  observacoes_protese: { label: 'Observações da prótese', tipo: 'textarea', source: 'manual' },
+};
+
 const SAMPLE_TERMO_OVERRIDES: Record<string, string> = {
   profissional_nome: 'Dra. Mariana Alves',
   profissional_cro: 'CRO-CE 12345',
@@ -102,6 +159,37 @@ function formatarDataBanco(date: string | null | undefined): string {
 
 function normalizarValor(value: unknown): string {
   return value === null || value === undefined ? '' : String(value);
+}
+
+function inferPlaceholderType(key: string): TermoCampoTipo {
+  if (/observ|motivo|descricao|endereco|rodape/i.test(key)) return 'textarea';
+  if (/email/i.test(key)) return 'email';
+  if (/telefone/i.test(key)) return 'tel';
+  if (/cpf|cnpj/i.test(key)) return 'cpf';
+  if (/data|ano/i.test(key)) return 'date';
+  return 'text';
+}
+
+function inferPlaceholderSource(key: string): TermoCampoSource {
+  if (key.startsWith('cliente_')) return 'cliente';
+  if (key.startsWith('unidade_')) return 'unidade';
+  return 'manual';
+}
+
+function buildFallbackLabel(key: string) {
+  return key
+    .split(/[_.-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function getPlaceholderMetadata(key: string): PlaceholderMetadata {
+  return TERMO_PLACEHOLDER_METADATA[key] || {
+    label: buildFallbackLabel(key),
+    tipo: inferPlaceholderType(key),
+    source: inferPlaceholderSource(key),
+  };
 }
 
 function getPlaceholderLineVariant(key: string) {
@@ -195,6 +283,43 @@ export function buildSampleTermoContext(overrides: RenderConfig = {}) {
     ...SAMPLE_TERMO_OVERRIDES,
     ...overrides,
   }, unidadeExemplo);
+}
+
+export function extractTermoPlaceholderKeys(html: string) {
+  if (!html) return [];
+
+  const unique = new Set<string>();
+  const keys: string[] = [];
+
+  for (const match of html.matchAll(PLACEHOLDER_RE)) {
+    const key = String(match[1] || '').trim().toLowerCase();
+    if (!key || unique.has(key)) continue;
+    unique.add(key);
+    keys.push(key);
+  }
+
+  return keys;
+}
+
+export function buildTermoDraft(html: string, context: Record<string, string>): TermoDraft {
+  const placeholdersUsados = extractTermoPlaceholderKeys(html);
+  const campos: TermoCampoDraft[] = placeholdersUsados.map((key) => {
+    const metadata = getPlaceholderMetadata(key);
+    return {
+      key,
+      label: metadata.label,
+      tipo: metadata.tipo,
+      value: normalizarValor(context[key]),
+      required: true,
+      source: metadata.source,
+    };
+  });
+
+  return {
+    campos,
+    pendentes: campos.filter((campo) => !campo.value.trim()).map((campo) => campo.key),
+    placeholdersUsados,
+  };
 }
 
 export function renderTermoTemplate(html: string, context: Record<string, string>) {

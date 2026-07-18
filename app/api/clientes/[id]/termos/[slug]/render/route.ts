@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { withUnit } from '@/lib/auth/middleware';
-import { TermoTemplate, Cliente, Unidade } from '@/lib/types';
-import { garantirTermosSchema } from '@/lib/helpers/garantirTermosSchema';
-import { buildTermoContext, normalizeLegacyTermoTemplateHtml, renderTermoTemplate } from '@/lib/helpers/termosPlaceholder';
-import { garantirCamposEmpresaUnidades, UNIDADE_EMPRESA_SELECT } from '@/lib/helpers/unidadesEmpresa';
+import { Cliente } from '@/lib/types';
+import { carregarTermoRenderizadoParaCliente } from '@/lib/helpers/termosCliente';
 
 const SLUG_REGEX = /^[a-z0-9-]+$/;
 
@@ -17,7 +15,7 @@ export const POST = withUnit(async (request: NextRequest, ctx) => {
     }
 
     const cliente = await queryOne<Cliente>(
-      'SELECT * FROM clientes WHERE id = ?',
+      'SELECT id FROM clientes WHERE id = ?',
       [id]
     );
 
@@ -25,35 +23,24 @@ export const POST = withUnit(async (request: NextRequest, ctx) => {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
     }
 
-    await garantirTermosSchema();
-    await garantirCamposEmpresaUnidades();
+    const body = (await request.json().catch(() => ({}))) as { placeholders?: Record<string, unknown> };
+    const termoRenderizado = await carregarTermoRenderizadoParaCliente({
+      clienteId: id,
+      slug,
+      unidadeId: ctx.unidadeId,
+      placeholders: body.placeholders,
+    });
 
-    const termo = await queryOne<TermoTemplate>(
-      'SELECT id, slug, titulo, conteudo_html, ativo, created_by, updated_by, created_at, updated_at FROM termos WHERE slug = ?',
-      [slug]
-    );
-
-    if (!termo || termo.ativo !== 1) {
+    if (!termoRenderizado) {
       return NextResponse.json({ error: 'Termo não encontrado ou inativo.' }, { status: 404 });
     }
 
-    const unidade = await queryOne<Unidade>(
-      `SELECT ${UNIDADE_EMPRESA_SELECT} FROM unidades WHERE id = ?`,
-      [ctx.unidadeId]
-    );
-
-    const body = (await request.json().catch(() => ({}))) as { placeholders?: Record<string, unknown> };
-    const context = buildTermoContext(cliente, body.placeholders, unidade);
-    const { html, placeholdersNaoEncontrados } = renderTermoTemplate(
-      normalizeLegacyTermoTemplateHtml(termo.conteudo_html),
-      context
-    );
-
     return NextResponse.json({
-      html,
-      titulo: termo.titulo,
-      slug: termo.slug,
-      placeholdersNaoEncontrados,
+      html: termoRenderizado.html,
+      titulo: termoRenderizado.termo.titulo,
+      slug: termoRenderizado.termo.slug,
+      placeholdersNaoEncontrados: termoRenderizado.placeholdersNaoEncontrados,
+      draft: termoRenderizado.draft,
     });
   } catch (error) {
     console.error('Erro ao renderizar termo:', error);

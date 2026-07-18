@@ -8,6 +8,11 @@ describe('proxy de autenticação das APIs', () => {
     expect(response.status).toBe(200);
   });
 
+  it('mantém o webhook do Autentique público', async () => {
+    const response = await middleware(new NextRequest('http://localhost:3000/api/webhooks/autentique'));
+    expect(response.status).toBe(200);
+  });
+
   it('rejeita uma API sem token', async () => {
     const response = await middleware(new NextRequest('http://localhost:3000/api/clientes'));
     expect(response.status).toBe(401);

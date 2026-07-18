@@ -43,6 +43,7 @@ const defaultR2Bucket = {
 
 let _currentDb: unknown = defaultDb;
 let _currentR2: unknown = defaultR2Bucket;
+let _extraEnv: Record<string, unknown> = {};
 
 /** Injeta um mock DB customizado (ex: o mockDb de db-mock.ts) */
 export function __setMockDb(db: unknown) {
@@ -58,6 +59,12 @@ export function __setMockR2(r2: unknown) {
 export function __resetMocks() {
   _currentDb = defaultDb;
   _currentR2 = defaultR2Bucket;
+  _extraEnv = {};
+}
+
+/** Injeta variáveis extras de ambiente do runtime Cloudflare */
+export function __setMockEnv(env: Record<string, unknown>) {
+  _extraEnv = { ...env };
 }
 
 // ── Exported function (usada pelo lib/db.ts) ────────────────────────
@@ -67,6 +74,7 @@ export function getCloudflareContext() {
     env: {
       DB: _currentDb,
       R2_BUCKET: _currentR2,
+      ..._extraEnv,
     },
   };
 }

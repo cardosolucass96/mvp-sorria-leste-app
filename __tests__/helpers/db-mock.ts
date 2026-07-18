@@ -10,6 +10,7 @@
 const cfMock = require('@opennextjs/cloudflare') as {
   __setMockDb: (db: unknown) => void;
   __setMockR2: (r2: unknown) => void;
+  __setMockEnv: (env: Record<string, unknown>) => void;
   __resetMocks: () => void;
 };
 
@@ -210,6 +211,11 @@ export const mockR2Bucket = {
 export function setupCloudflareContextMock() {
   cfMock.__setMockDb(mockDb);
   cfMock.__setMockR2(mockR2Bucket);
+  cfMock.__setMockEnv({});
+}
+
+export function setMockCloudflareEnv(env: Record<string, unknown>) {
+  cfMock.__setMockEnv(env);
 }
 
 /**

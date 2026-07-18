@@ -20,7 +20,7 @@ export const GET = withAuth(async (_request: NextRequest, ctx) => {
     await garantirTermosSchema();
 
     const termos = await query<TermoTemplate>(
-      'SELECT id, slug, titulo FROM termos WHERE ativo = 1 ORDER BY titulo ASC',
+      'SELECT id, slug, titulo, permite_autentique FROM termos WHERE ativo = 1 ORDER BY titulo ASC',
       []
     );
 

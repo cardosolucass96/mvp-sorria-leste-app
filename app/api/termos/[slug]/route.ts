@@ -25,7 +25,7 @@ export const GET = withRole(['admin'], async (_request: NextRequest, ctx) => {
     const { slug } = await (ctx.params as Promise<{ slug: string }>);
 
     const termo = await queryOne<TermoTemplate>(
-      'SELECT id, slug, titulo, conteudo_html, ativo, created_by, updated_by, created_at, updated_at FROM termos WHERE slug = ?',
+      'SELECT id, slug, titulo, conteudo_html, ativo, permite_autentique, created_by, updated_by, created_at, updated_at FROM termos WHERE slug = ?',
       [slug]
     );
 
@@ -56,9 +56,10 @@ export const PUT = withRole(['admin'], async (request: NextRequest, ctx) => {
       ? normalizeLegacyTermoTemplateHtml(String(body.conteudo_html).trim())
       : null;
     const ativo = body?.ativo === undefined ? null : Number(Boolean(body.ativo));
+    const permiteAutentique = body?.permite_autentique === undefined ? null : Number(Boolean(body.permite_autentique));
 
     const termo = await queryOne<TermoTemplate>(
-      'SELECT id, slug, titulo, conteudo_html, ativo, created_by, updated_by, created_at, updated_at FROM termos WHERE slug = ?',
+      'SELECT id, slug, titulo, conteudo_html, ativo, permite_autentique, created_by, updated_by, created_at, updated_at FROM termos WHERE slug = ?',
       [slugAtual]
     );
 
@@ -98,6 +99,7 @@ export const PUT = withRole(['admin'], async (request: NextRequest, ctx) => {
              titulo = ?,
              conteudo_html = ?,
              ativo = ?,
+             permite_autentique = ?,
              updated_by = ?,
              updated_at = ?
        WHERE slug = ?`,
@@ -106,6 +108,7 @@ export const PUT = withRole(['admin'], async (request: NextRequest, ctx) => {
         titulo ?? termo.titulo,
         conteudoHtml ?? termo.conteudo_html,
         ativo ?? termo.ativo,
+        permiteAutentique ?? termo.permite_autentique ?? 1,
         ctx.user.sub,
         nowUtcIso(),
         slugAtual,
@@ -113,7 +116,7 @@ export const PUT = withRole(['admin'], async (request: NextRequest, ctx) => {
     );
 
     const termoAtualizado = await queryOne<TermoTemplate>(
-      'SELECT id, slug, titulo, conteudo_html, ativo, created_by, updated_by, created_at, updated_at FROM termos WHERE id = ?',
+      'SELECT id, slug, titulo, conteudo_html, ativo, permite_autentique, created_by, updated_by, created_at, updated_at FROM termos WHERE id = ?',
       [termo.id]
     );
 
