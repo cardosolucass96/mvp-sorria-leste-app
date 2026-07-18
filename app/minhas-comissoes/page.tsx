@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
-import { Banknote, DollarSign, Layers3, ListTree } from 'lucide-react';
+import { Banknote, DollarSign, Layers3, ListTree, ClipboardList, Users } from 'lucide-react';
 import { PageHeader, Alert, StatCard, Badge, LoadingState, Table, Button, Input } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda, formatarData } from '@/lib/utils/formatters';
@@ -15,6 +15,7 @@ interface Comissao {
   atendimento_id: number;
   usuario_id: number;
   usuario_nome: string;
+  cliente_id: number;
   tipo: string;
   percentual: number;
   valor_base: number;
@@ -167,6 +168,27 @@ export default function MinhasComissoesPage() {
     });
   }, [dados?.comissoes]);
 
+  const procedimentosVendidos = useMemo(
+    () => (dados?.comissoes ?? []).filter((comissao) => comissao.tipo === 'venda').length,
+    [dados?.comissoes]
+  );
+
+  const totalVendas = useMemo(
+    () => (dados?.comissoes ?? [])
+      .filter((comissao) => comissao.tipo === 'venda')
+      .reduce((total, comissao) => total + comissao.valor_base, 0),
+    [dados?.comissoes]
+  );
+
+  const pacientesVendidos = useMemo(
+    () => new Set(
+      (dados?.comissoes ?? [])
+        .filter((comissao) => comissao.tipo === 'venda')
+        .map((comissao) => comissao.cliente_id)
+    ).size,
+    [dados?.comissoes]
+  );
+
   if (loading) return <LoadingState />;
 
   return (
@@ -177,9 +199,11 @@ export default function MinhasComissoesPage() {
 
       {/* Cards de Totais */}
       {dados && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard icon={<Banknote className="w-6 h-6" />} label="Total de Vendas" value={formatarMoeda(totalVendas)} color="border-warning-500" />
           <StatCard icon={<DollarSign className="w-6 h-6" />} label="Comissão de Venda" value={formatarMoeda(dados.totais.venda)} color="border-success-500" />
-          <StatCard icon={<Banknote className="w-6 h-6" />} label="Total Geral" value={formatarMoeda(dados.totais.geral)} color="border-evaluation-500" />
+          <StatCard icon={<ClipboardList className="w-6 h-6" />} label="Procedimentos Vendidos" value={procedimentosVendidos} color="border-info-500" />
+          <StatCard icon={<Users className="w-6 h-6" />} label="Pacientes Vendidos" value={pacientesVendidos} color="border-primary/40" />
         </div>
       )}
 

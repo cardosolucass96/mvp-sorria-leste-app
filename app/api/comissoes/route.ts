@@ -14,6 +14,7 @@ interface Comissao {
   item_atendimento_id: number;
   usuario_id: number;
   usuario_nome: string;
+  cliente_id: number;
   tipo: string;
   origem: 'avaliacao' | 'acrescimo' | 'execucao';
   percentual: number;
@@ -111,6 +112,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         c.item_atendimento_id,
         c.usuario_id,
         u.nome as usuario_nome,
+        cl.id as cliente_id,
         c.tipo,
         ${origemExpr} as origem,
         c.percentual,
