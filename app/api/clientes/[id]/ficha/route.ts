@@ -3,6 +3,16 @@ import { query, queryOne } from '@/lib/db';
 import { withAuth } from '@/lib/auth/middleware';
 import { garantirEsquemaFormasPagamento } from '@/lib/helpers/formasPagamento';
 import { garantirCamposEmpresaUnidades } from '@/lib/helpers/unidadesEmpresa';
+import { isRestrictedDentistPatientView } from '@/lib/auth/patientPrivacy';
+
+const FINANCIAL_HISTORY_TYPES = new Set([
+  'pagamento',
+  'credito',
+  'debito',
+  'estorno',
+  'transferencia_saida',
+  'transferencia_entrada',
+]);
 
 // GET /api/clientes/[id]/ficha - Retorna dados completos do cliente para a ficha
 export const GET = withAuth(async (_request, context) => {
@@ -216,14 +226,19 @@ export const GET = withAuth(async (_request, context) => {
       [clienteId]
     );
 
+    const restrictedDentistView = isRestrictedDentistPatientView(context.user);
+    const historicoFiltrado = restrictedDentistView
+      ? historico.filter((evento) => !FINANCIAL_HISTORY_TYPES.has((evento as { tipo: string }).tipo))
+      : historico;
+
     return NextResponse.json({
       atendimentos,
       procedimentos,
-      pagamentos,
-      pagamentos_alocacoes: pagamentosAlocacoes,
-      historico,
+      pagamentos: restrictedDentistView ? [] : pagamentos,
+      pagamentos_alocacoes: restrictedDentistView ? [] : pagamentosAlocacoes,
+      historico: historicoFiltrado,
       prontuarios,
-      movimentacoes: hMovimentacoes,
+      movimentacoes: restrictedDentistView ? [] : hMovimentacoes,
     });
   } catch (error) {
     console.error('Erro ao buscar ficha:', error);

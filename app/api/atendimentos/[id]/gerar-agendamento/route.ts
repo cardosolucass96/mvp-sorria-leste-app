@@ -4,6 +4,7 @@ import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { AgendamentoCompleto } from '@/lib/types';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 import { clinicDateTimeInputToUtcIso, isClinicDateTimeInputInPast } from '@/lib/time';
+import { redactPatientContactFields } from '@/lib/auth/patientPrivacy';
 
 interface AtendimentoBase {
   id: number;
@@ -117,7 +118,10 @@ export const POST = withUnit(async (
       [result.lastInsertRowid]
     );
 
-    return NextResponse.json(agendamento, { status: 201 });
+    return NextResponse.json(
+      agendamento ? redactPatientContactFields(agendamento, context.user) : agendamento,
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Erro ao gerar agendamento:', error);
     return NextResponse.json({ error: 'Erro ao gerar agendamento' }, { status: 500 });

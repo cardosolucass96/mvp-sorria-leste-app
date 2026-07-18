@@ -6,6 +6,11 @@ import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
 import { isDateTimeLocalValueInPast } from '@/lib/utils/formatters';
 import { clinicDateTimeInputToUtcIso, clinicDateTimeInputToUtcIsoEndOfDay } from '@/lib/time';
+import {
+  isRestrictedDentistPatientView,
+  redactPatientContactFields,
+  redactPatientContactFieldsList,
+} from '@/lib/auth/patientPrivacy';
 
 interface CriarAgendamentoBody {
   cliente_id?: number;
@@ -89,7 +94,11 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       params.push(parseInt(atendimentoOrigemId));
     }
 
-    if (executorId) {
+    const restrictedDentistView = isRestrictedDentistPatientView(context.user);
+    if (restrictedDentistView) {
+      conditions.push('a.executor_id = ?');
+      params.push(context.user.sub);
+    } else if (executorId) {
       conditions.push('a.executor_id = ?');
       params.push(parseInt(executorId));
     }
@@ -144,7 +153,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     if (!paginated) {
       // Retrocompatibilidade: sem ?page → retorna array simples
       const agendamentos = await query<AgendamentoCompleto>(selectSql, params);
-      return NextResponse.json(agendamentos);
+      return NextResponse.json(redactPatientContactFieldsList(agendamentos, context.user));
     }
 
     // Com paginação: retorna { items, total, page, pages }
@@ -158,7 +167,12 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       [...params, limit, offset]
     );
 
-    return NextResponse.json({ items, total, page, pages });
+    return NextResponse.json({
+      items: redactPatientContactFieldsList(items, context.user),
+      total,
+      page,
+      pages,
+    });
   } catch (error) {
     console.error('Erro ao buscar agendamentos:', error);
     return NextResponse.json({ error: 'Erro ao buscar agendamentos' }, { status: 500 });
@@ -190,9 +204,8 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     const isAvaliacao = tipo === 'avaliacao';
 
-    // Avaliador/Executor só pode criar agendamento para si mesmo
-    const userRole = context.user.role;
-    if (userRole === 'avaliador' || userRole === 'executor') {
+    // Dentista restrito só pode criar agendamento para si mesmo
+    if (isRestrictedDentistPatientView(context.user)) {
       executor_id = context.user.sub;
     }
 
@@ -386,7 +399,10 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       [result.lastInsertRowid]
     );
 
-    return NextResponse.json(agendamento, { status: 201 });
+    return NextResponse.json(
+      agendamento ? redactPatientContactFields(agendamento, context.user) : agendamento,
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Erro ao criar agendamento:', error);
     return NextResponse.json({ error: 'Erro ao criar agendamento' }, { status: 500 });

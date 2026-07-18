@@ -6,6 +6,11 @@ import { PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 import { validarUsuarioPorRoles } from '../_helpers';
 import { garantirCamposEmpresaUnidades } from '@/lib/helpers/unidadesEmpresa';
 import { nowUtcIso } from '@/lib/time';
+import {
+  getEffectiveUserRoles,
+  isRestrictedDentistPatientView,
+  redactPatientContactFields,
+} from '@/lib/auth/patientPrivacy';
 
 interface Atendimento {
   id: number;
@@ -154,6 +159,30 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         { status: 404 }
       );
     }
+
+    if (isRestrictedDentistPatientView(context.user)) {
+      const roles = getEffectiveUserRoles(context.user);
+      let allowed = false;
+
+      if (roles.includes('avaliador') && atendimento.status === 'avaliacao') {
+        allowed = atendimento.avaliador_id === null || atendimento.avaliador_id === context.user.sub;
+      }
+
+      if (!allowed && (roles.includes('executor') || roles.includes('ortodontista')) && atendimento.status === 'em_execucao') {
+        const executorItem = await queryOne<{ id: number }>(
+          `SELECT id
+           FROM itens_atendimento
+           WHERE atendimento_id = ? AND (executor_id IS NULL OR executor_id = ?)
+           LIMIT 1`,
+          [parseInt(id), context.user.sub]
+        );
+        allowed = !!executorItem;
+      }
+
+      if (!allowed) {
+        return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
+      }
+    }
     
     // Busca itens do atendimento
     const itens = await query<ItemAtendimento>(
@@ -296,7 +325,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     );
     
     return NextResponse.json({
-      ...atendimento,
+      ...redactPatientContactFields(atendimento, context.user),
       itens: itensComEtapas,
       total: totalResult?.total || 0,
       total_pago: totalPagoResult?.total || 0,
@@ -476,7 +505,9 @@ export const PUT = withUnit(async (request: NextRequest, context: UnitAuthentica
       [parseInt(id)]
     );
     
-    return NextResponse.json(atualizado);
+    return NextResponse.json(
+      atualizado ? redactPatientContactFields(atualizado, context.user) : atualizado
+    );
   } catch (error) {
     console.error('Erro ao atualizar atendimento:', error);
     return NextResponse.json(

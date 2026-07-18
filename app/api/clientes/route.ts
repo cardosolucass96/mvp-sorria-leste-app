@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute, batch } from '@/lib/db';
 import { Cliente } from '@/lib/types';
+import {
+  applyPatientPrivacyToClientes,
+  ensureCanManagePatientRegistration,
+  getAuthenticatedRequestUser,
+  isRestrictedDentistPatientView,
+} from '@/lib/auth/patientPrivacy';
 
 const PAGE_SIZE = 50;
 
 // GET /api/clientes - Listar clientes com busca e paginação
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthenticatedRequestUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Token inválido ou expirado' }, { status: 401 });
+    }
+    const restrictedDentistView = isRestrictedDentistPatientView(user);
+
     const { searchParams } = new URL(request.url);
     const busca  = searchParams.get('busca') || '';
     const page   = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
@@ -19,17 +31,21 @@ export async function GET(request: NextRequest) {
 
     if (busca) {
       const like = `%${busca.toLowerCase()}%`;
+      const searchWhere = restrictedDentistView
+        ? 'LOWER(nome) LIKE ?'
+        : 'LOWER(nome) LIKE ? OR LOWER(cpf) LIKE ? OR LOWER(telefone) LIKE ? OR LOWER(email) LIKE ?';
+      const searchParams = restrictedDentistView ? [like] : [like, like, like, like];
       const [countResult, dataResult] = await batch([
         {
           sql: `SELECT COUNT(*) as total FROM clientes
-                WHERE LOWER(nome) LIKE ? OR LOWER(cpf) LIKE ? OR LOWER(telefone) LIKE ? OR LOWER(email) LIKE ?`,
-          params: [like, like, like, like],
+                WHERE ${searchWhere}`,
+          params: searchParams,
         },
         {
           sql: `SELECT * FROM clientes
-                WHERE LOWER(nome) LIKE ? OR LOWER(cpf) LIKE ? OR LOWER(telefone) LIKE ? OR LOWER(email) LIKE ?
+                WHERE ${searchWhere}
                 ORDER BY ${ordem} LIMIT ? OFFSET ?`,
-          params: [like, like, like, like, limit, offset],
+          params: [...searchParams, limit, offset],
         },
       ]);
       total    = (countResult.results[0] as { total: number }).total;
@@ -44,7 +60,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      clientes,
+      clientes: applyPatientPrivacyToClientes(clientes, user),
       total,
       page,
       totalPages: Math.ceil(total / limit),
@@ -62,6 +78,13 @@ export async function GET(request: NextRequest) {
 // POST /api/clientes - Criar novo cliente
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthenticatedRequestUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Token inválido ou expirado' }, { status: 401 });
+    }
+    const unauthorized = ensureCanManagePatientRegistration(user);
+    if (unauthorized) return unauthorized;
+
     const body = await request.json();
     const { nome, cpf, telefone, email, data_nascimento, endereco, origem, sexo, plano_odontologico, observacoes } = body;
 

@@ -6,12 +6,29 @@ import { getOrigemLabel } from '@/lib/constants/origens';
 import { calculateAgeFromDateOnly } from '@/lib/time';
 
 export interface AbaDadosProps {
-  cliente: Cliente;
+  cliente: Cliente & { idade?: number | null };
   saldo?: { saldo: number; saldo_calculado: number };
+  restricted?: boolean;
 }
 
-export default function AbaDados({ cliente, saldo }: AbaDadosProps) {
-  const idade = calcularIdade(cliente.data_nascimento);
+export default function AbaDados({ cliente, saldo, restricted = false }: AbaDadosProps) {
+  const idade = typeof cliente.idade === 'number'
+    ? cliente.idade
+    : calcularIdade(cliente.data_nascimento);
+  const sexo = cliente.sexo ? cliente.sexo.charAt(0).toUpperCase() + cliente.sexo.slice(1) : null;
+
+  if (restricted) {
+    return (
+      <div>
+        <h3 className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Dados do Paciente</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Campo label="Nome Completo" value={cliente.nome} />
+          <Campo label="Idade" value={idade !== null ? `${idade} anos` : null} />
+          <Campo label="Sexo" value={sexo} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -48,7 +65,7 @@ export default function AbaDados({ cliente, saldo }: AbaDadosProps) {
           />
           <Campo
             label="Sexo"
-            value={cliente.sexo ? cliente.sexo.charAt(0).toUpperCase() + cliente.sexo.slice(1) : null}
+            value={sexo}
           />
           <Campo label="Origem" value={getOrigemLabel(cliente.origem)} />
           <Campo label="Plano Odontológico" value={cliente.plano_odontologico} />

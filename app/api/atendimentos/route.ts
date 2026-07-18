@@ -5,6 +5,12 @@ import { validarUsuarioPorRoles } from './_helpers';
 import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
 import { getClinicDayUtcRange, getClinicTrailingDaysUtcRange } from '@/lib/time';
 import type { AtendimentoStatus } from '@/lib/types';
+import {
+  getEffectiveUserRoles,
+  isRestrictedDentistPatientView,
+  redactPatientContactFields,
+  redactPatientContactFieldsList,
+} from '@/lib/auth/patientPrivacy';
 
 interface Atendimento {
   id: number;
@@ -49,6 +55,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const hojeRange = getClinicDayUtcRange();
     const ultimos7DiasRange = getClinicTrailingDaysUtcRange(7);
     const ultimos30DiasRange = getClinicTrailingDaysUtcRange(30);
+    const restrictedDentistView = isRestrictedDentistPatientView(context.user);
 
     let sql = `
       SELECT
@@ -143,13 +150,37 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       params.push(`%${busca}%`, `%${busca}%`);
     }
 
+    if (restrictedDentistView) {
+      const roles = getEffectiveUserRoles(context.user);
+      const scopedConditions: string[] = [];
+
+      if (roles.includes('avaliador')) {
+        scopedConditions.push("(a.status = 'avaliacao' AND (a.avaliador_id IS NULL OR a.avaliador_id = ?))");
+        params.push(context.user.sub);
+      }
+
+      if (roles.includes('executor') || roles.includes('ortodontista')) {
+        scopedConditions.push(`(
+          a.status = 'em_execucao'
+          AND EXISTS (
+            SELECT 1 FROM itens_atendimento ix
+            WHERE ix.atendimento_id = a.id
+              AND (ix.executor_id IS NULL OR ix.executor_id = ?)
+          )
+        )`);
+        params.push(context.user.sub);
+      }
+
+      conditions.push(scopedConditions.length > 0 ? `(${scopedConditions.join(' OR ')})` : '1 = 0');
+    }
+
     sql += ' WHERE ' + conditions.join(' AND ');
 
     sql += ' ORDER BY a.created_at DESC';
 
     const atendimentos = await query<AtendimentoComCliente>(sql, params);
 
-    return NextResponse.json(atendimentos);
+    return NextResponse.json(redactPatientContactFieldsList(atendimentos, context.user));
   } catch (error) {
     console.error('Erro ao buscar atendimentos:', error);
     return NextResponse.json(
@@ -329,7 +360,10 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         [atendimentoId]
       );
       
-      return NextResponse.json(novoAtendimento, { status: 201 });
+      return NextResponse.json(
+        novoAtendimento ? redactPatientContactFields(novoAtendimento, context.user) : novoAtendimento,
+        { status: 201 }
+      );
     }
     
     // === FLUXO NORMAL ===
@@ -355,7 +389,10 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       [result.lastInsertRowid]
     );
     
-    return NextResponse.json(novoAtendimento, { status: 201 });
+    return NextResponse.json(
+      novoAtendimento ? redactPatientContactFields(novoAtendimento, context.user) : novoAtendimento,
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Erro ao criar atendimento:', error);
     return NextResponse.json(

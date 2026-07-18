@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext, getUserRoles } from '@/lib/auth/middleware';
 import { Categoria } from '@/lib/types';
+import { isRestrictedDentistPatientView } from '@/lib/auth/patientPrivacy';
 
 interface ProcedimentoExecucao {
   id: number;
@@ -32,6 +33,10 @@ export const GET = withUnit(async (
 
     if (!executorId) {
       return NextResponse.json({ error: 'executor_id é obrigatório' }, { status: 400 });
+    }
+
+    if (isRestrictedDentistPatientView(context.user) && parseInt(executorId, 10) !== context.user.sub) {
+      return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
     }
 
     const categoria = await queryOne<Categoria>(
@@ -79,6 +84,13 @@ export const GET = withUnit(async (
         AND a.categoria_id = ?
         AND i.status IN ('pago', 'executando')
         AND (i.executor_id = ? OR i.executor_id IS NULL)
+        AND NOT EXISTS (
+          SELECT 1
+          FROM agendamentos ag
+          WHERE ag.item_atendimento_origem_id = i.id
+            AND ag.unidade_id = a.unidade_id
+            AND ag.status IN ('pendente', 'agendado')
+        )
       ORDER BY
         CASE WHEN i.executor_id = ? THEN 0 ELSE 1 END,
         i.created_at DESC`,

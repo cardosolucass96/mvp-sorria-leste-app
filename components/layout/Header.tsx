@@ -72,7 +72,7 @@ function UserAvatar({ nome, className }: { nome: string; className?: string }) {
 const subscribe = () => () => {};
 
 export default function Header() {
-  const { user, logout, viewMode, toggleViewMode, isAdmin } = useAuth();
+  const { user, logout, viewMode, toggleViewMode, isAdmin, hasRole } = useAuth();
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const sidebarContext = useSidebar();
@@ -84,6 +84,7 @@ export default function Header() {
   const [buscandoClientes, setBuscandoClientes] = useState(false);
   const [erroClientes, setErroClientes] = useState('');
   const termoBuscaDebounced = useDebounce(termoBuscaClientes.trim(), 250);
+  const canSearchClients = hasRole(['admin', 'atendente']);
 
   const isDarkMode = mounted && resolvedTheme === 'dark';
   const themeActionLabel = isDarkMode ? 'Modo claro' : 'Modo escuro';
@@ -96,6 +97,15 @@ export default function Header() {
     logout();
     router.push('/login');
   };
+
+  useEffect(() => {
+    if (canSearchClients) return;
+    setMostrarBuscaClientes(false);
+    setTermoBuscaClientes('');
+    setClientesSugeridos([]);
+    setErroClientes('');
+    setBuscandoClientes(false);
+  }, [canSearchClients]);
 
   const irParaListaClientes = (termo: string) => {
     const buscaNormalizada = termo.trim();
@@ -124,7 +134,7 @@ export default function Header() {
   };
 
   useEffect(() => {
-    if (!mostrarBuscaClientes || !termoBuscaDebounced) {
+    if (!canSearchClients || !mostrarBuscaClientes || !termoBuscaDebounced) {
       setClientesSugeridos([]);
       setErroClientes('');
       setBuscandoClientes(false);
@@ -175,7 +185,7 @@ export default function Header() {
     buscarClientes();
 
     return () => controller.abort();
-  }, [termoBuscaDebounced, mostrarBuscaClientes]);
+  }, [canSearchClients, termoBuscaDebounced, mostrarBuscaClientes]);
 
   return (
     <>
@@ -204,109 +214,111 @@ export default function Header() {
           {user && (
             <>
               <UnitSelector />
-              <Popover
-                open={mostrarBuscaClientes}
-                onOpenChange={(open) => {
-                  setMostrarBuscaClientes(open);
-                  if (!open) {
-                    setTermoBuscaClientes('');
-                    setClientesSugeridos([]);
-                    setErroClientes('');
-                  }
-                }}
-              >
-                <PopoverTrigger
-                  className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  title="Pesquisar clientes"
-                  aria-label="Pesquisar clientes"
+              {canSearchClients && (
+                <Popover
+                  open={mostrarBuscaClientes}
+                  onOpenChange={(open) => {
+                    setMostrarBuscaClientes(open);
+                    if (!open) {
+                      setTermoBuscaClientes('');
+                      setClientesSugeridos([]);
+                      setErroClientes('');
+                    }
+                  }}
                 >
-                  <Search className="size-4" />
-                </PopoverTrigger>
-                <PopoverContent align="end" sideOffset={8} className="w-[320px]">
-                  <form onSubmit={handleBuscarClientes} className="space-y-2">
-                    <p className="text-sm font-medium text-foreground">Pesquisar clientes</p>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
-                        <Search className="w-4 h-4" />
-                      </span>
-                      <input
-                        autoFocus
-                        type="search"
-                        value={termoBuscaClientes}
-                        onChange={(e) => setTermoBuscaClientes(e.target.value)}
-                        placeholder="Buscar por nome, CPF, telefone ou email..."
-                        className="field-control w-full py-2 pl-10 pr-9 text-sm"
-                      />
-                      {termoBuscaClientes && (
-                        <button
-                          type="button"
-                          onClick={() => setTermoBuscaClientes('')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors"
-                          aria-label="Limpar busca"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                    <Button
-                      type="submit"
-                      disabled={!termoBuscaClientes.trim()}
-                      fullWidth
-                      size="sm"
-                    >
-                      <Search className="size-4" />
-                      Buscar
-                    </Button>
-
-                    {termoBuscaClientes.trim() && (
-                      <div className="space-y-1 pt-1">
-                        {buscandoClientes && (
-                          <p className="text-xs text-muted-foreground">Buscando clientes...</p>
-                        )}
-
-                        {!buscandoClientes && erroClientes && (
-                          <p className="text-xs text-destructive">{erroClientes}</p>
-                        )}
-
-                        {!buscandoClientes &&
-                          !erroClientes &&
-                          (clientesSugeridos.length > 0 ? (
-                            <ul className="space-y-1 max-h-56 overflow-auto">
-                              {clientesSugeridos.map((cliente) => (
-                                <li key={cliente.id}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelecionarCliente(cliente.id)}
-                                    className="w-full rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                                  >
-                                    <p className="font-medium text-foreground">{cliente.nome}</p>
-                                    {(cliente.cpf || cliente.telefone || cliente.email) && (
-                                      <p className="text-xs text-muted-foreground">
-                                        {[cliente.cpf, cliente.telefone, cliente.email].filter(Boolean).join(' • ')}
-                                      </p>
-                                    )}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">Nenhum cliente encontrado</p>
-                          ))}
-
-                        {clientesSugeridos.length > 0 && (
+                  <PopoverTrigger
+                    className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    title="Pesquisar clientes"
+                    aria-label="Pesquisar clientes"
+                  >
+                    <Search className="size-4" />
+                  </PopoverTrigger>
+                  <PopoverContent align="end" sideOffset={8} className="w-[320px]">
+                    <form onSubmit={handleBuscarClientes} className="space-y-2">
+                      <p className="text-sm font-medium text-foreground">Pesquisar clientes</p>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+                          <Search className="w-4 h-4" />
+                        </span>
+                        <input
+                          autoFocus
+                          type="search"
+                          value={termoBuscaClientes}
+                          onChange={(e) => setTermoBuscaClientes(e.target.value)}
+                          placeholder="Buscar por nome, CPF, telefone ou email..."
+                          className="field-control w-full py-2 pl-10 pr-9 text-sm"
+                        />
+                        {termoBuscaClientes && (
                           <button
                             type="button"
-                            className="w-full rounded-md px-2.5 py-2 text-left text-xs text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                            onClick={() => irParaListaClientes(termoBuscaClientes)}
+                            onClick={() => setTermoBuscaClientes('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors"
+                            aria-label="Limpar busca"
                           >
-                            Ver todos os resultados
+                            <X className="w-4 h-4" />
                           </button>
                         )}
                       </div>
-                    )}
-                  </form>
-                </PopoverContent>
-              </Popover>
+                      <Button
+                        type="submit"
+                        disabled={!termoBuscaClientes.trim()}
+                        fullWidth
+                        size="sm"
+                      >
+                        <Search className="size-4" />
+                        Buscar
+                      </Button>
+
+                      {termoBuscaClientes.trim() && (
+                        <div className="space-y-1 pt-1">
+                          {buscandoClientes && (
+                            <p className="text-xs text-muted-foreground">Buscando clientes...</p>
+                          )}
+
+                          {!buscandoClientes && erroClientes && (
+                            <p className="text-xs text-destructive">{erroClientes}</p>
+                          )}
+
+                          {!buscandoClientes &&
+                            !erroClientes &&
+                            (clientesSugeridos.length > 0 ? (
+                              <ul className="space-y-1 max-h-56 overflow-auto">
+                                {clientesSugeridos.map((cliente) => (
+                                  <li key={cliente.id}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelecionarCliente(cliente.id)}
+                                      className="w-full rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                                    >
+                                      <p className="font-medium text-foreground">{cliente.nome}</p>
+                                      {(cliente.cpf || cliente.telefone || cliente.email) && (
+                                        <p className="text-xs text-muted-foreground">
+                                          {[cliente.cpf, cliente.telefone, cliente.email].filter(Boolean).join(' • ')}
+                                        </p>
+                                      )}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">Nenhum cliente encontrado</p>
+                            ))}
+
+                          {clientesSugeridos.length > 0 && (
+                            <button
+                              type="button"
+                              className="w-full rounded-md px-2.5 py-2 text-left text-xs text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                              onClick={() => irParaListaClientes(termoBuscaClientes)}
+                            >
+                              Ver todos os resultados
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </form>
+                  </PopoverContent>
+                </Popover>
+              )}
 
               {/* Theme toggle */}
               <Button

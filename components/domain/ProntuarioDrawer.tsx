@@ -16,6 +16,7 @@ import Alert from '@/components/ui/Alert';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import type { Cliente, VinculoCliente } from '@/lib/types';
 import type { FichaData } from './prontuario/types';
+import { useAuth } from '@/contexts/AuthContext';
 import AbaDados from './prontuario/AbaDados';
 import AbaAtendimentos from './prontuario/AbaAtendimentos';
 import AbaProcedimentos from './prontuario/AbaProcedimentos';
@@ -43,23 +44,33 @@ export default function ProntuarioDrawer({
   ctaLoading,
   initialTab = 'prontuario',
 }: ProntuarioDrawerProps) {
+  const { hasRole } = useAuth();
+  const isDentistPatientView = hasRole(['avaliador', 'executor', 'ortodontista'])
+    && !hasRole(['admin', 'atendente']);
+  const safeInitialTab = isDentistPatientView && ['historico', 'pagamentos', 'vinculados'].includes(initialTab)
+    ? 'prontuario'
+    : initialTab;
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [ficha, setFicha] = useState<FichaData | null>(null);
   const [vinculos, setVinculos] = useState<VinculoCliente[]>([]);
   const [saldo, setSaldo] = useState<{ saldo: number; saldo_calculado: number } | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [abaAtiva, setAbaAtiva] = useState<string>(initialTab);
+  const [abaAtiva, setAbaAtiva] = useState<string>(safeInitialTab);
 
   const carregar = useCallback(async (id: number) => {
     setLoading(true);
     setError('');
+    if (isDentistPatientView) {
+      setVinculos([]);
+      setSaldo(undefined);
+    }
     try {
       const [resCliente, resFicha, resVinculos, resSaldo] = await Promise.all([
         apiFetch(`/api/clientes/${id}`),
         apiFetch(`/api/clientes/${id}/ficha`),
-        apiFetch(`/api/clientes/${id}/vinculos`),
-        apiFetch(`/api/clientes/${id}/saldo`),
+        isDentistPatientView ? Promise.resolve(null) : apiFetch(`/api/clientes/${id}/vinculos`),
+        isDentistPatientView ? Promise.resolve(null) : apiFetch(`/api/clientes/${id}/saldo`),
       ]);
       if (!resCliente.ok) {
         setError('Cliente não encontrado');
@@ -67,8 +78,8 @@ export default function ProntuarioDrawer({
       }
       setCliente(await resCliente.json());
       if (resFicha.ok) setFicha(await resFicha.json());
-      if (resVinculos.ok) setVinculos(await resVinculos.json());
-      if (resSaldo.ok) {
+      if (resVinculos?.ok) setVinculos(await resVinculos.json());
+      if (resSaldo?.ok) {
         const s = await resSaldo.json();
         setSaldo({ saldo: s.saldo ?? 0, saldo_calculado: s.saldo_calculado ?? 0 });
       }
@@ -77,11 +88,11 @@ export default function ProntuarioDrawer({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isDentistPatientView]);
 
   useEffect(() => {
     if (open && clienteId) {
-      setAbaAtiva(initialTab);
+      setAbaAtiva(safeInitialTab);
       carregar(clienteId);
     } else if (!open) {
       // reset ao fechar
@@ -91,16 +102,22 @@ export default function ProntuarioDrawer({
       setSaldo(undefined);
       setError('');
     }
-  }, [open, clienteId, carregar, initialTab]);
+  }, [open, clienteId, carregar, safeInitialTab]);
 
   const abas = [
     { key: 'dados', label: 'Dados' },
     { key: 'atendimentos', label: 'Atendim.', count: ficha?.atendimentos.length },
     { key: 'procedimentos', label: 'Proced.', count: ficha?.procedimentos.length },
     { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
-    { key: 'historico', label: 'Histórico', count: ficha?.historico.length },
-    { key: 'pagamentos', label: 'Pagam.', count: ficha?.pagamentos.filter(p => !p.cancelado).length },
-    { key: 'vinculados', label: 'Vínculos', count: vinculos.length || undefined },
+    ...(
+      isDentistPatientView
+        ? []
+        : [
+            { key: 'historico', label: 'Histórico', count: ficha?.historico.length },
+            { key: 'pagamentos', label: 'Pagam.', count: ficha?.pagamentos.filter(p => !p.cancelado).length },
+            { key: 'vinculados', label: 'Vínculos', count: vinculos.length || undefined },
+          ]
+    ),
   ];
 
   return (
@@ -115,7 +132,9 @@ export default function ProntuarioDrawer({
             <span className="truncate">{cliente ? cliente.nome : 'Prontuário'}</span>
           </SheetTitle>
           <SheetDescription className="text-xs">
-            {cliente?.telefone ? `${cliente.telefone} • ` : ''}Ficha completa do paciente
+            {isDentistPatientView
+              ? 'Ficha clínica do paciente'
+              : `${cliente?.telefone ? `${cliente.telefone} • ` : ''}Ficha completa do paciente`}
           </SheetDescription>
         </SheetHeader>
 
@@ -144,7 +163,13 @@ export default function ProntuarioDrawer({
           )}
           {!loading && cliente && ficha && (
             <>
-              {abaAtiva === 'dados' && <AbaDados cliente={cliente} saldo={saldo} />}
+              {abaAtiva === 'dados' && (
+                <AbaDados
+                  cliente={cliente}
+                  saldo={isDentistPatientView ? undefined : saldo}
+                  restricted={isDentistPatientView}
+                />
+              )}
               {abaAtiva === 'atendimentos' && (
                 <AbaAtendimentos atendimentos={ficha.atendimentos} />
               )}

@@ -68,6 +68,13 @@ export const GET = withUnit(async (
         AND a.unidade_id = ?
         AND a.categoria_id = ?
         AND i.status IN ('pago', 'executando')
+        AND NOT EXISTS (
+          SELECT 1
+          FROM agendamentos ag
+          WHERE ag.item_atendimento_origem_id = i.id
+            AND ag.unidade_id = a.unidade_id
+            AND ag.status IN ('pendente', 'agendado')
+        )
       ORDER BY i.created_at ASC, c.nome ASC`,
       [context.unidadeId, categoria.id]
     );

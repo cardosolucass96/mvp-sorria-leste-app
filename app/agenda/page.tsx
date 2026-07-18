@@ -201,9 +201,9 @@ export default function AgendaPage() {
   const { user, hasRole, currentUnidade } = useAuth();
   const unitFetch = useUnitFetch();
 
-  // Avaliador/executor só vê seus próprios agendamentos
-  const isDentista = hasRole(['avaliador', 'executor']);
   const isAdminOrAtendente = hasRole(['admin', 'atendente']);
+  // Dentistas veem apenas os próprios agendamentos. Admin/atendente com role extra mantém visão completa.
+  const isDentista = hasRole(['avaliador', 'executor', 'ortodontista']) && !isAdminOrAtendente;
 
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [total, setTotal] = useState(0);
@@ -1211,7 +1211,7 @@ export default function AgendaPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-secondary px-4 py-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-foreground">{grupo.cliente_nome}</span>
-            {grupo.cliente_telefone && (
+            {isAdminOrAtendente && grupo.cliente_telefone && (
               <span className="text-sm text-muted-foreground">{formatarTelefone(grupo.cliente_telefone)}</span>
             )}
             {dataGrupo
@@ -1947,7 +1947,9 @@ export default function AgendaPage() {
                     className="w-full border-b border-border px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-secondary last:border-0"
                   >
                     <span className="font-medium">{c.nome}</span>
-                    {c.telefone && <span className="ml-2 text-muted-foreground">{formatarTelefone(c.telefone)}</span>}
+                    {isAdminOrAtendente && c.telefone && (
+                      <span className="ml-2 text-muted-foreground">{formatarTelefone(c.telefone)}</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -1962,7 +1964,7 @@ export default function AgendaPage() {
             <div className="flex items-center justify-between rounded-lg bg-surface-secondary px-3 py-2">
               <div>
                 <span className="text-sm font-medium">{novoClienteSelecionado.nome}</span>
-                {novoClienteSelecionado.telefone && (
+                {isAdminOrAtendente && novoClienteSelecionado.telefone && (
                   <span className="ml-2 text-xs text-muted-foreground">{formatarTelefone(novoClienteSelecionado.telefone)}</span>
                 )}
               </div>

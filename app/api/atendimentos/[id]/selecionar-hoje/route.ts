@@ -47,6 +47,10 @@ interface ItensHojeProjetadosResult {
   itensHoje: number;
 }
 
+interface CountResult {
+  count: number;
+}
+
 function inferirStatusAgendamento(destino: DestinoStatus, dataAgendada?: string | null) {
   if (destino === 'agendar' && dataAgendada) return 'agendado';
   return 'pendente';
@@ -103,6 +107,20 @@ async function validarExecutorSelecionado(
   }
 
   return roles.some((role) => ['executor', 'ortodontista'].includes(role)) ? 'ok' : 'invalid';
+}
+
+async function itemTemDependenciasQueBloqueiamExclusao(itemId: number): Promise<boolean> {
+  const result = await queryOne<CountResult>(
+    `SELECT (
+       (SELECT COUNT(*) FROM comissoes WHERE item_atendimento_id = ?) +
+       (SELECT COUNT(*) FROM prontuarios WHERE item_atendimento_id = ?) +
+       (SELECT COUNT(*) FROM notas_execucao WHERE item_atendimento_id = ?) +
+       (SELECT COUNT(*) FROM anexos_execucao WHERE item_atendimento_id = ?)
+     ) AS count`,
+    [itemId, itemId, itemId, itemId]
+  );
+
+  return Number(result?.count ?? 0) > 0;
 }
 
 async function criarAgendamentoFuturo({
@@ -319,11 +337,12 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
           );
         }
 
+        const preservarItemOrigem = preservarItensOriginais || await itemTemDependenciasQueBloqueiamExclusao(item.id);
         const agendamentoId = await criarAgendamentoFuturo({
           atendimento,
           item,
           etapaModeloId: null,
-          itemAtendimentoOrigemId: preservarItensOriginais ? item.id : null,
+          itemAtendimentoOrigemId: preservarItemOrigem ? item.id : null,
           executorId: destino.executor_id,
           dataAgendada: destino.data_agendada,
           destinoStatus: destino.destino_status,
@@ -332,7 +351,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         });
         agendamentosCriados += 1;
 
-        if (preservarItensOriginais) {
+        if (preservarItemOrigem) {
           continue;
         }
 

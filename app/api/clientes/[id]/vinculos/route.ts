@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute } from '@/lib/db';
 import { VinculoCliente } from '@/lib/types';
+import {
+  ensureCanManagePatientRegistration,
+  getAuthenticatedRequestUser,
+  isRestrictedDentistPatientView,
+} from '@/lib/auth/patientPrivacy';
 
 // GET /api/clientes/[id]/vinculos — lista vínculos do cliente
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getAuthenticatedRequestUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Token inválido ou expirado' }, { status: 401 });
+    }
+    if (isRestrictedDentistPatientView(user)) {
+      return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
+    }
+
     const { id } = await params;
     const clienteId = parseInt(id, 10);
     if (isNaN(clienteId)) return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
@@ -44,6 +57,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getAuthenticatedRequestUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Token inválido ou expirado' }, { status: 401 });
+    }
+    const unauthorized = ensureCanManagePatientRegistration(user);
+    if (unauthorized) return unauthorized;
+
     const { id } = await params;
     const clienteId = parseInt(id, 10);
     if (isNaN(clienteId)) return NextResponse.json({ error: 'ID inválido' }, { status: 400 });

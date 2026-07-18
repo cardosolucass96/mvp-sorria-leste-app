@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { withUnit, UnitAuthenticatedContext, getUserRoles } from '@/lib/auth/middleware';
+import { isRestrictedDentistPatientView } from '@/lib/auth/patientPrivacy';
 
 interface ItemAtendimento {
   id: number;
@@ -13,6 +14,7 @@ interface ItemAtendimento {
   criado_por_nome: string | null;
   cliente_nome: string;
   cliente_id: number;
+  categoria_id: number | null;
   valor: number;
   valor_pago: number;
   status: string;
@@ -42,6 +44,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         cp.nome as criado_por_nome,
         c.nome as cliente_nome,
         c.id as cliente_id,
+        a.categoria_id,
         i.valor,
         i.valor_pago,
         i.dentes,
@@ -67,6 +70,26 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     }
 
     const item = itens[0];
+
+    if (isRestrictedDentistPatientView(context.user) && item.executor_id !== context.user.sub) {
+      if (item.executor_id !== null) {
+        return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
+      }
+
+      const userRoles = getUserRoles(context.user);
+      if (item.categoria_id) {
+        const catRoles = await query<{ role: string }>(
+          'SELECT role FROM categoria_roles WHERE categoria_id = ?',
+          [item.categoria_id]
+        );
+        const allowed = catRoles.some((row) => userRoles.includes(row.role));
+        if (!allowed) {
+          return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
+        }
+      } else if (!userRoles.some((role) => role === 'executor' || role === 'ortodontista')) {
+        return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
+      }
+    }
 
     return NextResponse.json({ ...item, etapas: [] });
   } catch (error) {

@@ -9,6 +9,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import Spinner from '@/components/ui/Spinner';
 import { SidebarProvider, SidebarInset } from '@/components/ui/_shadcn/sidebar';
+import { MENU_ITEMS } from '@/lib/constants/navigation';
+import type { UserRole } from '@/lib/types';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -16,19 +18,47 @@ interface AppLayoutProps {
 
 const publicRoutes = ['/login'];
 
+const EXTRA_ROUTE_ACCESS: Array<{ href: string; roles: UserRole[] }> = [
+  { href: '/execucao', roles: ['admin', 'executor', 'ortodontista'] },
+  { href: '/fila', roles: ['admin', 'avaliador', 'executor', 'ortodontista'] },
+];
+
+const ROUTE_ACCESS = [
+  ...MENU_ITEMS
+    .filter((item) => Array.isArray(item.roles))
+    .map((item) => ({ href: item.href, roles: item.roles ?? [] })),
+  ...EXTRA_ROUTE_ACCESS,
+].sort((left, right) => right.href.length - left.href.length);
+
+function getRequiredRoles(pathname: string): UserRole[] | null {
+  const match = ROUTE_ACCESS.find((item) => (
+    pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`))
+  ));
+
+  return match?.roles ?? null;
+}
+
 export default function AppLayout({ children }: AppLayoutProps) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, hasRole } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   const isPublicRoute = publicRoutes.includes(pathname);
   const isTvRoute = pathname.startsWith('/painel-tv');
+  const requiredRoles = isPublicRoute ? null : getRequiredRoles(pathname);
+  const isUnauthorized = !!user && !!requiredRoles && !hasRole(requiredRoles);
 
   useEffect(() => {
     if (!isLoading && !user && !isPublicRoute) {
       router.push('/login');
     }
   }, [isLoading, user, isPublicRoute, router]);
+
+  useEffect(() => {
+    if (!isLoading && isUnauthorized) {
+      router.replace('/');
+    }
+  }, [isLoading, isUnauthorized, router]);
 
   if (isPublicRoute) {
     return <>{children}</>;
@@ -47,6 +77,17 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   if (!user) {
     return null;
+  }
+
+  if (isUnauthorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Spinner size="lg" />
+          <p className="text-sm text-muted-foreground">Redirecionando...</p>
+        </div>
+      </div>
+    );
   }
 
   if (isTvRoute) {

@@ -19,10 +19,25 @@ import {
   CLIENTE_COMPLETO,
   TODOS_CLIENTES,
 } from '../../helpers/seed';
+import { generateToken } from '@/lib/auth/jwt';
 
 // Importar handlers
 import { GET as listClientes, POST as createCliente } from '@/app/api/clientes/route';
 import { GET as getCliente, PUT as updateCliente, DELETE as deleteCliente } from '@/app/api/clientes/[id]/route';
+
+async function dentistAuthHeaders(role = 'executor') {
+  const token = await generateToken({
+    id: 44,
+    email: `${role}@sorrialeste.test`,
+    role,
+    roles: [role],
+    nome: 'Dentista Teste',
+    unidade_ids: [1],
+    unidade_atual: 1,
+  });
+
+  return { Authorization: `Bearer ${token}` };
+}
 
 // ─── Setup / Teardown ──────────────────────────────────────────────────────────
 
@@ -124,6 +139,53 @@ describe('GET /api/clientes', () => {
 
     expect(status).toBe(200);
     expect(data.clientes).toEqual([]);
+  });
+
+  it('mascara dados sensíveis para dentista', async () => {
+    mockQueryResponse('select count(*) as total from clientes', { total: 1 });
+    mockQueryResponse('select * from clientes order by nome', [CLIENTE_BASICO]);
+
+    const { status, data } = await callRoute<{ clientes: Array<typeof CLIENTE_BASICO & { idade?: number | null }> }>(
+      listClientes,
+      '/api/clientes',
+      { headers: await dentistAuthHeaders() }
+    );
+
+    expect(status).toBe(200);
+    expect(data.clientes[0].nome).toBe(CLIENTE_BASICO.nome);
+    expect(data.clientes[0].cpf).toBeNull();
+    expect(data.clientes[0].telefone).toBeNull();
+    expect(data.clientes[0].email).toBeNull();
+    expect(data.clientes[0].data_nascimento).toBeNull();
+    expect(data.clientes[0].endereco).toBeNull();
+    expect(data.clientes[0].origem).toBeNull();
+    expect(data.clientes[0].observacoes).toBeNull();
+    expect(typeof data.clientes[0].idade).toBe('number');
+  });
+
+  it('restringe busca de dentista ao nome do cliente', async () => {
+    mockQueryResponse('select count(*) as total from clientes', { total: 1 });
+    mockQueryResponse('where lower(nome) like', [CLIENTE_BASICO]);
+
+    const { status, data } = await callRoute<{ clientes: Array<typeof CLIENTE_BASICO> }>(
+      listClientes,
+      '/api/clientes',
+      {
+        searchParams: { busca: 'Lucas' },
+        headers: await dentistAuthHeaders('ortodontista'),
+      }
+    );
+
+    expect(status).toBe(200);
+    expect(data.clientes[0].nome).toBe(CLIENTE_BASICO.nome);
+
+    const queries = getExecutedQueries().filter(q => q.sql.includes('LIKE'));
+    expect(queries).toHaveLength(2);
+    for (const query of queries) {
+      expect(query.sql).not.toContain('cpf');
+      expect(query.sql).not.toContain('telefone');
+      expect(query.sql).not.toContain('email');
+    }
   });
 });
 
@@ -302,6 +364,28 @@ describe('GET /api/clientes/[id]', () => {
     expect(data.cpf).toBeNull();
     expect(data.telefone).toBeNull();
     expect(data.email).toBeNull();
+  });
+
+  it('retorna apenas identificação mínima para dentista', async () => {
+    mockQueryResponse('select * from clientes where id', { ...CLIENTE_BASICO, sexo: 'masculino' });
+
+    const ctx = createRouteContext({ id: '1' });
+    const { status, data } = await callRoute<Record<string, unknown>>(
+      getCliente,
+      '/api/clientes/1',
+      { headers: await dentistAuthHeaders('avaliador') },
+      ctx
+    );
+
+    expect(status).toBe(200);
+    expect(data.nome).toBe(CLIENTE_BASICO.nome);
+    expect(data.sexo).toBe('masculino');
+    expect(data.cpf).toBeNull();
+    expect(data.telefone).toBeNull();
+    expect(data.email).toBeNull();
+    expect(data.data_nascimento).toBeNull();
+    expect(data.endereco).toBeNull();
+    expect(typeof data.idade).toBe('number');
   });
 });
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { isRestrictedDentistPatientView } from '@/lib/auth/patientPrivacy';
 
 interface ProcedimentoExecucao {
   id: number;
@@ -32,6 +33,10 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       );
     }
 
+    if (isRestrictedDentistPatientView(context.user) && parseInt(executorId, 10) !== context.user.sub) {
+      return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
+    }
+
     // Busca PROCEDIMENTOS PAGOS individuais:
     // 1. Já atribuídos ao executor (meus)
     // 2. Sem executor definido (disponíveis para pegar)
@@ -60,6 +65,13 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       AND a.unidade_id = ?
       AND i.status IN ('pago', 'executando')
       AND (i.executor_id = ? OR i.executor_id IS NULL)
+      AND NOT EXISTS (
+        SELECT 1
+        FROM agendamentos ag
+        WHERE ag.item_atendimento_origem_id = i.id
+          AND ag.unidade_id = a.unidade_id
+          AND ag.status IN ('pendente', 'agendado')
+      )
       ORDER BY
         CASE WHEN i.executor_id = ? THEN 0 ELSE 1 END,
         i.created_at DESC`,

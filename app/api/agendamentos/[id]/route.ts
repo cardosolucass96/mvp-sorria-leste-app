@@ -5,6 +5,7 @@ import { Agendamento, AgendamentoCompleto } from '@/lib/types';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 import { isDateTimeLocalValueInPast } from '@/lib/utils/formatters';
 import { clinicDateTimeInputToUtcIso } from '@/lib/time';
+import { isRestrictedDentistPatientView, redactPatientContactFields } from '@/lib/auth/patientPrivacy';
 
 interface AtualizarAgendamentoBody {
   data_agendada?: string | null;
@@ -43,7 +44,11 @@ export const GET = withUnit(async (
       return NextResponse.json({ error: 'Agendamento não encontrado' }, { status: 404 });
     }
 
-    return NextResponse.json(agendamento);
+    if (isRestrictedDentistPatientView(context.user) && agendamento.executor_id !== context.user.sub) {
+      return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
+    }
+
+    return NextResponse.json(redactPatientContactFields(agendamento, context.user));
   } catch (error) {
     console.error('Erro ao buscar agendamento:', error);
     return NextResponse.json({ error: 'Erro ao buscar agendamento' }, { status: 500 });
@@ -67,6 +72,14 @@ export const PUT = withUnit(async (
 
     if (!agendamento) {
       return NextResponse.json({ error: 'Agendamento não encontrado' }, { status: 404 });
+    }
+
+    if (isRestrictedDentistPatientView(context.user) && agendamento.executor_id !== context.user.sub) {
+      return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
+    }
+
+    if (isRestrictedDentistPatientView(context.user) && body.executor_id !== undefined && body.executor_id !== context.user.sub) {
+      return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
     }
 
     const updates: string[] = [];
@@ -169,7 +182,9 @@ export const PUT = withUnit(async (
     );
 
     const atualizado = await queryOne<AgendamentoCompleto>(DETAIL_SQL, [agendamentoId, context.unidadeId]);
-    return NextResponse.json(atualizado);
+    return NextResponse.json(
+      atualizado ? redactPatientContactFields(atualizado, context.user) : atualizado
+    );
   } catch (error) {
     console.error('Erro ao atualizar agendamento:', error);
     return NextResponse.json({ error: 'Erro ao atualizar agendamento' }, { status: 500 });

@@ -149,6 +149,54 @@ describe('POST /api/atendimentos/[id]/selecionar-hoje', () => {
     expect(insertAgendamentoQuery?.params[4]).toBeNull();
   });
 
+  it('preserva item com comissao ao mandar procedimento pago para sem data em fluxo misto', async () => {
+    mockQueryResponse('select id, cliente_id, unidade_id, categoria_id, status from atendimentos', ATENDIMENTO_AGUARDANDO_PGTO);
+    mockQueryResponse('select * from itens_atendimento where atendimento_id', [
+      { ...ITEM_LIMPEZA_PENDENTE, id: 1, procedimento_id: 34, valor: 500, valor_final: 500, valor_pago: 500, status: 'pago', executor_id: null },
+      { ...ITEM_LIMPEZA_PENDENTE, id: 2, procedimento_id: 1, valor: 0, valor_final: 0, valor_pago: 0, status: 'pago', executor_id: null },
+    ]);
+    mockQueryResponse('select (\n       (select count(*) from comissoes where item_atendimento_id = ?)', { count: 1 });
+    setLastInsertId(91);
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status, data } = await callRoute<{ agendamentos_criados: number; itens_hoje: number; status_final: string }>(
+      selecionarHoje,
+      '/api/atendimentos/3/selecionar-hoje',
+      {
+        method: 'POST',
+        body: {
+          acao_final: 'liberar_execucao',
+          destinos: [
+            {
+              item_id: 1,
+              etapa_modelo_id: null,
+              destino_status: 'pago_sem_data',
+              executor_id: null,
+            },
+            {
+              item_id: 2,
+              etapa_modelo_id: null,
+              destino_status: 'fazer_hoje',
+              executor_id: null,
+            },
+          ],
+        },
+      },
+      ctx
+    );
+
+    expect(status).toBe(200);
+    expect(data).toEqual({ agendamentos_criados: 1, itens_hoje: 1, status_final: 'aguardando_pagamento' });
+
+    const queries = getExecutedQueries();
+    const insertAgendamentoQuery = queries.find((query) => query.sql.includes('INSERT INTO agendamentos'));
+    const deleteItemQueries = queries.filter((query) => query.sql.includes('DELETE FROM itens_atendimento WHERE id = ?'));
+
+    expect(insertAgendamentoQuery).toBeDefined();
+    expect(insertAgendamentoQuery?.params[3]).toBe(1);
+    expect(deleteItemQueries).toHaveLength(0);
+  });
+
   it('mantem executor nulo ao quebrar procedimento em etapas para fazer_hoje', async () => {
     mockQueryResponse('select id, cliente_id, unidade_id, categoria_id, status from atendimentos', ATENDIMENTO_AGUARDANDO_PGTO);
     mockQueryResponse('select * from itens_atendimento where atendimento_id', [

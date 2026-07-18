@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { getStoredUtcInstantMillis } from '@/lib/time';
+import { isRestrictedDentistPatientView } from '@/lib/auth/patientPrivacy';
 
 interface ProcedimentoRow {
   item_id: number;
@@ -23,6 +24,10 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 
   if (!usuarioId) {
     return NextResponse.json({ error: 'usuario_id é obrigatório' }, { status: 400 });
+  }
+
+  if (isRestrictedDentistPatientView(context.user) && parseInt(usuarioId, 10) !== context.user.sub) {
+    return NextResponse.json({ error: 'Acesso não autorizado para este perfil' }, { status: 403 });
   }
 
   try {

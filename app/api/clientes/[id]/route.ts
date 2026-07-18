@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db';
 import { Cliente } from '@/lib/types';
+import {
+  applyPatientPrivacyToCliente,
+  ensureCanManagePatientRegistration,
+  getAuthenticatedRequestUser,
+} from '@/lib/auth/patientPrivacy';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -9,6 +14,11 @@ interface RouteParams {
 // GET /api/clientes/[id] - Buscar cliente por ID
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getAuthenticatedRequestUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Token inválido ou expirado' }, { status: 401 });
+    }
+
     const { id } = await params;
     const cliente = await queryOne<Cliente>(
       'SELECT * FROM clientes WHERE id = ?',
@@ -22,7 +32,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    return NextResponse.json(cliente);
+    return NextResponse.json(applyPatientPrivacyToCliente(cliente, user));
   } catch (error) {
     console.error('Erro ao buscar cliente:', error);
     return NextResponse.json(
@@ -35,6 +45,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // PUT /api/clientes/[id] - Atualizar cliente
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getAuthenticatedRequestUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Token inválido ou expirado' }, { status: 401 });
+    }
+    const unauthorized = ensureCanManagePatientRegistration(user);
+    if (unauthorized) return unauthorized;
+
     const { id } = await params;
     const body = await request.json();
     const { nome, cpf, telefone, email, data_nascimento, endereco, origem, sexo, plano_odontologico, observacoes } = body;
@@ -136,6 +153,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 // DELETE /api/clientes/[id] - Excluir cliente
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getAuthenticatedRequestUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Token inválido ou expirado' }, { status: 401 });
+    }
+    const unauthorized = ensureCanManagePatientRegistration(user);
+    if (unauthorized) return unauthorized;
+
     const { id } = await params;
 
     const existing = await queryOne<Cliente>(
