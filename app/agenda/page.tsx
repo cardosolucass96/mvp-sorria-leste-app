@@ -232,6 +232,7 @@ export default function AgendaPage() {
   const previousCalendarRangeKeyRef = useRef<string | null>(null);
   const handledOpenAgendaRef = useRef<string | null>(null);
   const handledEditAgendaRef = useRef<string | null>(null);
+  const latestAgendamentosRequestIdRef = useRef(0);
 
   // Persistir viewMode no localStorage
   useEffect(() => {
@@ -360,11 +361,17 @@ export default function AgendaPage() {
   );
 
   const carregarAgendamentos = useCallback(async () => {
+    const requestId = latestAgendamentosRequestIdRef.current + 1;
+    latestAgendamentosRequestIdRef.current = requestId;
     setLoading(true);
+    setError('');
     try {
       const params = new URLSearchParams();
       if (filtroStatus) params.append('status', filtroStatus);
-      if (busca) params.append('busca', busca);
+      const buscaNormalizada = busca.trim();
+      const exibirTudoNaBusca = viewMode === 'lista' && buscaNormalizada.length > 0;
+
+      if (buscaNormalizada) params.append('busca', buscaNormalizada);
 
       if (viewMode === 'calendario') {
         params.append('data_inicio', formatAgendaRangeStart(calendarRange.start));
@@ -372,8 +379,10 @@ export default function AgendaPage() {
       } else {
         if (dataInicio) params.append('data_inicio', dataInicio);
         if (dataFim) params.append('data_fim', dataFim);
-        params.append('page', String(page));
-        params.append('limit', String(LIMIT));
+        if (!exibirTudoNaBusca) {
+          params.append('page', String(page));
+          params.append('limit', String(LIMIT));
+        }
       }
       params.append('order_by', viewMode === 'calendario' ? 'data_agendada' : 'cliente_nome');
       params.append('order_dir', 'asc');
@@ -387,6 +396,9 @@ export default function AgendaPage() {
 
       const res = await unitFetch(`/api/agendamentos?${params}`);
       const data: Agendamento[] | AgendamentosPaginadosResponse = await res.json();
+      if (requestId !== latestAgendamentosRequestIdRef.current) {
+        return;
+      }
       if (!res.ok) {
         const errorMessage = (
           !Array.isArray(data)
@@ -405,9 +417,14 @@ export default function AgendaPage() {
       setTotal(normalized.total);
       setPages(normalized.pages);
     } catch {
+      if (requestId !== latestAgendamentosRequestIdRef.current) {
+        return;
+      }
       setError('Erro ao carregar agendamentos');
     } finally {
-      setLoading(false);
+      if (requestId === latestAgendamentosRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [
     filtroStatus,

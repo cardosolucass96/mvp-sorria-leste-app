@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import AgendaPage from '@/app/agenda/page';
@@ -249,6 +249,109 @@ describe('AgendaPage', () => {
       expect(
         mockUnitFetch.mock.calls.some(([url]) => String(url).includes('executor_id=10'))
       ).toBe(true);
+    });
+  });
+
+  test('remove a paginação quando há busca por cliente para exibir todos os resultados encontrados', async () => {
+    mockUnitFetch.mockImplementation((url: string) => {
+      if (url.includes('busca=Maria')) {
+        return mockJsonResponse([
+          makeAgendamento({ id: 21, cliente_nome: 'Maria Silva', data_agendada: '2026-07-15T09:00' }),
+          makeAgendamento({ id: 22, cliente_nome: 'Maria Silva', data_agendada: '2026-07-20T14:00', procedimento_nome: 'Canal' }),
+        ]);
+      }
+
+      return mockJsonResponse({
+        items: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    render(<AgendaPage />);
+
+    const buscaInput = await screen.findByLabelText('Buscar cliente');
+    fireEvent.change(buscaInput, { target: { value: 'Maria' } });
+
+    await waitFor(() => {
+      const params = getSearchParamsFromLastUnitFetch();
+      expect(params.get('busca')).toBe('Maria');
+      expect(params.get('page')).toBeNull();
+      expect(params.get('limit')).toBeNull();
+    });
+
+    expect(await screen.findByText('2 cliente(s) · 2 agendamento(s)')).toBeInTheDocument();
+  });
+
+  test('ignora respostas antigas quando o calendário dispara múltiplas cargas concorrentes', async () => {
+    localStorage.setItem('agenda-view-mode', 'calendario');
+    localStorage.setItem('agenda-calendar-subview', 'semana');
+
+    let resolveLista: ((response: { ok: boolean; status: number; json: () => Promise<unknown> }) => void) | null = null;
+    let resolveSemana: ((response: { ok: boolean; status: number; json: () => Promise<unknown> }) => void) | null = null;
+
+    const today = new Date();
+    const weekStart = formatAgendaRangeStart(startOfAgendaWeek(today));
+    const weekEnd = formatAgendaRangeEnd(endOfAgendaWeek(today));
+
+    mockUnitFetch.mockImplementation((url: string) => {
+      const query = url.split('?')[1] ?? '';
+      const params = new URLSearchParams(query);
+
+      if (params.get('page') === '1') {
+        return new Promise((resolve) => {
+          resolveLista = resolve;
+        });
+      }
+
+      if (params.get('data_inicio') === weekStart && params.get('data_fim') === weekEnd) {
+        return new Promise((resolve) => {
+          resolveSemana = resolve;
+        });
+      }
+
+      return mockJsonResponse([]);
+    });
+
+    render(<AgendaPage />);
+
+    await waitFor(() => {
+      expect(resolveLista).not.toBeNull();
+      expect(resolveSemana).not.toBeNull();
+    });
+
+    await act(async () => {
+      resolveSemana?.({
+        ok: true,
+        status: 200,
+        json: async () => [
+          makeAgendamento({ id: 31, cliente_nome: 'Semana Atual' }),
+        ],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('agenda-calendario')).toHaveTextContent('31');
+    });
+
+    await act(async () => {
+      resolveLista?.({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: [makeAgendamento({ id: 33, cliente_nome: 'Lista Antiga' })],
+          total: 1,
+          page: 1,
+          pages: 1,
+        }),
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('agenda-calendario')).toHaveTextContent('31');
+      expect(screen.getByText('Semana Atual')).toBeInTheDocument();
+      expect(screen.queryByText('Lista Antiga')).not.toBeInTheDocument();
     });
   });
 
