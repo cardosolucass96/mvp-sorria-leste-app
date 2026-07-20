@@ -43,6 +43,7 @@ describe('GET /api/orcamentos-em-aberto', () => {
         cliente_nome: 'Maria Silva',
         cliente_telefone: '85999990000',
         orcamento_em: '2026-07-10 09:00:00',
+        atendimento_status: 'em_execucao',
         procedimento_id: 201,
         procedimento_nome: 'Restauração',
         tem_etapas: 0,
@@ -63,6 +64,7 @@ describe('GET /api/orcamentos-em-aberto', () => {
         cliente_nome: 'Maria Silva',
         cliente_telefone: '85999990000',
         orcamento_em: '2026-07-10 09:00:00',
+        atendimento_status: 'em_execucao',
         procedimento_id: 201,
         procedimento_nome: 'Restauração',
         tem_etapas: 0,
@@ -83,6 +85,7 @@ describe('GET /api/orcamentos-em-aberto', () => {
         cliente_nome: 'Carlos Lima',
         cliente_telefone: null,
         orcamento_em: '2026-07-11 08:00:00',
+        atendimento_status: 'avaliacao',
         procedimento_id: 202,
         procedimento_nome: 'Canal',
         tem_etapas: 1,
@@ -107,6 +110,7 @@ describe('GET /api/orcamentos-em-aberto', () => {
         cliente_nome: 'Carlos Lima',
         cliente_telefone: null,
         orcamento_em: '2026-07-11 08:00:00',
+        atendimento_status: 'avaliacao',
         procedimento_id: 202,
         procedimento_nome: 'Canal',
         etapa_modelo_id: 7,
@@ -139,6 +143,7 @@ describe('GET /api/orcamentos-em-aberto', () => {
       };
       items: Array<{
         atendimento_id: number;
+        atendimento_status: string;
         valor_total_aberto: number;
         procedimentos: Array<{
           procedimento_nome: string;
@@ -163,6 +168,7 @@ describe('GET /api/orcamentos-em-aberto', () => {
     expect(data.items).toHaveLength(2);
     expect(data.items[0]).toEqual(expect.objectContaining({
       atendimento_id: 2,
+      atendimento_status: 'avaliacao',
       valor_total_aberto: 200,
       procedimentos: [
         expect.objectContaining({
@@ -176,6 +182,7 @@ describe('GET /api/orcamentos-em-aberto', () => {
     }));
     expect(data.items[1]).toEqual(expect.objectContaining({
       atendimento_id: 1,
+      atendimento_status: 'em_execucao',
       valor_total_aberto: 500,
       procedimentos: [
         expect.objectContaining({
@@ -192,5 +199,6 @@ describe('GET /api/orcamentos-em-aberto', () => {
     const itensQuery = queries.find((query) => query.sql.includes('FROM itens_atendimento i'));
     expect(itensQuery?.sql).toContain("COALESCE(a.tipo, 'normal') != 'sessao'");
     expect(itensQuery?.sql).toContain('i.adicionado_em_execucao = 0');
+    expect(itensQuery?.sql).toContain('a.status AS atendimento_status');
   });
 });

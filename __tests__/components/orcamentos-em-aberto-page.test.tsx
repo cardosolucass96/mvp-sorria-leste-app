@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 
@@ -9,6 +9,10 @@ const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockUnitFetch = jest.fn();
 const mockUseAuth = jest.fn();
+
+let atendimentoStatus = 'em_execucao';
+let prepararPagamentoOk = true;
+let prepararPagamentoErro = 'Falha ao preparar atendimento';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -35,19 +39,8 @@ function mockJsonResponse(data: unknown, init: { ok?: boolean; status?: number }
   });
 }
 
-beforeEach(() => {
-  jest.clearAllMocks();
-
-  mockUseAuth.mockReturnValue({
-    user: { id: 2, role: 'atendente', roles: ['atendente'] },
-    isLoading: false,
-    hasRole: (roles: string | string[]) => {
-      const values = Array.isArray(roles) ? roles : [roles];
-      return values.includes('atendente');
-    },
-  });
-
-  mockUnitFetch.mockImplementation(() => mockJsonResponse({
+function buildOrcamentosResponse(status = atendimentoStatus) {
+  return {
     summary: {
       valor_total_aberto: 800,
       orcamentos_abertos: 1,
@@ -59,6 +52,7 @@ beforeEach(() => {
     items: [
       {
         atendimento_id: 77,
+        atendimento_status: status,
         cliente_id: 101,
         cliente_nome: 'Maria Silva',
         cliente_telefone: '85999990000',
@@ -114,7 +108,39 @@ beforeEach(() => {
         ],
       },
     ],
-  }));
+  };
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  atendimentoStatus = 'em_execucao';
+  prepararPagamentoOk = true;
+  prepararPagamentoErro = 'Falha ao preparar atendimento';
+
+  mockUseAuth.mockReturnValue({
+    user: { id: 2, role: 'atendente', roles: ['atendente'] },
+    isLoading: false,
+    hasRole: (roles: string | string[]) => {
+      const values = Array.isArray(roles) ? roles : [roles];
+      return values.includes('atendente');
+    },
+  });
+
+  mockUnitFetch.mockImplementation((url: string, init?: { method?: string }) => {
+    if (url === '/api/orcamentos-em-aberto') {
+      return mockJsonResponse(buildOrcamentosResponse());
+    }
+
+    if (url === '/api/atendimentos/77' && init?.method === 'PUT') {
+      if (!prepararPagamentoOk) {
+        return mockJsonResponse({ error: prepararPagamentoErro }, { ok: false, status: 400 });
+      }
+
+      return mockJsonResponse({ id: 77, status: 'aguardando_pagamento' });
+    }
+
+    return mockJsonResponse({ error: `Unhandled request: ${url}` }, { ok: false, status: 500 });
+  });
 });
 
 describe('OrcamentosEmAbertoPage', () => {
@@ -143,5 +169,49 @@ describe('OrcamentosEmAbertoPage', () => {
 
     await user.click(screen.getByRole('button', { name: /Editar agendamento/i }));
     expect(mockPush).toHaveBeenLastCalledWith('/agenda?edit=301');
+  });
+
+  test('prepara atendimento em execução e abre a tela de pagamento', async () => {
+    const user = userEvent.setup();
+    render(<OrcamentosEmAbertoPage />);
+
+    await screen.findByText('Maria Silva');
+    await user.click(screen.getByRole('button', { name: /Ir para pagamento/i }));
+
+    await waitFor(() => {
+      expect(mockUnitFetch).toHaveBeenCalledWith(
+        '/api/atendimentos/77',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ status: 'aguardando_pagamento' }),
+        })
+      );
+    });
+    expect(mockPush).toHaveBeenCalledWith('/atendimentos/77/pagamento');
+  });
+
+  test('abre pagamento direto quando atendimento já aguarda pagamento', async () => {
+    atendimentoStatus = 'aguardando_pagamento';
+    const user = userEvent.setup();
+    render(<OrcamentosEmAbertoPage />);
+
+    await screen.findByText('Maria Silva');
+    await user.click(screen.getByRole('button', { name: /Ir para pagamento/i }));
+
+    expect(mockUnitFetch).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith('/atendimentos/77/pagamento');
+  });
+
+  test('exibe erro quando não consegue preparar pagamento', async () => {
+    prepararPagamentoOk = false;
+    prepararPagamentoErro = 'Transição bloqueada';
+    const user = userEvent.setup();
+    render(<OrcamentosEmAbertoPage />);
+
+    await screen.findByText('Maria Silva');
+    await user.click(screen.getByRole('button', { name: /Ir para pagamento/i }));
+
+    expect(await screen.findByText('Transição bloqueada')).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalledWith('/atendimentos/77/pagamento');
   });
 });

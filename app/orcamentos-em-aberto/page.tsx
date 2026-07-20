@@ -63,6 +63,7 @@ interface ProcedimentoItem {
 
 interface OrcamentoGrupo {
   atendimento_id: number;
+  atendimento_status: string;
   cliente_id: number;
   cliente_nome: string;
   cliente_telefone: string | null;
@@ -74,6 +75,10 @@ interface OrcamentoGrupo {
 interface OrcamentosEmAbertoResponse {
   summary: SummaryResponse;
   items: OrcamentoGrupo[];
+}
+
+interface ApiErrorResponse {
+  error?: string;
 }
 
 const SITUACAO_OPTIONS = [
@@ -156,6 +161,7 @@ export default function OrcamentosEmAbertoPage() {
   const [error, setError] = useState('');
   const [busca, setBusca] = useState('');
   const [situacaoFiltro, setSituacaoFiltro] = useState('');
+  const [preparandoPagamentoId, setPreparandoPagamentoId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isLoading && user && !canAccess) {
@@ -288,6 +294,43 @@ export default function OrcamentosEmAbertoPage() {
     router.push(`/agenda?edit=${agendamentoId}`);
   }
 
+  async function abrirPagamento(grupo: OrcamentoGrupo) {
+    const pagamentoUrl = `/atendimentos/${grupo.atendimento_id}/pagamento`;
+
+    if (grupo.atendimento_status === 'aguardando_pagamento') {
+      setError('');
+      router.push(pagamentoUrl);
+      return;
+    }
+
+    if (!['avaliacao', 'em_execucao'].includes(grupo.atendimento_status)) {
+      setError('Este atendimento não pode ser preparado para pagamento a partir do status atual.');
+      return;
+    }
+
+    setPreparandoPagamentoId(grupo.atendimento_id);
+    setError('');
+
+    try {
+      const res = await unitFetch(`/api/atendimentos/${grupo.atendimento_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'aguardando_pagamento' }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json() as ApiErrorResponse;
+        throw new Error(data.error || 'Erro ao preparar atendimento para pagamento');
+      }
+
+      router.push(pagamentoUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao preparar atendimento para pagamento');
+    } finally {
+      setPreparandoPagamentoId(null);
+    }
+  }
+
   if (isLoading || (loading && items.length === 0 && !error)) {
     return <LoadingState text="Carregando orçamentos em aberto..." />;
   }
@@ -408,6 +451,14 @@ export default function OrcamentosEmAbertoPage() {
                   <div className="flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" onClick={() => abrirCliente(item.cliente_id)}>
                       Abrir cliente
+                    </Button>
+                    <Button
+                      size="sm"
+                      icon={<Wallet className="w-4 h-4" />}
+                      loading={preparandoPagamentoId === item.atendimento_id}
+                      onClick={() => void abrirPagamento(item)}
+                    >
+                      Ir para pagamento
                     </Button>
                     <Button
                       variant="outline"

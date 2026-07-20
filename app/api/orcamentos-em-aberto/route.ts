@@ -13,6 +13,7 @@ interface BaseItemRow {
   cliente_nome: string;
   cliente_telefone: string | null;
   orcamento_em: string;
+  atendimento_status: string;
   procedimento_id: number;
   procedimento_nome: string;
   tem_etapas: number;
@@ -35,6 +36,7 @@ interface ActiveAgendamentoRow {
   cliente_nome: string;
   cliente_telefone: string | null;
   orcamento_em: string;
+  atendimento_status: string;
   procedimento_id: number | null;
   procedimento_nome: string | null;
   etapa_modelo_id: number | null;
@@ -76,6 +78,7 @@ interface ProcedimentoItem {
 
 interface OrcamentoGrupo {
   atendimento_id: number;
+  atendimento_status: string;
   cliente_id: number;
   cliente_nome: string;
   cliente_telefone: string | null;
@@ -96,6 +99,7 @@ interface SummaryResponse {
 interface DescriptorBase {
   key: string;
   atendimento_id: number;
+  atendimento_status: string;
   cliente_id: number;
   cliente_nome: string;
   cliente_telefone: string | null;
@@ -229,6 +233,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
          c.nome AS cliente_nome,
          c.telefone AS cliente_telefone,
          a.created_at AS orcamento_em,
+         a.status AS atendimento_status,
          p.id AS procedimento_id,
          p.nome AS procedimento_nome,
          p.tem_etapas AS tem_etapas,
@@ -262,6 +267,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
          c.nome AS cliente_nome,
          c.telefone AS cliente_telefone,
          a.created_at AS orcamento_em,
+         a.status AS atendimento_status,
          COALESCE(ag.procedimento_id, item_origem.procedimento_id) AS procedimento_id,
          p.nome AS procedimento_nome,
          ag.etapa_modelo_id,
@@ -296,6 +302,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
     const registrarDescriptor = (payload: {
       key: string;
       atendimento_id: number;
+      atendimento_status: string;
       cliente_id: number;
       cliente_nome: string;
       cliente_telefone: string | null;
@@ -331,6 +338,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
       descriptors.set(payload.key, {
         key: payload.key,
         atendimento_id: payload.atendimento_id,
+        atendimento_status: payload.atendimento_status,
         cliente_id: payload.cliente_id,
         cliente_nome: payload.cliente_nome,
         cliente_telefone: payload.cliente_telefone,
@@ -372,6 +380,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
           registrarDescriptor({
             key,
             atendimento_id: item.atendimento_id,
+            atendimento_status: item.atendimento_status,
             cliente_id: item.cliente_id,
             cliente_nome: item.cliente_nome,
             cliente_telefone: item.cliente_telefone,
@@ -404,6 +413,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
       registrarDescriptor({
         key,
         atendimento_id: item.atendimento_id,
+        atendimento_status: item.atendimento_status,
         cliente_id: item.cliente_id,
         cliente_nome: item.cliente_nome,
         cliente_telefone: item.cliente_telefone,
@@ -435,6 +445,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
 
     const ensureState = (key: string, fallback: {
       atendimento_id: number;
+      atendimento_status: string;
       cliente_id: number;
       cliente_nome: string;
       cliente_telefone: string | null;
@@ -470,6 +481,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
       const created: DescriptorState = {
         key,
         atendimento_id: fallback.atendimento_id,
+        atendimento_status: fallback.atendimento_status,
         cliente_id: fallback.cliente_id,
         cliente_nome: fallback.cliente_nome,
         cliente_telefone: fallback.cliente_telefone,
@@ -532,6 +544,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
 
       const state = ensureState(stateKey, {
         atendimento_id: agendamento.atendimento_origem_id,
+        atendimento_status: agendamento.atendimento_status,
         cliente_id: agendamento.cliente_id,
         cliente_nome: agendamento.cliente_nome,
         cliente_telefone: agendamento.cliente_telefone,
@@ -559,12 +572,13 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
       procedimentos: ProcedimentoItem[];
     }>();
 
-    const ensureGroup = (descriptor: Pick<DescriptorBase, 'atendimento_id' | 'cliente_id' | 'cliente_nome' | 'cliente_telefone' | 'orcamento_em'>) => {
+    const ensureGroup = (descriptor: Pick<DescriptorBase, 'atendimento_id' | 'atendimento_status' | 'cliente_id' | 'cliente_nome' | 'cliente_telefone' | 'orcamento_em'>) => {
       const current = groups.get(descriptor.atendimento_id);
       if (current) return current;
 
       const created = {
         atendimento_id: descriptor.atendimento_id,
+        atendimento_status: descriptor.atendimento_status,
         cliente_id: descriptor.cliente_id,
         cliente_nome: descriptor.cliente_nome,
         cliente_telefone: descriptor.cliente_telefone,
@@ -642,6 +656,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
 
         return {
           atendimento_id: group.atendimento_id,
+          atendimento_status: group.atendimento_status,
           cliente_id: group.cliente_id,
           cliente_nome: group.cliente_nome,
           cliente_telefone: group.cliente_telefone,
