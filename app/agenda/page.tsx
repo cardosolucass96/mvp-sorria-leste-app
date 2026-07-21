@@ -214,7 +214,6 @@ export default function AgendaPage() {
   const [error, setError] = useState('');
 
   const [busca, setBusca] = useState('');
-  const [buscaInput, setBuscaInput] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('pendente,agendado,faltou,realizado');
   const [filtroDentista, setFiltroDentista] = useState('');
   const [dataInicio, setDataInicio] = useState('');
@@ -833,9 +832,10 @@ export default function AgendaPage() {
     }
   };
 
-  const handleBuscar = (e: React.FormEvent) => {
+  const handleBuscar = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const buscaNormalizada = buscaInput.trim();
+    const formData = new FormData(e.currentTarget);
+    const buscaNormalizada = String(formData.get('busca') ?? '').trim();
 
     if (busca !== buscaNormalizada) {
       setBusca(buscaNormalizada);
@@ -1458,12 +1458,16 @@ export default function AgendaPage() {
       <div className="card">
         <form onSubmit={handleBuscar} className="flex gap-4 items-end flex-wrap">
           <div className="flex-1 min-w-[200px]">
-            <Input
-              label="Buscar cliente"
+            <label htmlFor="agenda-busca" className="block text-sm font-medium text-foreground mb-1">
+              Buscar cliente
+            </label>
+            <input
+              id="agenda-busca"
               name="busca"
-              value={buscaInput}
-              onChange={setBuscaInput}
+              type="search"
+              defaultValue={busca}
               placeholder="Nome do cliente..."
+              className="field-control w-full px-3 py-2 text-sm"
             />
           </div>
           <div className="min-w-[220px]">

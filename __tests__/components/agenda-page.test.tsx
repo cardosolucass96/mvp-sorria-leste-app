@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 
 import AgendaPage from '@/app/agenda/page';
@@ -229,6 +230,46 @@ describe('AgendaPage', () => {
 
     expect(await screen.findByText('Maria Silva')).toBeInTheDocument();
     expect(screen.getByText('1 cliente(s) · 1 agendamento(s)')).toBeInTheDocument();
+  });
+
+  test('não recarrega a agenda nem perde foco enquanto digita na busca', async () => {
+    mockUnitFetch.mockImplementation((url: string) => {
+      if (url.includes('busca=Maria')) {
+        return mockJsonResponse({
+          items: [makeAgendamento({ cliente_nome: 'Maria Filtrada' })],
+          total: 1,
+          page: 1,
+          pages: 1,
+        });
+      }
+
+      return mockJsonResponse({
+        items: [makeAgendamento({ cliente_nome: 'Cliente Inicial' })],
+        total: 1,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    const user = userEvent.setup();
+    render(<AgendaPage />);
+
+    expect(await screen.findByText('Cliente Inicial')).toBeInTheDocument();
+    const callsDepoisDoLoad = mockUnitFetch.mock.calls.length;
+    const buscaInput = screen.getByLabelText('Buscar cliente');
+
+    await user.click(buscaInput);
+    await user.type(buscaInput, 'Maria');
+
+    expect(buscaInput).toHaveFocus();
+    expect(mockUnitFetch).toHaveBeenCalledTimes(callsDepoisDoLoad);
+
+    await user.click(screen.getByRole('button', { name: 'Buscar' }));
+
+    await waitFor(() => {
+      expect(getSearchParamsFromLastUnitFetch().get('busca')).toBe('Maria');
+    });
+    expect(await screen.findByText('Maria Filtrada')).toBeInTheDocument();
   });
 
   test('permite filtrar a agenda por dentista para atendente', async () => {

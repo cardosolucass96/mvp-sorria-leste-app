@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   CalendarDays,
@@ -16,8 +16,10 @@ import {
 import {
   Alert,
   Badge,
+  type BadgeProps,
   Button,
   ConfirmDialog,
+  Divider,
   EmptyState,
   FilterBar,
   Input,
@@ -25,7 +27,6 @@ import {
   Modal,
   PageHeader,
   Select,
-  StatCard,
   Textarea,
 } from '@/components/ui';
 import { FollowupCalendario } from '@/components/domain';
@@ -47,24 +48,44 @@ import {
   getFollowupUrgencia,
   parseFollowupDateTime,
 } from '@/lib/utils/followup';
+import { addDaysToClinicDateKey, getClinicDateKey } from '@/lib/time';
+import { cn } from '@/lib/utils';
 import usePageTitle from '@/lib/utils/usePageTitle';
 
-interface FollowupSummary {
+type FollowupMetricKey = 'abertas' | 'criadas' | 'atrasadas' | 'vencem' | 'concluidas';
+
+interface FollowupResponsavelSummary {
+  responsavel_usuario_id: number;
+  responsavel_usuario_nome: string;
+  abertas: number;
+  criadas: number;
+  atrasadas: number;
+  vencem: number;
+  concluidas: number;
   abertas_hoje: number;
   criadas_hoje: number;
-  atrasadas: number;
   vencem_hoje: number;
   concluidas_hoje: number;
-  por_responsavel: Array<{
-    responsavel_usuario_id: number;
-    responsavel_usuario_nome: string;
-    abertas_hoje: number;
-    criadas_hoje: number;
-    atrasadas: number;
-    vencem_hoje: number;
-    concluidas_hoje: number;
-  }>;
 }
+
+interface FollowupSummary {
+  abertas: number;
+  criadas: number;
+  atrasadas: number;
+  vencem: number;
+  concluidas: number;
+  abertas_hoje: number;
+  criadas_hoje: number;
+  vencem_hoje: number;
+  concluidas_hoje: number;
+  por_responsavel: FollowupResponsavelSummary[];
+}
+
+type FollowupResponsavelSummaryPayload = Partial<FollowupResponsavelSummary>;
+
+type FollowupSummaryPayload = Partial<Omit<FollowupSummary, 'por_responsavel'>> & {
+  por_responsavel?: FollowupResponsavelSummaryPayload[];
+};
 
 interface ClienteBusca {
   id: number;
@@ -96,6 +117,8 @@ interface FollowupFormState {
   vencimentoEm: string;
 }
 
+type FollowupPeriodoFiltro = 'hoje' | 'semana' | 'mes' | 'trimestre' | 'ano' | 'todos' | 'custom';
+
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos' },
   { value: 'aberta', label: FOLLOWUP_STATUS_LABELS.aberta },
@@ -109,6 +132,18 @@ const BUCKET_LABELS: Record<'atrasadas' | 'hoje' | 'proximos_7_dias' | 'depois',
   depois: 'Depois',
 };
 
+const PERIODO_FOLLOWUP_OPTIONS: Array<{
+  value: Exclude<FollowupPeriodoFiltro, 'custom'>;
+  label: string;
+}> = [
+  { value: 'hoje', label: 'Hoje' },
+  { value: 'semana', label: '7 dias' },
+  { value: 'mes', label: '30 dias' },
+  { value: 'trimestre', label: '3 meses' },
+  { value: 'ano', label: '1 ano' },
+  { value: 'todos', label: 'Todos' },
+];
+
 const initialFormState: FollowupFormState = {
   cliente: null,
   clienteBusca: '',
@@ -119,12 +154,200 @@ const initialFormState: FollowupFormState = {
   vencimentoEm: '',
 };
 
+const EMPTY_FOLLOWUP_SUMMARY: FollowupSummary = {
+  abertas: 0,
+  criadas: 0,
+  abertas_hoje: 0,
+  criadas_hoje: 0,
+  atrasadas: 0,
+  vencem: 0,
+  vencem_hoje: 0,
+  concluidas: 0,
+  concluidas_hoje: 0,
+  por_responsavel: [],
+};
+
+function toSummaryNumber(value: unknown): number {
+  const numeric = Number(value ?? 0);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function normalizeResponsavelSummary(
+  responsavel: FollowupResponsavelSummaryPayload
+): FollowupResponsavelSummary | null {
+  const responsavelId = toSummaryNumber(responsavel.responsavel_usuario_id);
+  if (!responsavelId) return null;
+
+  const abertas = toSummaryNumber(responsavel.abertas ?? responsavel.abertas_hoje);
+  const criadas = toSummaryNumber(responsavel.criadas ?? responsavel.criadas_hoje);
+  const vencem = toSummaryNumber(responsavel.vencem ?? responsavel.vencem_hoje);
+  const concluidas = toSummaryNumber(responsavel.concluidas ?? responsavel.concluidas_hoje);
+
+  return {
+    responsavel_usuario_id: responsavelId,
+    responsavel_usuario_nome: responsavel.responsavel_usuario_nome || 'Responsável',
+    abertas,
+    criadas,
+    atrasadas: toSummaryNumber(responsavel.atrasadas),
+    vencem,
+    concluidas,
+    abertas_hoje: toSummaryNumber(responsavel.abertas_hoje ?? abertas),
+    criadas_hoje: toSummaryNumber(responsavel.criadas_hoje ?? criadas),
+    vencem_hoje: toSummaryNumber(responsavel.vencem_hoje ?? vencem),
+    concluidas_hoje: toSummaryNumber(responsavel.concluidas_hoje ?? concluidas),
+  };
+}
+
+function normalizeFollowupSummary(summary: FollowupSummaryPayload | null | undefined): FollowupSummary {
+  const abertas = toSummaryNumber(summary?.abertas ?? summary?.abertas_hoje);
+  const criadas = toSummaryNumber(summary?.criadas ?? summary?.criadas_hoje);
+  const vencem = toSummaryNumber(summary?.vencem ?? summary?.vencem_hoje);
+  const concluidas = toSummaryNumber(summary?.concluidas ?? summary?.concluidas_hoje);
+
+  return {
+    abertas,
+    criadas,
+    atrasadas: toSummaryNumber(summary?.atrasadas),
+    vencem,
+    concluidas,
+    abertas_hoje: toSummaryNumber(summary?.abertas_hoje ?? abertas),
+    criadas_hoje: toSummaryNumber(summary?.criadas_hoje ?? criadas),
+    vencem_hoje: toSummaryNumber(summary?.vencem_hoje ?? vencem),
+    concluidas_hoje: toSummaryNumber(summary?.concluidas_hoje ?? concluidas),
+    por_responsavel: Array.isArray(summary?.por_responsavel)
+      ? summary.por_responsavel
+        .map(normalizeResponsavelSummary)
+        .filter((responsavel): responsavel is FollowupResponsavelSummary => responsavel !== null)
+      : [],
+  };
+}
+
 function formatMonthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function parseDateKeyAsUtcNoon(dateKey: string): Date {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12));
+}
+
+function formatUtcDateKey(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function shiftDateKey(
+  dateKey: string,
+  adjustments: { months?: number; years?: number }
+): string {
+  const date = parseDateKeyAsUtcNoon(dateKey);
+
+  if (adjustments.years) {
+    date.setUTCFullYear(date.getUTCFullYear() + adjustments.years);
+  }
+  if (adjustments.months) {
+    date.setUTCMonth(date.getUTCMonth() + adjustments.months);
+  }
+
+  return formatUtcDateKey(date);
+}
+
 function sortByDueDate(a: FollowupTarefaCompleta, b: FollowupTarefaCompleta) {
   return a.vencimento_em.localeCompare(b.vencimento_em);
+}
+
+interface FollowupResponsavelBreakdown {
+  id: number;
+  nome: string;
+  total: number;
+}
+
+interface FollowupSummaryCardProps {
+  metric: FollowupMetricKey;
+  icon: ReactNode;
+  label: string;
+  value: number;
+  color: string;
+  iconColor?: string;
+  badgeColor?: BadgeProps['color'];
+  breakdown: FollowupResponsavelBreakdown[];
+  showBreakdown: boolean;
+}
+
+function getResponsavelBreakdown(
+  summary: FollowupSummary,
+  metric: FollowupMetricKey
+): FollowupResponsavelBreakdown[] {
+  return summary.por_responsavel
+    .map((responsavel) => ({
+      id: responsavel.responsavel_usuario_id,
+      nome: responsavel.responsavel_usuario_nome,
+      total: responsavel[metric],
+    }))
+    .filter((responsavel) => responsavel.total > 0)
+    .sort((a, b) => {
+      if (b.total !== a.total) return b.total - a.total;
+      return a.nome.localeCompare(b.nome);
+    });
+}
+
+function FollowupSummaryCard({
+  metric,
+  icon,
+  label,
+  value,
+  color,
+  iconColor = 'text-muted-foreground',
+  badgeColor = 'blue',
+  breakdown,
+  showBreakdown,
+}: FollowupSummaryCardProps) {
+  return (
+    <div
+      data-testid={`followup-summary-${metric}`}
+      className={cn(
+        'min-h-[116px] rounded-xl border border-border border-l-4 bg-card p-4 shadow-sm',
+        color
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className={cn('mt-0.5 shrink-0', iconColor)} aria-hidden="true">
+          {icon}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="text-2xl font-bold text-foreground">{value}</p>
+        </div>
+      </div>
+
+      {showBreakdown && (
+        <div className="mt-3 flex flex-col gap-2">
+          <Divider className="my-0 bg-border/70" />
+          <div className="flex flex-col gap-1.5">
+            {breakdown.length > 0 ? (
+              breakdown.map((responsavel) => (
+                <div
+                  key={`${metric}-${responsavel.id}`}
+                  className="flex items-center justify-between gap-3 text-xs"
+                >
+                  <span className="min-w-0 truncate text-muted-foreground">
+                    {responsavel.nome}
+                  </span>
+                  <Badge color={badgeColor} size="sm" className="shrink-0">
+                    {responsavel.total}
+                  </Badge>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs font-medium text-muted-foreground">Nenhum</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function FollowupPage() {
@@ -150,6 +373,7 @@ export default function FollowupPage() {
   const canCreate = canAccess;
   const canMutate = currentUserRoles.includes('atendente') || currentUserRoles.includes('admin');
   const currentUserId = Number(user?.id);
+  const isPrimaryAdmin = user?.role?.toLowerCase() === 'admin';
   const fallbackResponsaveis = useMemo<ResponsavelOption[]>(() => {
     const currentUserId = Number(user?.id);
     const canFallbackCurrentUser = !Number.isNaN(currentUserId)
@@ -159,14 +383,7 @@ export default function FollowupPage() {
   }, [currentUserRoles, user]);
 
   const [tarefas, setTarefas] = useState<FollowupTarefaCompleta[]>([]);
-  const [summary, setSummary] = useState<FollowupSummary>({
-    abertas_hoje: 0,
-    criadas_hoje: 0,
-    atrasadas: 0,
-    vencem_hoje: 0,
-    concluidas_hoje: 0,
-    por_responsavel: [],
-  });
+  const [summary, setSummary] = useState<FollowupSummary>(EMPTY_FOLLOWUP_SUMMARY);
   const [responsaveis, setResponsaveis] = useState<ResponsavelOption[]>([]);
   const [clienteResultados, setClienteResultados] = useState<ClienteBusca[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,7 +395,8 @@ export default function FollowupPage() {
   const [tipoFiltro, setTipoFiltro] = useState('');
   const [responsavelFiltro, setResponsavelFiltro] = useState('');
   const [vencimentoDe, setVencimentoDe] = useState('');
-  const [vencimentoAte, setVencimentoAte] = useState('');
+  const [vencimentoAte, setVencimentoAte] = useState(() => getClinicDateKey());
+  const [periodoVencimento, setPeriodoVencimento] = useState<FollowupPeriodoFiltro>('hoje');
   const [responsavelFiltroInicializado, setResponsavelFiltroInicializado] = useState(false);
 
   const [viewMode, setViewMode] = useState<'lista' | 'calendario'>('lista');
@@ -289,12 +507,12 @@ export default function FollowupPage() {
     if (responsavelFiltroInicializado) return;
     if (isLoading || !user || !canAccess) return;
 
-    if (!Number.isNaN(currentUserId)) {
+    if (!isPrimaryAdmin && !Number.isNaN(currentUserId)) {
       setResponsavelFiltro(String(currentUserId));
     }
 
     setResponsavelFiltroInicializado(true);
-  }, [canAccess, currentUserId, isLoading, responsavelFiltroInicializado, user]);
+  }, [canAccess, currentUserId, isLoading, isPrimaryAdmin, responsavelFiltroInicializado, user]);
 
   useEffect(() => {
     if (!taskModalOpen) return;
@@ -354,16 +572,7 @@ export default function FollowupPage() {
         return;
       }
       setTarefas(data.items ?? []);
-      setSummary(
-        data.summary ?? {
-          abertas_hoje: 0,
-          criadas_hoje: 0,
-          atrasadas: 0,
-          vencem_hoje: 0,
-          concluidas_hoje: 0,
-          por_responsavel: [],
-        }
-      );
+      setSummary(normalizeFollowupSummary(data.summary));
     } catch {
       setError('Erro ao carregar followups');
     } finally {
@@ -431,6 +640,53 @@ export default function FollowupPage() {
 
   const totalVisivel = tarefasVisiveis.length;
   const diaSelecionadoLabel = selectedDay ? formatarData(formatLocalDateKey(selectedDay)) : '';
+  const showResponsavelBreakdown = currentUserRoles.includes('admin');
+  const summaryCards: Array<Omit<FollowupSummaryCardProps, 'breakdown' | 'showBreakdown'>> = [
+    {
+      metric: 'abertas',
+      icon: <ClipboardList className="size-5" />,
+      label: 'Abertas',
+      value: summary.abertas,
+      color: 'border-primary/40',
+      badgeColor: 'orange',
+    },
+    {
+      metric: 'criadas',
+      icon: <Plus className="size-5" />,
+      label: 'Criadas',
+      value: summary.criadas,
+      color: 'border-info-500/40',
+      iconColor: 'text-info-600',
+      badgeColor: 'blue',
+    },
+    {
+      metric: 'atrasadas',
+      icon: <Clock3 className="size-5" />,
+      label: 'Atrasadas',
+      value: summary.atrasadas,
+      color: 'border-error-500/40',
+      iconColor: 'text-error-600',
+      badgeColor: 'red',
+    },
+    {
+      metric: 'vencem',
+      icon: <CalendarDays className="size-5" />,
+      label: 'Vencem',
+      value: summary.vencem,
+      color: 'border-warning-500/40',
+      iconColor: 'text-warning-600',
+      badgeColor: 'yellow',
+    },
+    {
+      metric: 'concluidas',
+      icon: <CheckCircle2 className="size-5" />,
+      label: 'Concluídas',
+      value: summary.concluidas,
+      color: 'border-success-500/40',
+      iconColor: 'text-success-600',
+      badgeColor: 'green',
+    },
+  ];
 
   function canConcludeTask(task: FollowupTarefaCompleta) {
     if (task.status !== 'aberta') return false;
@@ -444,6 +700,37 @@ export default function FollowupPage() {
     setResponsavelFiltro('');
     setVencimentoDe('');
     setVencimentoAte('');
+    setPeriodoVencimento('todos');
+  }
+
+  function aplicarPeriodoVencimento(periodo: Exclude<FollowupPeriodoFiltro, 'custom'>) {
+    const hoje = getClinicDateKey();
+    let vencimentoAteValue = '';
+
+    switch (periodo) {
+      case 'hoje':
+        vencimentoAteValue = hoje;
+        break;
+      case 'semana':
+        vencimentoAteValue = addDaysToClinicDateKey(hoje, 7);
+        break;
+      case 'mes':
+        vencimentoAteValue = addDaysToClinicDateKey(hoje, 30);
+        break;
+      case 'trimestre':
+        vencimentoAteValue = shiftDateKey(hoje, { months: 3 });
+        break;
+      case 'ano':
+        vencimentoAteValue = shiftDateKey(hoje, { years: 1 });
+        break;
+      case 'todos':
+        vencimentoAteValue = '';
+        break;
+    }
+
+    setPeriodoVencimento(periodo);
+    setVencimentoDe('');
+    setVencimentoAte(vencimentoAteValue);
   }
 
   const abrirNovaTarefa = useCallback(async (clienteId?: number, tipo?: string | null) => {
@@ -737,85 +1024,19 @@ export default function FollowupPage() {
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-        <StatCard
-          icon={<ClipboardList className="w-5 h-5" />}
-          label="Abertas hoje"
-          value={summary.abertas_hoje}
-          color="border-primary/40"
-        />
-        <StatCard
-          icon={<Plus className="w-5 h-5" />}
-          label="Criadas hoje"
-          value={summary.criadas_hoje}
-          color="border-info-500/40"
-          iconColor="text-info-600"
-        />
-        <StatCard
-          icon={<Clock3 className="w-5 h-5" />}
-          label="Atrasadas"
-          value={summary.atrasadas}
-          color="border-error-500/40"
-          iconColor="text-error-600"
-        />
-        <StatCard
-          icon={<CalendarDays className="w-5 h-5" />}
-          label="Vencem hoje"
-          value={summary.vencem_hoje}
-          color="border-warning-500/40"
-          iconColor="text-warning-600"
-        />
-        <StatCard
-          icon={<CheckCircle2 className="w-5 h-5" />}
-          label="Concluídas hoje"
-          value={summary.concluidas_hoje}
-          color="border-success-500/40"
-          iconColor="text-success-600"
-        />
+      <div className="flex flex-wrap gap-2">
+        {PERIODO_FOLLOWUP_OPTIONS.map((periodo) => (
+          <Button
+            key={periodo.value}
+            size="sm"
+            variant={periodoVencimento === periodo.value ? 'primary' : 'secondary'}
+            aria-pressed={periodoVencimento === periodo.value}
+            onClick={() => aplicarPeriodoVencimento(periodo.value)}
+          >
+            {periodo.label}
+          </Button>
+        ))}
       </div>
-
-      {currentUserRoles.includes('admin') && summary.por_responsavel.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <div className="mb-4">
-            <h2 className="text-base font-semibold text-foreground">Resumo por funcionário</h2>
-            <p className="text-sm text-muted-foreground">
-              Acompanhamento diário por responsável de followup.
-            </p>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
-            {[
-              { key: 'abertas_hoje', label: 'Abertas hoje' },
-              { key: 'criadas_hoje', label: 'Criadas hoje' },
-              { key: 'concluidas_hoje', label: 'Concluídas hoje' },
-              { key: 'atrasadas', label: 'Atrasadas' },
-            ].map((grupo) => (
-              <div key={grupo.key} className="rounded-xl border border-border bg-background px-4 py-3">
-                <h3 className="text-sm font-semibold text-foreground">{grupo.label}</h3>
-                <div className="mt-3 space-y-2">
-                  {summary.por_responsavel
-                    .filter((responsavel) => Number(responsavel[grupo.key as keyof typeof responsavel]) > 0)
-                    .map((responsavel) => (
-                      <div
-                        key={`${grupo.key}-${responsavel.responsavel_usuario_id}`}
-                        className="flex items-center justify-between gap-3 text-sm"
-                      >
-                        <span className="text-muted-foreground">{responsavel.responsavel_usuario_nome}</span>
-                        <Badge color="blue">
-                          {responsavel[grupo.key as keyof typeof responsavel] as number}
-                        </Badge>
-                      </div>
-                    ))}
-
-                  {!summary.por_responsavel.some(
-                    (responsavel) => Number(responsavel[grupo.key as keyof typeof responsavel]) > 0
-                  ) && <p className="text-sm text-muted-foreground">Nenhum</p>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <FilterBar
         fields={[
@@ -848,11 +1069,28 @@ export default function FollowupPage() {
           if (name === 'status') setStatusFiltro(value);
           if (name === 'tipo') setTipoFiltro(value);
           if (name === 'responsavel') setResponsavelFiltro(value);
-          if (name === 'vencimentoDe') setVencimentoDe(value);
-          if (name === 'vencimentoAte') setVencimentoAte(value);
+          if (name === 'vencimentoDe') {
+            setVencimentoDe(value);
+            setPeriodoVencimento('custom');
+          }
+          if (name === 'vencimentoAte') {
+            setVencimentoAte(value);
+            setPeriodoVencimento('custom');
+          }
         }}
         onClear={limparFiltros}
       />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {summaryCards.map((card) => (
+          <FollowupSummaryCard
+            key={card.metric}
+            {...card}
+            breakdown={getResponsavelBreakdown(summary, card.metric)}
+            showBreakdown={showResponsavelBreakdown}
+          />
+        ))}
+      </div>
 
       {viewMode === 'calendario' && (
         <div className="space-y-4">

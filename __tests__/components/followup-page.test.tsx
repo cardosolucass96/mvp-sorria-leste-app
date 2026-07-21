@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 
 import FollowupPage from '@/app/followup/page';
+import { addDaysToClinicDateKey, getClinicDateKey } from '@/lib/time';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -106,6 +107,10 @@ function mockJsonResponse(data: unknown, init: { ok?: boolean; status?: number }
   });
 }
 
+function getFollowupParamsFromUrl(url: unknown): URLSearchParams {
+  return new URLSearchParams(String(url).split('?')[1] ?? '');
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   localStorage.clear();
@@ -156,7 +161,139 @@ describe('FollowupPage', () => {
       expect(screen.getByLabelText('Responsável')).toHaveValue('2');
     });
     await waitFor(() => {
-      expect(mockUnitFetch).toHaveBeenCalledWith('/api/followup?responsavel_usuario_id=2');
+      const firstCallParams = getFollowupParamsFromUrl(mockUnitFetch.mock.calls[0]?.[0]);
+      expect(firstCallParams.get('responsavel_usuario_id')).toBe('2');
+      expect(firstCallParams.get('vencimento_ate')).toBe(getClinicDateKey());
+    });
+  });
+
+  test('admin abre a página com todos os responsáveis no filtro padrão', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 1, nome: 'Administrador', role: 'admin', roles: ['admin'] },
+      isLoading: false,
+      currentUnidade: 1,
+      hasRole: (roles: string | string[]) => {
+        const values = Array.isArray(roles) ? roles : [roles];
+        return values.includes('admin');
+      },
+    });
+
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse({
+        items: [makeTask({ id: 1, titulo: 'Tarefa de qualquer responsável' })],
+        summary: {
+          abertas: 1,
+          atrasadas: 0,
+          vencem_hoje: 1,
+          concluidas_hoje: 0,
+        },
+      })
+    );
+
+    render(<FollowupPage />);
+
+    expect(await screen.findByText('Tarefa de qualquer responsável')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Responsável')).toHaveValue('');
+    });
+    await waitFor(() => {
+      const firstCallParams = getFollowupParamsFromUrl(mockUnitFetch.mock.calls[0]?.[0]);
+      expect(firstCallParams.get('responsavel_usuario_id')).toBeNull();
+      expect(firstCallParams.get('vencimento_ate')).toBe(getClinicDateKey());
+    });
+    expect(mockUnitFetch).not.toHaveBeenCalledWith('/api/followup?responsavel_usuario_id=1');
+  });
+
+  test('mostra o resumo por responsável dentro de cada card para admin', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 1, nome: 'Administrador', role: 'admin', roles: ['admin'] },
+      isLoading: false,
+      currentUnidade: 1,
+      hasRole: (roles: string | string[]) => {
+        const values = Array.isArray(roles) ? roles : [roles];
+        return values.includes('admin');
+      },
+    });
+
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse({
+        items: [makeTask({ id: 1, titulo: 'Tarefa no resumo' })],
+        summary: {
+          abertas: 2,
+          criadas: 3,
+          atrasadas: 0,
+          vencem: 2,
+          concluidas: 10,
+          por_responsavel: [
+            {
+              responsavel_usuario_id: 11,
+              responsavel_usuario_nome: 'Talita',
+              abertas: 1,
+              criadas: 1,
+              atrasadas: 0,
+              vencem: 1,
+              concluidas: 4,
+            },
+            {
+              responsavel_usuario_id: 12,
+              responsavel_usuario_nome: 'Viviane',
+              abertas: 1,
+              criadas: 2,
+              atrasadas: 0,
+              vencem: 1,
+              concluidas: 6,
+            },
+          ],
+        },
+      })
+    );
+
+    render(<FollowupPage />);
+
+    expect(await screen.findByText('Tarefa no resumo')).toBeInTheDocument();
+    expect(screen.queryByText('Resumo por funcionário')).not.toBeInTheDocument();
+    expect(screen.queryByText('Concluídas hoje')).not.toBeInTheDocument();
+
+    const concluidasCard = screen.getByTestId('followup-summary-concluidas');
+    expect(within(concluidasCard).getByText('Concluídas')).toBeInTheDocument();
+    expect(within(concluidasCard).getByText('10')).toBeInTheDocument();
+    expect(within(concluidasCard).getByText('Viviane')).toBeInTheDocument();
+    expect(within(concluidasCard).getByText('6')).toBeInTheDocument();
+    expect(within(concluidasCard).getByText('Talita')).toBeInTheDocument();
+    expect(within(concluidasCard).getByText('4')).toBeInTheDocument();
+  });
+
+  test('aplica filtro rápido de vencimento mantendo o responsável selecionado', async () => {
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse({
+        items: [makeTask({ id: 1, titulo: 'Tarefa filtrada por período' })],
+        summary: {
+          abertas: 1,
+          atrasadas: 0,
+          vencem_hoje: 1,
+          concluidas_hoje: 0,
+        },
+      })
+    );
+
+    const user = userEvent.setup();
+    render(<FollowupPage />);
+
+    expect(await screen.findByText('Tarefa filtrada por período')).toBeInTheDocument();
+
+    const chamadasAntesDoPeriodo = mockUnitFetch.mock.calls.length;
+    await user.click(screen.getByRole('button', { name: '7 dias' }));
+
+    await waitFor(() => {
+      const novasChamadas = mockUnitFetch.mock.calls.slice(chamadasAntesDoPeriodo);
+      const encontrouFiltroSeteDias = novasChamadas.some(([url]) => {
+        const params = getFollowupParamsFromUrl(url);
+        return params.get('responsavel_usuario_id') === '2'
+          && params.get('vencimento_ate') === addDaysToClinicDateKey(getClinicDateKey(), 7)
+          && !params.has('vencimento_de');
+      });
+
+      expect(encontrouFiltroSeteDias).toBe(true);
     });
   });
 

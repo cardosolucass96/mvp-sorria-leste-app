@@ -19,9 +19,13 @@ function buildSummary(items: FollowupTarefaCompleta[]) {
   const porResponsavel = new Map<number, {
     responsavel_usuario_id: number;
     responsavel_usuario_nome: string;
+    abertas: number;
+    criadas: number;
+    atrasadas: number;
+    vencem: number;
+    concluidas: number;
     abertas_hoje: number;
     criadas_hoje: number;
-    atrasadas: number;
     vencem_hoje: number;
     concluidas_hoje: number;
   }>();
@@ -33,12 +37,19 @@ function buildSummary(items: FollowupTarefaCompleta[]) {
       const responsavel = porResponsavel.get(item.responsavel_usuario_id) ?? {
         responsavel_usuario_id: item.responsavel_usuario_id,
         responsavel_usuario_nome: item.responsavel_usuario_nome,
+        abertas: 0,
+        criadas: 0,
+        atrasadas: 0,
+        vencem: 0,
+        concluidas: 0,
         abertas_hoje: 0,
         criadas_hoje: 0,
-        atrasadas: 0,
         vencem_hoje: 0,
         concluidas_hoje: 0,
       };
+
+      acc.criadas += 1;
+      responsavel.criadas += 1;
 
       if (createdToday) {
         acc.criadas_hoje += 1;
@@ -46,6 +57,9 @@ function buildSummary(items: FollowupTarefaCompleta[]) {
       }
 
       if (item.status === 'aberta') {
+        acc.abertas += 1;
+        responsavel.abertas += 1;
+
         if (createdToday) {
           acc.abertas_hoje += 1;
           responsavel.abertas_hoje += 1;
@@ -56,15 +70,23 @@ function buildSummary(items: FollowupTarefaCompleta[]) {
           if (vencimento.getTime() < now.getTime()) {
             acc.atrasadas += 1;
             responsavel.atrasadas += 1;
-          } else if (getClinicDateKey(vencimento) === todayKey) {
-            acc.vencem_hoje += 1;
-            responsavel.vencem_hoje += 1;
+          } else {
+            acc.vencem += 1;
+            responsavel.vencem += 1;
+
+            if (getClinicDateKey(vencimento) === todayKey) {
+              acc.vencem_hoje += 1;
+              responsavel.vencem_hoje += 1;
+            }
           }
         }
 
         porResponsavel.set(item.responsavel_usuario_id, responsavel);
         return acc;
       }
+
+      acc.concluidas += 1;
+      responsavel.concluidas += 1;
 
       const concluidaEm = parseLocalDateTime(item.concluida_em);
       if (concluidaEm && getClinicDateKey(concluidaEm) === todayKey) {
@@ -75,14 +97,25 @@ function buildSummary(items: FollowupTarefaCompleta[]) {
       porResponsavel.set(item.responsavel_usuario_id, responsavel);
       return acc;
     },
-    { abertas_hoje: 0, criadas_hoje: 0, atrasadas: 0, vencem_hoje: 0, concluidas_hoje: 0 }
+    {
+      abertas: 0,
+      criadas: 0,
+      atrasadas: 0,
+      vencem: 0,
+      concluidas: 0,
+      abertas_hoje: 0,
+      criadas_hoje: 0,
+      vencem_hoje: 0,
+      concluidas_hoje: 0,
+    }
   );
 
   return {
     ...summary,
     por_responsavel: Array.from(porResponsavel.values()).sort((a, b) => {
-      if (b.abertas_hoje !== a.abertas_hoje) return b.abertas_hoje - a.abertas_hoje;
-      if (b.criadas_hoje !== a.criadas_hoje) return b.criadas_hoje - a.criadas_hoje;
+      const totalA = a.criadas + a.abertas + a.atrasadas + a.vencem + a.concluidas;
+      const totalB = b.criadas + b.abertas + b.atrasadas + b.vencem + b.concluidas;
+      if (totalB !== totalA) return totalB - totalA;
       return a.responsavel_usuario_nome.localeCompare(b.responsavel_usuario_nome);
     }),
   };

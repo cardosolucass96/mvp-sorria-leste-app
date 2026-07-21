@@ -67,9 +67,15 @@ describe('FollowupCalendario', () => {
     render(<FollowupCalendarioHarness />);
 
     expect(screen.getByText('Julho de 2026')).toBeInTheDocument();
-    expect(screen.getByText('09:00 Ligar Ana')).toBeInTheDocument();
-    expect(screen.getByText('11:00 Cobrar Bruno')).toBeInTheDocument();
+    expect(screen.getByText('06:00 Ligar Ana')).toBeInTheDocument();
+    expect(screen.getByText('08:00 Cobrar Bruno')).toBeInTheDocument();
     expect(screen.getByText('+1 outra(s)')).toBeInTheDocument();
+  });
+
+  test('mantém contraste legível no texto de dia sem tarefas', () => {
+    render(<FollowupCalendarioHarness />);
+
+    expect(screen.getByText('Sem tarefas')).toHaveClass('text-foreground/70');
   });
 
   test('seleciona o dia ao clicar na célula do mês', () => {

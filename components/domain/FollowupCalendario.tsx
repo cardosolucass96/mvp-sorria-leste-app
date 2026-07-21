@@ -267,7 +267,7 @@ export default function FollowupCalendario<T extends FollowupMinimal>({
                     'flex h-[92px] w-full min-w-0 flex-col items-start justify-between overflow-hidden rounded-2xl border p-2.5 text-left transition-all duration-200 sm:h-[102px] sm:p-3 lg:h-[112px]',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2',
                     getUrgenciaSurfaceClass(info?.urgencia),
-                    isSelected && 'border-primary/45 bg-primary-50 ring-2 ring-primary/15 shadow-[0_12px_24px_-18px_rgba(37,99,235,0.8)]',
+                    isSelected && 'border-primary/45 bg-primary-50 ring-2 ring-primary/15 shadow-[0_12px_24px_-18px_rgba(37,99,235,0.8)] dark:border-primary/70 dark:bg-primary/20 dark:ring-primary/35',
                     className
                   )}
                 >
@@ -322,7 +322,7 @@ export default function FollowupCalendario<T extends FollowupMinimal>({
                       </>
                     ) : (
                       <div className="flex h-7 items-end">
-                        <span className="text-[11px] text-muted-foreground/75">
+                        <span className="text-[11px] font-medium text-foreground/70 dark:text-foreground/75">
                           {dayIsToday ? 'Sem tarefas' : ' '}
                         </span>
                       </div>

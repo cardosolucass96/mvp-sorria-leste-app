@@ -89,6 +89,7 @@ describe('AgendaCalendario', () => {
     expect(screen.getByText('11:00 Bruno')).toBeInTheDocument();
     expect(screen.getByText('Diego')).toBeInTheDocument();
     expect(screen.getByText('+1 outro(s)')).toBeInTheDocument();
+    expect(screen.getByText('+1 outro(s)')).toHaveClass('text-foreground/70');
     expect(screen.queryByText(/^Sem data$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Sem hora/i)).not.toBeInTheDocument();
     expect(screen.getByText(/^dom$/i)).toBeInTheDocument();

@@ -130,7 +130,7 @@ describe('GET /api/followup', () => {
 
     const month = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
     const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-    const { status, data } = await callRoute<{ items: typeof overdueTask[]; summary: Record<string, number> }>(
+    const { status, data } = await callRoute<{ items: typeof overdueTask[]; summary: Record<string, unknown> }>(
       listFollowups,
       '/api/followup',
       {
@@ -149,9 +149,29 @@ describe('GET /api/followup', () => {
     expect(data.items).toHaveLength(3);
     expect(data.summary).toEqual({
       abertas: 2,
+      criadas: 3,
       atrasadas: 1,
+      vencem: 1,
+      concluidas: 1,
+      abertas_hoje: 0,
+      criadas_hoje: 0,
       vencem_hoje: 1,
       concluidas_hoje: 1,
+      por_responsavel: [
+        {
+          responsavel_usuario_id: 2,
+          responsavel_usuario_nome: 'Recepção 1',
+          abertas: 2,
+          criadas: 3,
+          atrasadas: 1,
+          vencem: 1,
+          concluidas: 1,
+          abertas_hoje: 0,
+          criadas_hoje: 0,
+          vencem_hoje: 1,
+          concluidas_hoje: 1,
+        },
+      ],
     });
 
     const selectQuery = getExecutedQueries().find((entry) => entry.sql.includes('FROM followup_tarefas f'));

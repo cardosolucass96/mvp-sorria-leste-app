@@ -396,7 +396,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                         {day.date.getDate()}
                       </span>
                       {dayGroups.length > 0 ? (
-                        <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground">
+                        <span className="rounded-full bg-background/88 px-2 py-1 text-[11px] font-semibold text-foreground/70 shadow-sm ring-1 ring-border/60">
                           {dayGroups.length}
                         </span>
                       ) : null}
@@ -421,7 +421,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                       ))}
 
                       {remaining > 0 ? (
-                        <span className="truncate pl-1 text-[11px] font-medium text-muted-foreground">
+                        <span className="truncate pl-1 text-[11px] font-medium text-foreground/70 dark:text-foreground/75">
                           +{remaining} outro(s)
                         </span>
                       ) : (
