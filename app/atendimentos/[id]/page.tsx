@@ -18,6 +18,7 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 import { finalizarJanelaDeImpressao } from '@/lib/utils/print';
 import { getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 import { PRINT_STYLE_TOKENS_BASE } from '@/lib/printStyles';
+import { isAcrescimoEmExecucaoACobrar } from '@/lib/utils/itemStatus';
 
 interface Procedimento {
   id: number;
@@ -66,6 +67,7 @@ interface ItemAtendimento {
   valor_original: number | null;
   valor_final: number | null;
   valor_pago: number;
+  adicionado_em_execucao: number | null;
   status: string;
   group_id: string | null;
   dentes?: string | null;
@@ -752,18 +754,23 @@ export default function AtendimentoDetalhePage({
             faces: d.faces.map(f => ({ nome: f, concluido: false })),
           })))
         : null;
+      const payload: Record<string, unknown> = {
+        procedimento_id: parseInt(procId),
+        valor: valorBase * quantidade,
+        dentes: dentesParaSalvar,
+        quantidade,
+        observacoes: procObservacoes || null,
+      };
+
+      if (atendimento?.status !== 'em_execucao') {
+        payload.executor_id = execId ? parseInt(execId) : null;
+        payload.criado_por_id = atendimento?.avaliador_id ?? user?.id;
+      }
+
       const res = await unitFetch(`/api/atendimentos/${id}/itens`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          procedimento_id: parseInt(procId),
-          executor_id: execId ? parseInt(execId) : null,
-          criado_por_id: atendimento?.avaliador_id ?? user?.id,
-          valor: valorBase * quantidade,
-          dentes: dentesParaSalvar,
-          quantidade,
-          observacoes: procObservacoes || null,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -2028,7 +2035,7 @@ export default function AtendimentoDetalhePage({
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">{renderValorCell(item)}</td>
-                        <td className="px-4 py-3 text-center"><StatusBadge type="item" status={item.status} /></td>
+                        <td className="px-4 py-3 text-center"><StatusBadge type="item" status={item.status} item={item} /></td>
                         {podRemover && (
                           <td className="px-4 py-3 text-center">
                             <button onClick={() => handleRemoverItem(item.id)} className="text-error-500 hover:text-error-700 p-1" title="Remover">
@@ -2045,6 +2052,7 @@ export default function AtendimentoDetalhePage({
                   const totalGrupo = grupoItens.reduce((s, i) => s + getValorAtualItem(i), 0);
                   const statusAgregado = getStatusAgregado(grupoItens);
                   const primeiro = grupoItens[0];
+                  const grupoACobrar = grupoItens.some(isAcrescimoEmExecucaoACobrar);
 
                   return (
                     <React.Fragment key={groupId}>
@@ -2112,7 +2120,15 @@ export default function AtendimentoDetalhePage({
                           )}
                         </td>
                         <td className="px-4 py-3 text-right font-medium">{formatarMoeda(totalGrupo)}</td>
-                        <td className="px-4 py-3 text-center"><StatusBadge type="item" status={statusAgregado} /></td>
+                        <td className="px-4 py-3 text-center">
+                          <StatusBadge
+                            type="item"
+                            status={statusAgregado}
+                            item={grupoACobrar && statusAgregado === 'pago'
+                              ? { status: 'pago', adicionado_em_execucao: 1, valor_pago: 0, valor_final: 1 }
+                              : primeiro}
+                          />
+                        </td>
                         {podRemover && (
                           <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                             <button onClick={() => handleRemoverGrupo(groupId)} className="text-error-500 hover:text-error-700 p-1" title="Remover procedimento">
@@ -2135,7 +2151,7 @@ export default function AtendimentoDetalhePage({
                           <td className="px-4 py-2" />
                           <td className="px-4 py-2" />
                           <td className="px-4 py-2 text-right">{renderValorCell(item, true)}</td>
-                          <td className="px-4 py-2 text-center"><StatusBadge type="item" status={item.status} size="sm" /></td>
+                          <td className="px-4 py-2 text-center"><StatusBadge type="item" status={item.status} item={item} size="sm" /></td>
                           {podRemover && (
                             <td className="px-4 py-2 text-center">
                               <button onClick={() => handleRemoverItem(item.id)} className="text-error-400 hover:text-error-600 p-1" title="Remover dente">
@@ -2223,14 +2239,20 @@ export default function AtendimentoDetalhePage({
                 </div>
               ) : null;
             })()}
-            <Select
-              label="Executor"
-              name="executor"
-              value={execId}
-              onChange={setExecId}
-              options={executores.map(e => ({ value: String(e.id), label: e.nome }))}
-              placeholder="Definir depois"
-            />
+            {atendimento?.status === 'em_execucao' ? (
+              <Alert type="info">
+                O acréscimo será vinculado a {user?.nome || 'você'} como venda e execução.
+              </Alert>
+            ) : (
+              <Select
+                label="Executor"
+                name="executor"
+                value={execId}
+                onChange={setExecId}
+                options={executores.map(e => ({ value: String(e.id), label: e.nome }))}
+                placeholder="Definir depois"
+              />
+            )}
             <Input
               label="Valor (R$)"
               name="valor"

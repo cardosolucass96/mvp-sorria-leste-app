@@ -17,7 +17,9 @@ export interface ItemProcedimento {
   executor_nome: string | null;
   criado_por_nome: string | null;
   valor: number;
+  valor_final?: number | null;
   valor_pago: number;
+  adicionado_em_execucao?: number | null;
   status: string;
   dentes: string | null;
   quantidade: number;

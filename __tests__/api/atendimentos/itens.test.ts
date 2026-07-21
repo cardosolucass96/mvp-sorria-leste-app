@@ -189,11 +189,11 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     expect(insertQuery!.params[3]).toBe(45);
   });
 
-  it('adiciona item em em_execucao com status=pago e adicionado_em_execucao=1', async () => {
+  it('adiciona item em em_execucao com status=pago, flag e usuário autenticado como venda/execução', async () => {
     setLastInsertId(12);
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from procedimentos where id', PROC_CANAL);
-    mockQueryResponse('select id, role from usuarios where id', { id: 4, role: 'executor' });
+    mockQueryResponse('select id, role from usuarios where id', { id: 1, role: 'admin' });
     mockQueryResponse('from itens_atendimento i', novoItem);
 
     const ctx = createRouteContext({ id: '4' });
@@ -209,6 +209,8 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     const queries = getExecutedQueries();
     const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
     expect(insertQuery).toBeDefined();
+    expect(insertQuery!.params[2]).toBe(1);
+    expect(insertQuery!.params[3]).toBe(1);
     // Params: ..., valor, valor_original, valor_final, dentes, quantidade, observacoes, status, adicionado_em_execucao
     expect(insertQuery!.params[10]).toBe('pago');
     expect(insertQuery!.params[11]).toBe(1);

@@ -36,6 +36,7 @@ import usePageTitle from '@/lib/utils/usePageTitle';
 import { getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 import { PRINT_STYLE_TOKENS_BASE, PRINT_STYLE_TOKENS_CLIENT_HEADER } from '@/lib/printStyles';
 import { calculateAgeFromDateOnly, getStoredUtcInstantMillis } from '@/lib/time';
+import { isAcrescimoEmExecucaoACobrar } from '@/lib/utils/itemStatus';
 
 const METODOS_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -102,7 +103,9 @@ interface ItemProcedimento {
   executor_nome: string | null;
   criado_por_nome: string | null;
   valor: number;
+  valor_final: number | null;
   valor_pago: number;
+  adicionado_em_execucao: number | null;
   status: string;
   dentes: string | null;
   dente_unico?: string | null;
@@ -1985,6 +1988,14 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               {procedimentosAgrupados.map((grupo) => {
                 const atendimento = atendimentosPorId.get(grupo.atendimento_id);
                 const itemPrincipal = grupo.itens[0];
+                const statusGrupo = grupo.itens.every((item) => item.status === 'concluido')
+                  ? 'concluido'
+                  : grupo.itens.some((item) => item.status === 'executando')
+                    ? 'executando'
+                    : grupo.itens.some((item) => item.status === 'pago')
+                      ? 'pago'
+                      : 'pendente';
+                const grupoACobrar = grupo.itens.some(isAcrescimoEmExecucaoACobrar);
                 const dentesGrupo = Array.from(new Set(
                   grupo.itens
                     .flatMap((item) => parseDentesLabels(item.dentes))
@@ -2004,13 +2015,10 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                             <h3 className="text-base font-semibold">{grupo.grupo_label}</h3>
                             <StatusBadge
                               type="item"
-                              status={grupo.itens.every((item) => item.status === 'concluido')
-                                ? 'concluido'
-                                : grupo.itens.some((item) => item.status === 'executando')
-                                  ? 'executando'
-                                  : grupo.itens.some((item) => item.status === 'pago')
-                                    ? 'pago'
-                                    : 'pendente'}
+                              status={statusGrupo}
+                              item={grupoACobrar && statusGrupo === 'pago'
+                                ? { status: 'pago', adicionado_em_execucao: 1, valor_pago: 0, valor_final: 1 }
+                                : itemPrincipal}
                             />
                             <span className="rounded-full bg-muted/70 px-2.5 py-1 text-xs font-medium text-muted-foreground">
                               {grupo.itens.length} item(ns)
@@ -2103,7 +2111,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                                   <td className="px-4 py-3 text-sm">{item.executor_nome || '-'}</td>
                                   <td className="px-4 py-3 text-right font-medium">{formatarMoeda(item.valor)}</td>
                                   <td className="px-4 py-3 text-right font-medium">{formatarMoeda(item.valor_pago)}</td>
-                                  <td className="px-4 py-3 text-center"><StatusBadge type="item" status={item.status} /></td>
+                                  <td className="px-4 py-3 text-center"><StatusBadge type="item" status={item.status} item={item} /></td>
                                   <td className="px-4 py-3 text-sm text-muted">
                                     {formatarData(item.concluido_at || item.created_at)}
                                   </td>
@@ -2827,7 +2835,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         >
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <StatusBadge type="item" status={modalProcedimento.status} />
+              <StatusBadge type="item" status={modalProcedimento.status} item={modalProcedimento} />
               {modalProcedimento.concluido_at && (
                 <span className="text-xs text-muted">Concluído em {formatarDataHora(modalProcedimento.concluido_at)}</span>
               )}

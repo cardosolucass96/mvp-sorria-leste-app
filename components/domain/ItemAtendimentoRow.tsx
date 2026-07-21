@@ -14,6 +14,9 @@ export interface ItemAtendimentoData {
   procedimento_nome: string;
   executor_nome?: string | null;
   valor: number;
+  valor_final?: number | null;
+  valor_pago?: number | null;
+  adicionado_em_execucao?: number | null;
   status: ItemStatus;
   dentes: string | null;
   quantidade: number;
@@ -63,7 +66,7 @@ export default function ItemAtendimentoRow({
         {formatarMoeda(item.valor)}
       </td>
       <td className="px-4 py-3 text-center">
-        <StatusBadge type="item" status={item.status} size="sm" />
+        <StatusBadge type="item" status={item.status} item={item} size="sm" />
       </td>
       <td className="px-4 py-3 text-center">
         {dentesFormatados ? (

@@ -371,12 +371,13 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
   // ═════════════════════════════════════════════
 
   describe('Adicionar item durante execução → flag adicionado_em_execucao', () => {
-    test('POST item em atendimento em_execucao insere com status=pago e flag adicionado_em_execucao=1', async () => {
+    test('POST item em atendimento em_execucao insere com status=pago, flag e usuário autenticado', async () => {
       mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO,
         status: 'em_execucao',
       });
       mockQueryResponse('from procedimentos where id', PROCEDIMENTO);
+      mockQueryResponse('select id, role from usuarios where id', { id: 1, role: 'admin' });
       setLastInsertId(3);
       mockQueryResponse('where i.id = ?', {
         id: 3,
@@ -405,9 +406,11 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
       const queries = getExecutedQueries();
       const insertQuery = queries.find(q => q.sql.includes('INSERT INTO itens_atendimento'));
       expect(insertQuery).toBeDefined();
-      // Params: ..., valor, valor_original, dentes, quantidade, observacoes, status, adicionado_em_execucao
-      expect(insertQuery!.params[9]).toBe('pago');
-      expect(insertQuery!.params[10]).toBe(1);
+      expect(insertQuery!.params[2]).toBe(1);
+      expect(insertQuery!.params[3]).toBe(1);
+      // Params: ..., valor, valor_original, valor_final, dentes, quantidade, observacoes, status, adicionado_em_execucao
+      expect(insertQuery!.params[10]).toBe('pago');
+      expect(insertQuery!.params[11]).toBe(1);
     });
 
     test('adicionar item em avaliação NÃO reverte status', async () => {

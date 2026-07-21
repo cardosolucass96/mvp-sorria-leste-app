@@ -406,7 +406,11 @@ export const PUT = withUnit(async (
       const contagem = await queryOne<{ total: number; concluidos: number; pendentes_pagamento: number }>(
         `SELECT COUNT(*) as total,
                 SUM(CASE WHEN status = 'concluido' THEN 1 ELSE 0 END) as concluidos,
-                SUM(CASE WHEN adicionado_em_execucao = 1 AND valor_pago < valor THEN 1 ELSE 0 END) as pendentes_pagamento
+                SUM(CASE
+                  WHEN adicionado_em_execucao = 1
+                    AND COALESCE(valor_pago, 0) + 0.001 < COALESCE(valor_final, valor)
+                  THEN 1 ELSE 0
+                END) as pendentes_pagamento
          FROM itens_atendimento WHERE atendimento_id = ?`,
         [parseInt(id)]
       );

@@ -9,6 +9,8 @@ import { STATUS_CONFIG, ITEM_STATUS_CONFIG, PARCELA_STATUS_CONFIG } from '@/lib/
 import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
 import type { AtendimentoStatus, ItemStatus, AgendamentoStatus } from '@/lib/types';
 import type { ParcelaStatus } from '@/lib/constants/status';
+import { isAcrescimoEmExecucaoACobrar, type ItemStatusFinanceiro } from '@/lib/utils/itemStatus';
+import { AlertTriangle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export type StatusBadgeType = 'atendimento' | 'item' | 'parcela' | 'agendamento';
@@ -19,6 +21,7 @@ export interface StatusBadgeProps {
   showIcon?: boolean;
   size?: BadgeProps['size'];
   className?: string;
+  item?: ItemStatusFinanceiro;
 }
 
 function getBadgeColor(bgCor: string): NonNullable<BadgeProps['color']> {
@@ -37,6 +40,7 @@ export default function StatusBadge({
   showIcon = true,
   size = 'md',
   className,
+  item,
 }: StatusBadgeProps) {
   let label = status;
   let Icon: LucideIcon | null = null;
@@ -48,10 +52,16 @@ export default function StatusBadge({
     Icon = config.icon;
     color = getBadgeColor(config.bgCor);
   } else if (type === 'item' && status in ITEM_STATUS_CONFIG) {
-    const config = ITEM_STATUS_CONFIG[status as ItemStatus];
-    label = config.label;
-    Icon = config.icon;
-    color = getBadgeColor(config.bgCor);
+    if (item && isAcrescimoEmExecucaoACobrar({ ...item, status })) {
+      label = 'A cobrar';
+      Icon = AlertTriangle;
+      color = 'yellow';
+    } else {
+      const config = ITEM_STATUS_CONFIG[status as ItemStatus];
+      label = config.label;
+      Icon = config.icon;
+      color = getBadgeColor(config.bgCor);
+    }
   } else if (type === 'parcela' && status in PARCELA_STATUS_CONFIG) {
     const config = PARCELA_STATUS_CONFIG[status as ParcelaStatus];
     label = config.label;

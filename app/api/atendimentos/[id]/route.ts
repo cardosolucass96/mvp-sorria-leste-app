@@ -664,6 +664,30 @@ async function validarTransicao(
       };
     }
   }
+
+  if (
+    (statusAtual === 'em_execucao' && novoStatus === 'finalizado') ||
+    (statusAtual === 'finalizado' && novoStatus === 'encerrado')
+  ) {
+    const acrescimosPendentes = await queryOne<CountResult>(
+      `SELECT COUNT(*) as count
+       FROM itens_atendimento
+       WHERE atendimento_id = ?
+         AND COALESCE(adicionado_em_execucao, 0) = 1
+         AND (
+           status <> 'concluido'
+           OR COALESCE(valor_pago, 0) + 0.001 < COALESCE(valor_final, valor)
+         )`,
+      [atendimentoId]
+    );
+
+    if (acrescimosPendentes && acrescimosPendentes.count > 0) {
+      return {
+        valido: false,
+        mensagem: 'Existem acréscimos de execução pendentes de cobrança ou conclusão',
+      };
+    }
+  }
   
   // NOTA: Em Execução → Finalizado é validado pelo endpoint dedicado
   // /api/atendimentos/[id]/finalizar (Sprint 7) que verifica:

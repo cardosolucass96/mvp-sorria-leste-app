@@ -49,7 +49,7 @@ export default function AbaProcedimentos({ procedimentos }: AbaProcedimentosProp
                 )}
               </div>
               <div className="text-right shrink-0">
-                <StatusBadge type="item" status={p.status} />
+                <StatusBadge type="item" status={p.status} item={p} />
                 <p className="text-sm font-medium mt-1">{formatarMoeda(p.valor_pago)}</p>
               </div>
             </div>

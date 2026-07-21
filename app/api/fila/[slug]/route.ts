@@ -16,6 +16,10 @@ interface ProcedimentoExecucao {
   cliente_id: number;
   cliente_nome: string;
   status: string;
+  valor: number;
+  valor_final: number | null;
+  valor_pago: number;
+  adicionado_em_execucao: number;
   created_at: string;
   concluido_at: string | null;
   dente_unico: string | null;
@@ -71,6 +75,10 @@ export const GET = withUnit(async (
         c.id as cliente_id,
         c.nome as cliente_nome,
         i.status,
+        i.valor,
+        i.valor_final,
+        i.valor_pago,
+        i.adicionado_em_execucao,
         i.created_at,
         i.concluido_at,
         json_extract(i.dentes, '$[0].dente') as dente_unico

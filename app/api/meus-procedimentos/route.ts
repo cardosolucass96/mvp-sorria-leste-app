@@ -16,6 +16,8 @@ interface ProcedimentoRow {
   tipo: string;
   valor: number | null;
   valor_final: number | null;
+  valor_pago: number;
+  adicionado_em_execucao: number;
   created_at: string;
   concluido_at: string | null;
 }
@@ -47,6 +49,8 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         'avaliacao' as tipo,
         ia.valor,
         ia.valor_final,
+        ia.valor_pago,
+        ia.adicionado_em_execucao,
         ia.created_at,
         ia.concluido_at
       FROM itens_atendimento ia
@@ -72,6 +76,8 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         'execucao' as tipo,
         ia.valor,
         ia.valor_final,
+        ia.valor_pago,
+        ia.adicionado_em_execucao,
         ia.created_at,
         ia.concluido_at
       FROM itens_atendimento ia

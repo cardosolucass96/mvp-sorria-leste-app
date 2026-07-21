@@ -11,6 +11,7 @@ import { Alert, LoadingState, PageHeader, Card, Button, Textarea } from '@/compo
 import { useToast } from '@/components/ui/Toast';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
+import { isAcrescimoEmExecucaoACobrar } from '@/lib/utils/itemStatus';
 
 interface ItemAtendimento {
   id: number;
@@ -18,7 +19,9 @@ interface ItemAtendimento {
   etapa_label: string | null;
   executor_nome: string | null;
   valor: number;
+  valor_final: number | null;
   valor_pago: number;
+  adicionado_em_execucao: number | null;
   status: string;
   dentes?: string | null;
   dente_unico: string | null;
@@ -118,6 +121,10 @@ export default function EncerrarAtendimentoPage({
 
   async function handleEncerrar() {
     if (!atendimento || atendimento.status === 'encerrado') return;
+    if (atendimento.itens.some(isAcrescimoEmExecucaoACobrar)) {
+      setError('Existem acréscimos de execução ainda a cobrar. Registre o pagamento antes de encerrar.');
+      return;
+    }
     setEncerrando(true);
     setError('');
     try {
@@ -145,6 +152,7 @@ export default function EncerrarAtendimentoPage({
   const totalPagamentos = pagamentosAtivos.reduce((s, p) => s + p.valor, 0);
   const itensConcluidos = atendimento.itens.filter(i => i.status === 'concluido');
   const itensPendentes = atendimento.itens.filter(i => i.status !== 'concluido');
+  const acrescimosPendentes = atendimento.itens.filter(isAcrescimoEmExecucaoACobrar);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 p-4">
@@ -163,6 +171,12 @@ export default function EncerrarAtendimentoPage({
       {jaEncerrado && (
         <Alert type="info">
           Este atendimento já foi encerrado em {atendimento.finalizado_at ? formatarDataHora(atendimento.finalizado_at) : '—'}.
+        </Alert>
+      )}
+
+      {!jaEncerrado && acrescimosPendentes.length > 0 && (
+        <Alert type="warning">
+          Existem {acrescimosPendentes.length} acréscimo(s) de execução ainda a cobrar. Registre o pagamento antes de encerrar.
         </Alert>
       )}
 
@@ -185,7 +199,7 @@ export default function EncerrarAtendimentoPage({
                   )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0 ml-4">
-                  <StatusBadge type="item" status={item.status} />
+                  <StatusBadge type="item" status={item.status} item={item} />
                   <span className="text-sm font-semibold">{formatarMoeda(item.valor)}</span>
                 </div>
               </div>
@@ -202,7 +216,7 @@ export default function EncerrarAtendimentoPage({
               {itensPendentes.map(item => (
                 <div key={item.id} className="flex items-center justify-between text-sm">
                   <span className="text-foreground">{nomeProcedimento(item)}</span>
-                  <StatusBadge type="item" status={item.status} />
+                  <StatusBadge type="item" status={item.status} item={item} />
                 </div>
               ))}
             </div>
@@ -268,7 +282,7 @@ export default function EncerrarAtendimentoPage({
           />
           <Button
             onClick={handleEncerrar}
-            disabled={encerrando}
+            disabled={encerrando || acrescimosPendentes.length > 0}
             loading={encerrando}
             className="w-full mt-4"
           >

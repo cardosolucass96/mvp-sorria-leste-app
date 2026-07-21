@@ -40,7 +40,9 @@ interface ItemAtendimento {
   executor_id: number | null;
   criado_por_id: number | null;
   valor: number;
+  valor_final: number | null;
   valor_pago: number;
+  adicionado_em_execucao: number;
   dentes: string | null;
   quantidade: number;
   por_dente: number;
@@ -341,13 +343,16 @@ export default function ExecucaoProcedimentoPage() {
     const res = await unitFetch(`/api/atendimentos/${item.atendimento_id}/itens`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ procedimento_id: parseInt(novoProcId), executor_id: user?.id, criado_por_id: user?.id }),
+      body: JSON.stringify({ procedimento_id: parseInt(novoProcId) }),
     });
     if (res.ok) {
       setShowNovoProcedimento(false);
       setNovoProcId('');
-      toast.success(`Procedimento adicionado! Atendimento voltou para Aguardando Pagamento.`);
+      toast.success('Procedimento adicionado e vinculado a você.');
       router.push('/execucao');
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || 'Erro ao adicionar procedimento');
     }
   }
 
@@ -533,7 +538,7 @@ export default function ExecucaoProcedimentoPage() {
       {/* ── Card principal ── */}
       <Card>
         <div className="flex justify-between items-start mb-4">
-          <StatusBadge type="item" status={item.status} />
+          <StatusBadge type="item" status={item.status} item={item} />
           {isDisponivel && (
             <span className="px-3 py-1 text-sm font-semibold rounded bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-100">
               Disponível
@@ -839,7 +844,7 @@ export default function ExecucaoProcedimentoPage() {
           className="mb-4"
           required
         />
-        <Alert type="warning">Ao adicionar, o atendimento voltará para Aguardando Pagamento.</Alert>
+        <Alert type="warning">Ao adicionar, a venda e a execução ficarão vinculadas a você. Se houver saldo, o procedimento aparecerá como a cobrar.</Alert>
         <div className="flex gap-2 mt-4">
           <Button onClick={adicionarProcedimento} className="flex-1">Adicionar</Button>
           <Button variant="secondary" onClick={() => { setShowNovoProcedimento(false); setNovoProcId(''); }} className="flex-1">Cancelar</Button>

@@ -54,7 +54,7 @@ export const GET = withAuth(async (_request, context) => {
 
     // Procedimentos (itens de todos os atendimentos)
     const procedimentos = await query(
-      `SELECT i.id, i.atendimento_id, i.valor, i.valor_pago, i.status,
+      `SELECT i.id, i.atendimento_id, i.valor, i.valor_final, i.valor_pago, i.adicionado_em_execucao, i.status,
               i.dentes, i.dente_unico, i.group_id, i.quantidade, i.observacoes, i.created_at, i.concluido_at,
               p.nome as procedimento_nome,
               i.etapa_label,

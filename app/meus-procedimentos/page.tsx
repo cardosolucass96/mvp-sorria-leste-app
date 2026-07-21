@@ -23,6 +23,8 @@ interface Procedimento {
   tipo: 'avaliacao' | 'execucao';
   valor: number | null;
   valor_final: number | null;
+  valor_pago: number;
+  adicionado_em_execucao: number;
   created_at: string;
   concluido_at: string | null;
 }
@@ -358,7 +360,7 @@ export default function MeusProcedimentosPage() {
               key: 'status',
               label: 'Status',
               align: 'center',
-              render: (proc) => <StatusBadge type="item" status={proc.status} showIcon />,
+              render: (proc) => <StatusBadge type="item" status={proc.status} item={proc} showIcon />,
             },
             {
               key: 'data',
@@ -456,7 +458,7 @@ export default function MeusProcedimentosPage() {
                       key: 'status',
                       label: 'Status',
                       align: 'center',
-                      render: (proc) => <StatusBadge type="item" status={proc.status} showIcon />,
+                      render: (proc) => <StatusBadge type="item" status={proc.status} item={proc} showIcon />,
                     },
                     {
                       key: 'data',

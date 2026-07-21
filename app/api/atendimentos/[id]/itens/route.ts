@@ -306,9 +306,16 @@ export const POST = withUnit(async (
       atendimento.categoria_id = procedimento.categoria_id;
     }
 
-    // Verifica executor se fornecido
-    if (executor_id) {
-      const validacaoExecutor = await validarExecutorSelecionado(executor_id, atendimento.categoria_id);
+    const isAddDuringExecucao = atendimento.status === 'em_execucao';
+    const usuarioAtualId = Number(context.user.sub);
+    const executorSolicitado = Number.isInteger(Number(executor_id)) && Number(executor_id) > 0
+      ? Number(executor_id)
+      : null;
+    const executorFinal = isAddDuringExecucao ? usuarioAtualId : executorSolicitado;
+
+    // Verifica executor se fornecido; em execução, o executor é sempre quem criou o acréscimo.
+    if (executorFinal) {
+      const validacaoExecutor = await validarExecutorSelecionado(executorFinal, atendimento.categoria_id);
       if (validacaoExecutor.kind === 'error') return validacaoExecutor.response;
     }
     
@@ -319,8 +326,10 @@ export const POST = withUnit(async (
       ? Number(criado_por_id)
       : null;
     const shouldResolverVendedorPadrao = ['triagem', 'avaliacao'].includes(atendimento.status)
-      && (!criadoPorSolicitado || criadoPorSolicitado === Number(context.user.sub));
-    const criadoPorFinal = shouldResolverVendedorPadrao
+      && (!criadoPorSolicitado || criadoPorSolicitado === usuarioAtualId);
+    const criadoPorFinal = isAddDuringExecucao
+      ? usuarioAtualId
+      : shouldResolverVendedorPadrao
       ? await resolveVendedorPadraoParaAtendimento(atendimento, context.user.sub)
       : criadoPorSolicitado ?? Number(context.user.sub);
 
@@ -351,7 +360,6 @@ export const POST = withUnit(async (
     // - status = 'pago' (visível para o executor sem precisar passar pelo pagamento)
     // - valor_pago = 0 (será cobrado depois, ao final do atendimento)
     // - adicionado_em_execucao = 1 (flag para o fluxo de finalização verificar e voltar para aguardando_pagamento)
-    const isAddDuringExecucao = atendimento.status === 'em_execucao';
     const statusItemInicial = isAddDuringExecucao ? 'pago' : 'pendente';
     const adicionadoEmExecucaoFlag = isAddDuringExecucao ? 1 : 0;
 
@@ -370,7 +378,7 @@ export const POST = withUnit(async (
           [
             parseInt(id as string),
             procedimento_id,
-            executor_id || null,
+            executorFinal,
             criadoPorFinal,
             valorPorDente,
             valorPorDente, // valor_original = snapshot do valor inicial
@@ -398,7 +406,7 @@ export const POST = withUnit(async (
       [
         parseInt(id as string),
         procedimento_id,
-        executor_id || null,
+        executorFinal,
         criadoPorFinal,
         valorFinal,
         valorFinal, // valor_original = snapshot do valor inicial

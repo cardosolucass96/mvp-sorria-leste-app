@@ -10,9 +10,11 @@ import '@testing-library/jest-dom';
 
 // Mock next/link
 jest.mock('next/link', () => {
-  return ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
+  const MockLink = ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
     <a href={href} {...props}>{children}</a>
   );
+  MockLink.displayName = 'MockLink';
+  return MockLink;
 });
 
 // ─── StatusBadge ─────────────────────────────────────────────────
@@ -28,6 +30,29 @@ describe('StatusBadge', () => {
   test('renderiza label correto para status item', () => {
     render(<StatusBadge type="item" status="pendente" />);
     expect(screen.getByText(/pendente/i)).toBeInTheDocument();
+  });
+
+  test('mostra A cobrar para acréscimo em execução sem pagamento financeiro', () => {
+    render(
+      <StatusBadge
+        type="item"
+        status="pago"
+        item={{ status: 'pago', adicionado_em_execucao: 1, valor_pago: 0, valor_final: 50 }}
+      />
+    );
+    expect(screen.getByText(/a cobrar/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^pago$/i)).not.toBeInTheDocument();
+  });
+
+  test('mantém Pago quando item pago tem cobertura financeira', () => {
+    render(
+      <StatusBadge
+        type="item"
+        status="pago"
+        item={{ status: 'pago', adicionado_em_execucao: 1, valor_pago: 50, valor_final: 50 }}
+      />
+    );
+    expect(screen.getByText(/^pago$/i)).toBeInTheDocument();
   });
 
   test('renderiza label correto para parcela', () => {

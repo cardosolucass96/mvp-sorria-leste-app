@@ -20,6 +20,10 @@ interface Procedimento {
   cliente_nome: string;
   executor_id: number | null;
   status: string;
+  valor: number;
+  valor_final: number | null;
+  valor_pago: number;
+  adicionado_em_execucao: number;
   created_at: string;
   concluido_at: string | null;
   dente_unico: string | null;
@@ -413,7 +417,7 @@ function PacienteSection({
                           <NomeProcedimento proc={proc} />
                         </span>
                       </div>
-                      <StatusBadge type="item" status={proc.status} />
+                      <StatusBadge type="item" status={proc.status} item={proc} />
                     </button>
                   ))}
                 </div>
@@ -437,7 +441,7 @@ function ProcedimentoCard({ proc, irmaos, onClick }: { proc: Procedimento; irmao
           <p className="text-sm text-muted-foreground">{proc.cliente_nome}</p>
           <p className="text-xs text-muted-foreground/80">Atendimento #{proc.atendimento_id}</p>
         </div>
-        <StatusBadge type="item" status={proc.status} />
+        <StatusBadge type="item" status={proc.status} item={proc} />
       </div>
       {irmaos.length > 0 && (
         <div className="mt-3 pt-3 border-t border-border-light">
@@ -448,7 +452,7 @@ function ProcedimentoCard({ proc, irmaos, onClick }: { proc: Procedimento; irmao
                 <span className="text-xs text-muted-foreground">
                   <NomeProcedimento proc={irmao} />
                 </span>
-                <StatusBadge type="item" status={irmao.status} />
+                <StatusBadge type="item" status={irmao.status} item={irmao} />
               </div>
             ))}
           </div>

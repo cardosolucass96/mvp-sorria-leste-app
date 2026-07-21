@@ -16,7 +16,9 @@ interface ItemAtendimento {
   cliente_id: number;
   categoria_id: number | null;
   valor: number;
+  valor_final: number | null;
   valor_pago: number;
+  adicionado_em_execucao: number;
   status: string;
   created_at: string;
   concluido_at: string | null;
@@ -46,7 +48,9 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         c.id as cliente_id,
         a.categoria_id,
         i.valor,
+        i.valor_final,
         i.valor_pago,
+        i.adicionado_em_execucao,
         i.dentes,
         i.quantidade,
         i.status,

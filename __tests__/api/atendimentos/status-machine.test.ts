@@ -126,7 +126,7 @@ describe('Máquina de estados — transições válidas', () => {
     const queries = getExecutedQueries();
     const updateQuery = queries.find(q => q.sql.includes('UPDATE atendimentos'));
     expect(updateQuery!.sql).toContain('liberado_por_id = ?');
-    expect(updateQuery!.sql).toContain("liberado_em = datetime('now'");
+    expect(updateQuery!.sql).toContain('liberado_em = ?');
   });
 
   it('em_execucao → aguardando_pagamento (volta permitida)', async () => {
@@ -359,6 +359,35 @@ describe('Máquina de estados — condições', () => {
 
     expect(status).toBe(400);
     expect(data.error).toBe('Ainda existem procedimentos de hoje sem cobertura financeira suficiente');
+  });
+
+  it('em_execucao → finalizado bloqueia acréscimo de execução pendente', async () => {
+    mockQueryResponse('select * from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
+    mockQueryResponse('coalesce(adicionado_em_execucao, 0) = 1', { count: 1 });
+
+    const ctx = createRouteContext({ id: '4' });
+    const { status, data } = await callRoute<{ error: string }>(updateAtendimento, '/api/atendimentos/4', {
+      method: 'PUT',
+      body: { status: 'finalizado' },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Existem acréscimos de execução pendentes de cobrança ou conclusão');
+  });
+
+  it('finalizado → encerrado bloqueia acréscimo de execução pendente', async () => {
+    const atendimentoFinalizado = { ...ATENDIMENTO_EM_EXECUCAO, id: 5, status: 'finalizado', finalizado_at: '2025-03-01' };
+    mockQueryResponse('select * from atendimentos where id', atendimentoFinalizado);
+    mockQueryResponse('coalesce(adicionado_em_execucao, 0) = 1', { count: 1 });
+
+    const ctx = createRouteContext({ id: '5' });
+    const { status, data } = await callRoute<{ error: string }>(updateAtendimento, '/api/atendimentos/5', {
+      method: 'PUT',
+      body: { status: 'encerrado' },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Existem acréscimos de execução pendentes de cobrança ou conclusão');
   });
 });
 
