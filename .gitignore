@@ -54,3 +54,9 @@ lib/*.report.json
 lib/*.preview.sql
 lib/*.import-all.sql
 backups/
+
+# local term-generation artifacts
+/scripts/gerar-termos-docx-manual.py
+/termos/manual-autentique-docx/
+/termos/manual-autentique-docx 2/
+/termos/manual-autentique-docx.zip
