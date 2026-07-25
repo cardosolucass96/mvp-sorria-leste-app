@@ -50,7 +50,10 @@ import { addDaysToClinicDateKey, getClinicDateKey } from '@/lib/time';
 interface Agendamento {
   id: number;
   cliente_id: number;
-  procedimento_id: number;
+  atendimento_origem_id: number | null;
+  item_atendimento_origem_id: number | null;
+  etapa_modelo_id: number | null;
+  procedimento_id: number | null;
   executor_id: number | null;
   executor_nome: string | null;
   data_agendada: string | null;
@@ -164,6 +167,50 @@ function isAgendamentoAtivo(status: string) {
 
 function getDateTimeLocalMinValue() {
   return getCurrentDateTimeLocalValue();
+}
+
+async function assertAgendaResponseOk(response: Response, fallbackMessage: string) {
+  if (response.ok) return;
+
+  let message = fallbackMessage;
+  try {
+    const data = await response.json() as { error?: string };
+    message = data.error || fallbackMessage;
+  } catch {}
+
+  throw new Error(message);
+}
+
+function montarPayloadReagendamento(agendamento: Agendamento, novaData: string): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    cliente_id: agendamento.cliente_id,
+    executor_id: agendamento.executor_id ?? null,
+    reagendado_de_id: agendamento.id,
+    pago: agendamento.pago,
+    data_agendada: novaData,
+  };
+
+  if (agendamento.observacoes) {
+    payload.observacoes = agendamento.observacoes;
+  }
+
+  if (agendamento.tipo === 'avaliacao') {
+    payload.tipo = 'avaliacao';
+    return payload;
+  }
+
+  payload.procedimento_id = agendamento.procedimento_id;
+  if (agendamento.item_atendimento_origem_id) {
+    payload.item_atendimento_origem_id = agendamento.item_atendimento_origem_id;
+  }
+  if (agendamento.atendimento_origem_id) {
+    payload.atendimento_origem_id = agendamento.atendimento_origem_id;
+  }
+  if (agendamento.etapa_modelo_id) {
+    payload.etapa_modelo_id = agendamento.etapa_modelo_id;
+  }
+
+  return payload;
 }
 
 function normalizarAgendamentosResponse(
@@ -1098,38 +1145,33 @@ export default function AgendaPage() {
         ag => ag.status === 'pendente' || ag.status === 'agendado'
       );
       await Promise.all(
-        ativos.map(ag =>
-          unitFetch(`/api/agendamentos/${ag.id}`, {
+        ativos.map(async (ag) => {
+          const res = await unitFetch(`/api/agendamentos/${ag.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'faltou' }),
-          })
-        )
+          });
+          await assertAgendaResponseOk(res, 'Erro ao registrar falta');
+        })
       );
       if (novaData) {
         await Promise.all(
-          ativos.map(ag =>
-            unitFetch('/api/agendamentos', {
+          ativos.map(async (ag) => {
+            const res = await unitFetch('/api/agendamentos', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                cliente_id: ag.cliente_id,
-                procedimento_id: ag.procedimento_id,
-                atendimento_origem_id: null,
-                reagendado_de_id: ag.id,
-                pago: ag.pago,
-                data_agendada: novaData,
-              }),
-            })
-          )
+              body: JSON.stringify(montarPayloadReagendamento(ag, novaData)),
+            });
+            await assertAgendaResponseOk(res, 'Erro ao criar novo agendamento');
+          })
         );
         toast.success('Falta registrada — reagendado para a nova data');
       } else {
         toast.success('Falta registrada');
       }
       carregarAgendamentos();
-    } catch {
-      toast.error('Erro ao registrar falta');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao registrar falta');
     } finally {
       setGrupoLoading(null);
       setConfirmDialog(prev => ({ ...prev, isOpen: false }));

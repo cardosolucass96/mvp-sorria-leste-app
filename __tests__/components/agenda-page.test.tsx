@@ -135,6 +135,9 @@ function makeAgendamento(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
     cliente_id: 101,
+    atendimento_origem_id: null,
+    item_atendimento_origem_id: null,
+    etapa_modelo_id: null,
     procedimento_id: 201,
     executor_id: 10,
     executor_nome: 'Dra. Ana',
@@ -586,6 +589,172 @@ describe('AgendaPage', () => {
         executor_id: 12,
       });
     }
+  });
+
+  test('faltou/reagendar avaliação cria novo agendamento como avaliação e preserva avaliador', async () => {
+    const avaliacao = makeAgendamento({
+      tipo: 'avaliacao',
+      procedimento_id: null,
+      procedimento_nome: 'Avaliação',
+      executor_id: 12,
+      executor_nome: 'Dr. Caio',
+      pago: 0,
+    });
+
+    mockUnitFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/agendamentos/1' && init?.method === 'PUT') {
+        return mockJsonResponse({ ...avaliacao, status: 'faltou' });
+      }
+
+      if (url === '/api/agendamentos' && init?.method === 'POST') {
+        return mockJsonResponse({ id: 40 }, { status: 201 });
+      }
+
+      return mockJsonResponse({
+        items: [avaliacao],
+        total: 1,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    render(<AgendaPage />);
+
+    expect(await screen.findByText('Maria Silva')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Faltou/Reagendar' }));
+
+    const dataInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement;
+    fireEvent.change(dataInput, { target: { value: '2026-07-19T09:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Reagendamento' }));
+
+    await waitFor(() => {
+      const postCalls = getUnitFetchCallsMatching(
+        (url, init) => url === '/api/agendamentos' && init?.method === 'POST'
+      );
+      expect(postCalls).toHaveLength(1);
+    });
+
+    const putCall = getUnitFetchCallsMatching(
+      (url, init) => url === '/api/agendamentos/1' && init?.method === 'PUT'
+    )[0];
+    const postCall = getUnitFetchCallsMatching(
+      (url, init) => url === '/api/agendamentos' && init?.method === 'POST'
+    )[0];
+    const postBody = JSON.parse(String((postCall[1] as RequestInit).body));
+
+    expect(JSON.parse(String((putCall[1] as RequestInit).body))).toEqual({ status: 'faltou' });
+    expect(postBody).toEqual({
+      cliente_id: 101,
+      executor_id: 12,
+      reagendado_de_id: 1,
+      pago: 0,
+      data_agendada: '2026-07-19T09:00',
+      tipo: 'avaliacao',
+    });
+  });
+
+  test('faltou/reagendar procedimento preserva vínculo de origem e etapa', async () => {
+    const agendamentoVinculado = makeAgendamento({
+      atendimento_origem_id: 10,
+      item_atendimento_origem_id: 77,
+      etapa_modelo_id: 7,
+      procedimento_id: 201,
+      procedimento_nome: 'Canal',
+      etapa_modelo_nome: 'Sessão 1',
+      executor_id: 10,
+      executor_nome: 'Dra. Ana',
+      pago: 1,
+      observacoes: 'Retorno combinado',
+    });
+
+    mockUnitFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/agendamentos/1' && init?.method === 'PUT') {
+        return mockJsonResponse({ ...agendamentoVinculado, status: 'faltou' });
+      }
+
+      if (url === '/api/agendamentos' && init?.method === 'POST') {
+        return mockJsonResponse({ id: 41 }, { status: 201 });
+      }
+
+      return mockJsonResponse({
+        items: [agendamentoVinculado],
+        total: 1,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    render(<AgendaPage />);
+
+    expect(await screen.findByText('Maria Silva')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Faltou/Reagendar' }));
+
+    const dataInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement;
+    fireEvent.change(dataInput, { target: { value: '2026-07-20T15:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Reagendamento' }));
+
+    await waitFor(() => {
+      const postCalls = getUnitFetchCallsMatching(
+        (url, init) => url === '/api/agendamentos' && init?.method === 'POST'
+      );
+      expect(postCalls).toHaveLength(1);
+    });
+
+    const postCall = getUnitFetchCallsMatching(
+      (url, init) => url === '/api/agendamentos' && init?.method === 'POST'
+    )[0];
+
+    expect(JSON.parse(String((postCall[1] as RequestInit).body))).toEqual({
+      cliente_id: 101,
+      executor_id: 10,
+      reagendado_de_id: 1,
+      pago: 1,
+      data_agendada: '2026-07-20T15:30',
+      observacoes: 'Retorno combinado',
+      procedimento_id: 201,
+      item_atendimento_origem_id: 77,
+      atendimento_origem_id: 10,
+      etapa_modelo_id: 7,
+    });
+  });
+
+  test('faltou/reagendar exibe erro quando a API falha ao criar novo agendamento', async () => {
+    mockUnitFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/agendamentos/1' && init?.method === 'PUT') {
+        return mockJsonResponse({ id: 1, status: 'faltou' });
+      }
+
+      if (url === '/api/agendamentos' && init?.method === 'POST') {
+        return mockJsonResponse(
+          { error: 'procedimento_id é obrigatório para agendamento de procedimento' },
+          { ok: false, status: 400 }
+        );
+      }
+
+      return mockJsonResponse({
+        items: [makeAgendamento()],
+        total: 1,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    render(<AgendaPage />);
+
+    expect(await screen.findByText('Maria Silva')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Faltou/Reagendar' }));
+
+    const dataInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement;
+    fireEvent.change(dataInput, { target: { value: '2026-07-21T08:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Reagendamento' }));
+
+    await waitFor(() => {
+      expect(mockToast.error).toHaveBeenCalledWith('procedimento_id é obrigatório para agendamento de procedimento');
+    });
+    expect(mockToast.success).not.toHaveBeenCalledWith('Falta registrada — reagendado para a nova data');
   });
 
   test('sugere procedimentos pendentes sem pré-seleção e envia o vínculo ao escolher uma sugestão', async () => {
