@@ -5,6 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Calendar as ShadCalendar } from '@/components/ui/_shadcn/calendar';
 import Button from '@/components/ui/Button';
+import Spinner from '@/components/ui/Spinner';
 import { AGENDAMENTO_STATUS_CONFIG } from '@/lib/constants/agendamentos';
 import { cn } from '@/lib/utils';
 import {
@@ -39,6 +40,7 @@ export interface AgendaCalendarioProps<T extends AgendamentoMinimal> {
   onFocusedDateChange: (date: Date) => void;
   selectedDay: Date | null;
   onSelectDay: (date: Date | null) => void;
+  loading?: boolean;
 }
 
 interface AgendaEventGroup<T extends AgendamentoMinimal> {
@@ -136,6 +138,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
   onFocusedDateChange,
   selectedDay,
   onSelectDay,
+  loading = false,
 }: AgendaCalendarioProps<T>) {
   const selectedDayKey = selectedDay ? formatAgendaDateKey(selectedDay) : null;
 
@@ -269,7 +272,10 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
   };
 
   return (
-    <div className="w-full overflow-hidden rounded-[28px] border border-border/70 bg-gradient-to-b from-surface via-surface to-background shadow-[0_18px_60px_-40px_rgba(15,23,42,0.35)]">
+    <div
+      className="relative w-full overflow-hidden rounded-[28px] border border-border/70 bg-gradient-to-b from-surface via-surface to-background shadow-[0_18px_60px_-40px_rgba(15,23,42,0.35)]"
+      aria-busy={loading}
+    >
       <div className="border-b border-border/70 bg-[radial-gradient(circle_at_top_left,rgba(234,88,12,0.15),transparent_34%),linear-gradient(180deg,var(--color-surface),color-mix(in srgb,var(--color-surface) 88%, #000 12%))] px-4 py-4 sm:px-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1">
@@ -590,6 +596,14 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
           ))}
         </div>
       </div>
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[1px]" role="status" aria-live="polite">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-sm font-medium text-foreground shadow-sm">
+            <Spinner size="sm" className="text-primary" />
+            Atualizando calendário...
+          </div>
+        </div>
+      )}
     </div>
   );
 }

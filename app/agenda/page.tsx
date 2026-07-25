@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, UserCheck, UserX, MessageCircle, CalendarClock, X, Plus, FileText, List, CalendarDays, Pencil } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingState from '@/components/ui/LoadingState';
+import Spinner from '@/components/ui/Spinner';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -14,6 +15,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import Modal from '@/components/ui/Modal';
 import Textarea from '@/components/ui/Textarea';
+import { Skeleton } from '@/components/ui/_shadcn/skeleton';
 import { StatusBadge, ProntuarioDrawer, AgendaCalendario, ViewModeToggle } from '@/components/domain';
 import { useToast } from '@/components/ui/Toast';
 import {
@@ -182,6 +184,53 @@ function normalizarAgendamentosResponse(
   };
 }
 
+function getHojeAgendaDate(): Date {
+  return parseAgendaDateKey(getClinicDateKey());
+}
+
+function AgendaListSkeleton() {
+  return (
+    <div className="flex flex-col gap-3" role="status" aria-label="Carregando lista de agendamentos">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="card p-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Skeleton className="h-5 w-48" />
+              <div className="flex gap-2">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-8 w-20" />
+              </div>
+            </div>
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AgendaDayPanelSkeleton() {
+  return (
+    <div className="flex flex-col gap-3" role="status" aria-label="Carregando agendamentos do dia">
+      <Skeleton className="h-5 w-44" />
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className="rounded-xl border border-border bg-surface p-4">
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+            <div className="flex gap-2">
+              <Skeleton className="h-8 w-20" />
+              <Skeleton className="h-8 w-24" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function AgendaPage() {
   usePageTitle('Agenda');
   const router = useRouter();
@@ -216,9 +265,9 @@ export default function AgendaPage() {
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('pendente,agendado,faltou,realizado');
   const [filtroDentista, setFiltroDentista] = useState('');
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
-  const [filtroRapido, setFiltroRapido] = useState<string | null>(null);
+  const [dataInicio, setDataInicio] = useState(() => getClinicDateKey());
+  const [dataFim, setDataFim] = useState(() => getClinicDateKey());
+  const [filtroRapido, setFiltroRapido] = useState<string | null>('hoje');
   const [page, setPage] = useState(1);
   const LIMIT = 50;
 
@@ -229,37 +278,44 @@ export default function AgendaPage() {
   // View mode + calendar state
   const [viewMode, setViewMode] = useState<'lista' | 'calendario'>('lista');
   const [calendarSubview, setCalendarSubview] = useState<AgendaCalendarView>('mes');
-  const [focusedDate, setFocusedDate] = useState<Date>(() => new Date());
-  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [focusedDate, setFocusedDate] = useState<Date>(() => getHojeAgendaDate());
+  const [selectedDay, setSelectedDay] = useState<Date | null>(() => getHojeAgendaDate());
+  const [viewPreferencesLoaded, setViewPreferencesLoaded] = useState(false);
+  const agendamentosRequestIdRef = useRef(0);
   const previousCalendarRangeKeyRef = useRef<string | null>(null);
   const handledOpenAgendaRef = useRef<string | null>(null);
   const handledEditAgendaRef = useRef<string | null>(null);
+  const hojeAgendaKey = useMemo(() => getClinicDateKey(), []);
+  const hojeAgendaDate = useMemo(() => parseAgendaDateKey(hojeAgendaKey), [hojeAgendaKey]);
 
   // Persistir viewMode no localStorage
   useEffect(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem(AGENDA_VIEW_MODE_STORAGE_KEY) : null;
-    if (saved === 'calendario' || saved === 'lista') {
-      setViewMode(saved);
-    }
-  }, []);
-  useEffect(() => {
     if (typeof window !== 'undefined') {
+      const savedViewMode = localStorage.getItem(AGENDA_VIEW_MODE_STORAGE_KEY);
+      if (savedViewMode === 'calendario' || savedViewMode === 'lista') {
+        setViewMode(savedViewMode);
+      }
+
+      const savedCalendarSubview = localStorage.getItem(AGENDA_CALENDAR_SUBVIEW_STORAGE_KEY);
+      if (savedCalendarSubview === 'mes' || savedCalendarSubview === 'semana') {
+        setCalendarSubview(savedCalendarSubview);
+      }
+    }
+
+    setViewPreferencesLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (viewPreferencesLoaded && typeof window !== 'undefined') {
       localStorage.setItem(AGENDA_VIEW_MODE_STORAGE_KEY, viewMode);
     }
-  }, [viewMode]);
+  }, [viewMode, viewPreferencesLoaded]);
 
   useEffect(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem(AGENDA_CALENDAR_SUBVIEW_STORAGE_KEY) : null;
-    if (saved === 'mes' || saved === 'semana') {
-      setCalendarSubview(saved);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (viewPreferencesLoaded && typeof window !== 'undefined') {
       localStorage.setItem(AGENDA_CALENDAR_SUBVIEW_STORAGE_KEY, calendarSubview);
     }
-  }, [calendarSubview]);
+  }, [calendarSubview, viewPreferencesLoaded]);
 
   // Profissionais da agenda (avaliadores/executores/ortodontistas)
   const [profissionaisAgenda, setProfissionaisAgenda] = useState<Usuario[]>([]);
@@ -362,7 +418,10 @@ export default function AgendaPage() {
   );
 
   const carregarAgendamentos = useCallback(async () => {
+    const requestId = agendamentosRequestIdRef.current + 1;
+    agendamentosRequestIdRef.current = requestId;
     setLoading(true);
+    setError('');
     try {
       const params = new URLSearchParams();
       if (filtroStatus) params.append('status', filtroStatus);
@@ -389,6 +448,8 @@ export default function AgendaPage() {
 
       const res = await unitFetch(`/api/agendamentos?${params}`);
       const data: Agendamento[] | AgendamentosPaginadosResponse = await res.json();
+      if (agendamentosRequestIdRef.current !== requestId) return;
+
       if (!res.ok) {
         const errorMessage = (
           !Array.isArray(data)
@@ -407,10 +468,14 @@ export default function AgendaPage() {
       setTotal(normalized.total);
       setPages(normalized.pages);
     } catch {
-      setError('Erro ao carregar agendamentos');
+      if (agendamentosRequestIdRef.current === requestId) {
+        setError('Erro ao carregar agendamentos');
+      }
     } finally {
-      setHasLoadedAgendamentos(true);
-      setLoading(false);
+      if (agendamentosRequestIdRef.current === requestId) {
+        setHasLoadedAgendamentos(true);
+        setLoading(false);
+      }
     }
   }, [
     filtroStatus,
@@ -428,8 +493,9 @@ export default function AgendaPage() {
   ]);
 
   useEffect(() => {
+    if (!viewPreferencesLoaded) return;
     carregarAgendamentos();
-  }, [carregarAgendamentos]);
+  }, [carregarAgendamentos, viewPreferencesLoaded]);
 
   const carregarProfissionaisAgenda = useCallback(async () => {
     if (!isAdminOrAtendente) return;
@@ -938,9 +1004,22 @@ export default function AgendaPage() {
       return;
     }
 
+    if (isAgendaDateInRange(hojeAgendaDate, calendarRange.start, calendarRange.end)) {
+      setSelectedDay(hojeAgendaDate);
+      return;
+    }
+
     const nextDayKey = visibleCalendarDayKeys[0];
     setSelectedDay(nextDayKey ? parseAgendaDateKey(nextDayKey) : null);
-  }, [calendarRange.end, calendarRange.start, calendarRangeKey, selectedDay, viewMode, visibleCalendarDayKeys]);
+  }, [
+    calendarRange.end,
+    calendarRange.start,
+    calendarRangeKey,
+    hojeAgendaDate,
+    selectedDay,
+    viewMode,
+    visibleCalendarDayKeys,
+  ]);
 
   // ─── Chegou ───────────────────────────────────────────────────
 
@@ -1424,7 +1503,9 @@ export default function AgendaPage() {
     );
   };
 
-  if (loading && !hasLoadedAgendamentos) return <LoadingState />;
+  const isRefreshingAgendamentos = loading && hasLoadedAgendamentos;
+
+  if (loading && !hasLoadedAgendamentos) return <LoadingState text="Carregando agenda..." />;
 
   return (
     <div className="space-y-6">
@@ -1475,7 +1556,10 @@ export default function AgendaPage() {
               label="Status"
               name="filtroStatus"
               value={filtroStatus}
-              onChange={setFiltroStatus}
+              onChange={(value) => {
+                setFiltroStatus(value);
+                setPage(1);
+              }}
               options={STATUS_OPTIONS}
               placeholder="Todos"
             />
@@ -1501,10 +1585,10 @@ export default function AgendaPage() {
           {viewMode === 'lista' && (
             <>
               <div className="min-w-[160px]">
-                <Input label="Data início" name="dataInicio" type="date" value={dataInicio} onChange={(v) => { setDataInicio(v); setFiltroRapido(null); }} />
+                <Input label="Data início" name="dataInicio" type="date" value={dataInicio} onChange={(v) => { setDataInicio(v); setFiltroRapido(null); setPage(1); }} />
               </div>
               <div className="min-w-[160px]">
-                <Input label="Data fim" name="dataFim" type="date" value={dataFim} onChange={(v) => { setDataFim(v); setFiltroRapido(null); }} />
+                <Input label="Data fim" name="dataFim" type="date" value={dataFim} onChange={(v) => { setDataFim(v); setFiltroRapido(null); setPage(1); }} />
               </div>
             </>
           )}
@@ -1531,8 +1615,14 @@ export default function AgendaPage() {
         )}
       </div>
 
-      <div className="text-sm text-muted-foreground">
-        {total > 0 ? `${agrupados.length} cliente(s) · ${total} agendamento(s)` : 'Nenhum resultado'}
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+        <span>{total > 0 ? `${agrupados.length} cliente(s) · ${total} agendamento(s)` : 'Nenhum resultado'}</span>
+        {isRefreshingAgendamentos && (
+          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground" role="status" aria-live="polite">
+            <Spinner size="sm" className="text-primary" />
+            Atualizando agenda...
+          </span>
+        )}
       </div>
 
       {viewMode === 'calendario' ? (
@@ -1545,9 +1635,12 @@ export default function AgendaPage() {
             onFocusedDateChange={setFocusedDate}
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
+            loading={isRefreshingAgendamentos}
           />
           <div className="space-y-3">
-            {(() => {
+            {isRefreshingAgendamentos ? (
+              <AgendaDayPanelSkeleton />
+            ) : (() => {
               if (!selectedDay) {
                 return (
                   <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
@@ -1576,6 +1669,8 @@ export default function AgendaPage() {
             })()}
           </div>
         </div>
+      ) : isRefreshingAgendamentos ? (
+        <AgendaListSkeleton />
       ) : agendamentos.length === 0 ? (
         <EmptyState
           title="Nenhum agendamento encontrado"

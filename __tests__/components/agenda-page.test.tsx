@@ -7,11 +7,14 @@ import AgendaPage from '@/app/agenda/page';
 import {
   endOfAgendaMonth,
   endOfAgendaWeek,
+  formatAgendaDateKey,
   formatAgendaRangeEnd,
   formatAgendaRangeStart,
+  parseAgendaDateKey,
   startOfAgendaMonth,
   startOfAgendaWeek,
 } from '@/lib/utils/agendaCalendar';
+import { getClinicDateKey } from '@/lib/time';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -78,6 +81,9 @@ jest.mock('@/components/domain', () => ({
   AgendaCalendario: (props: {
     agendamentos: Array<{ id: number }>;
     view: 'mes' | 'semana';
+    focusedDate: Date;
+    selectedDay: Date | null;
+    loading?: boolean;
     onViewChange: (view: 'mes' | 'semana') => void;
     onSelectDay: (date: Date | null) => void;
   }) => {
@@ -216,6 +222,21 @@ afterAll(() => {
 });
 
 describe('AgendaPage', () => {
+  test('abre a lista com o período de hoje pré-selecionado', async () => {
+    render(<AgendaPage />);
+
+    const hoje = getClinicDateKey();
+
+    expect(await screen.findByLabelText('Data início')).toHaveValue(hoje);
+    expect(screen.getByLabelText('Data fim')).toHaveValue(hoje);
+
+    await waitFor(() => {
+      const params = getSearchParamsFromLastUnitFetch();
+      expect(params.get('data_inicio')).toBe(hoje);
+      expect(params.get('data_fim')).toBe(hoje);
+    });
+  });
+
   test('renderiza agendamentos da lista quando a API retorna formato paginado', async () => {
     mockUnitFetch.mockImplementation(() =>
       mockJsonResponse({
@@ -318,6 +339,37 @@ describe('AgendaPage', () => {
 
     expect(await screen.findByText('Carlos Lima')).toBeInTheDocument();
     expect(screen.getByText(/15 de julho de 2026/i)).toBeInTheDocument();
+  });
+
+  test('usa o modo calendário salvo antes da primeira busca e seleciona hoje', async () => {
+    localStorage.setItem('agenda-view-mode', 'calendario');
+
+    mockUnitFetch.mockImplementation(() =>
+      mockJsonResponse([
+        makeAgendamento({ id: 12, data_agendada: `${getClinicDateKey()}T09:00` }),
+      ])
+    );
+
+    render(<AgendaPage />);
+
+    await waitFor(() => {
+      expect(mockAgendaCalendario).toHaveBeenCalled();
+    });
+
+    expect(
+      mockUnitFetch.mock.calls.some(([url]) => String(url).includes('page='))
+    ).toBe(false);
+
+    const today = parseAgendaDateKey(getClinicDateKey());
+    const firstParams = new URLSearchParams(String(mockUnitFetch.mock.calls[0][0]).split('?')[1] ?? '');
+    expect(firstParams.get('data_inicio')).toBe(formatAgendaRangeStart(startOfAgendaMonth(today)));
+    expect(firstParams.get('data_fim')).toBe(formatAgendaRangeEnd(endOfAgendaMonth(today)));
+
+    await waitFor(() => {
+      const lastProps = mockAgendaCalendario.mock.calls[mockAgendaCalendario.mock.calls.length - 1]?.[0];
+      expect(lastProps?.selectedDay).toBeInstanceOf(Date);
+      expect(formatAgendaDateKey(lastProps.selectedDay)).toBe(getClinicDateKey());
+    });
   });
 
   test('persiste o submodo semanal do calendário', async () => {
