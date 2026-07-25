@@ -67,13 +67,13 @@ const LEGEND_STATUSES = ['agendado', 'faltou', 'realizado', 'cancelado'] as cons
 const STATUS_EVENT_STYLES: Record<string, string> = {
   faltou: 'border-warning-200 bg-warning-50 text-warning-900 dark:border-warning-500/65 dark:bg-warning-500/18 dark:text-warning-50',
   pendente: 'border-muted bg-muted/65 text-muted-foreground dark:border-muted dark:bg-muted/55',
-  agendado: 'border-primary/40 bg-primary/10 text-primary dark:border-primary/70 dark:bg-primary/18',
+  agendado: 'border-info-200 bg-info-50 text-info-900 dark:border-info-500/65 dark:bg-info-500/18 dark:text-info-50',
   realizado: 'border-success-200 bg-success-50 text-success-900 dark:border-success-500/65 dark:bg-success-500/18 dark:text-success-50',
   cancelado: 'border-error-200 bg-error-50 text-error-900 dark:border-error-900/45 dark:bg-error-900/25 dark:text-error-100',
 };
 
 const STATUS_LEGEND_DOT: Record<string, string> = {
-  agendado: 'bg-primary-500',
+  agendado: 'bg-info-500',
   faltou: 'bg-warning-500',
   realizado: 'bg-success-500',
   cancelado: 'bg-error-500',
