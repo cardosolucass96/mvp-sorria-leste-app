@@ -761,11 +761,16 @@ export default function AtendimentoDetalhePage({
       mostrarErrorModalProcedimento('Selecione ao menos uma face para cada dente');
       return;
     }
+    const valorCustomTrimmed = valorCustom.trim();
+    const valorBase = valorCustomTrimmed ? Number(valorCustomTrimmed) : proc?.valor || 0;
+    if (!Number.isFinite(valorBase) || valorBase < 0) {
+      mostrarErrorModalProcedimento('Valor inválido');
+      return;
+    }
     setAdicionando(true);
     setErrorModal('');
     try {
       const quantidade = proc?.por_dente ? dentesFaces.length : 1;
-      const valorBase = valorCustom ? parseFloat(valorCustom) : proc?.valor || 0;
       const dentesParaSalvar = proc?.por_dente
         ? JSON.stringify(dentesFaces.map(d => ({
             dente: d.dente,
@@ -2219,7 +2224,7 @@ export default function AtendimentoDetalhePage({
         {loadingDadosProc ? (
           <LoadingState text="Carregando..." />
         ) : (
-          <form onSubmit={handleAdicionarProcedimento} className="space-y-4">
+          <form onSubmit={handleAdicionarProcedimento} className="space-y-4" noValidate>
             {errorModal && (
               <div ref={procedimentoErrorRef} tabIndex={-1} className="outline-none">
                 <Alert type="error">{errorModal}</Alert>
@@ -2280,6 +2285,8 @@ export default function AtendimentoDetalhePage({
               label="Valor (R$)"
               name="valor"
               type="number"
+              min={0}
+              step="0.01"
               value={valorCustom}
               onChange={setValorCustom}
               placeholder={(() => {

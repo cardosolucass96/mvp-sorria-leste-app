@@ -164,6 +164,8 @@ jest.mock('@/components/ui', () => ({
     value,
     onChange,
     type = 'text',
+    min,
+    step,
     placeholder,
   }: {
     label: string;
@@ -171,6 +173,8 @@ jest.mock('@/components/ui', () => ({
     value: string;
     onChange: (value: string) => void;
     type?: string;
+    min?: number | string;
+    step?: number | string;
     placeholder?: string;
   }) => (
     <label>
@@ -181,6 +185,8 @@ jest.mock('@/components/ui', () => ({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        min={min}
+        step={step}
         placeholder={placeholder}
       />
     </label>
@@ -216,7 +222,23 @@ jest.mock('@/components/ui', () => ({
 
 jest.mock('@/components/SeletorDentes', () => ({
   __esModule: true,
-  default: () => <div data-testid="seletor-dentes" />,
+  default: ({
+    onChange,
+  }: {
+    onChange: (dentes: Array<{ dente: string; faces: Array<{ nome: string }> }>) => void;
+  }) => (
+    <div data-testid="seletor-dentes">
+      <button
+        type="button"
+        onClick={() => onChange([
+          { dente: '16', faces: [] },
+          { dente: '26', faces: [] },
+        ])}
+      >
+        Selecionar dois dentes
+      </button>
+    </div>
+  ),
 }));
 
 function mockJsonResponse(data: unknown, init: { ok?: boolean; status?: number } = {}) {
@@ -412,5 +434,149 @@ describe('AtendimentoDetalhePage modal de procedimento', () => {
       procedimento_id: 1,
       observacoes: 'Paciente com sensibilidade no lado esquerdo',
     });
+  });
+
+  it('envia valor customizado zero e impede step abaixo de zero', async () => {
+    render(<AtendimentoDetalhePage params={Promise.resolve({ id: '10' })} />);
+
+    await screen.findByRole('heading', { name: 'Atendimento #10' });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '+ Adicionar Procedimento' }));
+    });
+
+    const modal = await screen.findByTestId('procedimento-modal');
+
+    fireEvent.change(within(modal).getByLabelText('Procedimento *'), {
+      target: { value: '1' },
+    });
+
+    const valorInput = within(modal).getByLabelText('Valor (R$)');
+    expect(valorInput).toHaveAttribute('min', '0');
+    expect(valorInput).toHaveAttribute('step', '0.01');
+
+    fireEvent.change(valorInput, {
+      target: { value: '0' },
+    });
+    (valorInput as HTMLInputElement).stepDown();
+
+    expect(valorInput).toHaveValue(0);
+
+    await act(async () => {
+      fireEvent.click(within(modal).getByRole('button', { name: /\+ Adicionar/i }));
+    });
+
+    await waitFor(() => {
+      expect(mockUnitFetch).toHaveBeenCalledWith(
+        '/api/atendimentos/10/itens',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    const postCall = mockUnitFetch.mock.calls.find(
+      ([url, init]: [string, RequestInit | undefined]) =>
+        url === '/api/atendimentos/10/itens' && init?.method === 'POST'
+    );
+
+    expect(JSON.parse(String(postCall?.[1]?.body))).toMatchObject({
+      procedimento_id: 1,
+      quantidade: 1,
+      valor: 0,
+    });
+  });
+
+  it('bloqueia submit com valor customizado negativo', async () => {
+    render(<AtendimentoDetalhePage params={Promise.resolve({ id: '10' })} />);
+
+    await screen.findByRole('heading', { name: 'Atendimento #10' });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '+ Adicionar Procedimento' }));
+    });
+
+    const modal = await screen.findByTestId('procedimento-modal');
+
+    fireEvent.change(within(modal).getByLabelText('Procedimento *'), {
+      target: { value: '1' },
+    });
+    fireEvent.change(within(modal).getByLabelText('Valor (R$)'), {
+      target: { value: '-2' },
+    });
+
+    await act(async () => {
+      fireEvent.click(within(modal).getByRole('button', { name: /\+ Adicionar/i }));
+    });
+
+    expect(await within(modal).findByText('Valor inválido')).toBeInTheDocument();
+    expect(mockUnitFetch).not.toHaveBeenCalledWith(
+      '/api/atendimentos/10/itens',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('envia valor zero total para procedimento por dente', async () => {
+    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === '/api/procedimentos') {
+        return mockJsonResponse([
+          { id: 1, nome: 'Reconstrução', valor: 150, por_dente: 1, tem_face: 0, tem_etapas: 0 },
+        ]);
+      }
+
+      if (url === '/api/usuarios?categoria_id=1') {
+        return mockJsonResponse([
+          { id: 8, nome: 'Dr. Executor', role: 'executor', roles: ['executor'] },
+        ]);
+      }
+
+      if (url === '/api/clientes/1/anexos') {
+        return mockJsonResponse([]);
+      }
+
+      throw new Error(`Unhandled fetch request: ${url}`);
+    });
+
+    render(<AtendimentoDetalhePage params={Promise.resolve({ id: '10' })} />);
+
+    await screen.findByRole('heading', { name: 'Atendimento #10' });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '+ Adicionar Procedimento' }));
+    });
+
+    const modal = await screen.findByTestId('procedimento-modal');
+
+    fireEvent.change(within(modal).getByLabelText('Procedimento *'), {
+      target: { value: '1' },
+    });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Selecionar dois dentes' }));
+    fireEvent.change(within(modal).getByLabelText('Valor (R$)'), {
+      target: { value: '0' },
+    });
+
+    await act(async () => {
+      fireEvent.click(within(modal).getByRole('button', { name: /\+ Adicionar/i }));
+    });
+
+    await waitFor(() => {
+      expect(mockUnitFetch).toHaveBeenCalledWith(
+        '/api/atendimentos/10/itens',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    const postCall = mockUnitFetch.mock.calls.find(
+      ([url, init]: [string, RequestInit | undefined]) =>
+        url === '/api/atendimentos/10/itens' && init?.method === 'POST'
+    );
+    const body = JSON.parse(String(postCall?.[1]?.body));
+
+    expect(body).toMatchObject({
+      procedimento_id: 1,
+      quantidade: 2,
+      valor: 0,
+    });
+    expect(JSON.parse(body.dentes)).toHaveLength(2);
   });
 });

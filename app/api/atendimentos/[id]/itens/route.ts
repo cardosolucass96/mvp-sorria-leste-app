@@ -319,8 +319,15 @@ export const POST = withUnit(async (
       if (validacaoExecutor.kind === 'error') return validacaoExecutor.response;
     }
     
-    // Usa valor do procedimento se não fornecido
-    const valorFinal = valor !== undefined ? valor : procedimento.valor;
+    // Usa valor do procedimento se não fornecido; quando enviado, precisa ser
+    // um valor financeiro válido e nunca negativo.
+    const valorFinal = valor !== undefined ? Number(valor) : Number(procedimento.valor);
+    if (!Number.isFinite(valorFinal) || valorFinal < 0) {
+      return NextResponse.json(
+        { error: 'Valor inválido' },
+        { status: 400 }
+      );
+    }
     const quantidadeFinal = quantidade || 1;
     const criadoPorSolicitado = Number.isInteger(criado_por_id) && Number(criado_por_id) > 0
       ? Number(criado_por_id)
