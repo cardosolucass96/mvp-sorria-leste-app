@@ -23,6 +23,7 @@ const mockUseAuth = jest.fn();
 const mockAgendaCalendario = jest.fn();
 const mockSearchParamsGet = jest.fn();
 const mockSearchParamsToString = jest.fn(() => '');
+const scrollIntoViewMock = jest.fn();
 const mockToast = {
   success: jest.fn(),
   error: jest.fn(),
@@ -173,6 +174,10 @@ function getUnitFetchCallsMatching(
 beforeEach(() => {
   jest.clearAllMocks();
   localStorage.clear();
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: scrollIntoViewMock,
+  });
   mockSearchParamsGet.mockReturnValue(null);
   mockSearchParamsToString.mockReturnValue('');
 
@@ -692,6 +697,65 @@ describe('AgendaPage', () => {
       data_agendada: null,
       observacoes: null,
     });
+  });
+
+  test('rola e foca o alerta quando o novo agendamento retorna erro', async () => {
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === '/api/usuarios?unidade_id=1') {
+        return mockJsonResponse([
+          { id: 10, nome: 'Dra. Ana', role: 'executor', roles: ['executor'], ativo: 1 },
+        ]);
+      }
+
+      if (url === '/api/procedimentos') {
+        return mockJsonResponse([]);
+      }
+
+      if (url.startsWith('/api/clientes?busca=')) {
+        return mockJsonResponse({
+          clientes: [
+            { id: 101, nome: 'Maria Silva', telefone: '85999990000', cpf: null },
+          ],
+        });
+      }
+
+      return mockJsonResponse({ clientes: [] });
+    });
+
+    mockUnitFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/agendamentos' && init?.method === 'POST') {
+        return mockJsonResponse({ error: 'Revise os dados obrigatórios' }, { ok: false, status: 400 });
+      }
+
+      return mockJsonResponse({
+        items: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+      });
+    });
+
+    render(<AgendaPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Novo Agendamento/i }));
+    fireEvent.change(await screen.findByPlaceholderText('Digite o nome do cliente...'), {
+      target: { value: 'Ma' },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /Maria Silva/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Criar Agendamento' }));
+
+    const alertText = await screen.findByText('Revise os dados obrigatórios');
+
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+    expect(alertText.closest('[tabindex="-1"]')).toHaveFocus();
   });
 
   test('permite trocar para procedimento do catálogo e limpa o vínculo do procedimento pendente', async () => {

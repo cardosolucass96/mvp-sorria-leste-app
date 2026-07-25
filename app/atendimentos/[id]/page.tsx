@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use, useCallback } from 'react';
+import React, { useState, useEffect, use, useCallback, useRef } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -267,6 +267,9 @@ export default function AtendimentoDetalhePage({
   const [anexosClienteUploading, setAnexosClienteUploading] = useState(false);
   const [adicionando, setAdicionando] = useState(false);
   const [errorModal, setErrorModal] = useState('');
+  const [errorModalSequence, setErrorModalSequence] = useState(0);
+  const procedimentoModalBodyRef = useRef<HTMLDivElement>(null);
+  const procedimentoErrorRef = useRef<HTMLDivElement>(null);
 
   // Modal ficha do cliente
   const [modalCliente, setModalCliente] = useState(false);
@@ -731,16 +734,31 @@ export default function AtendimentoDetalhePage({
     setErrorModal('');
   };
 
+  const mostrarErrorModalProcedimento = useCallback((message: string) => {
+    setErrorModal(message);
+    setErrorModalSequence((current) => current + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!modalProcedimento || !errorModal) return;
+
+    procedimentoModalBodyRef.current?.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+    procedimentoErrorRef.current?.focus({ preventScroll: true });
+  }, [errorModal, errorModalSequence, modalProcedimento]);
+
   const handleAdicionarProcedimento = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!procId) return;
     const proc = procedimentos.find(p => p.id === parseInt(procId));
     if (proc?.por_dente && dentesFaces.length === 0) {
-      setErrorModal('Selecione pelo menos um dente para este procedimento');
+      mostrarErrorModalProcedimento('Selecione pelo menos um dente para este procedimento');
       return;
     }
     if (proc?.por_dente && proc?.tem_face && dentesFaces.some(d => d.faces.length === 0)) {
-      setErrorModal('Selecione ao menos uma face para cada dente');
+      mostrarErrorModalProcedimento('Selecione ao menos uma face para cada dente');
       return;
     }
     setAdicionando(true);
@@ -780,7 +798,7 @@ export default function AtendimentoDetalhePage({
       fecharModalProcedimento();
       await carregarAtendimento();
     } catch (err) {
-      setErrorModal(err instanceof Error ? err.message : 'Erro ao adicionar');
+      mostrarErrorModalProcedimento(err instanceof Error ? err.message : 'Erro ao adicionar');
     } finally {
       setAdicionando(false);
     }
@@ -2196,12 +2214,17 @@ export default function AtendimentoDetalhePage({
         title="Adicionar Procedimento"
         size="lg"
         className="sm:h-[80vh]"
+        bodyRef={procedimentoModalBodyRef}
       >
         {loadingDadosProc ? (
           <LoadingState text="Carregando..." />
         ) : (
           <form onSubmit={handleAdicionarProcedimento} className="space-y-4">
-            {errorModal && <Alert type="error">{errorModal}</Alert>}
+            {errorModal && (
+              <div ref={procedimentoErrorRef} tabIndex={-1} className="outline-none">
+                <Alert type="error">{errorModal}</Alert>
+              </div>
+            )}
             <SearchableSelect
               label="Procedimento *"
               name="procedimento"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -94,6 +94,23 @@ function NovoAtendimentoForm() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [errorSequence, setErrorSequence] = useState(0);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  const mostrarError = useCallback((message: string) => {
+    setError(message);
+    setErrorSequence((current) => current + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!error || !errorRef.current) return;
+
+    errorRef.current.scrollIntoView?.({
+      behavior: 'smooth',
+      block: 'start',
+    });
+    errorRef.current.focus({ preventScroll: true });
+  }, [error, errorSequence]);
 
   // Busca clientes via API
   const buscarClientes = useCallback(async (termo: string) => {
@@ -149,13 +166,13 @@ function NovoAtendimentoForm() {
           setCategoriaId(String(categoriaPadrao.id));
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro ao carregar dados do formulário');
+        mostrarError(err instanceof Error ? err.message : 'Erro ao carregar dados do formulário');
       } finally {
         setLoadingDados(false);
       }
     };
     carregarDados();
-  }, [currentUnidade, buscarClientes]);
+  }, [currentUnidade, buscarClientes, mostrarError]);
 
   // Quando a categoria mudar e for pula_avaliacao, carrega procedimentos da categoria e executores compatíveis
   useEffect(() => {
@@ -235,7 +252,7 @@ function NovoAtendimentoForm() {
       if (!res.ok) throw new Error(data.error || 'Erro ao confirmar chegada');
       router.push(`/atendimentos/${data.atendimento_id ?? data.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao confirmar sessão');
+      mostrarError(err instanceof Error ? err.message : 'Erro ao confirmar sessão');
       setConfirmandoSessao(false);
     }
   };
@@ -270,11 +287,11 @@ function NovoAtendimentoForm() {
     e.preventDefault();
     if (!clienteId) return;
     if (categorias.length === 0) {
-      setError('Nenhuma fila ativa disponível para criar o atendimento');
+      mostrarError('Nenhuma fila ativa disponível para criar o atendimento');
       return;
     }
     if (!categoriaId) {
-      setError('Selecione uma fila');
+      mostrarError('Selecione uma fila');
       return;
     }
     setSaving(true);
@@ -288,7 +305,7 @@ function NovoAtendimentoForm() {
 
       if (pulaAvaliacao) {
         if (!procedimentoId) {
-          setError('Selecione um procedimento');
+          mostrarError('Selecione um procedimento');
           setSaving(false);
           return;
         }
@@ -311,7 +328,7 @@ function NovoAtendimentoForm() {
 
       router.push(`/atendimentos/${data.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao criar');
+      mostrarError(err instanceof Error ? err.message : 'Erro ao criar');
       setSaving(false);
     }
   };
@@ -330,7 +347,11 @@ function NovoAtendimentoForm() {
         ]}
       />
 
-      {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
+      {error && (
+        <div ref={errorRef} tabIndex={-1} className="outline-none">
+          <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
 

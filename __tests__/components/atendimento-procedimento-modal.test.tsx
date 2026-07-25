@@ -13,6 +13,7 @@ const mockToast = {
   warning: jest.fn(),
   info: jest.fn(),
 };
+const scrollToMock = jest.fn();
 const actualReactUse = React.use;
 
 jest.mock('next/link', () => {
@@ -113,8 +114,20 @@ jest.mock('@/components/ui', () => ({
   Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   EmptyState: ({ title }: { title: string }) => <div>{title}</div>,
   ConfirmDialog: () => null,
-  Modal: ({ children, isOpen }: { children: React.ReactNode; isOpen: boolean }) => (
-    isOpen ? <div data-testid="procedimento-modal">{children}</div> : null
+  Modal: ({
+    children,
+    isOpen,
+    bodyRef,
+  }: {
+    children: React.ReactNode;
+    isOpen: boolean;
+    bodyRef?: React.Ref<HTMLDivElement>;
+  }) => (
+    isOpen ? (
+      <div data-testid="procedimento-modal">
+        <div data-testid="procedimento-modal-body" ref={bodyRef}>{children}</div>
+      </div>
+    ) : null
   ),
   Select: ({
     label,
@@ -247,6 +260,10 @@ const atendimentoData = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+    configurable: true,
+    value: scrollToMock,
+  });
 
   jest.spyOn(React, 'use').mockImplementation(<T,>(value: T | Promise<T>) => {
     if (value && typeof (value as Promise<T>).then === 'function') {
@@ -301,6 +318,58 @@ afterEach(() => {
 });
 
 describe('AtendimentoDetalhePage modal de procedimento', () => {
+  it('rola o modal para o alerta quando falta selecionar dente obrigatório', async () => {
+    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === '/api/procedimentos') {
+        return mockJsonResponse([
+          { id: 1, nome: 'Implante', valor: 1000, por_dente: 1, tem_face: 0, tem_etapas: 0 },
+        ]);
+      }
+
+      if (url === '/api/usuarios?categoria_id=1') {
+        return mockJsonResponse([
+          { id: 8, nome: 'Dr. Executor', role: 'executor', roles: ['executor'] },
+        ]);
+      }
+
+      if (url === '/api/clientes/1/anexos') {
+        return mockJsonResponse([]);
+      }
+
+      throw new Error(`Unhandled fetch request: ${url}`);
+    });
+
+    render(<AtendimentoDetalhePage params={Promise.resolve({ id: '10' })} />);
+
+    await screen.findByRole('heading', { name: 'Atendimento #10' });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '+ Adicionar Procedimento' }));
+    });
+
+    const modal = await screen.findByTestId('procedimento-modal');
+
+    fireEvent.change(within(modal).getByLabelText('Procedimento *'), {
+      target: { value: '1' },
+    });
+
+    await act(async () => {
+      fireEvent.click(within(modal).getByRole('button', { name: /\+ Adicionar/i }));
+    });
+
+    const alertText = await within(modal).findByText('Selecione pelo menos um dente para este procedimento');
+
+    await waitFor(() => {
+      expect(scrollToMock).toHaveBeenCalledWith({
+        top: 0,
+        behavior: 'smooth',
+      });
+    });
+    expect(alertText.closest('[tabindex="-1"]')).toHaveFocus();
+  });
+
   it('espelha anexos e envia observacoes ao adicionar procedimento', async () => {
     render(<AtendimentoDetalhePage params={Promise.resolve({ id: '10' })} />);
 

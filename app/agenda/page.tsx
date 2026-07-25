@@ -397,6 +397,8 @@ export default function AgendaPage() {
   const [novoObs, setNovoObs] = useState('');
   const [novoSalvando, setNovoSalvando] = useState(false);
   const [novoError, setNovoError] = useState('');
+  const [novoErrorSequence, setNovoErrorSequence] = useState(0);
+  const novoErrorRef = useRef<HTMLDivElement>(null);
 
   const calendarRange = useMemo(() => {
     if (calendarSubview === 'semana') {
@@ -416,6 +418,21 @@ export default function AgendaPage() {
     () => `${calendarSubview}_${formatAgendaDateKey(calendarRange.start)}_${formatAgendaDateKey(calendarRange.end)}`,
     [calendarRange.end, calendarRange.start, calendarSubview]
   );
+
+  const mostrarNovoError = useCallback((message: string) => {
+    setNovoError(message);
+    setNovoErrorSequence((current) => current + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!novoDialog || !novoError || !novoErrorRef.current) return;
+
+    novoErrorRef.current.scrollIntoView?.({
+      behavior: 'smooth',
+      block: 'start',
+    });
+    novoErrorRef.current.focus({ preventScroll: true });
+  }, [novoDialog, novoError, novoErrorSequence]);
 
   const carregarAgendamentos = useCallback(async () => {
     const requestId = agendamentosRequestIdRef.current + 1;
@@ -589,14 +606,14 @@ export default function AgendaPage() {
           setNovoBuscaCliente('');
           setNovoClientes([]);
         } else {
-          setNovoError('Cliente não encontrado para pré-seleção.');
+          mostrarNovoError('Cliente não encontrado para pré-seleção.');
         }
       } catch {
-        setNovoError('Não foi possível carregar o cliente para pré-seleção.');
+        mostrarNovoError('Não foi possível carregar o cliente para pré-seleção.');
       }
     }
     void carregarProfissionaisAgenda();
-  }, [canManageAgenda, novoProcedimentos.length, carregarProfissionaisAgenda]);
+  }, [canManageAgenda, novoProcedimentos.length, carregarProfissionaisAgenda, mostrarNovoError]);
 
   useEffect(() => {
     if (openAgenda !== '1') {
@@ -789,15 +806,15 @@ export default function AgendaPage() {
 
   const handleCriarAgendamento = async () => {
     if (!canManageAgenda) {
-      setNovoError('Seu perfil pode apenas visualizar a própria agenda');
+      mostrarNovoError('Seu perfil pode apenas visualizar a própria agenda');
       return;
     }
     if (!novoClienteSelecionado) {
-      setNovoError('Selecione um cliente');
+      mostrarNovoError('Selecione um cliente');
       return;
     }
     if (novoTipo === 'procedimento' && !novoProcId) {
-      setNovoError('Selecione um procedimento');
+      mostrarNovoError('Selecione um procedimento');
       return;
     }
     setNovoSalvando(true);
@@ -836,7 +853,7 @@ export default function AgendaPage() {
       setNovoDialog(false);
       carregarAgendamentos();
     } catch (err) {
-      setNovoError(err instanceof Error ? err.message : 'Erro ao criar agendamento');
+      mostrarNovoError(err instanceof Error ? err.message : 'Erro ao criar agendamento');
     } finally {
       setNovoSalvando(false);
     }
@@ -2027,7 +2044,11 @@ export default function AgendaPage() {
 
       {/* Novo agendamento */}
       <Modal isOpen={canManageAgenda && novoDialog} onClose={() => setNovoDialog(false)} title="Novo Agendamento" size="md">
-        {novoError && <Alert type="error" dismissible onDismiss={() => setNovoError('')}>{novoError}</Alert>}
+        {novoError && (
+          <div ref={novoErrorRef} tabIndex={-1} className="outline-none">
+            <Alert type="error" dismissible onDismiss={() => setNovoError('')}>{novoError}</Alert>
+          </div>
+        )}
 
         {/* Busca e seleção de cliente */}
         {!novoClienteSelecionado ? (

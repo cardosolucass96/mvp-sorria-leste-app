@@ -22,6 +22,7 @@ export interface ModalProps {
   closeOnEsc?: boolean;
   className?: string;
   bodyClassName?: string;
+  bodyRef?: React.Ref<HTMLDivElement>;
   footerClassName?: string;
 }
 
@@ -44,6 +45,7 @@ export default function Modal({
   className = '',
   description,
   bodyClassName = '',
+  bodyRef,
   footerClassName = '',
 }: ModalProps) {
   void _closeOnOverlay;
@@ -77,7 +79,7 @@ export default function Modal({
         </DialogHeader>
 
         {/* Body */}
-        <div className={cn("px-6 py-4 overflow-y-auto flex-1 bg-card", bodyClassName)}>{children}</div>
+        <div ref={bodyRef} className={cn("px-6 py-4 overflow-y-auto flex-1 bg-card", bodyClassName)}>{children}</div>
 
         {/* Footer */}
         {footer && (
