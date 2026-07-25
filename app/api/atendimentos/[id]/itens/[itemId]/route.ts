@@ -28,6 +28,14 @@ interface Atendimento {
   categoria_id: number | null;
 }
 
+function getValorBaseDesconto(item: Pick<ItemAtendimento, 'valor' | 'valor_original' | 'valor_final'>): number {
+  return Math.max(
+    Number(item.valor_original ?? 0),
+    Number(item.valor_final ?? 0),
+    Number(item.valor ?? 0)
+  );
+}
+
 // PUT /api/atendimentos/[id]/itens/[itemId] - Atualiza item
 export const PUT = withUnit(async (
   request: NextRequest,
@@ -289,7 +297,7 @@ export const PUT = withUnit(async (
       }
     } else if (valorRecebido !== undefined) {
       const valorNum = Number(valorRecebido);
-      const baseline = item.valor_original ?? item.valor_final ?? item.valor;
+      const baseline = getValorBaseDesconto(item);
       const descontoValor = Math.max(0, baseline - valorNum);
 
       updates.push('valor = ?');

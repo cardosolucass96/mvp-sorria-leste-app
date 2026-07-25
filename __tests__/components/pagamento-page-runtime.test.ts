@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import PagamentoPage from '@/app/atendimentos/[id]/pagamento/page';
@@ -276,5 +276,97 @@ describe('PagamentoPage runtime', () => {
 
     expect(screen.getByText('Pagamentos registrados')).toBeInTheDocument();
     expect(screen.queryByText('Carregando pagamento...')).not.toBeInTheDocument();
+  });
+
+  it('usa o valor atual como base quando valor_original legado é menor ao salvar desconto', async () => {
+    mockUnitFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/atendimentos/14') {
+        return mockJsonResponse({
+          id: 14,
+          cliente_id: 2,
+          cliente_nome: 'Maria Souza',
+          status: 'aguardando_pagamento',
+          motivo_saida: null,
+          total: 100,
+          total_pago: 0,
+          itens: [
+            {
+              id: 101,
+              procedimento_id: 1,
+              procedimento_nome: 'Limpeza',
+              valor: 100,
+              valor_original: 98,
+              valor_final: 100,
+              valor_pago: 0,
+              desconto_valor: 0,
+              desconto_motivo: null,
+              status: 'pendente',
+              executor_id: null,
+              dente_unico: null,
+              etapas: [],
+              financeiro_status: 'nao_pago',
+              saldo: 100,
+              destino_status: 'agendar',
+              destino_data_agendada: null,
+              destino_executor_id: null,
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/atendimentos/14/pagamentos?grouped=1') {
+        return mockJsonResponse([]);
+      }
+
+      if (url === '/api/formas-pagamento') {
+        return mockJsonResponse([
+          {
+            id: 1,
+            unidade_id: 1,
+            grupo: 'PIX',
+            subgrupo: '',
+            metodo_base: 'pix',
+            ativo: 1,
+            taxa_percentual: 0.5,
+            taxa_fixa: 0,
+            vigente_de: '2025-01-01 00:00:00',
+            vigente_ate: null,
+            created_at: '2025-01-01 00:00:00',
+            updated_at: '2025-01-01 00:00:00',
+          },
+        ]);
+      }
+
+      if (url === '/api/atendimentos/14/itens/101' && init?.method === 'PUT') {
+        return mockJsonResponse({ id: 101 });
+      }
+
+      throw new Error(`Unhandled request: ${url}`);
+    });
+
+    render(React.createElement(PagamentoPage, { params: Promise.resolve({ id: '14' }) }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Maria Souza')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Desconto' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar desconto' }));
+
+    await waitFor(() => {
+      expect(mockUnitFetch).toHaveBeenCalledWith(
+        '/api/atendimentos/14/itens/101',
+        expect.objectContaining({ method: 'PUT' })
+      );
+    });
+
+    const putCall = mockUnitFetch.mock.calls.find(
+      ([url, init]: [string, RequestInit | undefined]) =>
+        url === '/api/atendimentos/14/itens/101' && init?.method === 'PUT'
+    );
+
+    expect(JSON.parse(String(putCall?.[1]?.body))).toMatchObject({
+      valor_final: 100,
+    });
   });
 });

@@ -69,6 +69,14 @@ interface ItemAtendimento {
   destino_executor_id?: number | null;
 }
 
+function getValorBaseDesconto(item: Pick<ItemAtendimento, 'valor' | 'valor_original' | 'valor_final'>): number {
+  return Math.max(
+    Number(item.valor_original ?? 0),
+    Number(item.valor_final ?? 0),
+    Number(item.valor ?? 0)
+  );
+}
+
 interface Pagamento {
   id: number;
   pagamento_grupo_id: number | null;
@@ -333,7 +341,7 @@ export default function PagamentoPage({
       const primeiraFormaId = formasData[0] ? String(formasData[0].id) : '';
 
       for (const item of atendimentoData.itens) {
-        const baseline = item.valor_original ?? item.valor_final ?? item.valor;
+        const baseline = getValorBaseDesconto(item);
         novosDescontos[item.id] = {
           valor: String((item.desconto_valor ?? Math.max(0, baseline - (item.valor_final ?? item.valor))).toFixed(2)),
           motivo: item.desconto_motivo ?? '',
@@ -607,7 +615,7 @@ export default function PagamentoPage({
     const item = atendimento?.itens.find((atual) => atual.id === itemId);
     if (!item) return;
 
-    const baseline = item.valor_original ?? item.valor_final ?? item.valor;
+    const baseline = getValorBaseDesconto(item);
     const valorFinal = Number((baseline - desconto).toFixed(2));
 
     if (valorFinal < 0) {
@@ -1121,7 +1129,7 @@ export default function PagamentoPage({
                               ...prev,
                               [item.id]: { ...prev[item.id], valor: value },
                             }))}
-                            hint={`Valor final: ${formatarMoeda(Math.max(0, (item.valor_original ?? item.valor_final ?? item.valor) - descontoPreview))}`}
+                            hint={`Valor final: ${formatarMoeda(Math.max(0, getValorBaseDesconto(item) - descontoPreview))}`}
                           />
                           <Input
                             label="Motivo do desconto"
