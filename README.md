@@ -71,9 +71,9 @@ __tests__/   # Testes
 ## Roles
 
 - **Admin**: acesso total, dashboard, gestao de usuarios e procedimentos
-- **Atendente**: recebe pacientes, cria atendimentos, registra pagamentos
-- **Avaliador**: avalia pacientes, define procedimentos e valores
-- **Executor**: executa procedimentos, preenche prontuarios
+- **Atendente**: recebe pacientes, cria atendimentos, registra pagamentos e acompanha dashboard
+- **Avaliador**: avalia pacientes, define procedimentos e valores, e acompanha dashboard
+- **Executor**: executa procedimentos, registra evolucoes clinicas e preenche prontuarios por etapa
 
 ## Pipeline de Atendimento
 

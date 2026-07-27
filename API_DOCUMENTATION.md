@@ -537,11 +537,49 @@ Retorna detalhe do item de execução com dados do cliente e procedimento.
   "valor_pago": 500,
   "dentes": null,
   "status": "pago",
+  "itens_elegiveis_evolucao": [
+    { "id": 1, "procedimento_nome": "Limpeza", "status": "executando" },
+    { "id": 2, "procedimento_nome": "Restauração", "status": "pago" }
+  ],
   ...
 }
 ```
 
 **Erros**: `404`, `500`
+
+---
+
+### `POST /api/execucao/evolucoes`
+
+Cria uma evolução clínica e conclui em lote os procedimentos selecionados do mesmo atendimento.
+
+| Campo        | Tipo     | Obrigatório | Descrição                                  |
+|--------------|----------|-------------|--------------------------------------------|
+| `item_ids`   | number[] | ✅          | Procedimentos que entrarão na evolução     |
+| `descricao`  | string   | ✅          | Descrição clínica (mín. 10 chars)          |
+| `observacoes`| string   | ❌          | Observações adicionais                     |
+
+**Regras**:
+- Todos os itens precisam pertencer ao mesmo atendimento e à unidade atual.
+- Todos os itens precisam estar atribuídos ao usuário autenticado.
+- Itens já concluídos ou já vinculados a outra evolução são rejeitados.
+- Procedimentos por etapas continuam no fluxo individual de sessões.
+- A comissão de execução continua sendo gerada por item concluído.
+- A operação é enviada em lote para salvar evolução, vínculos, conclusão dos itens, comissões e finalização/retorno para pagamento do atendimento.
+
+**Resposta (201)**:
+```json
+{
+  "success": true,
+  "evolucao_uuid": "uuid",
+  "atendimento_id": 1,
+  "item_ids": [1, 2],
+  "atendimento_finalizado": true,
+  "atendimento_voltou_para_pagamento": false
+}
+```
+
+**Erros**: `400` (validação), `401`, `403`, `404`, `409`, `500`
 
 ---
 
@@ -595,11 +633,11 @@ Cria ou atualiza prontuário (upsert).
 | Campo        | Tipo   | Obrigatório | Descrição                    |
 |--------------|--------|-------------|------------------------------|
 | `usuario_id` | number | ✅          | ID do autor                  |
-| `descricao`  | string | ✅          | Descrição clínica (mín. 50 chars) |
+| `descricao`  | string | ✅          | Descrição clínica (mín. 10 chars) |
 | `observacoes`| string | ❌          | Observações adicionais       |
 
 **Resposta (200/201)**: `{ "success": true, "prontuario": Prontuario, "message": "Prontuário criado|atualizado" }`  
-**Erros**: `400` (usuario_id faltando, descrição < 50 chars), `500`
+**Erros**: `400` (usuario_id faltando, descrição < 10 chars), `409` (item já vinculado a evolução em lote), `500`
 
 ---
 
@@ -695,7 +733,7 @@ Remove anexo (deleta do R2 e do banco).
 | Query       | Tipo   | Descrição                                |
 |-------------|--------|------------------------------------------|
 | `usuario_id`| string | ID do usuário logado                     |
-| `role`      | string | `executor`, `avaliador`, `admin`         |
+| `role`      | string | `executor`, `avaliador`, `atendente`, `admin` |
 
 **Resposta (200)**:
 ```json
@@ -720,6 +758,8 @@ Remove anexo (deleta do R2 e do banco).
 ### `GET /api/dashboard/admin`
 
 Dashboard administrativo com métricas detalhadas.
+
+**Acesso**: `admin`, `atendente`, `avaliador`.
 
 | Query        | Tipo   | Descrição              |
 |--------------|--------|------------------------|
@@ -933,7 +973,9 @@ Alguns endpoints adicionam contexto extra:
 | `parcelas`              | Parcelas de cobrança                |
 | `comissoes`             | Comissões calculadas                |
 | `notas_execucao`        | Notas do executor                   |
-| `prontuarios`           | Prontuários clínicos                |
+| `prontuarios`           | Prontuários clínicos legados por item |
+| `prontuario_evolucoes`  | Evoluções clínicas por atendimento  |
+| `prontuario_evolucao_itens` | Vínculo único item → evolução  |
 | `anexos_execucao`       | Arquivos anexados (R2)              |
 
 ---
