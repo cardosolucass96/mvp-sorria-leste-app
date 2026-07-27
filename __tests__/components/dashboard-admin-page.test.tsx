@@ -86,6 +86,10 @@ beforeEach(() => {
     user: { id: 1, nome: 'Admin', role: 'admin', roles: ['admin'] },
     isLoading: false,
     isAdmin: true,
+    hasRole: (roles: string | string[]) => {
+      const roleList = Array.isArray(roles) ? roles : [roles];
+      return roleList.includes('admin');
+    },
   });
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -151,5 +155,41 @@ describe('DashboardAdminPage', () => {
 
     expect(await screen.findByText('Erro ao carregar dashboard')).toBeInTheDocument();
     expect(screen.getByText('Erro ao carregar dados')).toBeInTheDocument();
+  });
+
+  it('permite atendente visualizar o mesmo dashboard', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 2, nome: 'Atendente', role: 'atendente', roles: ['atendente'] },
+      isLoading: false,
+      isAdmin: false,
+      hasRole: (roles: string | string[]) => {
+        const roleList = Array.isArray(roles) ? roles : [roles];
+        return roleList.includes('atendente');
+      },
+    });
+    mockUnitFetch.mockImplementation(() => mockJsonResponse(createDashboardPayload()));
+
+    render(<DashboardAdminPage />);
+
+    expect(await screen.findByText('Faturamento total recebido')).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('permite avaliador visualizar o mesmo dashboard', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 3, nome: 'Avaliador', role: 'avaliador', roles: ['avaliador'] },
+      isLoading: false,
+      isAdmin: false,
+      hasRole: (roles: string | string[]) => {
+        const roleList = Array.isArray(roles) ? roles : [roles];
+        return roleList.includes('avaliador');
+      },
+    });
+    mockUnitFetch.mockImplementation(() => mockJsonResponse(createDashboardPayload()));
+
+    render(<DashboardAdminPage />);
+
+    expect(await screen.findByText('Faturamento total recebido')).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

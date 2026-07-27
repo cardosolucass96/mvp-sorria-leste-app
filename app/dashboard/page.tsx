@@ -71,7 +71,7 @@ function shiftDateKey(
 
 export default function DashboardAdminPage() {
   usePageTitle('Dashboard');
-  const { user, isLoading: authLoading, isAdmin } = useAuth();
+  const { user, isLoading: authLoading, isAdmin, hasRole } = useAuth();
   const router = useRouter();
   const unitFetch = useUnitFetch();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -107,20 +107,23 @@ export default function DashboardAdminPage() {
     }
   }, [dataInicio, dataFim, unitFetch]);
 
-  useEffect(() => {
-    // Permite acesso se o role real é admin (mesmo em modo dentista)
-    if (!authLoading && (!user || !isAdmin)) {
-      router.push('/');
-    }
-  }, [user, authLoading, router, isAdmin]);
+  const canAccessDashboard = isAdmin || hasRole(['atendente', 'avaliador']);
 
   useEffect(() => {
+    if (!authLoading && (!user || !canAccessDashboard)) {
+      router.push('/');
+    }
+  }, [user, authLoading, router, canAccessDashboard]);
+
+  useEffect(() => {
+    if (authLoading || !user || !canAccessDashboard) return;
+
     const timer = window.setTimeout(() => {
       void fetchDashboard();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [fetchDashboard]);
+  }, [authLoading, canAccessDashboard, fetchDashboard, user]);
 
   const aplicarPeriodo = (periodo: string) => {
     setPeriodoSelecionado(periodo);
@@ -162,7 +165,7 @@ export default function DashboardAdminPage() {
     return `${meses[parseInt(mesNum) - 1]}/${ano.slice(2)}`;
   };
 
-  if (authLoading || !user || !isAdmin) {
+  if (authLoading || !user || !canAccessDashboard) {
     return null;
   }
 

@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { generateToken, verifyToken } from '@/lib/auth/jwt';
+import { generateToken } from '@/lib/auth/jwt';
 import { withAuth, withRole, AuthenticatedContext } from '@/lib/auth/middleware';
 import { callRoute } from '../helpers/api-test-helper';
 import {
@@ -24,9 +24,8 @@ import {
 // Rotas a serem testadas (importação real)
 import { GET as getDashboard } from '@/app/api/dashboard/route';
 import { GET as getDashboardAdmin } from '@/app/api/dashboard/admin/route';
-import { GET as getClientes, POST as postClientes } from '@/app/api/clientes/route';
+import { GET as getClientes } from '@/app/api/clientes/route';
 import { GET as getUsuarios, POST as postUsuarios } from '@/app/api/usuarios/route';
-import { GET as getProcedimentos } from '@/app/api/procedimentos/route';
 import { GET as getMeusProcedimentos } from '@/app/api/meus-procedimentos/route';
 import { PUT as putSenha } from '@/app/api/auth/senha/route';
 
@@ -172,7 +171,7 @@ describe('Segurança — Autorização & IDOR', () => {
       'GET /api/atendimentos': ['admin', 'atendente', 'avaliador', 'executor'],
       'POST /api/atendimentos': ['admin', 'atendente'],
       'GET /api/dashboard': ['admin', 'atendente', 'avaliador', 'executor'],
-      'GET /api/dashboard/admin': ['admin'],
+      'GET /api/dashboard/admin': ['admin', 'atendente', 'avaliador'],
       'POST /api/atendimentos/[id]/finalizar': ['admin', 'atendente'],
       'GET /api/comissoes': ['admin', 'atendente'],
       'GET /api/execucao': ['admin', 'executor'],
@@ -182,7 +181,7 @@ describe('Segurança — Autorização & IDOR', () => {
       expect(Object.keys(ROLE_MAP).length).toBeGreaterThanOrEqual(15);
     });
 
-    test('rotas admin-only incluem: usuarios CRUD, procedimentos CRUD, dashboard admin', () => {
+    test('rotas admin-only incluem: usuarios CRUD e procedimentos CRUD', () => {
       const adminOnly = Object.entries(ROLE_MAP)
         .filter(([, roles]) => roles.length === 1 && roles[0] === 'admin')
         .map(([route]) => route);
@@ -190,7 +189,7 @@ describe('Segurança — Autorização & IDOR', () => {
       expect(adminOnly).toContain('GET /api/usuarios');
       expect(adminOnly).toContain('POST /api/usuarios');
       expect(adminOnly).toContain('DELETE /api/clientes/[id]');
-      expect(adminOnly).toContain('GET /api/dashboard/admin');
+      expect(adminOnly).not.toContain('GET /api/dashboard/admin');
     });
 
     test.each([
@@ -201,6 +200,8 @@ describe('Segurança — Autorização & IDOR', () => {
       ['atendente+admin', 'admin', ['admin', 'atendente'], true],
       ['atendente+admin', 'atendente', ['admin', 'atendente'], true],
       ['atendente+admin', 'executor', ['admin', 'atendente'], false],
+      ['dashboard-view', 'avaliador', ['admin', 'atendente', 'avaliador'], true],
+      ['dashboard-view', 'executor', ['admin', 'atendente', 'avaliador'], false],
     ])('withRole(%s) role=%s → %s', async (_desc, role, allowed, shouldPass) => {
       const handler = jest.fn(async () => NextResponse.json({ ok: true }));
       const token = await generateToken({ id: 1, email: 'a@b.com', role, nome: 'Test', unidade_ids: [1, 2], unidade_atual: 1 });
@@ -258,6 +259,7 @@ describe('Segurança — Autorização & IDOR', () => {
     test('GET /api/dashboard — agora requer autenticação (withUnit)', async () => {
       // Sem token → 401 (protegido por withUnit)
       const { status } = await callRoute(getDashboard, '/api/dashboard', {
+        headers: { Authorization: '' },
         searchParams: { usuario_id: '999', role: 'executor' },
       });
 
@@ -268,6 +270,7 @@ describe('Segurança — Autorização & IDOR', () => {
     test('GET /api/meus-procedimentos — agora requer autenticação (withUnit)', async () => {
       // Sem token → 401 (protegido por withUnit)
       const { status } = await callRoute(getMeusProcedimentos, '/api/meus-procedimentos', {
+        headers: { Authorization: '' },
         searchParams: { usuario_id: '999' },
       });
 
@@ -277,7 +280,9 @@ describe('Segurança — Autorização & IDOR', () => {
 
     test('GET /api/dashboard/admin — agora requer autenticação (withUnit)', async () => {
       // Sem token → 401 (protegido por withUnit)
-      const { status } = await callRoute(getDashboardAdmin, '/api/dashboard/admin', {});
+      const { status } = await callRoute(getDashboardAdmin, '/api/dashboard/admin', {
+        headers: { Authorization: '' },
+      });
 
       // ✅ Corrigido: withUnit exige JWT válido
       expect(status).toBe(401);
@@ -288,7 +293,7 @@ describe('Segurança — Autorização & IDOR', () => {
 
   describe('withAuth protege handler real quando aplicado', () => {
     test('handler de GET clientes protegido com withAuth rejeita sem token', async () => {
-      const protectedGet = withAuth(async (request: NextRequest, ctx: AuthenticatedContext) => {
+      const protectedGet = withAuth(async (request: NextRequest) => {
         // Simula o que GET /api/clientes faria com auth
         return getClientes(request);
       });
@@ -423,12 +428,13 @@ describe('Segurança — Autorização & IDOR', () => {
       const { PUT: putAtendimento } = await import('@/app/api/atendimentos/[id]/route');
 
       // Mock: atendimento em aguardando_pagamento
-      mockQueryResponse('select * from atendimentos where id', {
+      mockQueryResponse('from atendimentos where id = ? and unidade_id = ?', {
         id: 1, status: 'aguardando_pagamento', cliente_id: 1, avaliador_id: 1,
         valor_total: 1000, valor_pago: 1000, created_at: '2025-01-01',
       });
-      // Mock: validação de transição — pelo menos 1 pagamento ativo
-      mockQueryResponse('count(*) as count from pagamentos where atendimento_id', { count: 1 });
+      // Mock: validação de transição — pelo menos 1 item e cobertura financeira suficiente
+      mockQueryResponse('select count(*) as count from itens_atendimento where atendimento_id = ?', { count: 1 });
+      mockQueryResponse('and valor_pago + 0.001 < coalesce', { count: 0 });
       // Mock: updated atendimento retornado
       mockQueryResponse('select a.*', {
         id: 1, status: 'em_execucao', cliente_id: 1, avaliador_id: 1,

@@ -244,7 +244,7 @@ export default function Home() {
                 {stats?.finalizadosHoje || 0} finalizado(s), {stats?.aguardandoPagamento || 0} aguardando pagamento e {operacaoEmCurso} em curso.
               </p>
             </div>
-            <Link href="/dashboard/admin" className="btn bg-success-600 text-success-50 hover:bg-success-700">
+            <Link href="/dashboard" className="btn bg-success-600 text-success-50 hover:bg-success-700">
               Dashboard Admin
             </Link>
           </div>

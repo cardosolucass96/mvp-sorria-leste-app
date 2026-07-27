@@ -240,7 +240,53 @@ describe('GET /api/dashboard/admin — contrato operacional', () => {
     expect(data.porCanal.find((item) => item.origem === 'nova_origem')?.label).toBe('nova_origem');
   });
 
-  it('rejeita usuario nao admin', async () => {
+  it('permite atendente acessar o dashboard administrativo', async () => {
+    const verifyTokenMock = verifyToken as jest.MockedFunction<typeof verifyToken>;
+    verifyTokenMock.mockResolvedValueOnce({
+      sub: 2,
+      email: 'atendente@test.com',
+      role: 'atendente',
+      roles: ['atendente'],
+      nome: 'Atendente Teste',
+      unidade_ids: [1],
+      unidade_atual: 1,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 86400,
+    });
+
+    const { status, data } = await callRoute<AdminDashboardResponse>(
+      getAdminDashboard,
+      '/api/dashboard/admin'
+    );
+
+    expect(status).toBe(200);
+    expect(data).toHaveProperty('resumo_operacional');
+  });
+
+  it('permite avaliador acessar o dashboard administrativo', async () => {
+    const verifyTokenMock = verifyToken as jest.MockedFunction<typeof verifyToken>;
+    verifyTokenMock.mockResolvedValueOnce({
+      sub: 3,
+      email: 'avaliador@test.com',
+      role: 'avaliador',
+      roles: ['avaliador'],
+      nome: 'Avaliador Teste',
+      unidade_ids: [1],
+      unidade_atual: 1,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 86400,
+    });
+
+    const { status, data } = await callRoute<AdminDashboardResponse>(
+      getAdminDashboard,
+      '/api/dashboard/admin'
+    );
+
+    expect(status).toBe(200);
+    expect(data).toHaveProperty('resumo_operacional');
+  });
+
+  it('rejeita usuario sem perfil admin, atendente ou avaliador', async () => {
     const verifyTokenMock = verifyToken as jest.MockedFunction<typeof verifyToken>;
     verifyTokenMock.mockResolvedValueOnce({
       sub: 99,

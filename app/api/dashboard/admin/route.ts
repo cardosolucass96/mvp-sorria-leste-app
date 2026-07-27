@@ -100,7 +100,7 @@ const ORIGEM_LABELS: Record<string, string> = {
   indicacao: 'Indicação',
 };
 
-export const GET = withUnitRole(['admin'], async (request: NextRequest, context: UnitAuthenticatedContext) => {
+export const GET = withUnitRole(['admin', 'atendente', 'avaliador'], async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const { searchParams } = new URL(request.url);
     const dataInicio = searchParams.get('data_inicio');

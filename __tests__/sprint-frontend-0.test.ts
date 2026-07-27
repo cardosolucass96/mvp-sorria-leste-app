@@ -448,9 +448,9 @@ describe('Sprint 0: navigation', () => {
     expect(MENU_ITEMS[0].roles).toBeUndefined();
   });
 
-  test('Dashboard é restrito a admin', () => {
+  test('Dashboard é restrito a perfis gerenciais', () => {
     const dash = MENU_ITEMS.find((i) => i.href === '/dashboard');
-    expect(dash?.roles).toEqual(['admin']);
+    expect(dash?.roles).toEqual(['admin', 'atendente', 'avaliador']);
   });
 
   test('VIEW_MODE_LABELS tem admin e dentista', () => {
