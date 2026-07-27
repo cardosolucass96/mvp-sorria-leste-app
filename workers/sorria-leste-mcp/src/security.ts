@@ -2,26 +2,41 @@ import type { AppUser, Env, OAuthProps } from './types';
 
 const READ_SCOPE = 'sorria.read';
 const FINANCIAL_READ_SCOPE = 'sorria.finance.read';
+const WRITE_SCOPE = 'sorria.write';
 const FINANCIAL_FIELD_PATTERN = /(valor|pagamento|pagamentos|saldo|comissao|comissoes|caixa|desconto|recebido|crediario|dinheiro|pix|cartao|cobranca)/i;
 const FINANCIAL_TEXT_PATTERN = /(valor|pagamento|pagamentos|saldo|comissão|comissões|comissao|comissoes|caixa|desconto|recebido|crediario|crediário|dinheiro|pix|cartao|cartão|cobranca|cobrança)/i;
 const MONEY_TEXT_PATTERN = /\bR\$\s*\d+(?:[.,]\d+)?|\b\d+(?:[.,]\d{2})\b/g;
 const HAS_MONEY_TEXT_PATTERN = /\bR\$\s*\d+(?:[.,]\d+)?|\b\d+(?:[.,]\d{2})\b/;
 
-const ALLOWED_SCOPES = new Set([READ_SCOPE, FINANCIAL_READ_SCOPE]);
+const ALLOWED_SCOPES = new Set([READ_SCOPE, FINANCIAL_READ_SCOPE, WRITE_SCOPE]);
 
-export function allowedEmails(env: Env): Set<string> {
+function parseEmailList(value: string | undefined): Set<string> {
   return new Set(
-    env.MCP_ALLOWED_EMAILS
+    (value ?? '')
       .split(',')
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean),
   );
 }
 
+export function allowedEmails(env: Env): Set<string> {
+  return parseEmailList(env.MCP_ALLOWED_EMAILS);
+}
+
+export function allowedWriteEmails(env: Env): Set<string> {
+  return parseEmailList(env.MCP_WRITE_ALLOWED_EMAILS);
+}
+
 export function isMcpAdministrator(user: Pick<AppUser, 'email' | 'role' | 'ativo'>, env: Env): boolean {
   return user.ativo === 1
     && user.role === 'admin'
     && allowedEmails(env).has(user.email.trim().toLowerCase());
+}
+
+export function isMcpWriter(user: Pick<AppUser, 'email' | 'role' | 'ativo'>, env: Env): boolean {
+  return user.ativo === 1
+    && ['admin', 'atendente'].includes(user.role)
+    && allowedWriteEmails(env).has(user.email.trim().toLowerCase());
 }
 
 export function parseOAuthProps(input: unknown): OAuthProps | null {
@@ -46,6 +61,10 @@ export function hasFinancialScope(scope: string[]): boolean {
   return scope.includes(FINANCIAL_READ_SCOPE);
 }
 
+export function hasWriteScope(scope: string[]): boolean {
+  return scope.includes(WRITE_SCOPE);
+}
+
 export function grantedScopes(requestedScope: string[]): string[] | null {
   if (requestedScope.some((scope) => !ALLOWED_SCOPES.has(scope))) return null;
 
@@ -57,6 +76,20 @@ export function grantedScopes(requestedScope: string[]): string[] | null {
   }
 
   return Array.from(granted).sort((left, right) => left.localeCompare(right));
+}
+
+export function canAuthorizeScopes(
+  user: Pick<AppUser, 'email' | 'role' | 'ativo'>,
+  env: Env,
+  scope: string[],
+): boolean {
+  const needsRead = hasReadScope(scope);
+  const needsFinancial = hasFinancialScope(scope);
+  const needsWrite = hasWriteScope(scope);
+
+  if ((needsRead || needsFinancial) && !isMcpAdministrator(user, env)) return false;
+  if (needsWrite && !isMcpWriter(user, env)) return false;
+  return needsRead || needsFinancial || needsWrite;
 }
 
 export function maskCpf(cpf: string | null): string | null {

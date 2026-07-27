@@ -10,11 +10,15 @@ import {
   clientOperationalProfile,
   clientStats,
   clientSummary,
+  createClient,
+  createEvaluationAppointment,
   dayAgenda,
   executionQueue,
   followupDetail,
   followupSummary,
+  getDiscoveryIdentity,
   getIdentity,
+  getWriteIdentity,
   listAppointments,
   listAttendances,
   listCategories,
@@ -58,6 +62,13 @@ const AGENDAMENTO_TIPO = z.enum(['avaliacao', 'procedimento']);
 const ATENDIMENTO_STATUS = z.enum(['triagem', 'avaliacao', 'aguardando_liberacao', 'em_execucao', 'finalizado', 'encerrado']);
 const FOLLOWUP_STATUS = z.enum(['aberta', 'concluida']);
 const FOLLOWUP_TIPO = z.enum(['orcamento', 'sem_posicao', 'retorno', 'cobranca', 'outro']);
+const ORIGEM_CLIENTE = z.enum(['fachada', 'trafego_meta', 'trafego_google', 'organico', 'indicacao']);
+const SEXO_CLIENTE = z.enum(['masculino', 'feminino', 'outro']);
+const PLANO_ODONTOLOGICO = z.enum(['Clin', 'Prime', 'OdontoArt']);
+const OPTIONAL_TEXT = z.string().trim().max(300).optional();
+const OPTIONAL_SHORT_TEXT = z.string().trim().max(120).optional();
+const OPTIONAL_EMAIL = z.string().trim().email().max(160).optional();
+const CLINIC_DATETIME = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Use data e hora no formato YYYY-MM-DDTHH:mm.');
 
 type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
 
@@ -70,11 +81,37 @@ function result(payload: unknown, redactFinancial = true): ToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(serialized, null, 2) }] };
 }
 
-function failure(): ToolResult {
+function failure(message = 'Não foi possível executar esta consulta. Verifique o escopo, a unidade e os filtros informados.'): ToolResult {
   return {
-    content: [{ type: 'text', text: 'Não foi possível executar esta consulta. Verifique o escopo, a unidade e os filtros informados.' }],
+    content: [{ type: 'text', text: message }],
     isError: true,
   };
+}
+
+async function runDiscoveryTool<T>(
+  env: Env,
+  props: unknown,
+  tool: string,
+  unidadeId: number | null,
+  action: (identity: Identity, setAuditUnit: (id: number | null) => void) => Promise<T>,
+): Promise<ToolResult> {
+  let identity: Identity | null = null;
+  let auditUnitId = unidadeId;
+  const setAuditUnit = (id: number | null) => {
+    auditUnitId = id;
+  };
+
+  try {
+    identity = await getDiscoveryIdentity(env, props);
+    if (unidadeId !== null) assertUnit(identity, unidadeId);
+    const payload = await action(identity, setAuditUnit);
+    await audit(env, identity, tool, auditUnitId, true);
+    return result(payload);
+  } catch (error) {
+    console.error(`Falha na ferramenta MCP ${tool}`, error);
+    await audit(env, identity, tool, auditUnitId, false);
+    return failure();
+  }
 }
 
 async function runReadTool<T>(
@@ -107,6 +144,27 @@ async function runReadTool<T>(
   }
 }
 
+async function runWriteTool<T>(
+  env: Env,
+  props: unknown,
+  tool: string,
+  unidadeId: number | null,
+  action: (identity: Identity) => Promise<T>,
+): Promise<ToolResult> {
+  let identity: Identity | null = null;
+  try {
+    identity = await getWriteIdentity(env, props);
+    if (unidadeId !== null) assertUnit(identity, unidadeId);
+    const payload = await action(identity);
+    await audit(env, identity, tool, unidadeId, true);
+    return result(payload);
+  } catch (error) {
+    console.error(`Falha na ferramenta MCP ${tool}`, error);
+    await audit(env, identity, tool, unidadeId, false);
+    return failure('Não foi possível executar esta escrita. Verifique o escopo, a unidade e os dados informados.');
+  }
+}
+
 function assertFinancialScope(identity: Identity): void {
   if (!hasFinancialScope(identity.scope)) {
     throw new Error('Escopo financeiro não autorizado para esta conexão MCP.');
@@ -117,21 +175,22 @@ export function createServer(env: Env, props: unknown): McpServer {
   const server = new McpServer(
     {
       name: 'sorria-leste',
-      version: '0.2.0',
+      version: '0.3.0',
     },
     {
       instructions: [
-        'Servidor MCP operacional da Sorria Leste, somente leitura.',
+        'Servidor MCP operacional da Sorria Leste.',
         'Use filtros específicos e informe a unidade quando solicitado.',
         'Ferramentas financeiras exigem o escopo separado sorria.finance.read.',
-        'Não há escrita, anexos, prontuários, notas clínicas nem HTML completo de termos.',
+        'O escopo sorria.write libera apenas cadastro de cliente e agendamento de avaliação.',
+        'Não há escrita de procedimentos, pagamentos, follow-ups, anexos, prontuários, notas clínicas nem HTML completo de termos.',
         'Dados pessoais de clientes são minimizados/mascarados; no escopo operacional os campos financeiros continuam ocultos.',
       ].join(' '),
     },
   );
 
   server.tool('minhas_unidades', 'Lista as unidades que esta conexão pode consultar.', {}, async () =>
-    runReadTool(env, props, 'minhas_unidades', null, (identity) => listUnits(env, identity)),
+    runDiscoveryTool(env, props, 'minhas_unidades', null, (identity) => listUnits(env, identity)),
   );
 
   server.tool('buscar_clientes', 'Busca clientes por nome ou telefone. CPF, telefone e e-mail são mascarados.', {
@@ -139,7 +198,39 @@ export function createServer(env: Env, props: unknown): McpServer {
     limite: PAGE,
     offset: OFFSET,
   }, async ({ busca, limite, offset }) =>
-    runReadTool(env, props, 'buscar_clientes', null, () => searchClients(env, busca, limite, offset)),
+    runDiscoveryTool(env, props, 'buscar_clientes', null, () => searchClients(env, busca, limite, offset)),
+  );
+
+  server.tool('criar_cliente', 'Cria um cliente/lead com dados cadastrais mínimos. Requer sorria.write.', {
+    nome: z.string().trim().min(1).max(120),
+    origem: ORIGEM_CLIENTE,
+    telefone: OPTIONAL_SHORT_TEXT,
+    email: OPTIONAL_EMAIL,
+    cpf: OPTIONAL_SHORT_TEXT,
+    dataNascimento: DATE.optional(),
+    endereco: OPTIONAL_TEXT,
+    sexo: SEXO_CLIENTE.optional(),
+    planoOdontologico: PLANO_ODONTOLOGICO.optional(),
+    observacoes: OPTIONAL_TEXT,
+  }, async (input) =>
+    runWriteTool(env, props, 'criar_cliente', null, () => createClient(env, input)),
+  );
+
+  server.tool('criar_agendamento_avaliacao', 'Cria apenas agendamento de avaliação para um cliente. Requer sorria.write.', {
+    unidadeId: UNIT,
+    clienteId: CLIENT,
+    dataAgendada: CLINIC_DATETIME.optional(),
+    executorId: USER.optional(),
+    observacoes: OPTIONAL_TEXT,
+  }, async ({ unidadeId, clienteId, dataAgendada, executorId, observacoes }) =>
+    runWriteTool(env, props, 'criar_agendamento_avaliacao', unidadeId, () =>
+      createEvaluationAppointment(env, {
+        unidadeId,
+        clienteId,
+        dataAgendada,
+        executorId,
+        observacoes,
+      })),
   );
 
   server.tool('obter_cliente_resumo', 'Retorna cadastro minimizado e histórico operacional básico; não inclui prontuários, notas ou anexos.', {

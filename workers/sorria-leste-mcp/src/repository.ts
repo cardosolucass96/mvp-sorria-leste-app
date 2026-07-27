@@ -1,8 +1,56 @@
-import type { AppUser, D1PreparedStatement, Env, Identity, OAuthProps } from './types';
-import { hasReadScope, isForbiddenFollowupType, isMcpAdministrator, maskCpf, maskEmail, maskNullableText, maskPhone, parseOAuthProps } from './security';
+import type { AppUser, D1PreparedStatement, Env, Identity } from './types';
+import {
+  hasReadScope,
+  hasWriteScope,
+  isForbiddenFollowupType,
+  isMcpAdministrator,
+  isMcpWriter,
+  maskCpf,
+  maskEmail,
+  maskNullableText,
+  maskPhone,
+  parseOAuthProps,
+} from './security';
 
 type QueryResult<T> = { results: T[] };
 type Primitive = string | number | null;
+type InsertResult = { meta?: { last_row_id?: number } };
+
+const ORIGENS_CLIENTE = new Set(['fachada', 'trafego_meta', 'trafego_google', 'organico', 'indicacao']);
+const SEXOS_CLIENTE = new Set(['masculino', 'feminino', 'outro']);
+const PLANOS_ODONTOLOGICOS = new Set(['Clin', 'Prime', 'OdontoArt']);
+const ROLES_DENTISTA_AGENDA = new Set(['avaliador', 'executor', 'ortodontista']);
+const CLINIC_UTC_OFFSET_MINUTES = -3 * 60;
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const LOCAL_DATETIME_INPUT_REGEX = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+
+export interface CreateClientInput {
+  nome: string;
+  origem: string;
+  telefone?: string | null;
+  email?: string | null;
+  cpf?: string | null;
+  dataNascimento?: string | null;
+  endereco?: string | null;
+  sexo?: string | null;
+  planoOdontologico?: string | null;
+  observacoes?: string | null;
+}
+
+export interface CreateEvaluationAppointmentInput {
+  unidadeId: number;
+  clienteId: number;
+  dataAgendada?: string | null;
+  executorId?: number | null;
+  observacoes?: string | null;
+}
+
+export interface CreateLeadEvaluationInput extends CreateClientInput {
+  unidadeId: number;
+  dataAgendada?: string | null;
+  executorId?: number | null;
+  observacoesAgendamento?: string | null;
+}
 
 async function all<T>(statement: D1PreparedStatement): Promise<T[]> {
   const result = await statement.all<T>() as QueryResult<T>;
@@ -51,6 +99,156 @@ function paymentGroupKey(paymentGroupId: number | null, paymentId: number): stri
   return paymentGroupId ? `grupo:${paymentGroupId}` : `pagamento:${paymentId}`;
 }
 
+function normalizeOptionalText(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function assertDateOnly(value: string | null): string | null {
+  if (!value) return null;
+  if (!DATE_ONLY_REGEX.test(value)) throw new Error('Data inválida.');
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) {
+    throw new Error('Data inválida.');
+  }
+  return value;
+}
+
+function createUtcDateFromClinicParts(year: number, month: number, day: number, hour: number, minute: number): Date {
+  const localUtcMillis = Date.UTC(year, month - 1, day, hour, minute);
+  return new Date(localUtcMillis - CLINIC_UTC_OFFSET_MINUTES * 60_000);
+}
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+function getClinicDateTimeLocalValue(date: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Fortaleza',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const values = { year: '0000', month: '00', day: '00', hour: '00', minute: '00' };
+  for (const part of parts) {
+    if (part.type in values) {
+      values[part.type as keyof typeof values] = part.value;
+    }
+  }
+  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+}
+
+function clinicDateTimeInputToUtcIso(value: string | null): { normalized: string; utcIso: string } | null {
+  if (!value) return null;
+  const match = value.match(LOCAL_DATETIME_INPUT_REGEX);
+  if (!match) throw new Error('dataAgendada inválida. Use YYYY-MM-DDTHH:mm.');
+
+  const [, yearText, monthText, dayText, hourText, minuteText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (month < 1 || month > 12 || day < 1 || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    throw new Error('dataAgendada inválida. Use YYYY-MM-DDTHH:mm.');
+  }
+
+  const calendarDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    calendarDate.getUTCFullYear() !== year
+    || calendarDate.getUTCMonth() !== month - 1
+    || calendarDate.getUTCDate() !== day
+  ) {
+    throw new Error('dataAgendada inválida. Use YYYY-MM-DDTHH:mm.');
+  }
+
+  const normalized = `${yearText}-${monthText}-${dayText}T${pad(hour)}:${pad(minute)}`;
+  return {
+    normalized,
+    utcIso: createUtcDateFromClinicParts(year, month, day, hour, minute).toISOString(),
+  };
+}
+
+function lastInsertedId(result: InsertResult): number {
+  const id = Number(result.meta?.last_row_id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error('Não foi possível recuperar o registro criado.');
+  }
+  return id;
+}
+
+async function loadReadableUnitIds(env: Env): Promise<number[]> {
+  const unidades = await all<{ id: number }>(env.DB.prepare(
+    'SELECT id FROM unidades WHERE ativo = 1 ORDER BY nome ASC',
+  ));
+  return unidades.map((unidade) => unidade.id);
+}
+
+async function loadWritableUnitIds(env: Env, user: AppUser): Promise<number[]> {
+  if (user.role === 'admin') return loadReadableUnitIds(env);
+  const unidades = await all<{ id: number }>(env.DB.prepare(`
+    SELECT u.id
+      FROM unidades u
+      JOIN usuario_unidades uu ON uu.unidade_id = u.id
+     WHERE uu.usuario_id = ? AND u.ativo = 1
+     ORDER BY u.nome ASC
+  `).bind(user.id));
+  return unidades.map((unidade) => unidade.id);
+}
+
+async function assertActiveUnit(env: Env, unidadeId: number): Promise<void> {
+  const unit = await env.DB.prepare('SELECT id FROM unidades WHERE id = ? AND ativo = 1')
+    .bind(unidadeId)
+    .first<{ id: number }>();
+  if (!unit) throw new Error('Unidade não encontrada.');
+}
+
+async function validateEvaluationAppointmentDraft(
+  env: Env,
+  input: Pick<CreateEvaluationAppointmentInput, 'unidadeId' | 'dataAgendada' | 'executorId'>,
+): Promise<void> {
+  await assertActiveUnit(env, input.unidadeId);
+
+  const parsedDate = clinicDateTimeInputToUtcIso(normalizeOptionalText(input.dataAgendada));
+  if (parsedDate && parsedDate.normalized < getClinicDateTimeLocalValue()) {
+    throw new Error('Não é possível agendar para uma data no passado.');
+  }
+
+  if (!input.executorId) return;
+
+  const row = await env.DB.prepare(`SELECT u.id, u.role,
+      GROUP_CONCAT(DISTINCT ur.role) AS roles_csv
+    FROM usuarios u
+    LEFT JOIN usuario_roles ur ON ur.usuario_id = u.id
+    WHERE u.id = ? AND u.ativo = 1
+    GROUP BY u.id`)
+    .bind(input.executorId)
+    .first<{ id: number; role: string; roles_csv: string | null }>();
+  if (!row) throw new Error('Executor não encontrado.');
+
+  const roles = splitCsv(row.roles_csv).length > 0 ? splitCsv(row.roles_csv) : [row.role];
+  if (!roles.some((role) => ROLES_DENTISTA_AGENDA.has(role))) {
+    throw new Error('Usuário selecionado não possui role de dentista.');
+  }
+
+  const executorUnit = await env.DB.prepare(
+    'SELECT 1 AS ok FROM usuario_unidades WHERE usuario_id = ? AND unidade_id = ? LIMIT 1',
+  ).bind(input.executorId, input.unidadeId).first<{ ok: number }>();
+  if (!executorUnit) throw new Error('Executor não pertence à unidade informada.');
+}
+
 export async function getIdentity(env: Env, propsInput: unknown): Promise<Identity> {
   const props = parseOAuthProps(propsInput);
   if (!props || !hasReadScope(props.scope)) throw new Error('Acesso MCP sem escopo de leitura.');
@@ -63,11 +261,36 @@ export async function getIdentity(env: Env, propsInput: unknown): Promise<Identi
     throw new Error('Conta sem permissão MCP.');
   }
 
-  const unidades = await all<{ id: number }>(env.DB.prepare(
-    'SELECT id FROM unidades WHERE ativo = 1 ORDER BY nome ASC',
-  ));
+  const unidadeIds = await loadReadableUnitIds(env);
 
-  return { ...user, unidadeIds: unidades.map((unidade) => unidade.id), scope: props.scope, clientId: props.clientId };
+  return { ...user, unidadeIds, scope: props.scope, clientId: props.clientId };
+}
+
+export async function getWriteIdentity(env: Env, propsInput: unknown): Promise<Identity> {
+  const props = parseOAuthProps(propsInput);
+  if (!props || !hasWriteScope(props.scope)) throw new Error('Acesso MCP sem escopo de escrita.');
+
+  const user = await env.DB.prepare(
+    'SELECT id, nome, email, role, ativo FROM usuarios WHERE id = ? AND email = ?',
+  ).bind(props.userId, props.email.trim().toLowerCase()).first<AppUser>();
+
+  if (!user || !isMcpWriter(user, env)) {
+    throw new Error('Conta sem permissão de escrita MCP.');
+  }
+
+  const unidadeIds = await loadWritableUnitIds(env, user);
+  if (unidadeIds.length === 0) {
+    throw new Error('Conta sem unidade autorizada para escrita MCP.');
+  }
+  return { ...user, unidadeIds, scope: props.scope, clientId: props.clientId };
+}
+
+export async function getDiscoveryIdentity(env: Env, propsInput: unknown): Promise<Identity> {
+  const props = parseOAuthProps(propsInput);
+  if (!props) throw new Error('Acesso MCP sem credenciais.');
+  if (hasReadScope(props.scope)) return getIdentity(env, propsInput);
+  if (hasWriteScope(props.scope)) return getWriteIdentity(env, propsInput);
+  throw new Error('Acesso MCP sem escopo operacional.');
 }
 
 export function assertUnit(identity: Identity, unidadeId: number): void {
@@ -100,6 +323,198 @@ export async function searchClients(env: Env, query: string, limit: number, offs
     email: maskEmail(row.email),
     cpf: maskCpf(row.cpf),
   }));
+}
+
+export async function createClient(env: Env, input: CreateClientInput) {
+  const nome = normalizeOptionalText(input.nome);
+  if (!nome) throw new Error('Nome é obrigatório.');
+
+  const origem = normalizeOptionalText(input.origem);
+  if (!origem || !ORIGENS_CLIENTE.has(origem)) throw new Error('Origem inválida.');
+
+  const cpf = normalizeOptionalText(input.cpf);
+  const telefone = normalizeOptionalText(input.telefone);
+  const email = normalizeOptionalText(input.email)?.toLowerCase() ?? null;
+  const dataNascimento = assertDateOnly(normalizeOptionalText(input.dataNascimento));
+  const endereco = normalizeOptionalText(input.endereco);
+  const sexo = normalizeOptionalText(input.sexo);
+  const planoOdontologico = normalizeOptionalText(input.planoOdontologico);
+  const observacoes = normalizeOptionalText(input.observacoes);
+
+  if (sexo && !SEXOS_CLIENTE.has(sexo)) throw new Error('Sexo inválido.');
+  if (planoOdontologico && !PLANOS_ODONTOLOGICOS.has(planoOdontologico)) {
+    throw new Error('Plano odontológico inválido.');
+  }
+
+  if (cpf) {
+    const existing = await env.DB.prepare('SELECT id FROM clientes WHERE cpf = ?')
+      .bind(cpf)
+      .first<{ id: number }>();
+    if (existing) throw new Error('CPF já cadastrado.');
+  }
+
+  const insert = await env.DB.prepare(`INSERT INTO clientes
+      (nome, cpf, telefone, email, data_nascimento, endereco, origem, sexo, plano_odontologico, observacoes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(
+      nome,
+      cpf,
+      telefone,
+      email,
+      dataNascimento,
+      endereco,
+      origem,
+      sexo,
+      planoOdontologico,
+      observacoes,
+    )
+    .run();
+
+  const id = lastInsertedId(insert);
+  const client = await env.DB.prepare(
+    'SELECT id, nome, telefone, email, cpf, origem, sexo, plano_odontologico, created_at FROM clientes WHERE id = ?',
+  ).bind(id).first<{
+    id: number;
+    nome: string;
+    telefone: string | null;
+    email: string | null;
+    cpf: string | null;
+    origem: string;
+    sexo: string | null;
+    plano_odontologico: string | null;
+    created_at: string;
+  }>();
+
+  if (!client) throw new Error('Cliente criado não foi encontrado.');
+  return {
+    id: client.id,
+    nome: client.nome,
+    telefone: maskPhone(client.telefone),
+    email: maskEmail(client.email),
+    cpf: maskCpf(client.cpf),
+    origem: client.origem,
+    sexo: client.sexo,
+    plano_odontologico: client.plano_odontologico,
+    cadastradoEm: client.created_at,
+  };
+}
+
+export async function createEvaluationAppointment(
+  env: Env,
+  input: CreateEvaluationAppointmentInput,
+) {
+  await validateEvaluationAppointmentDraft(env, input);
+
+  const cliente = await env.DB.prepare('SELECT id, nome, telefone FROM clientes WHERE id = ?')
+    .bind(input.clienteId)
+    .first<{ id: number; nome: string; telefone: string | null }>();
+  if (!cliente) throw new Error('Cliente não encontrado.');
+
+  const normalizedObservacoes = normalizeOptionalText(input.observacoes);
+  const parsedDate = clinicDateTimeInputToUtcIso(normalizeOptionalText(input.dataAgendada));
+  if (parsedDate && parsedDate.normalized < getClinicDateTimeLocalValue()) {
+    throw new Error('Não é possível agendar para uma data no passado.');
+  }
+
+  let executor: { id: number; nome: string } | null = null;
+  if (input.executorId) {
+    const row = await env.DB.prepare(`SELECT u.id, u.nome, u.role,
+        GROUP_CONCAT(DISTINCT ur.role) AS roles_csv
+      FROM usuarios u
+      LEFT JOIN usuario_roles ur ON ur.usuario_id = u.id
+      WHERE u.id = ? AND u.ativo = 1
+      GROUP BY u.id`)
+      .bind(input.executorId)
+      .first<{ id: number; nome: string; role: string; roles_csv: string | null }>();
+    if (!row) throw new Error('Executor não encontrado.');
+
+    const roles = splitCsv(row.roles_csv).length > 0 ? splitCsv(row.roles_csv) : [row.role];
+    if (!roles.some((role) => ROLES_DENTISTA_AGENDA.has(role))) {
+      throw new Error('Usuário selecionado não possui role de dentista.');
+    }
+
+    const executorUnit = await env.DB.prepare(
+      'SELECT 1 AS ok FROM usuario_unidades WHERE usuario_id = ? AND unidade_id = ? LIMIT 1',
+    ).bind(input.executorId, input.unidadeId).first<{ ok: number }>();
+    if (!executorUnit) throw new Error('Executor não pertence à unidade informada.');
+    executor = { id: row.id, nome: row.nome };
+  }
+
+  const status = parsedDate ? 'agendado' : 'pendente';
+  const insert = await env.DB.prepare(`INSERT INTO agendamentos
+      (cliente_id, executor_id, tipo, status, data_agendada, observacoes, pago, valor_pago, unidade_id)
+    VALUES (?, ?, 'avaliacao', ?, ?, ?, 0, 0, ?)`)
+    .bind(
+      cliente.id,
+      executor?.id ?? null,
+      status,
+      parsedDate?.utcIso ?? null,
+      normalizedObservacoes,
+      input.unidadeId,
+    )
+    .run();
+
+  const id = lastInsertedId(insert);
+  const appointment = await env.DB.prepare(`SELECT a.id, a.unidade_id, a.cliente_id, a.executor_id,
+      a.tipo, a.status, a.data_agendada, a.observacoes, a.created_at,
+      c.nome AS cliente_nome, c.telefone AS cliente_telefone, u.nome AS executor_nome
+    FROM agendamentos a
+    JOIN clientes c ON c.id = a.cliente_id
+    LEFT JOIN usuarios u ON u.id = a.executor_id
+    WHERE a.id = ?`)
+    .bind(id)
+    .first<{
+      id: number;
+      unidade_id: number;
+      cliente_id: number;
+      executor_id: number | null;
+      tipo: string;
+      status: string;
+      data_agendada: string | null;
+      observacoes: string | null;
+      created_at: string;
+      cliente_nome: string;
+      cliente_telefone: string | null;
+      executor_nome: string | null;
+    }>();
+
+  if (!appointment) throw new Error('Agendamento criado não foi encontrado.');
+  return {
+    id: appointment.id,
+    unidadeId: appointment.unidade_id,
+    cliente: {
+      id: appointment.cliente_id,
+      nome: appointment.cliente_nome,
+      telefone: maskPhone(appointment.cliente_telefone),
+    },
+    executor: appointment.executor_id
+      ? { id: appointment.executor_id, nome: appointment.executor_nome }
+      : null,
+    tipo: appointment.tipo,
+    status: appointment.status,
+    data_agendada: appointment.data_agendada,
+    observacoes: maskNullableText(appointment.observacoes),
+    criadoEm: appointment.created_at,
+  };
+}
+
+export async function createLeadEvaluation(env: Env, input: CreateLeadEvaluationInput) {
+  await validateEvaluationAppointmentDraft(env, {
+    unidadeId: input.unidadeId,
+    dataAgendada: input.dataAgendada,
+    executorId: input.executorId,
+  });
+
+  const cliente = await createClient(env, input);
+  const agendamento = await createEvaluationAppointment(env, {
+    unidadeId: input.unidadeId,
+    clienteId: cliente.id,
+    dataAgendada: input.dataAgendada,
+    executorId: input.executorId,
+    observacoes: input.observacoesAgendamento,
+  });
+
+  return { cliente, agendamento };
 }
 
 export async function clientSummary(env: Env, clientId: number) {
@@ -1807,7 +2222,7 @@ export async function audit(env: Env, identity: Identity | null, tool: string, u
       .bind(identity?.id ?? null, identity?.clientId ?? null, tool, unidadeId, success ? 1 : 0)
       .run();
   } catch (error) {
-    // Auditoria não pode revelar dados nem interromper uma consulta de leitura.
+    // Auditoria não pode revelar dados nem interromper uma ação MCP.
     console.error('Falha ao registrar auditoria MCP', error);
   }
 }

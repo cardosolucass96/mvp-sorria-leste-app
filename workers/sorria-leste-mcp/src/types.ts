@@ -10,7 +10,11 @@ export interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   first<T = unknown>(colName?: string): Promise<T | null>;
   all<T = unknown>(): Promise<{ results?: T[] }>;
-  run<T = Record<string, unknown>>(): Promise<{ results?: T[]; success?: boolean; meta?: Record<string, unknown> }>;
+  run<T = Record<string, unknown>>(): Promise<{
+    results?: T[];
+    success?: boolean;
+    meta?: { last_row_id?: number; changes?: number } & Record<string, unknown>;
+  }>;
   raw<T = unknown>(): Promise<T[]>;
 }
 
@@ -35,6 +39,10 @@ export interface Env {
   OAUTH_KV: KVNamespace;
   /** Lista de e-mails autorizados a conectar o MCP, separada por vírgula. */
   MCP_ALLOWED_EMAILS: string;
+  /** Lista de e-mails autorizados a usar escrita MCP mínima, separada por vírgula. */
+  MCP_WRITE_ALLOWED_EMAILS: string;
+  /** API key server-to-server para integrações SDR, como n8n. */
+  SDR_API_KEY: string;
   OAUTH_PROVIDER: OAuthHelpers;
 }
 

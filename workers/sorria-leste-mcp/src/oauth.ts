@@ -1,7 +1,7 @@
 import { getOAuthApi, OAuthProvider, type AuthRequest, type ClientInfo, type OAuthProviderOptions } from '@cloudflare/workers-oauth-provider';
 import { createMcpHandler } from 'agents/mcp';
 import { createServer } from './mcp';
-import { grantedScopes, isMcpAdministrator, safeEqual, verifyPassword } from './security';
+import { canAuthorizeScopes, grantedScopes, safeEqual, verifyPassword } from './security';
 import type { AppUser, Env, WorkerExecutionContext } from './types';
 
 type PropsExecutionContext = WorkerExecutionContext & { props?: Record<string, unknown> };
@@ -54,7 +54,8 @@ async function renderAuthorize(
   const csrfToken = crypto.randomUUID();
   const requestedScopes = oauthRequest.scope.length > 0 ? oauthRequest.scope.join(', ') : 'sorria.read';
   const hasFinancialRead = oauthRequest.scope.includes('sorria.finance.read');
-  const body = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Autorizar Sorria Leste MCP</title><style>body{font-family:system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem;color:#1f2937}label{display:block;margin-top:1rem;font-weight:600}input{box-sizing:border-box;width:100%;padding:.7rem;margin-top:.35rem}button{margin-top:1.5rem;padding:.75rem 1rem;background:#ea580c;color:#fff;border:0;border-radius:.4rem;font-weight:700}.notice{background:#fff7ed;padding:1rem;border-radius:.4rem}.error{color:#b91c1c}</style></head><body><h1>Autorizar acesso de leitura</h1><p class="notice"><strong>${escapeHtml(client.clientName || client.clientId)}</strong> pediu acesso ao MCP Sorria Leste com o escopo <code>${escapeHtml(requestedScopes)}</code>.</p>${error ? `<p class="error">${escapeHtml(error)}</p>` : ''}<p>Somente administradores previamente autorizados podem conectar o Codex. Nenhuma ferramenta deste servidor altera dados; o escopo financeiro libera apenas leitura adicional de follow-up de cobrança, pagamentos e resumos de caixa.</p>${hasFinancialRead ? '<p class="notice">Este pedido inclui leitura financeira. Use apenas em ambientes autorizados.</p>' : ''}<form method="post" action="/oauth/authorize"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="authorization_request" value="${escapeHtml(url.toString())}"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="username" required><label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit">Autorizar leitura</button></form></body></html>`;
+  const hasWrite = oauthRequest.scope.includes('sorria.write');
+  const body = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Autorizar Sorria Leste MCP</title><style>body{font-family:system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem;color:#1f2937}label{display:block;margin-top:1rem;font-weight:600}input{box-sizing:border-box;width:100%;padding:.7rem;margin-top:.35rem}button{margin-top:1.5rem;padding:.75rem 1rem;background:#ea580c;color:#fff;border:0;border-radius:.4rem;font-weight:700}.notice{background:#fff7ed;padding:1rem;border-radius:.4rem}.error{color:#b91c1c}</style></head><body><h1>Autorizar acesso ao MCP</h1><p class="notice"><strong>${escapeHtml(client.clientName || client.clientId)}</strong> pediu acesso ao MCP Sorria Leste com o escopo <code>${escapeHtml(requestedScopes)}</code>.</p>${error ? `<p class="error">${escapeHtml(error)}</p>` : ''}<p>Leitura operacional e financeira seguem restritas a administradores previamente autorizados. Escrita V1 exige escopo próprio e libera apenas cadastro de cliente e agendamento de avaliação para contas autorizadas.</p>${hasFinancialRead ? '<p class="notice">Este pedido inclui leitura financeira. Use apenas em ambientes autorizados.</p>' : ''}${hasWrite ? '<p class="notice">Este pedido inclui escrita operacional mínima. Não libera prontuários, pagamentos, procedimentos, follow-ups nem anexos.</p>' : ''}<form method="post" action="/oauth/authorize"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="authorization_request" value="${escapeHtml(url.toString())}"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="username" required><label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit">Autorizar acesso</button></form></body></html>`;
   return new Response(body, {
     status: 200,
     headers: securityHeaders(csrfToken, url.protocol === 'https:', [
@@ -70,7 +71,7 @@ async function authenticate(env: Env, email: string, password: string): Promise<
   const user = await env.DB.prepare(
     'SELECT id, nome, email, senha, role, ativo FROM usuarios WHERE email = ?',
   ).bind(email.trim().toLowerCase()).first<AppUser & { senha: string }>();
-  if (!user || !isMcpAdministrator(user, env)) return null;
+  if (!user || user.ativo !== 1) return null;
   return (await verifyPassword(password, user.senha)) ? user : null;
 }
 
@@ -126,6 +127,9 @@ const defaultHandler = {
 
       const scope = grantedScopes(authRequest.scope);
       if (!scope) return new Response('Escopo não autorizado.', { status: 400 });
+      if (!canAuthorizeScopes(user, env, scope)) {
+        return renderAuthorize(originalRequest, env, authRequest, client, 'Conta sem permissão para o escopo MCP solicitado.');
+      }
       const { redirectTo } = await oauth.completeAuthorization({
         request: authRequest,
         userId: String(user.id),
@@ -147,14 +151,14 @@ const options: OAuthProviderOptions<Env> = {
   authorizeEndpoint: '/oauth/authorize',
   tokenEndpoint: '/oauth/token',
   clientRegistrationEndpoint: '/oauth/register',
-  scopesSupported: ['sorria.read', 'sorria.finance.read'],
+  scopesSupported: ['sorria.read', 'sorria.finance.read', 'sorria.write'],
   allowPlainPKCE: false,
   allowImplicitFlow: false,
   accessTokenTTL: 3600,
   refreshTokenTTL: 2_592_000,
   resourceMetadata: {
     resource_name: 'Sorria Leste MCP',
-    scopes_supported: ['sorria.read', 'sorria.finance.read'],
+    scopes_supported: ['sorria.read', 'sorria.finance.read', 'sorria.write'],
     bearer_methods_supported: ['header'],
   },
 };

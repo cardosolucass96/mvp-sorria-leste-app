@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canAuthorizeScopes,
   grantedScopes,
   hasFinancialScope,
+  hasWriteScope,
   isForbiddenFollowupType,
+  isMcpWriter,
   maskCpf,
   maskEmail,
   maskNullableText,
@@ -17,9 +20,28 @@ describe('proteções MCP', () => {
     expect(grantedScopes(['sorria.read'])).toEqual(['sorria.read']);
     expect(grantedScopes(['sorria.finance.read'])).toEqual(['sorria.finance.read', 'sorria.read']);
     expect(grantedScopes(['sorria.read', 'sorria.finance.read'])).toEqual(['sorria.finance.read', 'sorria.read']);
-    expect(grantedScopes(['sorria.write'])).toBeNull();
+    expect(grantedScopes(['sorria.write'])).toEqual(['sorria.write']);
     expect(hasFinancialScope(['sorria.read'])).toBe(false);
     expect(hasFinancialScope(['sorria.read', 'sorria.finance.read'])).toBe(true);
+    expect(hasWriteScope(['sorria.write'])).toBe(true);
+    expect(grantedScopes(['sorria.admin'])).toBeNull();
+  });
+
+  it('separa permissão de escrita da permissão administrativa de leitura', () => {
+    const env = {
+      MCP_ALLOWED_EMAILS: 'admin@sorria.com',
+      MCP_WRITE_ALLOWED_EMAILS: 'sdr@sorria.com, admin@sorria.com',
+    } as never;
+    const admin = { email: 'admin@sorria.com', role: 'admin', ativo: 1 };
+    const sdr = { email: 'sdr@sorria.com', role: 'atendente', ativo: 1 };
+    const outsider = { email: 'outro@sorria.com', role: 'atendente', ativo: 1 };
+
+    expect(isMcpWriter(sdr, env)).toBe(true);
+    expect(canAuthorizeScopes(admin, env, ['sorria.read'])).toBe(true);
+    expect(canAuthorizeScopes(admin, env, ['sorria.write'])).toBe(true);
+    expect(canAuthorizeScopes(sdr, env, ['sorria.write'])).toBe(true);
+    expect(canAuthorizeScopes(sdr, env, ['sorria.finance.read', 'sorria.read'])).toBe(false);
+    expect(canAuthorizeScopes(outsider, env, ['sorria.write'])).toBe(false);
   });
 
   it('mascara identificadores pessoais nos resultados', () => {
