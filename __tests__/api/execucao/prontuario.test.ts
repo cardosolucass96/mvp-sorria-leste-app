@@ -157,6 +157,26 @@ describe('POST /api/execucao/item/[id]/prontuario', () => {
     expect(updateQ!.sql).toContain('updated_at = ?');
   });
 
+  it('bloqueia sobrescrita quando o item já está em uma evolução em lote', async () => {
+    mockQueryResponse('from prontuario_evolucao_itens pei', { id: 8, legacy_prontuario_id: null });
+
+    const ctx = createRouteContext({ id: '3' });
+    const { status, data } = await callRoute<{ error: string }>(
+      saveProntuario,
+      '/api/execucao/item/3/prontuario',
+      {
+        method: 'POST',
+        body: { usuario_id: 4, descricao: DESCRICAO_VALIDA },
+      },
+      ctx
+    );
+
+    expect(status).toBe(409);
+    expect(data.error).toContain('evolução em lote');
+    expect(getExecutedQueries().some((q) => q.sql.includes('INSERT INTO prontuarios'))).toBe(false);
+    expect(getExecutedQueries().some((q) => q.sql.includes('UPDATE prontuarios'))).toBe(false);
+  });
+
   it('rejeita descrição com menos de 10 caracteres', async () => {
     const ctx = createRouteContext({ id: '3' });
     const { status, data } = await callRoute<{ error: string }>(

@@ -57,6 +57,16 @@ interface ItemAtendimento {
   etapas: Etapa[];
   etapa_label: string | null;
   tem_etapas: number;
+  itens_elegiveis_evolucao?: ItemElegivelEvolucao[];
+}
+
+interface ItemElegivelEvolucao {
+  id: number;
+  atendimento_id: number;
+  procedimento_nome: string;
+  etapa_label: string | null;
+  status: string;
+  concluido_at: string | null;
 }
 
 interface Procedimento {
@@ -128,6 +138,9 @@ export default function ExecucaoProcedimentoPage() {
   const [observacoesProntuario, setObservacoesProntuario] = useState('');
   const [salvandoProntuario, setSalvandoProntuario] = useState(false);
   const [erroProntuario, setErroProntuario] = useState('');
+  const [evolucaoModalOpen, setEvolucaoModalOpen] = useState(false);
+  const [itensSelecionadosEvolucao, setItensSelecionadosEvolucao] = useState<number[]>([]);
+  const [concluindoEvolucao, setConcluindoEvolucao] = useState(false);
 
   // Etapas — estado de cada uma (aberta/formulário)
   const [etapaAberta, setEtapaAberta] = useState<number | null>(null);
@@ -147,6 +160,8 @@ export default function ExecucaoProcedimentoPage() {
       carregarAnexos();
       carregarProntuario();
     }
+    // A carga desta tela deve reagir apenas à troca do item na URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
   async function carregarItem() {
@@ -215,7 +230,55 @@ export default function ExecucaoProcedimentoPage() {
     if (res.ok) carregarItem();
   }
 
-  function marcarComoConcluido() {
+  function abrirModalEvolucao() {
+    if (!item) return;
+    setItensSelecionadosEvolucao([item.id]);
+    setErroProntuario('');
+    setEvolucaoModalOpen(true);
+  }
+
+  async function concluirEvolucao() {
+    if (!item) return;
+    if (descricaoProntuario.trim().length < MIN_CHARS) {
+      setErroProntuario(`Mínimo ${MIN_CHARS} caracteres`);
+      return;
+    }
+
+    setConcluindoEvolucao(true);
+    setErroProntuario('');
+    try {
+      const res = await unitFetch('/api/execucao/evolucoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          item_ids: itensSelecionadosEvolucao,
+          descricao: descricaoProntuario,
+          observacoes: observacoesProntuario,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErroProntuario(data.error || 'Erro ao concluir evolução');
+        return;
+      }
+
+      setEvolucaoModalOpen(false);
+      if (data.atendimento_finalizado) {
+        toast.success('Todos os procedimentos concluídos. Atendimento finalizado.');
+      } else if (data.atendimento_voltou_para_pagamento) {
+        toast.success('Procedimentos concluídos. Atendimento voltou para pagamento.');
+      } else {
+        toast.success('Evolução salva e procedimentos concluídos.');
+      }
+      router.push('/execucao');
+    } catch {
+      setErroProntuario('Erro ao concluir evolução');
+    } finally {
+      setConcluindoEvolucao(false);
+    }
+  }
+
+  function marcarComoConcluidoIndividual() {
     if (!item) return;
     if (!prontuario) {
       toast.warning('Preencha o prontuário antes de concluir.');
@@ -228,15 +291,15 @@ export default function ExecucaoProcedimentoPage() {
       type: 'warning',
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-        const res = await unitFetch(`/api/atendimentos/${item.atendimento_id}/itens/${item!.id}`, {
+        const res = await unitFetch(`/api/atendimentos/${item.atendimento_id}/itens/${item.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'concluido' }),
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.atendimento_finalizado) {
-            toast.success('Todos os procedimentos concluídos! Atendimento encaminhado para revisão.');
+          if (data.atendimento_finalizado || data.atendimento_voltou_para_pagamento) {
+            toast.success('Procedimento concluído.');
             router.push('/execucao');
           } else {
             carregarItem();
@@ -245,8 +308,6 @@ export default function ExecucaoProcedimentoPage() {
       },
     });
   }
-
-  // ─── Prontuário do item (para itens sem etapas) ────────────────────────────
 
   async function salvarProntuario() {
     if (!user) return;
@@ -265,15 +326,16 @@ export default function ExecucaoProcedimentoPage() {
       if (res.ok) {
         const data = await res.json();
         setProntuario(data.prontuario);
-        toast.success('Prontuário salvo!');
+        toast.success('Prontuário salvo.');
       } else {
         const data = await res.json();
         setErroProntuario(data.error || 'Erro ao salvar');
       }
     } catch {
       setErroProntuario('Erro ao salvar prontuário');
+    } finally {
+      setSalvandoProntuario(false);
     }
-    setSalvandoProntuario(false);
   }
 
   // ─── Etapas ────────────────────────────────────────────────────────────────
@@ -591,16 +653,22 @@ export default function ExecucaoProcedimentoPage() {
           {/* Concluir manual só para itens SEM etapas por dente */}
           {isMeu && item.status === 'executando' && !temEtapas && (
             <div className="space-y-2">
-              {!prontuario && (
-                <div className="p-3 bg-warning-50 border border-warning-300 rounded-lg text-sm text-warning-800 dark:bg-warning-900/22 dark:border-warning-900/35 dark:text-warning-100">
-                  <strong>Prontuário pendente:</strong> preencha abaixo antes de concluir.
-                </div>
+              {isMultiSessao ? (
+                <>
+                  {!prontuario && (
+                    <div className="p-3 bg-warning-50 border border-warning-300 rounded-lg text-sm text-warning-800 dark:bg-warning-900/22 dark:border-warning-900/35 dark:text-warning-100">
+                      <strong>Prontuário pendente:</strong> preencha abaixo antes de concluir.
+                    </div>
+                  )}
+                  <Button onClick={marcarComoConcluidoIndividual} disabled={!prontuario} className="w-full text-lg py-3">
+                    {prontuario ? `Concluir Sessão (${item.etapa_label ?? 'sessão'})` : 'Preencha o Prontuário para Concluir'}
+                  </Button>
+                </>
+              ) : (
+                <Button onClick={abrirModalEvolucao} className="w-full text-lg py-3">
+                  Criar Evolução e Concluir
+                </Button>
               )}
-              <Button onClick={marcarComoConcluido} disabled={!prontuario} className="w-full text-lg py-3">
-                {prontuario
-                  ? (isMultiSessao ? `Concluir Sessão (${item.etapa_label ?? 'sessão'})` : 'Marcar como Concluído')
-                  : 'Preencha o Prontuário para Concluir'}
-              </Button>
             </div>
           )}
           {/* Para itens COM etapas por dente: conclusão é automática */}
@@ -674,8 +742,7 @@ export default function ExecucaoProcedimentoPage() {
         </Card>
       )}
 
-      {/* ── Prontuário do item (apenas para procedimentos SEM etapas) ── */}
-      {!temEtapas && ((isMeu && item.status === 'executando') || prontuario) && (
+      {!temEtapas && isMultiSessao && ((isMeu && item.status === 'executando') || prontuario) && (
         <Card className={!prontuario && item.status === 'executando' ? 'ring-2 ring-error-400' : ''}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold">
@@ -686,15 +753,7 @@ export default function ExecucaoProcedimentoPage() {
             )}
           </div>
 
-          {!prontuario && item.status === 'executando' && (
-            <div className="mb-4 p-3 bg-error-50 border border-error-200 rounded-lg dark:bg-error-900/22 dark:border-error-900/35">
-              <p className="text-sm text-error-700 dark:text-error-100">
-                <strong>Obrigatório:</strong> mínimo {MIN_CHARS} caracteres para concluir.
-              </p>
-            </div>
-          )}
-
-          {isMeu && item.status === 'executando' && (
+          {isMeu && item.status === 'executando' ? (
             <div className="space-y-4">
               {erroProntuario && (
                 <div className="p-3 bg-error-50 border border-error-200 rounded-lg text-sm text-error-700 dark:bg-error-900/22 dark:border-error-900/35 dark:text-error-100">{erroProntuario}</div>
@@ -706,12 +765,12 @@ export default function ExecucaoProcedimentoPage() {
                   onChange={e => setDescricaoProntuario(e.target.value)}
                   placeholder="Descreva o procedimento realizado, materiais, técnicas..."
                   className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:outline-none ${
-                    descricaoProntuario.length < MIN_CHARS ? 'border-error-300 dark:border-error-500/50' : 'border-success-300 dark:border-success-500/50'
+                    descricaoProntuario.trim().length < MIN_CHARS ? 'border-error-300 dark:border-error-500/50' : 'border-success-300 dark:border-success-500/50'
                   }`}
                   rows={5}
                 />
-                <span className={`text-xs ${descricaoProntuario.length < MIN_CHARS ? 'text-error-600 dark:text-error-100' : 'text-success-600 dark:text-success-100'}`}>
-                  {descricaoProntuario.length}/{MIN_CHARS} mín.
+                <span className={`text-xs ${descricaoProntuario.trim().length < MIN_CHARS ? 'text-error-600 dark:text-error-100' : 'text-success-600 dark:text-success-100'}`}>
+                  {descricaoProntuario.trim().length}/{MIN_CHARS} mín.
                 </span>
               </div>
               <div>
@@ -733,55 +792,8 @@ export default function ExecucaoProcedimentoPage() {
                 <Save className="w-4 h-4 mr-1.5 inline-block" />
                 {prontuario ? 'Atualizar Prontuário' : 'Salvar Prontuário'}
               </Button>
-
-              {/* Anexos */}
-              <div className="pt-4 border-t">
-                <h3 className="text-md font-semibold mb-3 flex items-center gap-2">
-                  <Paperclip className="w-4 h-4" /> Anexos e Imagens
-                </h3>
-                <div className="p-4 border-2 border-dashed border-input rounded-lg mb-4">
-                  <input type="text" value={descricaoAnexo} onChange={e => setDescricaoAnexo(e.target.value)}
-                    placeholder="Descrição (opcional)" className="w-full border border-input rounded px-3 py-2 text-sm mb-2" />
-                  <input ref={fileInputRef} type="file" accept="image/*,video/*,.pdf,.doc,.docx"
-                    onChange={enviarAnexo} disabled={enviandoAnexo}
-                    className="block w-full text-sm text-muted file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-50 dark:file:bg-primary-900/30 file:text-primary-700 dark:file:text-primary-100" />
-                  {enviandoAnexo && <p className="mt-2 text-sm text-primary-600 dark:text-primary-100">Enviando...</p>}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {anexos.length > 0 ? anexos.map(anexo => {
-                    const url = `/api/arquivos/${anexo.caminho}`;
-                    const isImg = anexo.tipo_arquivo.startsWith('image/');
-                    const isVid = anexo.tipo_arquivo.startsWith('video/');
-                    return (
-                      <div key={anexo.id} className="border rounded-lg overflow-hidden">
-                        {isImg ? (
-                          <a href={url} target="_blank" rel="noopener noreferrer">
-                            <img src={url} alt={anexo.nome_arquivo} className="w-full h-32 object-cover hover:opacity-90" />
-                          </a>
-                        ) : isVid ? (
-                          <video src={url} controls className="w-full h-32 object-cover bg-black" />
-                        ) : (
-                          <a href={`${url}?download=true`} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center justify-center h-32 bg-surface-muted hover:bg-muted/80">
-                            <FileText className="w-8 h-8 text-muted-foreground" />
-                          </a>
-                        )}
-                        <div className="p-2">
-                          <p className="font-medium text-xs truncate">{anexo.nome_arquivo}</p>
-                          <p className="text-xs text-muted-foreground">{(anexo.tamanho / 1024 / 1024).toFixed(2)} MB</p>
-                          <button onClick={() => removerAnexo(anexo.id)} className="mt-1 text-xs text-error-600 dark:text-error-100 hover:text-error-800 dark:hover:text-error-200">
-                            Remover
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }) : <p className="text-muted text-xs col-span-2">Nenhum anexo</p>}
-                </div>
-              </div>
             </div>
-          )}
-
-          {prontuario && (item.status === 'concluido' || !isMeu) && (
+          ) : prontuario ? (
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-muted mb-1">Descrição</label>
@@ -801,7 +813,89 @@ export default function ExecucaoProcedimentoPage() {
                 Por <strong>{prontuario.usuario_nome}</strong> em {formatarDataHora(prontuario.created_at)}
               </p>
             </div>
+          ) : null}
+        </Card>
+      )}
+
+      {/* ── Evolução do item concluído ── */}
+      {!temEtapas && !isMultiSessao && prontuario && (item.status === 'concluido' || !isMeu) && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold">Evolução Clínica</h2>
+            <span className="px-3 py-1 text-sm font-semibold rounded bg-success-100 text-success-800 dark:bg-success-900/30 dark:text-success-100">Preenchido</span>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-muted mb-1">Descrição</label>
+              <div className="bg-surface-secondary p-4 rounded-lg border">
+                <p className="text-foreground whitespace-pre-wrap">{prontuario.descricao}</p>
+              </div>
+            </div>
+            {prontuario.observacoes && (
+              <div>
+                <label className="block text-sm font-medium text-muted mb-1">Observações</label>
+                <div className="bg-surface-secondary p-4 rounded-lg border">
+                  <p className="text-foreground whitespace-pre-wrap">{prontuario.observacoes}</p>
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-muted">
+              Por <strong>{prontuario.usuario_nome}</strong> em {formatarDataHora(prontuario.created_at)}
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {!temEtapas && ((isMeu && item.status === 'executando') || anexos.length > 0) && (
+        <Card>
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <Paperclip className="w-4 h-4" /> Anexos do Procedimento
+          </h2>
+          {isMeu && item.status === 'executando' && (
+            <div className="p-4 border-2 border-dashed border-input rounded-lg mb-4">
+              <input type="text" value={descricaoAnexo} onChange={e => setDescricaoAnexo(e.target.value)}
+                placeholder="Descrição (opcional)" className="w-full border border-input rounded px-3 py-2 text-sm mb-2" />
+              <input ref={fileInputRef} type="file" accept="image/*,video/*,.pdf,.doc,.docx"
+                onChange={enviarAnexo} disabled={enviandoAnexo}
+                className="block w-full text-sm text-muted file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-50 dark:file:bg-primary-900/30 file:text-primary-700 dark:file:text-primary-100" />
+              {enviandoAnexo && <p className="mt-2 text-sm text-primary-600 dark:text-primary-100">Enviando...</p>}
+            </div>
           )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {anexos.length > 0 ? anexos.map(anexo => {
+              const url = `/api/arquivos/${anexo.caminho}`;
+              const isImg = anexo.tipo_arquivo.startsWith('image/');
+              const isVid = anexo.tipo_arquivo.startsWith('video/');
+              return (
+                <div key={anexo.id} className="border rounded-lg overflow-hidden">
+                  {isImg ? (
+                    <a href={url} target="_blank" rel="noopener noreferrer">
+                      {/* Uploads clínicos vêm do R2 via rota dinâmica; next/image não cobre esse caso sem loader extra. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={anexo.nome_arquivo} className="w-full h-32 object-cover hover:opacity-90" />
+                    </a>
+                  ) : isVid ? (
+                    <video src={url} controls className="w-full h-32 object-cover bg-black" />
+                  ) : (
+                    <a href={`${url}?download=true`} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-center h-32 bg-surface-muted hover:bg-muted/80">
+                      <FileText className="w-8 h-8 text-muted-foreground" />
+                    </a>
+                  )}
+                  <div className="p-2">
+                    <p className="font-medium text-xs truncate">{anexo.nome_arquivo}</p>
+                    <p className="text-xs text-muted-foreground">{(anexo.tamanho / 1024 / 1024).toFixed(2)} MB</p>
+                    {isMeu && item.status === 'executando' && (
+                      <button onClick={() => removerAnexo(anexo.id)} className="mt-1 text-xs text-error-600 dark:text-error-100 hover:text-error-800 dark:hover:text-error-200">
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            }) : <p className="text-muted text-xs col-span-2">Nenhum anexo</p>}
+          </div>
         </Card>
       )}
 
@@ -848,6 +942,109 @@ export default function ExecucaoProcedimentoPage() {
         <div className="flex gap-2 mt-4">
           <Button onClick={adicionarProcedimento} className="flex-1">Adicionar</Button>
           <Button variant="secondary" onClick={() => { setShowNovoProcedimento(false); setNovoProcId(''); }} className="flex-1">Cancelar</Button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={evolucaoModalOpen}
+        onClose={() => {
+          if (!concluindoEvolucao) setEvolucaoModalOpen(false);
+        }}
+        size="lg"
+        title="Nova Evolução Clínica"
+      >
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-medium text-foreground mb-2">Procedimentos desta evolução</p>
+            <div className="space-y-2 rounded-lg border border-border p-3">
+              {(item.itens_elegiveis_evolucao ?? [{
+                id: item.id,
+                atendimento_id: item.atendimento_id,
+                procedimento_nome: item.procedimento_nome,
+                etapa_label: item.etapa_label,
+                status: item.status,
+                concluido_at: item.concluido_at,
+              }]).map((elegivel) => {
+                const isAtual = elegivel.id === item.id;
+                const checked = itensSelecionadosEvolucao.includes(elegivel.id);
+                return (
+                  <label key={elegivel.id} className="flex items-start gap-3 rounded-md border border-border/70 p-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={checked}
+                      disabled={isAtual || concluindoEvolucao}
+                      onChange={(event) => {
+                        setItensSelecionadosEvolucao((prev) => {
+                          if (event.target.checked) return [...new Set([...prev, elegivel.id])];
+                          return prev.filter((id) => id !== elegivel.id || id === item.id);
+                        });
+                      }}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground">
+                        {elegivel.etapa_label ? `${elegivel.procedimento_nome} — ${elegivel.etapa_label}` : elegivel.procedimento_nome}
+                        {isAtual && <span className="ml-2 text-xs text-muted">(atual)</span>}
+                      </span>
+                      <span className="block text-xs text-muted">Status: {elegivel.status}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {erroProntuario && (
+            <Alert type="error">{erroProntuario}</Alert>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Descrição clínica *</label>
+            <textarea
+              value={descricaoProntuario}
+              onChange={e => setDescricaoProntuario(e.target.value)}
+              placeholder="Descreva a evolução, procedimentos realizados, materiais, técnicas e condutas..."
+              className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:outline-none ${
+                descricaoProntuario.trim().length < MIN_CHARS ? 'border-error-300 dark:border-error-500/50' : 'border-success-300 dark:border-success-500/50'
+              }`}
+              rows={6}
+              disabled={concluindoEvolucao}
+            />
+            <span className={`text-xs ${descricaoProntuario.trim().length < MIN_CHARS ? 'text-error-600 dark:text-error-100' : 'text-success-600 dark:text-success-100'}`}>
+              {descricaoProntuario.trim().length}/{MIN_CHARS} mín.
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Observações (opcional)</label>
+            <textarea
+              value={observacoesProntuario}
+              onChange={e => setObservacoesProntuario(e.target.value)}
+              placeholder="Cuidados pós-procedimento, retornos, orientações..."
+              className="w-full border border-input rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+              rows={3}
+              disabled={concluindoEvolucao}
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              onClick={concluirEvolucao}
+              disabled={concluindoEvolucao || itensSelecionadosEvolucao.length === 0 || descricaoProntuario.trim().length < MIN_CHARS}
+              loading={concluindoEvolucao}
+              className="flex-1"
+            >
+              Concluir Selecionados
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setEvolucaoModalOpen(false)}
+              disabled={concluindoEvolucao}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+          </div>
         </div>
       </Modal>
 

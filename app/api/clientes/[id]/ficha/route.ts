@@ -4,6 +4,7 @@ import { withAuth } from '@/lib/auth/middleware';
 import { garantirEsquemaFormasPagamento } from '@/lib/helpers/formasPagamento';
 import { garantirCamposEmpresaUnidades } from '@/lib/helpers/unidadesEmpresa';
 import { isRestrictedDentistPatientView } from '@/lib/auth/patientPrivacy';
+import { garantirProntuarioEvolucoesSchema } from '@/lib/helpers/garantirProntuarioEvolucoesSchema';
 
 const FINANCIAL_HISTORY_TYPES = new Set([
   'pagamento',
@@ -14,6 +15,25 @@ const FINANCIAL_HISTORY_TYPES = new Set([
   'transferencia_entrada',
 ]);
 
+interface ProntuarioEvolucaoRow {
+  evolucao_id: number;
+  atendimento_id: number;
+  prontuario_id: number | null;
+  prontuario_descricao: string;
+  prontuario_observacoes: string | null;
+  prontuario_data: string;
+  prontuario_updated_at: string;
+  prontuario_autor: string | null;
+  item_id: number;
+  concluido_at: string | null;
+  dentes: string | null;
+  quantidade: number;
+  item_observacoes: string | null;
+  procedimento_nome: string;
+  etapa_label: string | null;
+  executor_nome: string | null;
+}
+
 // GET /api/clientes/[id]/ficha - Retorna dados completos do cliente para a ficha
 export const GET = withAuth(async (_request, context) => {
   try {
@@ -22,6 +42,7 @@ export const GET = withAuth(async (_request, context) => {
     const clienteId = parseInt(id);
     await garantirCamposEmpresaUnidades();
     await garantirEsquemaFormasPagamento();
+    await garantirProntuarioEvolucoesSchema();
 
     const cliente = await queryOne('SELECT id FROM clientes WHERE id = ?', [clienteId]);
     if (!cliente) {
@@ -197,34 +218,79 @@ export const GET = withAuth(async (_request, context) => {
       return da > db2 ? -1 : da < db2 ? 1 : 0;
     });
 
-    // Prontuários — procedimentos concluídos com texto de prontuário
-    const prontuarios = await query(
+    // Prontuários/evoluções — uma evolução pode documentar vários procedimentos.
+    const prontuarioRows = await query<ProntuarioEvolucaoRow>(
       `SELECT
+         pe.id as evolucao_id,
+         pe.atendimento_id,
+         pe.legacy_prontuario_id as prontuario_id,
+         pe.descricao as prontuario_descricao,
+         pe.observacoes as prontuario_observacoes,
+         pe.created_at as prontuario_data,
+         pe.updated_at as prontuario_updated_at,
+         pu.nome as prontuario_autor,
          i.id as item_id,
-         i.atendimento_id,
          i.concluido_at,
          i.dentes,
          i.quantidade,
          i.observacoes as item_observacoes,
          p.nome as procedimento_nome,
          i.etapa_label,
-         u.nome as executor_nome,
-         pr.id as prontuario_id,
-         pr.descricao as prontuario_descricao,
-         pr.observacoes as prontuario_observacoes,
-         pr.created_at as prontuario_data,
-         pr.updated_at as prontuario_updated_at,
-         pu.nome as prontuario_autor
-       FROM itens_atendimento i
+         u.nome as executor_nome
+       FROM prontuario_evolucoes pe
+       INNER JOIN prontuario_evolucao_itens pei ON pei.evolucao_id = pe.id
+       INNER JOIN itens_atendimento i ON i.id = pei.item_atendimento_id
        INNER JOIN atendimentos a ON i.atendimento_id = a.id
        INNER JOIN procedimentos p ON i.procedimento_id = p.id
        LEFT JOIN usuarios u ON i.executor_id = u.id
-       LEFT JOIN prontuarios pr ON pr.item_atendimento_id = i.id
-       LEFT JOIN usuarios pu ON pr.usuario_id = pu.id
+       LEFT JOIN usuarios pu ON pe.usuario_id = pu.id
        WHERE a.cliente_id = ? AND i.status = 'concluido'
-       ORDER BY i.concluido_at DESC`,
+       ORDER BY pe.created_at DESC, i.concluido_at DESC, i.id ASC`,
       [clienteId]
     );
+
+    const prontuariosMap = new Map<number, ProntuarioEvolucaoRow & { itens: Array<{
+      item_id: number;
+      procedimento_nome: string;
+      etapa_label: string | null;
+      executor_nome: string | null;
+      dentes: string | null;
+      quantidade: number;
+      item_observacoes: string | null;
+      concluido_at: string | null;
+    }> }>();
+
+    for (const row of prontuarioRows) {
+      const atual = prontuariosMap.get(row.evolucao_id) ?? {
+        ...row,
+        itens: [],
+      };
+      atual.itens.push({
+        item_id: row.item_id,
+        procedimento_nome: row.procedimento_nome,
+        etapa_label: row.etapa_label,
+        executor_nome: row.executor_nome,
+        dentes: row.dentes,
+        quantidade: row.quantidade,
+        item_observacoes: row.item_observacoes,
+        concluido_at: row.concluido_at,
+      });
+      prontuariosMap.set(row.evolucao_id, atual);
+    }
+
+    const prontuarios = Array.from(prontuariosMap.values()).map((evolucao) => ({
+      ...evolucao,
+      procedimento_nome: evolucao.itens.length > 1
+        ? `${evolucao.itens.length} procedimentos`
+        : evolucao.itens[0]?.procedimento_nome ?? evolucao.procedimento_nome,
+      etapa_label: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.etapa_label ?? null,
+      executor_nome: evolucao.itens.length > 1 ? evolucao.prontuario_autor : evolucao.itens[0]?.executor_nome ?? evolucao.executor_nome,
+      item_id: evolucao.itens[0]?.item_id ?? evolucao.item_id,
+      concluido_at: evolucao.itens[0]?.concluido_at ?? evolucao.concluido_at,
+      dentes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.dentes ?? null,
+      quantidade: evolucao.itens.length > 1 ? evolucao.itens.length : evolucao.itens[0]?.quantidade ?? evolucao.quantidade,
+      item_observacoes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.item_observacoes ?? null,
+    }));
 
     const restrictedDentistView = isRestrictedDentistPatientView(context.user);
     const historicoFiltrado = restrictedDentistView

@@ -53,6 +53,10 @@ const DEPENDENCIAS_ITEM_UPDATE = [
 
 const DEPENDENCIAS_ITEM_DELETE = [
   {
+    table: 'prontuario_evolucao_itens',
+    sql: 'DELETE FROM prontuario_evolucao_itens WHERE item_atendimento_id = ?',
+  },
+  {
     table: 'movimentacoes_saldo',
     sql: 'DELETE FROM movimentacoes_saldo WHERE item_atendimento_id = ?',
   },

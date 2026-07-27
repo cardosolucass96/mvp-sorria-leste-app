@@ -169,6 +169,7 @@ interface EventoHistorico {
 }
 
 interface ItemProntuario {
+  evolucao_id?: number;
   item_id: number;
   atendimento_id: number;
   concluido_at: string | null;
@@ -184,6 +185,16 @@ interface ItemProntuario {
   prontuario_data: string | null;
   prontuario_updated_at: string | null;
   prontuario_autor: string | null;
+  itens?: Array<{
+    item_id: number;
+    procedimento_nome: string;
+    etapa_label: string | null;
+    executor_nome: string | null;
+    dentes: string | null;
+    quantidade: number;
+    item_observacoes: string | null;
+    concluido_at: string | null;
+  }>;
 }
 
 interface Movimentacao {
@@ -519,17 +530,36 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     setAnexosCliente([]);
     setAnexosProntuario([]);
     try {
-      const prontuariosMap = new Map<number, ItemProntuario>(
-        prontuarios.map((item) => [item.item_id, item])
-      );
+      const prontuariosMap = new Map<number, ItemProntuario & { procedimento_nome_item?: string; etapa_label_item?: string | null }>();
+      for (const prontuario of prontuarios) {
+        const itens = prontuario.itens?.length
+          ? prontuario.itens
+          : [{
+              item_id: prontuario.item_id,
+              procedimento_nome: prontuario.procedimento_nome,
+              etapa_label: prontuario.etapa_label,
+              executor_nome: prontuario.executor_nome,
+              dentes: prontuario.dentes,
+              quantidade: prontuario.quantidade,
+              item_observacoes: prontuario.item_observacoes,
+              concluido_at: prontuario.concluido_at,
+            }];
+        for (const item of itens) {
+          prontuariosMap.set(item.item_id, {
+            ...prontuario,
+            procedimento_nome_item: item.procedimento_nome,
+            etapa_label_item: item.etapa_label,
+          });
+        }
+      }
       const [resCliente, ...resExec] = await Promise.all([
         fetch(`/api/clientes/${id}/anexos`),
         ...Array.from(prontuariosMap.keys()).map((itemId) => fetch(`/api/execucao/item/${itemId}/anexos`)),
       ]);
 
-          if (resCliente.ok) {
+      if (resCliente.ok) {
         const anexosClienteRaw = await resCliente.json() as AnexoClienteApi[];
-          setAnexosCliente(anexosClienteRaw.map(a => ({
+        setAnexosCliente(anexosClienteRaw.map(a => ({
           id: a.id,
           nome: a.nome_arquivo,
           url: `/api/arquivos/${a.caminho}`,
@@ -559,8 +589,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 origem: 'prontuario' as const,
                 itemAtendimentoId: anexo.item_atendimento_id,
                 atendimentoId: prontuario?.atendimento_id,
-                procedimentoNome: prontuario?.procedimento_nome,
-                etapaLabel: prontuario?.etapa_label ?? null,
+                procedimentoNome: prontuario?.procedimento_nome_item ?? prontuario?.procedimento_nome,
+                etapaLabel: prontuario?.etapa_label_item ?? prontuario?.etapa_label ?? null,
                 usuarioNome: anexo.usuario_nome || null,
                 descricao: anexo.descricao || null,
               };
@@ -1293,9 +1323,27 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
 
       const prontuarioInfo = prontuarios.length
         ? prontuarios.map((item) => {
+            const itens = item.itens?.length
+              ? item.itens
+              : [{
+                  item_id: item.item_id,
+                  procedimento_nome: item.procedimento_nome,
+                  etapa_label: item.etapa_label,
+                  executor_nome: item.executor_nome,
+                  dentes: item.dentes,
+                  quantidade: item.quantidade,
+                  item_observacoes: item.item_observacoes,
+                  concluido_at: item.concluido_at,
+                }];
+            const procedimentos = itens.map((procedimento) => (
+              procedimento.etapa_label
+                ? `${procedimento.procedimento_nome} — ${procedimento.etapa_label}`
+                : procedimento.procedimento_nome
+            )).join(', ');
             const linhas = [
-              `<strong>${escapeHtml(item.etapa_label ? `${item.procedimento_nome} — ${item.etapa_label}` : item.procedimento_nome)}</strong>`,
-              `Executor: ${escapeHtml(item.executor_nome || '-')}, concluído em ${escapeHtml(formatarDataHora(item.concluido_at))}`,
+              `<strong>${escapeHtml(itens.length > 1 ? `Evolução com ${itens.length} procedimentos` : procedimentos)}</strong>`,
+              `Procedimentos: ${escapeHtml(procedimentos)}`,
+              `Executor: ${escapeHtml(item.prontuario_autor || item.executor_nome || '-')}, evolução em ${escapeHtml(formatarDataHora(item.prontuario_data || item.concluido_at))}`,
               item.prontuario_descricao ? `Descrição: ${escapeHtml(item.prontuario_descricao)}` : null,
               item.prontuario_observacoes ? `Observações: ${escapeHtml(item.prontuario_observacoes)}` : null,
             ]
@@ -2391,30 +2439,45 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <FileText className="w-5 h-5" /> Prontuários de Execução
+              <FileText className="w-5 h-5" /> Evoluções Clínicas
             </h2>
             <span className="text-sm text-muted">
-              {ficha?.prontuarios.length ?? 0} procedimento(s) concluído(s)
+              {ficha?.prontuarios.length ?? 0} evolução(ões)
             </span>
           </div>
           {!ficha?.prontuarios.length ? (
             <Card>
-              <p className="text-center py-8 text-muted">Nenhum procedimento concluído</p>
+              <p className="text-center py-8 text-muted">Nenhuma evolução clínica</p>
             </Card>
           ) : (
             ficha.prontuarios.map(item => {
               const dentes = formatarDentes(item.dentes);
+              const itens = item.itens?.length
+                ? item.itens
+                : [{
+                    item_id: item.item_id,
+                    procedimento_nome: item.procedimento_nome,
+                    etapa_label: item.etapa_label,
+                    executor_nome: item.executor_nome,
+                    dentes: item.dentes,
+                    quantidade: item.quantidade,
+                    item_observacoes: item.item_observacoes,
+                    concluido_at: item.concluido_at,
+                  }];
+              const isEvolucaoAgrupada = itens.length > 1;
               return (
-                <Card key={item.item_id}>
+                <Card key={item.evolucao_id ?? item.item_id}>
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div>
                       <h3 className="font-semibold text-base">
-                        {item.etapa_label ? `${item.procedimento_nome} — ${item.etapa_label}` : item.procedimento_nome}
+                        {isEvolucaoAgrupada
+                          ? `Evolução com ${itens.length} procedimentos`
+                          : item.etapa_label ? `${item.procedimento_nome} — ${item.etapa_label}` : item.procedimento_nome}
                       </h3>
                       <div className="flex flex-wrap gap-3 mt-1 text-sm text-muted">
-                        {item.executor_nome && <span>Executor: <span className="text-foreground">{item.executor_nome}</span></span>}
-                        {dentes && <span>Dentes: <span className="text-foreground">{dentes}</span></span>}
-                        {item.quantidade > 1 && <span>Qtd: <span className="text-foreground">{item.quantidade}</span></span>}
+                        {!isEvolucaoAgrupada && item.executor_nome && <span>Executor: <span className="text-foreground">{item.executor_nome}</span></span>}
+                        {!isEvolucaoAgrupada && dentes && <span>Dentes: <span className="text-foreground">{dentes}</span></span>}
+                        {!isEvolucaoAgrupada && item.quantidade > 1 && <span>Qtd: <span className="text-foreground">{item.quantidade}</span></span>}
                         <Link href={`/atendimentos/${item.atendimento_id}`} className="text-info-600 hover:text-info-800">
                           Atend. #{item.atendimento_id} →
                         </Link>
@@ -2430,10 +2493,37 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                     </div>
                   </div>
 
+                  {isEvolucaoAgrupada && (
+                    <div className="mb-4 rounded-lg border border-border bg-surface-secondary p-4">
+                      <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Procedimentos vinculados</p>
+                      <div className="space-y-2">
+                        {itens.map((procedimento) => {
+                          const dentesItem = formatarDentes(procedimento.dentes);
+                          return (
+                            <div key={procedimento.item_id} className="text-sm text-muted">
+                              <p className="font-medium text-foreground">
+                                {procedimento.etapa_label
+                                  ? `${procedimento.procedimento_nome} — ${procedimento.etapa_label}`
+                                  : procedimento.procedimento_nome}
+                              </p>
+                              <p>
+                                {procedimento.executor_nome && `Executor: ${procedimento.executor_nome}`}
+                                {dentesItem && ` · Dentes: ${dentesItem}`}
+                                {procedimento.concluido_at && ` · Concluído em ${formatarDataHora(procedimento.concluido_at)}`}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {item.prontuario_descricao ? (
                     <div className="space-y-3">
                       <div className="rounded-lg border-l-4 border-primary-400 bg-surface-secondary p-4">
-                        <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Descrição do Procedimento</p>
+                        <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">
+                          {isEvolucaoAgrupada ? 'Descrição da Evolução' : 'Descrição do Procedimento'}
+                        </p>
                         <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{item.prontuario_descricao}</p>
                       </div>
                       {item.prontuario_observacoes && (
@@ -2449,7 +2539,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                         </div>
                       )}
                       <div className="flex justify-end text-xs text-muted">
-                        Prontuário preenchido por <span className="font-medium ml-1">{item.prontuario_autor}</span>
+                        Evolução preenchida por <span className="font-medium ml-1">{item.prontuario_autor}</span>
                         {item.prontuario_data && <span className="ml-2">em {formatarDataHora(item.prontuario_data)}</span>}
                         {item.prontuario_updated_at && item.prontuario_updated_at !== item.prontuario_data && (
                           <span className="ml-2">(atualizado em {formatarDataHora(item.prontuario_updated_at)})</span>
@@ -2458,7 +2548,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                     </div>
                   ) : (
                     <div className="rounded-lg border border-dashed border-border p-4 text-center">
-                      <p className="text-sm text-muted">Prontuário não preenchido</p>
+                      <p className="text-sm text-muted">Evolução clínica não preenchida</p>
                     </div>
                   )}
                 </Card>
@@ -2582,7 +2672,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           <Card>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
-                <FileText className="w-5 h-5" /> Fotos e Arquivos dos Prontuários
+                <FileText className="w-5 h-5" /> Fotos e Arquivos das Evoluções
               </h2>
               <span className="text-sm text-muted">
                 {anexosProntuario.length} arquivo(s)
@@ -2592,7 +2682,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             {anexosLoading ? (
               <LoadingState mode="spinner" text="Carregando anexos..." />
             ) : anexosProntuario.length === 0 ? (
-              <p className="text-center py-8 text-muted">Nenhum arquivo encontrado nos prontuários.</p>
+              <p className="text-center py-8 text-muted">Nenhum arquivo encontrado nas evoluções.</p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {anexosProntuario.map((anexo) => (

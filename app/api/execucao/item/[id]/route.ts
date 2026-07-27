@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext, getUserRoles } from '@/lib/auth/middleware';
 import { isRestrictedDentistPatientView } from '@/lib/auth/patientPrivacy';
+import { garantirProntuarioEvolucoesSchema } from '@/lib/helpers/garantirProntuarioEvolucoesSchema';
 
 interface ItemAtendimento {
   id: number;
@@ -27,11 +28,21 @@ interface ItemAtendimento {
   tem_etapas: number;
 }
 
+interface ItemElegivelEvolucao {
+  id: number;
+  atendimento_id: number;
+  procedimento_nome: string;
+  etapa_label: string | null;
+  status: string;
+  concluido_at: string | null;
+}
+
 // GET /api/execucao/item/[id] - Busca um item de atendimento específico pelo ID
 export const GET = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const params = await context.params!;
     const id = params.id as string;
+    await garantirProntuarioEvolucoesSchema();
 
     const itens = await query<ItemAtendimento>(
       `SELECT
@@ -95,7 +106,31 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       }
     }
 
-    return NextResponse.json({ ...item, etapas: [] });
+    const itensElegiveisEvolucao = await query<ItemElegivelEvolucao>(
+      `SELECT
+        i.id,
+        i.atendimento_id,
+        p.nome as procedimento_nome,
+        i.etapa_label,
+        i.status,
+        i.concluido_at
+      FROM itens_atendimento i
+      INNER JOIN atendimentos a ON a.id = i.atendimento_id
+      INNER JOIN procedimentos p ON p.id = i.procedimento_id
+      LEFT JOIN prontuario_evolucao_itens pei ON pei.item_atendimento_id = i.id
+      WHERE i.atendimento_id = ?
+        AND a.unidade_id = ?
+        AND i.executor_id = ?
+        AND i.status IN ('pago', 'executando')
+        AND p.tem_etapas = 0
+        AND pei.evolucao_id IS NULL
+      ORDER BY
+        CASE WHEN i.id = ? THEN 0 ELSE 1 END,
+        i.created_at ASC`,
+      [item.atendimento_id, context.unidadeId, context.user.sub, item.id]
+    );
+
+    return NextResponse.json({ ...item, etapas: [], itens_elegiveis_evolucao: itensElegiveisEvolucao });
   } catch (error) {
     console.error('Erro ao buscar item:', error);
     return NextResponse.json(

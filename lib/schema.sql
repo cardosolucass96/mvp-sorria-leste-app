@@ -390,18 +390,48 @@ CREATE TABLE IF NOT EXISTS anexos_cliente (
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
 
--- Prontuário de Execução (obrigatório para conclusão do procedimento)
+-- Prontuário de Execução legado por item (usado em procedimentos por etapas)
 CREATE TABLE IF NOT EXISTS prontuarios (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   item_atendimento_id INTEGER NOT NULL UNIQUE, -- Um prontuário por item
   usuario_id INTEGER NOT NULL, -- Executor que preencheu
-  descricao TEXT NOT NULL, -- Descrição detalhada do procedimento realizado (mínimo 50 caracteres)
+  descricao TEXT NOT NULL, -- Descrição detalhada do procedimento realizado (mínimo 10 caracteres)
   observacoes TEXT, -- Observações adicionais opcionais
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
+
+-- Evoluções clínicas flexíveis.
+-- Compatível com prontuarios legado: um texto clínico pode agrupar N itens.
+CREATE TABLE IF NOT EXISTS prontuario_evolucoes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  uuid TEXT NOT NULL UNIQUE,
+  atendimento_id INTEGER NOT NULL,
+  usuario_id INTEGER NOT NULL,
+  descricao TEXT NOT NULL,
+  observacoes TEXT,
+  legacy_prontuario_id INTEGER UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (atendimento_id) REFERENCES atendimentos(id),
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+  FOREIGN KEY (legacy_prontuario_id) REFERENCES prontuarios(id)
+);
+CREATE INDEX IF NOT EXISTS idx_prontuario_evolucoes_atendimento
+  ON prontuario_evolucoes(atendimento_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS prontuario_evolucao_itens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  evolucao_id INTEGER NOT NULL,
+  item_atendimento_id INTEGER NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (evolucao_id) REFERENCES prontuario_evolucoes(id) ON DELETE CASCADE,
+  FOREIGN KEY (item_atendimento_id) REFERENCES itens_atendimento(id)
+);
+CREATE INDEX IF NOT EXISTS idx_prontuario_evolucao_itens_evolucao
+  ON prontuario_evolucao_itens(evolucao_id);
 
 -- Sessões futuras agendadas
 CREATE TABLE IF NOT EXISTS agendamentos (

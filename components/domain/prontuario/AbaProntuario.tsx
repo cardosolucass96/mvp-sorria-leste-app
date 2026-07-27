@@ -14,7 +14,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
     return (
       <div className="flex flex-col items-center py-10 text-muted">
         <FileText className="w-10 h-10 mb-2 opacity-50" />
-        <p className="text-sm">Nenhum procedimento concluído</p>
+        <p className="text-sm">Nenhuma evolução clínica</p>
       </div>
     );
   }
@@ -23,25 +23,40 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
     <div className="space-y-4">
       {prontuarios.map(item => {
         const dentes = formatarDentes(item.dentes);
+        const itens = item.itens?.length
+          ? item.itens
+          : [{
+              item_id: item.item_id,
+              procedimento_nome: item.procedimento_nome,
+              etapa_label: item.etapa_label,
+              executor_nome: item.executor_nome,
+              dentes: item.dentes,
+              quantidade: item.quantidade,
+              item_observacoes: item.item_observacoes,
+              concluido_at: item.concluido_at,
+            }];
+        const isEvolucaoAgrupada = itens.length > 1;
         return (
-          <div key={item.item_id} className="rounded-lg border border-border p-4">
+          <div key={item.evolucao_id ?? item.item_id} className="rounded-lg border border-border p-4">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="min-w-0 flex-1">
                 <h4 className="font-semibold text-sm">
-                  {item.etapa_label ? `${item.procedimento_nome} — ${item.etapa_label}` : item.procedimento_nome}
+                  {isEvolucaoAgrupada
+                    ? `Evolução com ${itens.length} procedimentos`
+                    : item.etapa_label ? `${item.procedimento_nome} — ${item.etapa_label}` : item.procedimento_nome}
                 </h4>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-muted">
-                  {item.executor_nome && (
+                  {!isEvolucaoAgrupada && item.executor_nome && (
                     <span>
                       Executor: <span className="text-foreground">{item.executor_nome}</span>
                     </span>
                   )}
-                  {dentes && (
+                  {!isEvolucaoAgrupada && dentes && (
                     <span>
                       Dentes: <span className="text-foreground">{dentes}</span>
                     </span>
                   )}
-                  {item.quantidade > 1 && (
+                  {!isEvolucaoAgrupada && item.quantidade > 1 && (
                     <span>
                       Qtd: <span className="text-foreground">{item.quantidade}</span>
                     </span>
@@ -62,11 +77,38 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
               )}
             </div>
 
+            {isEvolucaoAgrupada && (
+              <div className="mb-3 rounded-lg border border-border bg-surface-secondary p-3">
+                <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-2">
+                  Procedimentos vinculados
+                </p>
+                <div className="space-y-2">
+                  {itens.map((procedimento) => {
+                    const dentesItem = formatarDentes(procedimento.dentes);
+                    return (
+                      <div key={procedimento.item_id} className="text-xs text-muted">
+                        <p className="font-medium text-foreground">
+                          {procedimento.etapa_label
+                            ? `${procedimento.procedimento_nome} — ${procedimento.etapa_label}`
+                            : procedimento.procedimento_nome}
+                        </p>
+                        <p>
+                          {procedimento.executor_nome && `Executor: ${procedimento.executor_nome}`}
+                          {dentesItem && ` · Dentes: ${dentesItem}`}
+                          {procedimento.concluido_at && ` · Concluído em ${formatarDataHora(procedimento.concluido_at)}`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {item.prontuario_descricao ? (
               <div className="space-y-3">
                 <div className="bg-surface-secondary rounded-lg p-3 border-l-4 border-primary-400">
                   <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">
-                    Descrição do Procedimento
+                    {isEvolucaoAgrupada ? 'Descrição da Evolução' : 'Descrição do Procedimento'}
                   </p>
                   <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
                     {item.prontuario_descricao}
@@ -103,7 +145,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
               </div>
             ) : (
               <div className="rounded-lg border border-dashed border-border text-center p-3">
-                <p className="text-xs text-muted">Prontuário não preenchido</p>
+                <p className="text-xs text-muted">Evolução clínica não preenchida</p>
               </div>
             )}
           </div>

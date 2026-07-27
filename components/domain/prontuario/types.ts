@@ -48,6 +48,7 @@ export interface EventoHistorico {
 }
 
 export interface ItemProntuario {
+  evolucao_id?: number;
   item_id: number;
   atendimento_id: number;
   concluido_at: string | null;
@@ -63,6 +64,16 @@ export interface ItemProntuario {
   prontuario_data: string | null;
   prontuario_updated_at: string | null;
   prontuario_autor: string | null;
+  itens?: Array<{
+    item_id: number;
+    procedimento_nome: string;
+    etapa_label: string | null;
+    executor_nome: string | null;
+    dentes: string | null;
+    quantidade: number;
+    item_observacoes: string | null;
+    concluido_at: string | null;
+  }>;
 }
 
 export interface Movimentacao {

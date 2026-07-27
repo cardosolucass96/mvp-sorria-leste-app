@@ -12,11 +12,6 @@ import {
   resetMockDb,
   mockQueryResponse,
 } from '../../helpers/db-mock';
-import {
-  ITEM_RESTAURACAO_PAGO,
-  ITEM_CANAL_EXECUTANDO,
-} from '../../helpers/seed';
-
 // Mock JWT para bypass de autenticação nos testes
 jest.mock('@/lib/auth/jwt', () => ({
   extractToken: jest.fn().mockReturnValue('mock-token'),
@@ -222,5 +217,38 @@ describe('GET /api/execucao/item/[id]', () => {
     expect(data).toHaveProperty('valor_pago', 400);
     expect(data).toHaveProperty('quantidade', 2);
     expect(data).toHaveProperty('cliente_id', 1);
+  });
+
+  it('inclui itens elegíveis para a mesma evolução clínica', async () => {
+    mockQueryResponse('c.nome as cliente_nome', [itemDetalhado]);
+    mockQueryResponse('left join prontuario_evolucao_itens', [
+      {
+        id: 2,
+        atendimento_id: 4,
+        procedimento_nome: 'Restauração Dental',
+        etapa_label: null,
+        status: 'executando',
+        concluido_at: null,
+      },
+      {
+        id: 3,
+        atendimento_id: 4,
+        procedimento_nome: 'Profilaxia',
+        etapa_label: null,
+        status: 'pago',
+        concluido_at: null,
+      },
+    ]);
+
+    const ctx = createRouteContext({ id: '2' });
+    const { data } = await callRoute<{
+      itens_elegiveis_evolucao: Array<{ id: number; procedimento_nome: string }>;
+    }>(getItemDetail, '/api/execucao/item/2', {}, ctx);
+
+    expect(data.itens_elegiveis_evolucao).toHaveLength(2);
+    expect(data.itens_elegiveis_evolucao.map((item) => item.procedimento_nome)).toEqual([
+      'Restauração Dental',
+      'Profilaxia',
+    ]);
   });
 });
