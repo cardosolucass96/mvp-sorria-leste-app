@@ -1,5 +1,6 @@
 import type {
   FechamentoCaixaMeta,
+  FechamentoCaixaPagamentoRecebido,
   FechamentoCaixaRecente,
   FechamentoCaixaVisao,
 } from '@/lib/fechamento-caixa/types';
@@ -42,6 +43,10 @@ export interface FinanceiroComposicaoResultado {
   total_final: number;
 }
 
+export interface FinanceiroReceitaPeriodo extends FechamentoCaixaPagamentoRecebido {
+  data_referencia: string;
+}
+
 export interface FinanceiroGraficos {
   faturamento_por_dia: Array<{
     data_referencia: string;
@@ -70,6 +75,7 @@ export interface FinanceiroResponse {
     dias: number;
   };
   dias: FinanceiroDiaResumo[];
+  receitas_periodo: FinanceiroReceitaPeriodo[];
   resumo_periodo: Omit<FinanceiroDiaResumo, 'data_referencia' | 'status' | 'fechado_por_nome' | 'fechado_em'>;
   graficos: FinanceiroGraficos;
 }

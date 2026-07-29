@@ -1353,12 +1353,16 @@ async function insertEvento(params: {
   );
 }
 
-export async function obterFechamentoCaixaResponse(unidadeId: number, dataReferencia: string): Promise<FechamentoCaixaResponse> {
+export async function obterFechamentoCaixaResponse(
+  unidadeId: number,
+  dataReferencia: string,
+  options: { incluirRecentes?: boolean } = {}
+): Promise<FechamentoCaixaResponse> {
   await garantirSchemaFechamentoCaixa();
 
   const row = await getFechamentoRow(unidadeId, dataReferencia);
   const draft = mergeDraft(parseJson(row?.draft_json, createEmptyFechamentoCaixaDraft()));
-  const recentes = await getFechamentosRecentes(unidadeId);
+  const recentes = options.incluirRecentes === false ? [] : await getFechamentosRecentes(unidadeId);
 
   if (row?.status === 'fechado' && row.snapshot_json) {
     const base = sanitizeFechamentoView(

@@ -158,13 +158,18 @@ describe('GET /api/financeiro', () => {
       dias: 2,
     });
     expect(data.dias).toHaveLength(2);
+    expect(data.receitas_periodo).toHaveLength(2);
+    expect(data.receitas_periodo.map((receita) => receita.data_referencia)).toEqual([
+      '2026-06-02',
+      '2026-06-01',
+    ]);
     expect(data.resumo_periodo.total_liquido).toBe(270);
     expect(data.resumo_periodo.total_final).toBe(210);
     expect(data.graficos.faturamento_por_dia).toHaveLength(2);
     expect(data.graficos.metodos_pagamento.map((item) => item.metodo)).toEqual(['dinheiro', 'pix']);
     expect(mockObterFechamentoCaixaResponse).toHaveBeenCalledWith(9, '2026-06-07');
-    expect(mockObterFechamentoCaixaResponse).toHaveBeenCalledWith(9, '2026-06-01');
-    expect(mockObterFechamentoCaixaResponse).toHaveBeenCalledWith(9, '2026-06-02');
+    expect(mockObterFechamentoCaixaResponse).toHaveBeenCalledWith(9, '2026-06-01', { incluirRecentes: false });
+    expect(mockObterFechamentoCaixaResponse).toHaveBeenCalledWith(9, '2026-06-02', { incluirRecentes: false });
   });
 
   it('rejeita atendente', async () => {

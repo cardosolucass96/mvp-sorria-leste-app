@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import FinanceiroPage from '@/app/financeiro/page';
@@ -234,6 +234,32 @@ function createFinanceiroFixture(): FinanceiroResponse {
         valor_cancelado: 0,
       },
     ],
+    receitas_periodo: [
+      {
+        ...resultado.pagamentos_recebidos_dia[0],
+        data_referencia: '2026-06-07',
+      },
+      {
+        ...resultado.pagamentos_recebidos_dia[0],
+        id: 'grupo:2',
+        pagamento_grupo_id: 2,
+        pagamento_representante_id: 503,
+        atendimento_id: 2,
+        cliente_id: 88,
+        cliente_nome: 'João',
+        valor_total: 500,
+        observacoes: 'Receita do segundo dia',
+        created_at: '2026-06-08 10:30:00',
+        data_referencia: '2026-06-08',
+        formas: [{
+          ...resultado.pagamentos_recebidos_dia[0].formas[0],
+          id: 503,
+          valor: 500,
+          valor_liquido: 500,
+          created_at: '2026-06-08 10:30:00',
+        }],
+      },
+    ],
     resumo_periodo: {
       unidade_id: 1,
       unidade_nome: 'Unidade Centro',
@@ -317,11 +343,14 @@ describe('FinanceiroPage', () => {
     expect(screen.getAllByTestId('responsive-container')).toHaveLength(4);
 
     expect(screen.getByText('Resumo dia a dia')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Receitas recebidas no período' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pagamentos recebidos no dia' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Profissionais no fechamento' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Maria' })).toHaveAttribute('href', '/clientes/77');
-    expect(screen.getByText('Paula')).toBeInTheDocument();
-    expect(screen.getByText('Pagamento do dia conferido')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Maria' })[0]).toHaveAttribute('href', '/clientes/77');
+    expect(screen.getAllByText('Paula').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pagamento do dia conferido').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'João' })).toHaveAttribute('href', '/clientes/88');
+    expect(screen.getByText('Receita do segundo dia')).toBeInTheDocument();
     expect(screen.getByText('Dra. Alice')).toBeInTheDocument();
 
     expect(mockUnitFetch).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/financeiro\?/));
@@ -342,7 +371,8 @@ describe('FinanceiroPage', () => {
     render(<FinanceiroPage />);
 
     expect(await screen.findByText('Resumo dia a dia')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('08/06/2026'));
+    const resumoTable = screen.getByRole('table', { name: 'Resumo financeiro dia a dia' });
+    fireEvent.click(within(resumoTable).getByText('08/06/2026'));
 
     await waitFor(() => {
       expect(screen.getByLabelText('Dia')).toHaveValue('2026-06-08');

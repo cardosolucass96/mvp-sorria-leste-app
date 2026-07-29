@@ -4,6 +4,7 @@ import type { FechamentoCaixaResponse, FechamentoCaixaVisao } from '@/lib/fecham
 import type {
   FinanceiroDiaResumo,
   FinanceiroMetodoResumo,
+  FinanceiroReceitaPeriodo,
   FinanceiroResponse,
 } from './types';
 
@@ -175,6 +176,19 @@ function aggregateMetodos(periodoViews: FechamentoCaixaVisao[]): FinanceiroMetod
   });
 }
 
+function createReceitasPeriodo(periodoResponses: FechamentoCaixaResponse[]): FinanceiroReceitaPeriodo[] {
+  return periodoResponses
+    .flatMap((response) => response.resultado.pagamentos_recebidos_dia.map((pagamento) => ({
+      ...pagamento,
+      data_referencia: response.resultado.data_referencia,
+    })))
+    .sort((left, right) => {
+      const createdAtComparison = right.created_at.localeCompare(left.created_at);
+      if (createdAtComparison !== 0) return createdAtComparison;
+      return right.id.localeCompare(left.id);
+    });
+}
+
 export function normalizarParametrosFinanceiro(params: ObterFinanceiroParams): {
   data: string;
   dataInicio: string;
@@ -207,22 +221,20 @@ export function normalizarParametrosFinanceiro(params: ObterFinanceiroParams): {
 
 export async function obterFinanceiroResponse(params: ObterFinanceiroParams): Promise<FinanceiroResponse> {
   const normalized = normalizarParametrosFinanceiro(params);
-  const uniqueDates = Array.from(new Set([normalized.data, ...normalized.datasPeriodo]));
-  const responsesByDate = new Map<string, FechamentoCaixaResponse>();
-
-  for (const date of uniqueDates) {
-    responsesByDate.set(date, await obterFechamentoCaixaResponse(params.unidadeId, date));
-  }
-
-  const diaResponse = responsesByDate.get(normalized.data);
-  if (!diaResponse) {
-    throw new Error('Não foi possível carregar o dia selecionado.');
-  }
+  const diaResponse = await obterFechamentoCaixaResponse(params.unidadeId, normalized.data);
+  const periodoDates = normalized.datasPeriodo.filter((date) => date !== normalized.data);
+  const periodoResponsesCarregadas = await Promise.all(periodoDates.map(async (date) => ({
+    date,
+    response: await obterFechamentoCaixaResponse(params.unidadeId, date, { incluirRecentes: false }),
+  })));
+  const responsesByDate = new Map(periodoResponsesCarregadas.map(({ date, response }) => [date, response]));
+  responsesByDate.set(normalized.data, diaResponse);
 
   const periodoResponses = normalized.datasPeriodo
     .map((date) => responsesByDate.get(date))
     .filter((response): response is FechamentoCaixaResponse => Boolean(response));
   const dias = periodoResponses.map(createDiaResumo);
+  const receitasPeriodo = createReceitasPeriodo(periodoResponses);
   const resumoPeriodo = createPeriodoResumo(dias);
   const diaResumo = createDiaResumo(diaResponse);
 
@@ -238,6 +250,7 @@ export async function obterFinanceiroResponse(params: ObterFinanceiroParams): Pr
       dias: normalized.diasPeriodo,
     },
     dias,
+    receitas_periodo: receitasPeriodo,
     resumo_periodo: resumoPeriodo,
     graficos: {
       faturamento_por_dia: dias.map((dia) => ({

@@ -35,6 +35,7 @@ import type {
 import type {
   FinanceiroDiaResumo,
   FinanceiroMetodoResumo,
+  FinanceiroReceitaPeriodo,
   FinanceiroResponse,
 } from '@/lib/financeiro/types';
 import { getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
@@ -379,6 +380,15 @@ export default function FinanceiroPage() {
     },
   ], []);
 
+  const receitasPeriodoColumns = useMemo<TableColumn<FinanceiroReceitaPeriodo>[]>(() => [
+    {
+      key: 'data_referencia',
+      label: 'Data',
+      render: (item) => <span className="font-medium">{formatarData(item.data_referencia)}</span>,
+    },
+    ...pagamentosColumns,
+  ], [pagamentosColumns]);
+
   const profissionaisColumns = useMemo<TableColumn<FechamentoCaixaDentista>[]>(() => [
     {
       key: 'nome',
@@ -640,6 +650,29 @@ export default function FinanceiroPage() {
               emptyMessage="Nenhum dia encontrado no período."
               caption="Resumo financeiro dia a dia"
               className="[&_table]:min-w-[980px]"
+            />
+          </Card>
+
+          <Card>
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-base font-semibold">Receitas recebidas no período</h2>
+                <p className="text-sm text-muted-foreground">
+                  Lista dos valores que entraram entre {formatarData(data.periodo.data_inicio)} e {formatarData(data.periodo.data_fim)}.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge color="green">{data.receitas_periodo.filter((receita) => !receita.cancelado).length} recebida(s)</Badge>
+                <Badge color="blue">{formatarMoeda(data.resumo_periodo.total_liquido)} líquido</Badge>
+              </div>
+            </div>
+            <Table
+              columns={receitasPeriodoColumns}
+              data={data.receitas_periodo}
+              keyExtractor={(item) => `${item.data_referencia}:${item.id}`}
+              emptyMessage="Nenhuma receita recebida nesse período."
+              caption="Receitas recebidas no período"
+              className="[&_table]:min-w-[1200px]"
             />
           </Card>
 
