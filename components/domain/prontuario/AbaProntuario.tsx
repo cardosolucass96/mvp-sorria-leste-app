@@ -48,7 +48,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-muted">
                   {!isEvolucaoAgrupada && item.executor_nome && (
                     <span>
-                      Executor: <span className="text-foreground">{item.executor_nome}</span>
+                      Executor responsável: <span className="text-foreground">{item.executor_nome}</span>
                     </span>
                   )}
                   {!isEvolucaoAgrupada && dentes && (
@@ -93,7 +93,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
                             : procedimento.procedimento_nome}
                         </p>
                         <p>
-                          {procedimento.executor_nome && `Executor: ${procedimento.executor_nome}`}
+                          {procedimento.executor_nome && `Executor responsável: ${procedimento.executor_nome}`}
                           {dentesItem && ` · Dentes: ${dentesItem}`}
                           {procedimento.concluido_at && ` · Concluído em ${formatarDataHora(procedimento.concluido_at)}`}
                         </p>
@@ -136,7 +136,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
                 )}
                 <div className="flex flex-wrap justify-end text-[11px] text-muted gap-1">
                   <span>
-                    Preenchido por <span className="font-medium">{item.prontuario_autor}</span>
+                    Registrado por <span className="font-medium">{item.prontuario_autor}</span>
                   </span>
                   {item.prontuario_data && (
                     <span>em {formatarDataHora(item.prontuario_data)}</span>

@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter, useParams } from 'next/navigation';
 import { formatarDataHora } from '@/lib/utils/formatters';
-import { StatusBadge, ProntuarioDrawer } from '@/components/domain';
+import { EvolucaoConclusaoModal, StatusBadge, ProntuarioDrawer } from '@/components/domain';
 import {
   Activity, Save, Paperclip, FileText,
   CheckCircle2, Circle, ChevronDown, ChevronUp,
@@ -57,6 +57,7 @@ interface ItemAtendimento {
   etapas: Etapa[];
   etapa_label: string | null;
   tem_etapas: number;
+  possui_agendamento_ativo: number;
   itens_elegiveis_evolucao?: ItemElegivelEvolucao[];
 }
 
@@ -67,6 +68,7 @@ interface ItemElegivelEvolucao {
   etapa_label: string | null;
   status: string;
   concluido_at: string | null;
+  possui_agendamento_ativo: number;
 }
 
 interface Procedimento {
@@ -139,8 +141,6 @@ export default function ExecucaoProcedimentoPage() {
   const [salvandoProntuario, setSalvandoProntuario] = useState(false);
   const [erroProntuario, setErroProntuario] = useState('');
   const [evolucaoModalOpen, setEvolucaoModalOpen] = useState(false);
-  const [itensSelecionadosEvolucao, setItensSelecionadosEvolucao] = useState<number[]>([]);
-  const [concluindoEvolucao, setConcluindoEvolucao] = useState(false);
 
   // Etapas — estado de cada uma (aberta/formulário)
   const [etapaAberta, setEtapaAberta] = useState<number | null>(null);
@@ -232,50 +232,12 @@ export default function ExecucaoProcedimentoPage() {
 
   function abrirModalEvolucao() {
     if (!item) return;
-    setItensSelecionadosEvolucao([item.id]);
-    setErroProntuario('');
-    setEvolucaoModalOpen(true);
-  }
-
-  async function concluirEvolucao() {
-    if (!item) return;
-    if (descricaoProntuario.trim().length < MIN_CHARS) {
-      setErroProntuario(`Mínimo ${MIN_CHARS} caracteres`);
+    if (Number(item.possui_agendamento_ativo) === 1) {
+      toast.warning('Este procedimento possui agendamento ativo para outra sessão.');
       return;
     }
-
-    setConcluindoEvolucao(true);
     setErroProntuario('');
-    try {
-      const res = await unitFetch('/api/execucao/evolucoes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item_ids: itensSelecionadosEvolucao,
-          descricao: descricaoProntuario,
-          observacoes: observacoesProntuario,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErroProntuario(data.error || 'Erro ao concluir evolução');
-        return;
-      }
-
-      setEvolucaoModalOpen(false);
-      if (data.atendimento_finalizado) {
-        toast.success('Todos os procedimentos concluídos. Atendimento finalizado.');
-      } else if (data.atendimento_voltou_para_pagamento) {
-        toast.success('Procedimentos concluídos. Atendimento voltou para pagamento.');
-      } else {
-        toast.success('Evolução salva e procedimentos concluídos.');
-      }
-      router.push('/execucao');
-    } catch {
-      setErroProntuario('Erro ao concluir evolução');
-    } finally {
-      setConcluindoEvolucao(false);
-    }
+    setEvolucaoModalOpen(true);
   }
 
   function marcarComoConcluidoIndividual() {
@@ -531,7 +493,7 @@ export default function ExecucaoProcedimentoPage() {
             {etapa.prontuario_observacoes && (
               <p className="text-xs text-muted mt-1 italic">{etapa.prontuario_observacoes}</p>
             )}
-            <p className="text-xs text-muted mt-1">por {etapa.prontuario_autor}</p>
+            <p className="text-xs text-muted mt-1">registrado por {etapa.prontuario_autor}</p>
           </div>
         )}
 
@@ -652,24 +614,30 @@ export default function ExecucaoProcedimentoPage() {
           )}
           {/* Concluir manual só para itens SEM etapas por dente */}
           {isMeu && item.status === 'executando' && !temEtapas && (
-            <div className="space-y-2">
-              {isMultiSessao ? (
-                <>
-                  {!prontuario && (
-                    <div className="p-3 bg-warning-50 border border-warning-300 rounded-lg text-sm text-warning-800 dark:bg-warning-900/22 dark:border-warning-900/35 dark:text-warning-100">
-                      <strong>Prontuário pendente:</strong> preencha abaixo antes de concluir.
-                    </div>
-                  )}
-                  <Button onClick={marcarComoConcluidoIndividual} disabled={!prontuario} className="w-full text-lg py-3">
-                    {prontuario ? `Concluir Sessão (${item.etapa_label ?? 'sessão'})` : 'Preencha o Prontuário para Concluir'}
+            Number(item.possui_agendamento_ativo) === 1 ? (
+              <Alert type="warning" title="Agendado para outra sessão">
+                Cancele ou realize o agendamento ativo antes de concluir este procedimento.
+              </Alert>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {isMultiSessao ? (
+                  <>
+                    {!prontuario && (
+                      <Alert type="warning" title="Prontuário pendente">
+                        Preencha o prontuário abaixo antes de concluir.
+                      </Alert>
+                    )}
+                    <Button onClick={marcarComoConcluidoIndividual} disabled={!prontuario} className="w-full text-lg py-3">
+                      {prontuario ? `Concluir Sessão (${item.etapa_label ?? 'sessão'})` : 'Preencha o Prontuário para Concluir'}
+                    </Button>
+                  </>
+                ) : (
+                  <Button onClick={abrirModalEvolucao} className="w-full text-lg py-3">
+                    Criar Evolução e Concluir
                   </Button>
-                </>
-              ) : (
-                <Button onClick={abrirModalEvolucao} className="w-full text-lg py-3">
-                  Criar Evolução e Concluir
-                </Button>
-              )}
-            </div>
+                )}
+              </div>
+            )
           )}
           {/* Para itens COM etapas por dente: conclusão é automática */}
           {isMeu && item.status === 'executando' && temEtapas && etapasConcluidas < item.etapas.length && (
@@ -810,7 +778,7 @@ export default function ExecucaoProcedimentoPage() {
                 </div>
               )}
               <p className="text-xs text-muted">
-                Por <strong>{prontuario.usuario_nome}</strong> em {formatarDataHora(prontuario.created_at)}
+                Registrado por <strong>{prontuario.usuario_nome}</strong> em {formatarDataHora(prontuario.created_at)}
               </p>
             </div>
           ) : null}
@@ -841,7 +809,7 @@ export default function ExecucaoProcedimentoPage() {
               </div>
             )}
             <p className="text-xs text-muted">
-              Por <strong>{prontuario.usuario_nome}</strong> em {formatarDataHora(prontuario.created_at)}
+              Registrado por <strong>{prontuario.usuario_nome}</strong> em {formatarDataHora(prontuario.created_at)}
             </p>
           </div>
         </Card>
@@ -945,108 +913,40 @@ export default function ExecucaoProcedimentoPage() {
         </div>
       </Modal>
 
-      <Modal
-        isOpen={evolucaoModalOpen}
-        onClose={() => {
-          if (!concluindoEvolucao) setEvolucaoModalOpen(false);
+      <EvolucaoConclusaoModal
+        open={evolucaoModalOpen}
+        onClose={() => setEvolucaoModalOpen(false)}
+        itemIdsIniciais={[item.id]}
+        registradorNome={user?.nome || 'Executor'}
+        itens={(item.itens_elegiveis_evolucao ?? [{
+          id: item.id,
+          atendimento_id: item.atendimento_id,
+          procedimento_nome: item.procedimento_nome,
+          etapa_label: item.etapa_label,
+          status: item.status,
+          concluido_at: item.concluido_at,
+          possui_agendamento_ativo: item.possui_agendamento_ativo,
+        }]).map((elegivel) => ({
+          id: elegivel.id,
+          label: elegivel.etapa_label
+            ? `${elegivel.procedimento_nome} — ${elegivel.etapa_label}`
+            : elegivel.procedimento_nome,
+          executor_id: item.executor_id,
+          executor_nome: item.executor_nome,
+          status: elegivel.status,
+          possui_agendamento_ativo: elegivel.possui_agendamento_ativo,
+        }))}
+        onSuccess={(data) => {
+          if (data.atendimento_finalizado) {
+            toast.success('Todos os procedimentos concluídos. Atendimento finalizado.');
+          } else if (data.atendimento_voltou_para_pagamento) {
+            toast.success('Procedimentos concluídos. Atendimento voltou para pagamento.');
+          } else {
+            toast.success('Evolução salva e procedimentos concluídos.');
+          }
+          router.push('/execucao');
         }}
-        size="lg"
-        title="Nova Evolução Clínica"
-      >
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm font-medium text-foreground mb-2">Procedimentos desta evolução</p>
-            <div className="space-y-2 rounded-lg border border-border p-3">
-              {(item.itens_elegiveis_evolucao ?? [{
-                id: item.id,
-                atendimento_id: item.atendimento_id,
-                procedimento_nome: item.procedimento_nome,
-                etapa_label: item.etapa_label,
-                status: item.status,
-                concluido_at: item.concluido_at,
-              }]).map((elegivel) => {
-                const isAtual = elegivel.id === item.id;
-                const checked = itensSelecionadosEvolucao.includes(elegivel.id);
-                return (
-                  <label key={elegivel.id} className="flex items-start gap-3 rounded-md border border-border/70 p-3">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={checked}
-                      disabled={isAtual || concluindoEvolucao}
-                      onChange={(event) => {
-                        setItensSelecionadosEvolucao((prev) => {
-                          if (event.target.checked) return [...new Set([...prev, elegivel.id])];
-                          return prev.filter((id) => id !== elegivel.id || id === item.id);
-                        });
-                      }}
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-foreground">
-                        {elegivel.etapa_label ? `${elegivel.procedimento_nome} — ${elegivel.etapa_label}` : elegivel.procedimento_nome}
-                        {isAtual && <span className="ml-2 text-xs text-muted">(atual)</span>}
-                      </span>
-                      <span className="block text-xs text-muted">Status: {elegivel.status}</span>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
-          {erroProntuario && (
-            <Alert type="error">{erroProntuario}</Alert>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Descrição clínica *</label>
-            <textarea
-              value={descricaoProntuario}
-              onChange={e => setDescricaoProntuario(e.target.value)}
-              placeholder="Descreva a evolução, procedimentos realizados, materiais, técnicas e condutas..."
-              className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:outline-none ${
-                descricaoProntuario.trim().length < MIN_CHARS ? 'border-error-300 dark:border-error-500/50' : 'border-success-300 dark:border-success-500/50'
-              }`}
-              rows={6}
-              disabled={concluindoEvolucao}
-            />
-            <span className={`text-xs ${descricaoProntuario.trim().length < MIN_CHARS ? 'text-error-600 dark:text-error-100' : 'text-success-600 dark:text-success-100'}`}>
-              {descricaoProntuario.trim().length}/{MIN_CHARS} mín.
-            </span>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Observações (opcional)</label>
-            <textarea
-              value={observacoesProntuario}
-              onChange={e => setObservacoesProntuario(e.target.value)}
-              placeholder="Cuidados pós-procedimento, retornos, orientações..."
-              className="w-full border border-input rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:outline-none"
-              rows={3}
-              disabled={concluindoEvolucao}
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              onClick={concluirEvolucao}
-              disabled={concluindoEvolucao || itensSelecionadosEvolucao.length === 0 || descricaoProntuario.trim().length < MIN_CHARS}
-              loading={concluindoEvolucao}
-              className="flex-1"
-            >
-              Concluir Selecionados
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => setEvolucaoModalOpen(false)}
-              disabled={concluindoEvolucao}
-              className="flex-1"
-            >
-              Cancelar
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      />
 
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
