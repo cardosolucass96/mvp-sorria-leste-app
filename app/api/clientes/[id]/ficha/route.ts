@@ -278,19 +278,27 @@ export const GET = withAuth(async (_request, context) => {
       prontuariosMap.set(row.evolucao_id, atual);
     }
 
-    const prontuarios = Array.from(prontuariosMap.values()).map((evolucao) => ({
-      ...evolucao,
-      procedimento_nome: evolucao.itens.length > 1
-        ? `${evolucao.itens.length} procedimentos`
-        : evolucao.itens[0]?.procedimento_nome ?? evolucao.procedimento_nome,
-      etapa_label: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.etapa_label ?? null,
-      executor_nome: evolucao.itens.length > 1 ? evolucao.prontuario_autor : evolucao.itens[0]?.executor_nome ?? evolucao.executor_nome,
-      item_id: evolucao.itens[0]?.item_id ?? evolucao.item_id,
-      concluido_at: evolucao.itens[0]?.concluido_at ?? evolucao.concluido_at,
-      dentes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.dentes ?? null,
-      quantidade: evolucao.itens.length > 1 ? evolucao.itens.length : evolucao.itens[0]?.quantidade ?? evolucao.quantidade,
-      item_observacoes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.item_observacoes ?? null,
-    }));
+    const prontuarios = Array.from(prontuariosMap.values()).map((evolucao) => {
+      const executores = [...new Set(
+        evolucao.itens
+          .map((item) => item.executor_nome)
+          .filter((nome): nome is string => Boolean(nome))
+      )];
+
+      return {
+        ...evolucao,
+        procedimento_nome: evolucao.itens.length > 1
+          ? `${evolucao.itens.length} procedimentos`
+          : evolucao.itens[0]?.procedimento_nome ?? evolucao.procedimento_nome,
+        etapa_label: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.etapa_label ?? null,
+        executor_nome: executores.length > 0 ? executores.join(', ') : null,
+        item_id: evolucao.itens[0]?.item_id ?? evolucao.item_id,
+        concluido_at: evolucao.itens[0]?.concluido_at ?? evolucao.concluido_at,
+        dentes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.dentes ?? null,
+        quantidade: evolucao.itens.length > 1 ? evolucao.itens.length : evolucao.itens[0]?.quantidade ?? evolucao.quantidade,
+        item_observacoes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.item_observacoes ?? null,
+      };
+    });
 
     const restrictedDentistView = isRestrictedDentistPatientView(context.user);
     const historicoFiltrado = restrictedDentistView

@@ -4,6 +4,7 @@ import { gerarComissoesExecucaoItem } from '@/lib/helpers/gerarComissoes';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 import { nowUtcIso } from '@/lib/time';
+import { garantirProntuarioEvolucoesSchema } from '@/lib/helpers/garantirProntuarioEvolucoesSchema';
 
 interface ItemAtendimento {
   id: number;
@@ -51,7 +52,6 @@ export const PUT = withUnit(async (
       valor_final,
       desconto_motivo,
       status,
-      usuario_id,
       dentes,
       etapa_modelo_id,
       etapa_valor,
@@ -90,13 +90,51 @@ export const PUT = withUnit(async (
       );
     }
     
-    // Validação: apenas o executor pode marcar como executando/concluído
+    // Status clínico nunca confia em IDs enviados pelo cliente: a identidade vem do JWT.
     if (status && ['executando', 'concluido'].includes(status)) {
-      if (usuario_id && item.executor_id && usuario_id !== item.executor_id) {
+      if (
+        item.executor_id !== context.user.sub
+        || !userHasAnyRole(context.user, ['executor', 'ortodontista'])
+      ) {
         return NextResponse.json(
           { error: 'Apenas o executor designado pode alterar o status deste procedimento' },
           { status: 403 }
         );
+      }
+
+      if (atendimento.status !== 'em_execucao') {
+        return NextResponse.json(
+          { error: 'O atendimento precisa estar em execução' },
+          { status: 400 }
+        );
+      }
+
+      if (status === 'executando' && item.status !== 'pago') {
+        return NextResponse.json(
+          { error: 'Apenas procedimentos pagos podem iniciar a execução' },
+          { status: 400 }
+        );
+      }
+
+      if (status === 'concluido') {
+        if (item.status !== 'executando') {
+          return NextResponse.json(
+            { error: 'O procedimento precisa estar em execução antes de ser concluído' },
+            { status: 400 }
+          );
+        }
+
+        await garantirProntuarioEvolucoesSchema();
+        const evolucao = await queryOne<{ id: number }>(
+          'SELECT id FROM prontuario_evolucao_itens WHERE item_atendimento_id = ?',
+          [parseInt(itemId)]
+        );
+        if (!evolucao) {
+          return NextResponse.json(
+            { error: 'Preencha o prontuário antes de concluir o procedimento' },
+            { status: 400 }
+          );
+        }
       }
     }
 
