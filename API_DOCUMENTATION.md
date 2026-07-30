@@ -312,7 +312,14 @@ Retorna atendimento completo com itens e totais.
   "avaliador_nome": "...",
   "liberado_por_nome": "...",
   "status": "avaliacao",
-  "itens": [...],
+  "itens": [
+    {
+      "id": 10,
+      "status": "executando",
+      "executor_id": 4,
+      "possui_agendamento_ativo": 0
+    }
+  ],
   "total": 1500.00,
   "total_pago": 500.00,
   ...
@@ -376,9 +383,8 @@ Atualiza item de atendimento.
 | `executor_id`| number\|null  | Atribuir/remover executor                |
 | `valor`      | number        | Valor do item                            |
 | `status`     | string        | `pendente`, `pago`, `executando`, `concluido` |
-| `usuario_id` | number        | ID do usuário que faz a alteração        |
 
-> Se `status=concluido`, define `concluido_at` automaticamente.
+> A identidade clínica vem do JWT. `executando` e `concluido` são restritos ao executor designado; a conclusão direta também exige prontuário existente. Admin/atendente concluem em nome do executor somente pelo endpoint transacional de evoluções.
 
 **Resposta (200)**: `ItemAtendimentoCompleto`  
 **Erros**: `400` (sem campos), `403` (executor não designado tenta mudar para executando/concluido), `404`, `500`
@@ -537,9 +543,10 @@ Retorna detalhe do item de execução com dados do cliente e procedimento.
   "valor_pago": 500,
   "dentes": null,
   "status": "pago",
+  "possui_agendamento_ativo": 0,
   "itens_elegiveis_evolucao": [
-    { "id": 1, "procedimento_nome": "Limpeza", "status": "executando" },
-    { "id": 2, "procedimento_nome": "Restauração", "status": "pago" }
+    { "id": 1, "procedimento_nome": "Limpeza", "status": "executando", "possui_agendamento_ativo": 0 },
+    { "id": 2, "procedimento_nome": "Restauração", "status": "pago", "possui_agendamento_ativo": 1 }
   ],
   ...
 }
@@ -561,10 +568,14 @@ Cria uma evolução clínica e conclui em lote os procedimentos selecionados do 
 
 **Regras**:
 - Todos os itens precisam pertencer ao mesmo atendimento e à unidade atual.
-- Todos os itens precisam estar atribuídos ao usuário autenticado.
+- Todos os itens precisam ter o mesmo executor definido.
+- Executor/ortodontista só pode concluir os próprios itens; admin/atendente pode registrar em nome do executor da unidade atual.
+- A identidade de quem registra vem exclusivamente do JWT; não são aceitos `usuario_id` ou `executor_id` no body.
 - Itens já concluídos ou já vinculados a outra evolução são rejeitados.
-- Procedimentos por etapas continuam no fluxo individual de sessões.
+- Itens com agendamento futuro ativo são rejeitados.
+- Procedimentos comuns, por dente e por etapas/sessões usam a mesma conclusão transacional.
 - A comissão de execução continua sendo gerada por item concluído.
+- `itens_atendimento.executor_id` permanece como responsável clínico/comissionado e `prontuario_evolucoes.usuario_id` registra quem lançou o texto.
 - A operação é enviada em lote para salvar evolução, vínculos, conclusão dos itens, comissões e finalização/retorno para pagamento do atendimento.
 
 **Resposta (201)**:
@@ -574,6 +585,8 @@ Cria uma evolução clínica e conclui em lote os procedimentos selecionados do 
   "evolucao_uuid": "uuid",
   "atendimento_id": 1,
   "item_ids": [1, 2],
+  "executor_id": 4,
+  "registrado_por_id": 2,
   "atendimento_finalizado": true,
   "atendimento_voltou_para_pagamento": false
 }
@@ -632,12 +645,13 @@ Cria ou atualiza prontuário (upsert).
 
 | Campo        | Tipo   | Obrigatório | Descrição                    |
 |--------------|--------|-------------|------------------------------|
-| `usuario_id` | number | ✅          | ID do autor                  |
 | `descricao`  | string | ✅          | Descrição clínica (mín. 10 chars) |
 | `observacoes`| string | ❌          | Observações adicionais       |
 
+O usuário é derivado do JWT. A escrita individual é permitida apenas ao executor responsável, na unidade atual e durante a execução. Admin/atendente devem usar `POST /api/execucao/evolucoes` para o registro assistido.
+
 **Resposta (200/201)**: `{ "success": true, "prontuario": Prontuario, "message": "Prontuário criado|atualizado" }`  
-**Erros**: `400` (usuario_id faltando, descrição < 10 chars), `409` (item já vinculado a evolução em lote), `500`
+**Erros**: `400` (estado inválido, descrição < 10 chars), `401`, `403`, `404`, `409` (item já vinculado a evolução em lote), `500`
 
 ---
 

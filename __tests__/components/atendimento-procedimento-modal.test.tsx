@@ -54,6 +54,7 @@ jest.mock('@/components/domain', () => ({
   StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
   StatusPipeline: ({ currentStatus }: { currentStatus: string }) => <div>{currentStatus}</div>,
   AnexosGallery: () => <div data-testid="anexos-gallery">Galeria de anexos</div>,
+  EvolucaoConclusaoModal: () => null,
 }));
 
 jest.mock('@/components/ui/SearchableSelect', () => ({

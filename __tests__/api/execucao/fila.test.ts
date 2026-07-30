@@ -11,6 +11,7 @@ import {
   teardownCloudflareContextMock,
   resetMockDb,
   mockQueryResponse,
+  getExecutedQueries,
 } from '../../helpers/db-mock';
 // Mock JWT para bypass de autenticação nos testes
 jest.mock('@/lib/auth/jwt', () => ({
@@ -56,6 +57,7 @@ describe('GET /api/execucao', () => {
     status: 'pago',
     created_at: '2025-02-04 11:00:00',
     concluido_at: null,
+    possui_agendamento_ativo: 0,
     ...overrides,
   });
 
@@ -180,6 +182,7 @@ describe('GET /api/execucao/item/[id]', () => {
     status: 'pago',
     created_at: '2025-02-04 11:00:00',
     concluido_at: null,
+    possui_agendamento_ativo: 0,
   };
 
   it('retorna item com todos os dados de JOINs', async () => {
@@ -229,6 +232,7 @@ describe('GET /api/execucao/item/[id]', () => {
         etapa_label: null,
         status: 'executando',
         concluido_at: null,
+        possui_agendamento_ativo: 0,
       },
       {
         id: 3,
@@ -237,18 +241,27 @@ describe('GET /api/execucao/item/[id]', () => {
         etapa_label: null,
         status: 'pago',
         concluido_at: null,
+        possui_agendamento_ativo: 1,
       },
     ]);
 
     const ctx = createRouteContext({ id: '2' });
     const { data } = await callRoute<{
-      itens_elegiveis_evolucao: Array<{ id: number; procedimento_nome: string }>;
+      possui_agendamento_ativo: number;
+      itens_elegiveis_evolucao: Array<{
+        id: number;
+        procedimento_nome: string;
+        possui_agendamento_ativo: number;
+      }>;
     }>(getItemDetail, '/api/execucao/item/2', {}, ctx);
 
+    expect(data.possui_agendamento_ativo).toBe(0);
     expect(data.itens_elegiveis_evolucao).toHaveLength(2);
     expect(data.itens_elegiveis_evolucao.map((item) => item.procedimento_nome)).toEqual([
       'Restauração Dental',
       'Profilaxia',
     ]);
+    expect(data.itens_elegiveis_evolucao[1].possui_agendamento_ativo).toBe(1);
+    expect(getExecutedQueries().filter(({ sql }) => sql.includes('possui_agendamento_ativo'))).toHaveLength(2);
   });
 });

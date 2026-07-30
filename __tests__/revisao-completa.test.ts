@@ -306,8 +306,8 @@ describe('Prontuário e Anexos', () => {
 
   test('API de prontuário deve existir com GET e POST', () => {
     const content = readFile('app/api/execucao/item/[id]/prontuario/route.ts');
-    expect(content).toContain('export async function GET');
-    expect(content).toContain('export async function POST');
+    expect(content).toMatch(/export (?:async function|const) GET/);
+    expect(content).toMatch(/export (?:async function|const) POST/);
   });
 
   test('Prontuário deve ter mínimo de caracteres', () => {

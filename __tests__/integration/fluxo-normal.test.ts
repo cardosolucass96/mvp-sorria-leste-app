@@ -46,16 +46,18 @@ jest.mock('@/lib/auth/jwt', () => ({
   generateToken: jest.fn().mockResolvedValue('mock-token'),
 }));
 
+import { verifyToken } from '@/lib/auth/jwt';
+
 // ═════════════════════════════════════════════
 // Route handlers
 // ═════════════════════════════════════════════
 
 import { POST as postClientes } from '@/app/api/clientes/route';
 import { POST as postAtendimentos } from '@/app/api/atendimentos/route';
-import { PUT as putAtendimento, GET as getAtendimento } from '@/app/api/atendimentos/[id]/route';
+import { PUT as putAtendimento } from '@/app/api/atendimentos/[id]/route';
 import { POST as postItens } from '@/app/api/atendimentos/[id]/itens/route';
 import { PUT as putItem } from '@/app/api/atendimentos/[id]/itens/[itemId]/route';
-import { POST as postPagamentos, GET as getPagamentos } from '@/app/api/atendimentos/[id]/pagamentos/route';
+import { POST as postPagamentos } from '@/app/api/atendimentos/[id]/pagamentos/route';
 import { POST as postFinalizar } from '@/app/api/atendimentos/[id]/finalizar/route';
 import { POST as postNotas } from '@/app/api/execucao/item/[id]/notas/route';
 import { POST as postProntuario } from '@/app/api/execucao/item/[id]/prontuario/route';
@@ -126,10 +128,37 @@ const ATENDIMENTO_BASE = {
   avaliador_nome: AVALIADOR.nome,
 };
 
+const ADMIN_JWT = {
+  sub: 1,
+  email: 'admin@test.com',
+  role: 'admin',
+  roles: ['admin'],
+  nome: 'Admin Teste',
+  unidade_ids: [1, 2],
+  unidade_atual: 1,
+  iat: Math.floor(Date.now() / 1000),
+  exp: Math.floor(Date.now() / 1000) + 86400,
+};
+
+function autenticarComoExecutor() {
+  jest.mocked(verifyToken).mockResolvedValue({
+    sub: EXECUTOR.id,
+    email: EXECUTOR.email,
+    role: EXECUTOR.role,
+    roles: [EXECUTOR.role],
+    nome: EXECUTOR.nome,
+    unidade_ids: [1],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  });
+}
+
 describe('Integração — Fluxo Normal Completo', () => {
   beforeEach(() => {
     setupCloudflareContextMock();
     resetMockDb();
+    jest.mocked(verifyToken).mockResolvedValue(ADMIN_JWT);
   });
 
   afterEach(() => {
@@ -461,6 +490,7 @@ describe('Integração — Fluxo Normal Completo', () => {
 
   describe('Etapa 9 — Executor assume procedimento', () => {
     test('PUT /api/atendimentos/1/itens/1 marca status executando', async () => {
+      autenticarComoExecutor();
       // Atendimento em execução
       mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
@@ -492,7 +522,6 @@ describe('Integração — Fluxo Normal Completo', () => {
         method: 'PUT',
         body: {
           status: 'executando',
-          usuario_id: EXECUTOR.id,
         },
       }, ctx);
 
@@ -529,6 +558,14 @@ describe('Integração — Fluxo Normal Completo', () => {
 
   describe('Etapa 11 — Prontuário', () => {
     test('POST /api/execucao/item/1/prontuario cria prontuário', async () => {
+      autenticarComoExecutor();
+      mockQueryResponse('a.status as atendimento_status', {
+        id: 1,
+        executor_id: EXECUTOR.id,
+        unidade_id: 1,
+        atendimento_status: 'em_execucao',
+        item_status: 'executando',
+      });
       // Não existe prontuário anterior
       mockQueryResponse('select id from prontuarios where item_atendimento_id', []);
       // Retorna prontuário criado
@@ -546,7 +583,6 @@ describe('Integração — Fluxo Normal Completo', () => {
       const { status, data } = await callRoute<{ success: boolean; message: string; prontuario: Record<string, unknown> }>(postProntuario, '/api/execucao/item/1/prontuario', {
         method: 'POST',
         body: {
-          usuario_id: EXECUTOR.id,
           descricao: 'Limpeza realizada com sucesso. Remoção de placa bacteriana em todos os quadrantes.',
           observacoes: 'Paciente deve retornar em 6 meses.',
         },
@@ -565,6 +601,7 @@ describe('Integração — Fluxo Normal Completo', () => {
 
   describe('Etapa 12 — Concluir procedimento', () => {
     test('PUT /api/atendimentos/1/itens/1 marca como concluído', async () => {
+      autenticarComoExecutor();
       mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_BASE,
         status: 'em_execucao',
@@ -577,6 +614,7 @@ describe('Integração — Fluxo Normal Completo', () => {
         valor: 200,
         status: 'executando',
       });
+      mockQueryResponse('select id from prontuario_evolucao_itens', { id: 1 });
       mockQueryResponse('where i.id = ?', {
         id: 1,
         atendimento_id: 1,
@@ -594,7 +632,6 @@ describe('Integração — Fluxo Normal Completo', () => {
         method: 'PUT',
         body: {
           status: 'concluido',
-          usuario_id: EXECUTOR.id,
         },
       }, ctx);
 

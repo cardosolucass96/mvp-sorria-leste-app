@@ -42,6 +42,8 @@ jest.mock('@/lib/auth/jwt', () => ({
   generateToken: jest.fn().mockResolvedValue('mock-token'),
 }));
 
+import { verifyToken } from '@/lib/auth/jwt';
+
 import { POST as postClientes } from '@/app/api/clientes/route';
 import { POST as postAtendimentos } from '@/app/api/atendimentos/route';
 import { PUT as putAtendimento } from '@/app/api/atendimentos/[id]/route';
@@ -90,10 +92,37 @@ const ATENDIMENTO_ORTO_BASE = {
   avaliador_nome: null,
 };
 
+const ADMIN_JWT = {
+  sub: 1,
+  email: 'admin@test.com',
+  role: 'admin',
+  roles: ['admin'],
+  nome: 'Admin Teste',
+  unidade_ids: [1, 2],
+  unidade_atual: 1,
+  iat: Math.floor(Date.now() / 1000),
+  exp: Math.floor(Date.now() / 1000) + 86400,
+};
+
+function autenticarComoExecutorOrto() {
+  jest.mocked(verifyToken).mockResolvedValue({
+    sub: EXECUTOR_ORTO.id,
+    email: EXECUTOR_ORTO.email,
+    role: EXECUTOR_ORTO.role,
+    roles: [EXECUTOR_ORTO.role],
+    nome: EXECUTOR_ORTO.nome,
+    unidade_ids: [1],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  });
+}
+
 describe('Integração — Fluxo Orto', () => {
   beforeEach(() => {
     setupCloudflareContextMock();
     resetMockDb();
+    jest.mocked(verifyToken).mockResolvedValue(ADMIN_JWT);
   });
 
   afterEach(() => {
@@ -177,7 +206,7 @@ describe('Integração — Fluxo Orto', () => {
       mockQueryResponse('select id from clientes where id', { id: CLIENTE_ORTO.id });
       mockQueryResponse('select count(*) as count from atendimentos', { count: 0 });
 
-      const { status, data } = await callRoute<{ error: string }>(postAtendimentos, '/api/atendimentos', {
+      const { status } = await callRoute<{ error: string }>(postAtendimentos, '/api/atendimentos', {
         method: 'POST',
         body: {
           cliente_id: CLIENTE_ORTO.id,
@@ -282,6 +311,7 @@ describe('Integração — Fluxo Orto', () => {
 
   describe('Etapa 5 — Executar procedimento', () => {
     test('PUT marca item como executando', async () => {
+      autenticarComoExecutorOrto();
       mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_ORTO_BASE,
         status: 'em_execucao',
@@ -304,7 +334,7 @@ describe('Integração — Fluxo Orto', () => {
       const ctx = createRouteContext({ id: String(ATENDIMENTO_ORTO_BASE.id), itemId: '1' });
       const { status, data } = await callRoute(putItem, '/api/atendimentos/10/itens/1', {
         method: 'PUT',
-        body: { status: 'executando', usuario_id: EXECUTOR_ORTO.id },
+        body: { status: 'executando' },
       }, ctx);
 
       expect(status).toBe(200);
@@ -312,6 +342,7 @@ describe('Integração — Fluxo Orto', () => {
     });
 
     test('PUT marca item como concluído', async () => {
+      autenticarComoExecutorOrto();
       mockQueryResponse('from atendimentos where id', {
         ...ATENDIMENTO_ORTO_BASE,
         status: 'em_execucao',
@@ -324,6 +355,7 @@ describe('Integração — Fluxo Orto', () => {
         valor: PROC_ORTO.valor,
         status: 'executando',
       });
+      mockQueryResponse('select id from prontuario_evolucao_itens', { id: 1 });
       mockQueryResponse('select \n        i.*', {
         id: 1,
         status: 'concluido',
@@ -335,7 +367,7 @@ describe('Integração — Fluxo Orto', () => {
       const ctx = createRouteContext({ id: String(ATENDIMENTO_ORTO_BASE.id), itemId: '1' });
       const { status, data } = await callRoute(putItem, '/api/atendimentos/10/itens/1', {
         method: 'PUT',
-        body: { status: 'concluido', usuario_id: EXECUTOR_ORTO.id },
+        body: { status: 'concluido' },
       }, ctx);
 
       expect(status).toBe(200);

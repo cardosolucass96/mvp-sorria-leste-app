@@ -51,6 +51,7 @@ function makeAuthPayload(role: 'admin' | 'atendente' | 'avaliador' | 'executor' 
     sub: idsByRole[role],
     email: `${role}@test.com`,
     role,
+    roles: [role],
     nome: `${role} Teste`,
     unidade_ids: [1, 2],
     unidade_atual: 1,
@@ -979,6 +980,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('atualiza status para executando', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     const item = { ...ITEM_RESTAURACAO_PAGO, executor_id: 4 };
     mockQueryResponse('select * from itens_atendimento where id', item);
@@ -994,8 +996,10 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('marca concluido_at automaticamente ao concluir', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_CANAL_EXECUTANDO);
+    mockQueryResponse('select id from prontuario_evolucao_itens', { id: 10 });
     mockQueryResponse('from itens_atendimento i', { ...ITEM_CANAL_EXECUTANDO, procedimento_nome: 'Canal', executor_nome: 'Dr. Carlos' });
 
     const ctx = createRouteContext({ id: '4', itemId: '3' });
@@ -1010,8 +1014,10 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('ao voltar automaticamente para aguardando_pagamento limpa contexto de liberação da execução', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_CANAL_EXECUTANDO);
+    mockQueryResponse('select id from prontuario_evolucao_itens', { id: 10 });
     mockQueryResponse('count(*) as total', { total: 2, concluidos: 2, pendentes_pagamento: 1 });
     mockQueryResponse('from itens_atendimento i', { ...ITEM_CANAL_EXECUTANDO, procedimento_nome: 'Canal', executor_nome: 'Dr. Carlos' });
 
@@ -1066,13 +1072,13 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
     expect(status).toBe(403);
   });
 
-  it('permite status sem restrição de executor se sem usuario_id', async () => {
+  it('usa o JWT do executor mesmo quando usuario_id não é enviado', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_RESTAURACAO_PAGO, executor_id: 4 });
     mockQueryResponse('from itens_atendimento i', { ...ITEM_RESTAURACAO_PAGO, procedimento_nome: 'Restauração', executor_nome: 'Dr. Carlos' });
 
     const ctx = createRouteContext({ id: '4', itemId: '2' });
-    // Sem usuario_id → sem verificação de executor
     const { status } = await callRoute(updateItem, '/api/atendimentos/4/itens/2', {
       method: 'PUT',
       body: { status: 'executando' },

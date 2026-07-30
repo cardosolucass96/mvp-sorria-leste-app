@@ -413,6 +413,31 @@ describe('GET /api/atendimentos/[id]', () => {
     expect(data.total_pago).toBe(0);
   });
 
+  it('retorna o indicador de agendamento ativo e o calcula na unidade atual', async () => {
+    mockQueryResponse('from atendimentos a', atendimentoDetalhe);
+    mockQueryResponse('from itens_atendimento i', [{
+      ...itemBase,
+      possui_agendamento_ativo: 1,
+    }]);
+    mockQueryResponse('select sum(coalesce(valor_final, valor)) as total from itens_atendimento', { total: 150 });
+    mockQueryResponse('coalesce(sum(valor_pago), 0) as total from itens_atendimento', { total: 0 });
+
+    const { status, data } = await callRoute<{
+      itens: Array<{ possui_agendamento_ativo: number }>;
+    }>(
+      getAtendimento,
+      '/api/atendimentos/3',
+      {},
+      createRouteContext({ id: '3' })
+    );
+
+    expect(status).toBe(200);
+    expect(data.itens[0].possui_agendamento_ativo).toBe(1);
+    const queryItens = getExecutedQueries().find(({ sql }) => sql.includes('possui_agendamento_ativo'));
+    expect(queryItens?.sql).toContain("ag_ativo.status IN ('pendente', 'agendado')");
+    expect(queryItens?.params).toEqual([1, 3]);
+  });
+
   it('retorna 404 se atendimento não existe', async () => {
     const ctx = createRouteContext({ id: '999' });
     const { status, data } = await callRoute<{ error: string }>(getAtendimento, '/api/atendimentos/999', {}, ctx);

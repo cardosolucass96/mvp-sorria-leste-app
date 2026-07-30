@@ -29,7 +29,7 @@ describe('GET /api/clientes/[id]/ficha - evoluções clínicas', () => {
         prontuario_observacoes: 'Sem intercorrências',
         prontuario_data: '2026-07-25T12:00:00.000Z',
         prontuario_updated_at: '2026-07-25T12:00:00.000Z',
-        prontuario_autor: 'Dra. Ana',
+        prontuario_autor: 'Ana Atendente',
         item_id: 10,
         concluido_at: '2026-07-25T12:00:00.000Z',
         dentes: '11',
@@ -47,7 +47,7 @@ describe('GET /api/clientes/[id]/ficha - evoluções clínicas', () => {
         prontuario_observacoes: 'Sem intercorrências',
         prontuario_data: '2026-07-25T12:00:00.000Z',
         prontuario_updated_at: '2026-07-25T12:00:00.000Z',
-        prontuario_autor: 'Dra. Ana',
+        prontuario_autor: 'Ana Atendente',
         item_id: 11,
         concluido_at: '2026-07-25T12:05:00.000Z',
         dentes: null,
@@ -83,6 +83,8 @@ describe('GET /api/clientes/[id]/ficha - evoluções clínicas', () => {
         procedimento_nome: string;
         item_id: number;
         quantidade: number;
+        executor_nome: string | null;
+        prontuario_autor: string;
         itens: Array<{ item_id: number; procedimento_nome: string }>;
       }>;
     }>(
@@ -99,6 +101,8 @@ describe('GET /api/clientes/[id]/ficha - evoluções clínicas', () => {
       procedimento_nome: '2 procedimentos',
       item_id: 10,
       quantidade: 2,
+      executor_nome: 'Dra. Ana',
+      prontuario_autor: 'Ana Atendente',
     });
     expect(data.prontuarios[0].itens.map((item) => item.procedimento_nome)).toEqual([
       'Restauração',

@@ -49,6 +49,13 @@ jest.mock('@/lib/utils/print', () => ({
 jest.mock('@/components/domain', () => ({
   StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
   StatusPipeline: ({ currentStatus }: { currentStatus: string }) => <div data-testid="status-pipeline">{currentStatus}</div>,
+  EvolucaoConclusaoModal: ({
+    open,
+    itemIdsIniciais,
+  }: {
+    open: boolean;
+    itemIdsIniciais: number[];
+  }) => open ? <div data-testid="evolucao-assistida">{itemIdsIniciais.join(',')}</div> : null,
 }));
 
 jest.mock('@/components/ui', () => ({
@@ -136,6 +143,7 @@ interface MockItemAtendimento {
   dentes: string | null;
   dente_unico: string | null;
   progresso_etapas: Array<{ nome: string; status: string }> | null;
+  possui_agendamento_ativo?: number;
 }
 
 interface MockAtendimento {
@@ -348,6 +356,102 @@ describe('AtendimentoDetalhePage financeiro', () => {
     expect(screen.getByText(/finalizado como continuação\/retorno/i)).toBeInTheDocument();
     expect(screen.getByText('Continuação / retorno agendado')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: '💳 Ver Financeiro' }).length).toBeGreaterThan(0);
+  });
+});
+
+describe('AtendimentoDetalhePage conclusão assistida', () => {
+  test('admin vê a ação clínica em item elegível e abre a evolução correspondente', async () => {
+    const atendimento = makeAtendimento('em_execucao');
+    atendimento.itens[0] = {
+      ...atendimento.itens[0],
+      executor_id: 4,
+      executor_nome: 'Dra. Marina',
+    };
+
+    await renderPage('em_execucao', atendimento);
+
+    expect(screen.getByRole('columnheader', { name: 'Ação clínica' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir e gerar prontuário' }));
+    expect(screen.getByTestId('evolucao-assistida')).toHaveTextContent('101');
+  });
+
+  test('atendente possui a mesma ação assistida', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 2, nome: 'Ana Atendente', role: 'atendente', roles: ['atendente'] },
+      currentUnidade: 1,
+      hasRole: (roles: string | string[]) => {
+        const values = Array.isArray(roles) ? roles : [roles];
+        return values.includes('atendente');
+      },
+    });
+    const atendimento = makeAtendimento('em_execucao');
+    atendimento.itens[0] = {
+      ...atendimento.itens[0],
+      executor_id: 4,
+      executor_nome: 'Dra. Marina',
+    };
+
+    await renderPage('em_execucao', atendimento);
+
+    expect(screen.getByRole('button', { name: 'Concluir e gerar prontuário' })).toBeInTheDocument();
+  });
+
+  test('mostra motivos de bloqueio para item sem executor e com agendamento ativo', async () => {
+    const atendimento = makeAtendimento('em_execucao');
+    atendimento.itens.push({
+      ...atendimento.itens[0],
+      id: 102,
+      procedimento_nome: 'Profilaxia',
+      executor_id: 4,
+      executor_nome: 'Dra. Marina',
+      possui_agendamento_ativo: 1,
+    });
+
+    await renderPage('em_execucao', atendimento);
+
+    expect(screen.getByText('Defina um executor')).toBeInTheDocument();
+    expect(screen.getByText('Agendado para outra sessão')).toBeInTheDocument();
+  });
+
+  test('não mostra a coluna clínica para avaliador nem fora da execução', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 3, role: 'avaliador', roles: ['avaliador'] },
+      currentUnidade: 1,
+      hasRole: () => false,
+    });
+    await renderPage('em_execucao');
+    expect(screen.queryByRole('columnheader', { name: 'Ação clínica' })).not.toBeInTheDocument();
+  });
+
+  test('grupo por dente oferece conclusão no cabeçalho e por subitem sem misturar executores', async () => {
+    const atendimento = makeAtendimentoAgrupado('em_execucao');
+    atendimento.itens = atendimento.itens.map((item) => ({
+      ...item,
+      status: 'pago',
+      executor_id: 4,
+      executor_nome: 'Dra. Marina',
+    }));
+
+    await renderPage('em_execucao', atendimento);
+
+    expect(screen.getByRole('button', { name: 'Concluir grupo' })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Restauração Estética'));
+    expect(screen.getAllByRole('button', { name: 'Concluir e gerar prontuário' })).toHaveLength(2);
+  });
+
+  test('bloqueia a ação em lote de um grupo com executores diferentes', async () => {
+    const atendimento = makeAtendimentoAgrupado('em_execucao');
+    atendimento.itens = atendimento.itens.map((item, index) => ({
+      ...item,
+      status: 'pago',
+      executor_id: index === 0 ? 4 : 5,
+      executor_nome: index === 0 ? 'Dra. Marina' : 'Dr. Paulo',
+    }));
+
+    await renderPage('em_execucao', atendimento);
+
+    expect(screen.getByText('Executores diferentes')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Concluir grupo' })).not.toBeInTheDocument();
   });
 });
 
