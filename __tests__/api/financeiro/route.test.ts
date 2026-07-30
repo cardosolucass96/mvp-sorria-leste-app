@@ -172,6 +172,21 @@ describe('GET /api/financeiro', () => {
     expect(mockObterFechamentoCaixaResponse).toHaveBeenCalledWith(9, '2026-06-02', { incluirRecentes: false });
   });
 
+  it('usa o fim do período como referência quando não recebe filtro de dia', async () => {
+    const { status, data } = await callRoute<FinanceiroResponse>(GET, '/api/financeiro', {
+      searchParams: {
+        data_inicio: '2026-06-01',
+        data_fim: '2026-06-02',
+      },
+      headers: await buildAuthHeaders('admin'),
+    });
+
+    expect(status).toBe(200);
+    expect(data.dia.meta.data_referencia).toBe('2026-06-02');
+    expect(mockObterFechamentoCaixaResponse).toHaveBeenCalledWith(9, '2026-06-02');
+    expect(mockObterFechamentoCaixaResponse).toHaveBeenCalledWith(9, '2026-06-01', { incluirRecentes: false });
+  });
+
   it('rejeita atendente', async () => {
     const { status, data } = await callRoute<{ error: string }>(GET, '/api/financeiro', {
       searchParams: {

@@ -320,21 +320,20 @@ describe('FinanceiroPage', () => {
     render(<FinanceiroPage />);
 
     expect(await screen.findByText('Financeiro')).toBeInTheDocument();
-    expect(await screen.findByLabelText('Dia')).toBeInTheDocument();
-    expect(screen.getByLabelText('Data início')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Data início')).toBeInTheDocument();
     expect(screen.getByLabelText('Data fim')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Dia')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '7 dias' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '30 dias' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Hoje' })).toBeInTheDocument();
 
-    expect(await screen.findByText('Status do fechamento')).toBeInTheDocument();
     expect(screen.getByText('Total bruto')).toBeInTheDocument();
     expect(screen.getByText('Total líquido')).toBeInTheDocument();
     expect(screen.getByText('Resultado final')).toBeInTheDocument();
     expect(screen.getByText('Diárias')).toBeInTheDocument();
     expect(screen.getAllByText('Comissões').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Ajustes').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/R\$\s*1\.175,00/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/R\$\s*1\.675,00/).length).toBeGreaterThan(0);
 
     expect(screen.getByText('Evolução do período')).toBeInTheDocument();
     expect(screen.getByText('Recebimento por método')).toBeInTheDocument();
@@ -344,40 +343,41 @@ describe('FinanceiroPage', () => {
 
     expect(screen.getByText('Resumo dia a dia')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Receitas recebidas no período' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Pagamentos recebidos no dia' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Profissionais no fechamento' })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Maria' })[0]).toHaveAttribute('href', '/clientes/77');
     expect(screen.getAllByText('Paula').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Pagamento do dia conferido').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'João' })).toHaveAttribute('href', '/clientes/88');
     expect(screen.getByText('Receita do segundo dia')).toBeInTheDocument();
-    expect(screen.getByText('Dra. Alice')).toBeInTheDocument();
 
     expect(mockUnitFetch).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/financeiro\?/));
+    const requestUrl = mockUnitFetch.mock.calls.at(-1)?.[0] as string;
+    const params = new URLSearchParams(requestUrl.split('?')[1]);
+    expect(params.has('data')).toBe(false);
+    expect(params.get('data_inicio')).toBeTruthy();
+    expect(params.get('data_fim')).toBeTruthy();
   });
 
-  test('refaz a consulta quando altera o dia selecionado', async () => {
+  test('refaz a consulta quando altera o período', async () => {
     render(<FinanceiroPage />);
 
-    const input = await screen.findByLabelText('Dia');
-    fireEvent.change(input, { target: { value: '2026-06-08' } });
+    const input = await screen.findByLabelText('Data início');
+    fireEvent.change(input, { target: { value: '2026-06-01' } });
 
     await waitFor(() => {
-      expect(mockUnitFetch).toHaveBeenCalledWith(expect.stringContaining('data=2026-06-08'));
+      expect(mockUnitFetch).toHaveBeenCalledWith(expect.stringContaining('data_inicio=2026-06-01'));
     });
   });
 
-  test('clicar no resumo dia a dia seleciona a data', async () => {
+  test('resumo dia a dia não funciona como filtro de data', async () => {
     render(<FinanceiroPage />);
 
     expect(await screen.findByText('Resumo dia a dia')).toBeInTheDocument();
     const resumoTable = screen.getByRole('table', { name: 'Resumo financeiro dia a dia' });
+    const requestsBeforeClick = mockUnitFetch.mock.calls.length;
     fireEvent.click(within(resumoTable).getByText('08/06/2026'));
 
-    await waitFor(() => {
-      expect(screen.getByLabelText('Dia')).toHaveValue('2026-06-08');
-      expect(mockUnitFetch).toHaveBeenCalledWith(expect.stringContaining('data=2026-06-08'));
-    });
+    expect(screen.queryByLabelText('Dia')).not.toBeInTheDocument();
+    expect(mockUnitFetch).toHaveBeenCalledTimes(requestsBeforeClick);
   });
 
   test('bloqueia usuário não admin', async () => {

@@ -197,9 +197,9 @@ export function normalizarParametrosFinanceiro(params: ObterFinanceiroParams): {
   datasPeriodo: string[];
 } {
   const hoje = assertDateKey(params.hoje ?? getClinicDateKey(), 'hoje');
-  const data = normalizeOptionalDate(params.data, 'data') ?? hoje;
   const dataFim = normalizeOptionalDate(params.dataFim, 'data_fim') ?? hoje;
   const dataInicio = normalizeOptionalDate(params.dataInicio, 'data_inicio') ?? addDaysToClinicDateKey(dataFim, -6);
+  const data = normalizeOptionalDate(params.data, 'data') ?? dataFim;
   const diasPeriodo = dateKeyToDayNumber(dataFim) - dateKeyToDayNumber(dataInicio) + 1;
 
   if (diasPeriodo <= 0) {

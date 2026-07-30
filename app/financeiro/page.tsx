@@ -28,10 +28,7 @@ import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import { addDaysToClinicDateKey, getClinicDateKey } from '@/lib/time';
 import { calculateFechamentoPagamentoTotais } from '@/lib/fechamento-caixa/compute';
-import type {
-  FechamentoCaixaDentista,
-  FechamentoCaixaPagamentoRecebido,
-} from '@/lib/fechamento-caixa/types';
+import type { FechamentoCaixaPagamentoRecebido } from '@/lib/fechamento-caixa/types';
 import type {
   FinanceiroDiaResumo,
   FinanceiroMetodoResumo,
@@ -163,7 +160,6 @@ export default function FinanceiroPage() {
   const { user, isLoading: authLoading, hasRole } = useAuth();
   const unitFetch = useUnitFetch();
   const canAccess = hasRole('admin');
-  const [selectedDate, setSelectedDate] = useState(() => todayIso());
   const [dataInicio, setDataInicio] = useState(() => getDefaultStart());
   const [dataFim, setDataFim] = useState(() => todayIso());
   const [data, setData] = useState<FinanceiroResponse | null>(null);
@@ -176,7 +172,6 @@ export default function FinanceiroPage() {
 
     try {
       const params = new URLSearchParams({
-        data: selectedDate,
         data_inicio: dataInicio,
         data_fim: dataFim,
       });
@@ -195,7 +190,7 @@ export default function FinanceiroPage() {
     } finally {
       setLoading(false);
     }
-  }, [dataFim, dataInicio, selectedDate, unitFetch]);
+  }, [dataFim, dataInicio, unitFetch]);
 
   useEffect(() => {
     if (!authLoading && (!user || !canAccess)) {
@@ -211,20 +206,17 @@ export default function FinanceiroPage() {
 
   const aplicarHoje = () => {
     const hoje = todayIso();
-    setSelectedDate(hoje);
     setDataInicio(hoje);
     setDataFim(hoje);
   };
 
   const aplicarUltimosDias = (dias: number) => {
     const hoje = todayIso();
-    setSelectedDate(hoje);
     setDataInicio(addDaysToClinicDateKey(hoje, -(dias - 1)));
     setDataFim(hoje);
   };
 
-  const diaResumo = data?.dia.resultado.resumo;
-  const totalComissoesDia = (diaResumo?.total_comissao_avaliacao ?? 0) + (diaResumo?.total_comissao_execucao ?? 0);
+  const periodoResumo = data?.resumo_periodo;
   const faturamentoChartData = useMemo(() => (
     data?.graficos.faturamento_por_dia.map((item) => ({
       ...item,
@@ -235,11 +227,11 @@ export default function FinanceiroPage() {
   const composicaoChartData = useMemo(() => {
     if (!data) return [];
     return [
-      { label: 'Líquido', valor: data.graficos.composicao_resultado_dia.total_liquido },
-      { label: 'Diárias', valor: -data.graficos.composicao_resultado_dia.total_diarias },
-      { label: 'Comissões', valor: -data.graficos.composicao_resultado_dia.total_comissoes },
-      { label: 'Ajustes', valor: data.graficos.composicao_resultado_dia.ajustes_manuais },
-      { label: 'Resultado', valor: data.graficos.composicao_resultado_dia.total_final },
+      { label: 'Líquido', valor: data.resumo_periodo.total_liquido },
+      { label: 'Diárias', valor: -data.resumo_periodo.total_diarias },
+      { label: 'Comissões', valor: -data.resumo_periodo.total_comissoes },
+      { label: 'Ajustes', valor: data.resumo_periodo.ajustes_manuais },
+      { label: 'Resultado', valor: data.resumo_periodo.total_final },
     ];
   }, [data]);
   const cancelamentosChartData = useMemo(() => (
@@ -389,54 +381,6 @@ export default function FinanceiroPage() {
     ...pagamentosColumns,
   ], [pagamentosColumns]);
 
-  const profissionaisColumns = useMemo<TableColumn<FechamentoCaixaDentista>[]>(() => [
-    {
-      key: 'nome',
-      label: 'Profissional',
-      render: (item) => (
-        <div className="flex flex-col gap-1">
-          <span className="font-medium">{item.nome}</span>
-          <div className="flex flex-wrap gap-1.5">
-            <Badge color={item.included ? 'green' : 'red'} size="sm">
-              {item.included ? 'Incluído' : 'Excluído'}
-            </Badge>
-            {item.manualmente_editado && <Badge color="amber" size="sm">Editado</Badge>}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'valor_diaria',
-      label: 'Diária',
-      align: 'right',
-      render: (item) => formatarMoeda(item.valor_diaria),
-    },
-    {
-      key: 'comissoes',
-      label: 'Comissões',
-      align: 'right',
-      render: (item) => formatarMoeda(item.comissao_avaliacao + item.comissao_execucao),
-    },
-    {
-      key: 'ajustes',
-      label: 'Ajustes',
-      align: 'center',
-      render: (item) => item.ajuste_count,
-    },
-    {
-      key: 'procedimentos',
-      label: 'Procedimentos',
-      align: 'center',
-      render: (item) => item.procedimentos_executados.length,
-    },
-    {
-      key: 'total_dia',
-      label: 'Total do dia',
-      align: 'right',
-      render: (item) => <span className="font-semibold text-primary">{formatarMoeda(item.total_dia)}</span>,
-    },
-  ], []);
-
   if (authLoading || !user || !canAccess) {
     return null;
   }
@@ -452,7 +396,7 @@ export default function FinanceiroPage() {
       <PageHeader
         title="Financeiro"
         icon={<TrendingUp className="h-7 w-7" />}
-        description="Consulta financeira por dia e período, com base no fechamento de caixa."
+        description="Consulta financeira por período, com base nos fechamentos de caixa."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="secondary" onClick={() => aplicarUltimosDias(7)}>
@@ -482,20 +426,11 @@ export default function FinanceiroPage() {
               <p className="text-lg font-semibold">
                 {data ? `${formatarData(data.periodo.data_inicio)} a ${formatarData(data.periodo.data_fim)}` : 'Período financeiro'}
               </p>
-              <p className="text-sm text-muted-foreground">
-                Dia selecionado: {formatarData(selectedDate)}
-              </p>
+              <p className="text-sm text-muted-foreground">Selecione as datas de início e fim da consulta.</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:w-[34rem]">
-            <Input
-              label="Dia"
-              name="data"
-              type="date"
-              value={selectedDate}
-              onChange={setSelectedDate}
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-[28rem]">
             <Input
               label="Data início"
               name="data_inicio"
@@ -516,47 +451,16 @@ export default function FinanceiroPage() {
 
       {loading ? (
         <LoadingState text="Carregando financeiro..." />
-      ) : data && diaResumo ? (
+      ) : data && periodoResumo ? (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            <StatCard icon={<Banknote className="h-6 w-6" />} label="Total bruto" value={formatarMoeda(diaResumo.total_bruto)} color="border-success-500" />
-            <StatCard icon={<Wallet className="h-6 w-6" />} label="Total líquido" value={formatarMoeda(diaResumo.total_liquido)} color="border-info-500" />
-            <StatCard icon={<TrendingUp className="h-6 w-6" />} label="Resultado final" value={formatarMoeda(diaResumo.total_final)} color="border-primary-500" />
-            <StatCard icon={<Calendar className="h-6 w-6" />} label="Diárias" value={formatarMoeda(diaResumo.total_diarias)} color="border-warning-500" />
-            <StatCard icon={<Banknote className="h-6 w-6" />} label="Comissões" value={formatarMoeda(totalComissoesDia)} color="border-evaluation-500" />
-            <StatCard icon={<ClipboardList className="h-6 w-6" />} label="Ajustes" value={formatarMoeda(diaResumo.ajustes_manuais)} color="border-border" />
+            <StatCard icon={<Banknote className="h-6 w-6" />} label="Total bruto" value={formatarMoeda(periodoResumo.total_bruto)} color="border-success-500" />
+            <StatCard icon={<Wallet className="h-6 w-6" />} label="Total líquido" value={formatarMoeda(periodoResumo.total_liquido)} color="border-info-500" />
+            <StatCard icon={<TrendingUp className="h-6 w-6" />} label="Resultado final" value={formatarMoeda(periodoResumo.total_final)} color="border-primary-500" />
+            <StatCard icon={<Calendar className="h-6 w-6" />} label="Diárias" value={formatarMoeda(periodoResumo.total_diarias)} color="border-warning-500" />
+            <StatCard icon={<Banknote className="h-6 w-6" />} label="Comissões" value={formatarMoeda(periodoResumo.total_comissoes)} color="border-evaluation-500" />
+            <StatCard icon={<ClipboardList className="h-6 w-6" />} label="Ajustes" value={formatarMoeda(periodoResumo.ajustes_manuais)} color="border-border" />
           </div>
-
-          <Card>
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-base font-semibold">Status do fechamento</h2>
-                <p className="text-sm text-muted-foreground">
-                  Unidade: {data.dia.resultado.unidade_nome || `Unidade ${data.dia.resultado.unidade_id}`}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge color={data.dia.meta.status === 'fechado' ? 'green' : 'yellow'}>
-                  {data.dia.meta.status === 'fechado' ? 'Fechado' : 'Aberto'}
-                </Badge>
-                {data.dia.meta.editado_manual && <Badge color="amber">Editado manualmente</Badge>}
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
-              <div className="rounded-lg border border-border bg-secondary/55 p-3">
-                <p className="text-xs uppercase text-muted-foreground">Referência</p>
-                <p className="font-semibold">{formatarData(data.dia.meta.data_referencia)}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-secondary/55 p-3">
-                <p className="text-xs uppercase text-muted-foreground">Fechado por</p>
-                <p className="font-semibold">{data.dia.meta.fechado_por_nome || '-'}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-secondary/55 p-3">
-                <p className="text-xs uppercase text-muted-foreground">Fechado em</p>
-                <p className="font-semibold">{formatarDataHora(data.dia.meta.fechado_em)}</p>
-              </div>
-            </div>
-          </Card>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <Card>
@@ -646,7 +550,6 @@ export default function FinanceiroPage() {
               columns={diasColumns}
               data={data.dias}
               keyExtractor={(item) => item.data_referencia}
-              onRowClick={(item) => setSelectedDate(item.data_referencia)}
               emptyMessage="Nenhum dia encontrado no período."
               caption="Resumo financeiro dia a dia"
               className="[&_table]:min-w-[980px]"
@@ -676,45 +579,6 @@ export default function FinanceiroPage() {
             />
           </Card>
 
-          <Card>
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-base font-semibold">Pagamentos recebidos no dia</h2>
-                <p className="text-sm text-muted-foreground">
-                  Descritivo dos recebimentos, formas de pagamento, valores e cancelamentos.
-                </p>
-              </div>
-              <Badge color="green">{data.dia.resultado.pagamentos_recebidos_dia.length} registro(s)</Badge>
-            </div>
-            <Table
-              columns={pagamentosColumns}
-              data={data.dia.resultado.pagamentos_recebidos_dia}
-              keyExtractor={(item) => item.id}
-              emptyMessage="Nenhum pagamento recebido nesse dia."
-              caption="Pagamentos recebidos no dia"
-              className="[&_table]:min-w-[1120px]"
-            />
-          </Card>
-
-          <Card>
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-base font-semibold">Profissionais no fechamento</h2>
-                <p className="text-sm text-muted-foreground">
-                  Leitura das diárias, comissões, ajustes e totais calculados para o dia.
-                </p>
-              </div>
-              <Badge color="gray">{data.dia.resultado.dentistas.length} profissional(is)</Badge>
-            </div>
-            <Table
-              columns={profissionaisColumns}
-              data={data.dia.resultado.dentistas}
-              keyExtractor={(item) => item.usuario_id}
-              emptyMessage="Nenhum profissional encontrado nesse fechamento."
-              caption="Profissionais no fechamento financeiro"
-              className="[&_table]:min-w-[880px]"
-            />
-          </Card>
         </>
       ) : (
         <Alert type="info">Nenhum dado financeiro encontrado para os filtros selecionados.</Alert>
