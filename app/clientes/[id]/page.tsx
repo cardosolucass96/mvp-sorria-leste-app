@@ -23,7 +23,7 @@ import {
   Copy,
   ExternalLink,
 } from 'lucide-react';
-import { PageHeader, Card, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal, Input, Textarea } from '@/components/ui';
+import { PageHeader, Card, Badge, Button, Alert, LoadingState, EmptyState, ConfirmDialog, Tabs, Modal, Input, Textarea } from '@/components/ui';
 import { StatusBadge, ClienteForm, ClienteFormData, AnexosGallery } from '@/components/domain';
 import { formatarData, formatarDataHora, formatarMoeda, formatarCPF, formatarCNPJ, formatarTelefone, formatarDentes, parseDentesLabels, nomeProcedimentoItem, formatarAgoraDaClinica } from '@/lib/utils/formatters';
 import { finalizarJanelaDeImpressao } from '@/lib/utils/print';
@@ -1794,7 +1794,6 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     { key: 'procedimentos', label: 'Procedimentos', count: ficha?.procedimentos.length },
     { key: 'pagamentos', label: 'Pagamentos', count: ficha?.pagamentos.filter(p => !p.cancelado).length },
     { key: 'agendamentos', label: 'Agendamentos', count: agendamentos.length },
-    { key: 'followups', label: 'Followups', count: followups.length },
     { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
     { key: 'anexos', label: 'Anexos', count: anexosCliente.length + anexosProntuario.length + termosDigitais.length },
     { key: 'historico', label: 'Histórico', count: ficha?.historico.length },
@@ -1940,6 +1939,61 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               >
                 Transferir saldo →
               </Button>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Seção de followups — exibida diretamente na aba de dados */}
+      {abaAtiva === 'dados' && !isEditing && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <MessageCircle className="size-5" /> Followups
+            </h2>
+            <Button
+              onClick={() => push(`/followup?open=1&cliente_id=${id}`)}
+              variant="secondary"
+            >
+              <Plus data-icon="inline-start" /> Novo Followup
+            </Button>
+          </div>
+          {!followups.length ? (
+            <p className="text-center py-8 text-muted">Nenhum followup registrado</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {followups.map((followup) => {
+                const tipoConfig = FOLLOWUP_TIPO_CONFIG[followup.tipo];
+                return (
+                  <div key={followup.id} className="rounded-lg border border-border p-4 hover:bg-surface-secondary">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{followup.titulo}</span>
+                          <Badge color={tipoConfig.badgeColor}>{tipoConfig.label}</Badge>
+                          <Badge color={followup.status === 'concluida' ? 'green' : 'amber'}>
+                            {FOLLOWUP_STATUS_LABELS[followup.status]}
+                          </Badge>
+                        </div>
+                        {followup.descricao && (
+                          <p className="mt-2 text-sm text-muted whitespace-pre-wrap">{followup.descricao}</p>
+                        )}
+                        <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
+                          <span>Vencimento: {formatarDataHora(followup.vencimento_em)}</span>
+                          <span>Responsável: {followup.responsavel_usuario_nome}</span>
+                          <span>Criado por: {followup.criado_por_nome}</span>
+                          {followup.concluida_em && <span>Concluído em: {formatarDataHora(followup.concluida_em)}</span>}
+                        </div>
+                        {followup.nota_conclusao && (
+                          <p className="mt-3 rounded-md bg-muted/35 px-3 py-2 text-sm text-foreground">
+                            {followup.nota_conclusao}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </Card>
@@ -2373,63 +2427,6 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 })}
               </tbody>
             </table>
-          )}
-        </Card>
-      )}
-
-      {/* ABA: FOLLOWUPS */}
-      {abaAtiva === 'followups' && (
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <MessageCircle className="w-5 h-5" /> Followups
-            </h2>
-            <Button
-              onClick={() => push(`/followup?open=1&cliente_id=${id}`)}
-              variant="secondary"
-            >
-              <Plus className="w-4 h-4 mr-1.5" /> Nova Followup
-            </Button>
-          </div>
-          {!followups.length ? (
-            <p className="text-center py-8 text-muted">Nenhum followup registrado</p>
-          ) : (
-            <div className="space-y-3">
-              {followups.map((followup) => {
-                const tipoConfig = FOLLOWUP_TIPO_CONFIG[followup.tipo];
-                return (
-                  <div key={followup.id} className="rounded-lg border border-border p-4 hover:bg-surface-secondary">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium">{followup.titulo}</span>
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${tipoConfig.borderColor} border`}>
-                            {tipoConfig.label}
-                          </span>
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${followup.status === 'concluida' ? 'bg-success-500/10 text-success-800 dark:text-success-200' : 'bg-warning-500/10 text-warning-800 dark:text-warning-200'}`}>
-                            {FOLLOWUP_STATUS_LABELS[followup.status]}
-                          </span>
-                        </div>
-                        {followup.descricao && (
-                          <p className="mt-2 text-sm text-muted whitespace-pre-wrap">{followup.descricao}</p>
-                        )}
-                        <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
-                          <span>Vencimento: {formatarDataHora(followup.vencimento_em)}</span>
-                          <span>Responsável: {followup.responsavel_usuario_nome}</span>
-                          <span>Criado por: {followup.criado_por_nome}</span>
-                          {followup.concluida_em && <span>Concluído em: {formatarDataHora(followup.concluida_em)}</span>}
-                        </div>
-                        {followup.nota_conclusao && (
-                          <p className="mt-3 rounded-md bg-muted/35 px-3 py-2 text-sm text-foreground">
-                            {followup.nota_conclusao}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           )}
         </Card>
       )}

@@ -45,6 +45,7 @@ jest.mock('@/components/ui', () => ({
   EmptyState: ({ title }: { title: string }) => <div>{title}</div>,
   ConfirmDialog: () => null,
   Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   PageHeader: ({ title, actions }: { title: string; actions?: React.ReactNode }) => (
     <div>
       <h1>{title}</h1>
@@ -153,13 +154,15 @@ function jsonResponse(data: unknown, init: { ok?: boolean; status?: number } = {
   });
 }
 
-describe('ClienteDetalhePage - termos digitais', () => {
+describe('ClienteDetalhePage', () => {
   let termosDigitaisMock: Array<Record<string, unknown>>;
   let termosMock: Array<Record<string, unknown>>;
+  let followupsMock: Array<Record<string, unknown>>;
 
   beforeEach(() => {
     jest.clearAllMocks();
     termosDigitaisMock = [];
+    followupsMock = [];
     termosMock = [
       { id: 99, slug: 'termo-consentimento', titulo: 'Termo de Consentimento', permite_autentique: 1 },
     ];
@@ -236,7 +239,7 @@ describe('ClienteDetalhePage - termos digitais', () => {
       }
 
       if (input.startsWith('/api/followup')) {
-        return jsonResponse({ items: [] });
+        return jsonResponse({ items: followupsMock });
       }
 
       if (input.endsWith('/render')) {
@@ -300,6 +303,80 @@ describe('ClienteDetalhePage - termos digitais', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('exibe todos os followups na aba Dados, abaixo do saldo, sem uma aba própria', async () => {
+    followupsMock = [
+      {
+        id: 21,
+        cliente_id: 10,
+        unidade_id: 1,
+        responsavel_usuario_id: 2,
+        criado_por_id: 1,
+        concluida_por_id: null,
+        excluida_por_id: null,
+        tipo: 'retorno',
+        titulo: 'Confirmar retorno',
+        descricao: 'Ligar para a cliente pela manhã.',
+        status: 'aberta',
+        vencimento_em: '2026-08-03T12:00:00.000Z',
+        nota_conclusao: null,
+        concluida_em: null,
+        excluida_em: null,
+        created_at: '2026-08-01T12:00:00.000Z',
+        updated_at: '2026-08-01T12:00:00.000Z',
+        cliente_nome: 'Maria Teste',
+        cliente_telefone: '85999999999',
+        responsavel_usuario_nome: 'Ana',
+        criado_por_nome: 'Admin',
+        concluida_por_nome: null,
+      },
+      {
+        id: 22,
+        cliente_id: 10,
+        unidade_id: 1,
+        responsavel_usuario_id: 2,
+        criado_por_id: 1,
+        concluida_por_id: 2,
+        excluida_por_id: null,
+        tipo: 'cobranca',
+        titulo: 'Cobrança concluída',
+        descricao: null,
+        status: 'concluida',
+        vencimento_em: '2026-07-30T12:00:00.000Z',
+        nota_conclusao: 'Pagamento confirmado.',
+        concluida_em: '2026-07-30T14:00:00.000Z',
+        excluida_em: null,
+        created_at: '2026-07-29T12:00:00.000Z',
+        updated_at: '2026-07-30T14:00:00.000Z',
+        cliente_nome: 'Maria Teste',
+        cliente_telefone: '85999999999',
+        responsavel_usuario_nome: 'Ana',
+        criado_por_nome: 'Admin',
+        concluida_por_nome: 'Ana',
+      },
+    ];
+
+    render(<ClienteDetalhePage params={Promise.resolve({ id: '10' })} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Confirmar retorno')).toBeInTheDocument();
+      expect(screen.getByText('Cobrança concluída')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('button', { name: 'Followups' })).not.toBeInTheDocument();
+
+    const saldoHeading = screen.getByRole('heading', { name: 'Saldo do Cliente' });
+    const followupsHeading = screen.getByRole('heading', { name: 'Followups' });
+    expect(saldoHeading.compareDocumentPosition(followupsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    expect(screen.getByText('Aberta')).toBeInTheDocument();
+    expect(screen.getByText('Concluída')).toBeInTheDocument();
+    expect(screen.getByText('Pagamento confirmado.')).toBeInTheDocument();
+    expect(mockUnitFetch).toHaveBeenCalledWith('/api/followup?cliente_id=10&status=aberta,concluida');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Novo Followup' }));
+    expect(mockPush).toHaveBeenCalledWith('/followup?open=1&cliente_id=10');
   });
 
   it('alterna para digital, revisa os campos e mostra o link gerado', async () => {
