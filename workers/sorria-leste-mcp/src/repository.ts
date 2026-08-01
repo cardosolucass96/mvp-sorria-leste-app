@@ -42,6 +42,7 @@ export interface CreateEvaluationAppointmentInput {
   clienteId: number;
   dataAgendada?: string | null;
   executorId?: number | null;
+  criadoPorId?: number | null;
   observacoes?: string | null;
 }
 
@@ -49,6 +50,7 @@ export interface CreateLeadEvaluationInput extends CreateClientInput {
   unidadeId: number;
   dataAgendada?: string | null;
   executorId?: number | null;
+  criadoPorId: number;
   observacoesAgendamento?: string | null;
 }
 
@@ -217,13 +219,24 @@ async function assertActiveUnit(env: Env, unidadeId: number): Promise<void> {
 
 async function validateEvaluationAppointmentDraft(
   env: Env,
-  input: Pick<CreateEvaluationAppointmentInput, 'unidadeId' | 'dataAgendada' | 'executorId'>,
+  input: Pick<CreateEvaluationAppointmentInput, 'unidadeId' | 'dataAgendada' | 'executorId' | 'criadoPorId'>,
 ): Promise<void> {
   await assertActiveUnit(env, input.unidadeId);
 
   const parsedDate = clinicDateTimeInputToUtcIso(normalizeOptionalText(input.dataAgendada));
   if (parsedDate && parsedDate.normalized < getClinicDateTimeLocalValue()) {
     throw new Error('Não é possível agendar para uma data no passado.');
+  }
+
+  if (input.criadoPorId) {
+    const creator = await env.DB.prepare(`SELECT u.id
+      FROM usuarios u
+      JOIN usuario_unidades uu ON uu.usuario_id = u.id
+      WHERE u.id = ? AND uu.unidade_id = ? AND u.ativo = 1
+      LIMIT 1`)
+      .bind(input.criadoPorId, input.unidadeId)
+      .first<{ id: number }>();
+    if (!creator) throw new Error('Criador não encontrado ou não pertence à unidade informada.');
   }
 
   if (!input.executorId) return;
@@ -247,6 +260,24 @@ async function validateEvaluationAppointmentDraft(
     'SELECT 1 AS ok FROM usuario_unidades WHERE usuario_id = ? AND unidade_id = ? LIMIT 1',
   ).bind(input.executorId, input.unidadeId).first<{ ok: number }>();
   if (!executorUnit) throw new Error('Executor não pertence à unidade informada.');
+}
+
+async function findDefaultEvaluator(
+  env: Env,
+  unidadeId: number,
+): Promise<{ id: number; nome: string } | null> {
+  return env.DB.prepare(`SELECT u.id, u.nome
+    FROM usuarios u
+    JOIN usuario_unidades uu ON uu.usuario_id = u.id
+    LEFT JOIN usuario_roles ur ON ur.usuario_id = u.id
+    WHERE uu.unidade_id = ?
+      AND u.ativo = 1
+      AND (u.role = 'avaliador' OR ur.role = 'avaliador')
+    GROUP BY u.id, u.nome, u.role
+    ORDER BY CASE WHEN u.role = 'avaliador' THEN 0 ELSE 1 END, u.id ASC
+    LIMIT 1`)
+    .bind(unidadeId)
+    .first<{ id: number; nome: string }>();
 }
 
 export async function getIdentity(env: Env, propsInput: unknown): Promise<Identity> {
@@ -438,15 +469,18 @@ export async function createEvaluationAppointment(
     ).bind(input.executorId, input.unidadeId).first<{ ok: number }>();
     if (!executorUnit) throw new Error('Executor não pertence à unidade informada.');
     executor = { id: row.id, nome: row.nome };
+  } else {
+    executor = await findDefaultEvaluator(env, input.unidadeId);
   }
 
   const status = parsedDate ? 'agendado' : 'pendente';
   const insert = await env.DB.prepare(`INSERT INTO agendamentos
-      (cliente_id, executor_id, tipo, status, data_agendada, observacoes, pago, valor_pago, unidade_id)
-    VALUES (?, ?, 'avaliacao', ?, ?, ?, 0, 0, ?)`)
+      (cliente_id, executor_id, criado_por_id, tipo, status, data_agendada, observacoes, pago, valor_pago, unidade_id)
+    VALUES (?, ?, ?, 'avaliacao', ?, ?, ?, 0, 0, ?)`)
     .bind(
       cliente.id,
       executor?.id ?? null,
+      input.criadoPorId ?? null,
       status,
       parsedDate?.utcIso ?? null,
       normalizedObservacoes,
@@ -455,12 +489,14 @@ export async function createEvaluationAppointment(
     .run();
 
   const id = lastInsertedId(insert);
-  const appointment = await env.DB.prepare(`SELECT a.id, a.unidade_id, a.cliente_id, a.executor_id,
+  const appointment = await env.DB.prepare(`SELECT a.id, a.unidade_id, a.cliente_id, a.executor_id, a.criado_por_id,
       a.tipo, a.status, a.data_agendada, a.observacoes, a.created_at,
-      c.nome AS cliente_nome, c.telefone AS cliente_telefone, u.nome AS executor_nome
+      c.nome AS cliente_nome, c.telefone AS cliente_telefone, u.nome AS executor_nome,
+      creator.nome AS criado_por_nome
     FROM agendamentos a
     JOIN clientes c ON c.id = a.cliente_id
     LEFT JOIN usuarios u ON u.id = a.executor_id
+    LEFT JOIN usuarios creator ON creator.id = a.criado_por_id
     WHERE a.id = ?`)
     .bind(id)
     .first<{
@@ -468,6 +504,7 @@ export async function createEvaluationAppointment(
       unidade_id: number;
       cliente_id: number;
       executor_id: number | null;
+      criado_por_id: number | null;
       tipo: string;
       status: string;
       data_agendada: string | null;
@@ -476,6 +513,7 @@ export async function createEvaluationAppointment(
       cliente_nome: string;
       cliente_telefone: string | null;
       executor_nome: string | null;
+      criado_por_nome: string | null;
     }>();
 
   if (!appointment) throw new Error('Agendamento criado não foi encontrado.');
@@ -490,6 +528,9 @@ export async function createEvaluationAppointment(
     executor: appointment.executor_id
       ? { id: appointment.executor_id, nome: appointment.executor_nome }
       : null,
+    criadoPor: appointment.criado_por_id
+      ? { id: appointment.criado_por_id, nome: appointment.criado_por_nome }
+      : null,
     tipo: appointment.tipo,
     status: appointment.status,
     data_agendada: appointment.data_agendada,
@@ -503,6 +544,7 @@ export async function createLeadEvaluation(env: Env, input: CreateLeadEvaluation
     unidadeId: input.unidadeId,
     dataAgendada: input.dataAgendada,
     executorId: input.executorId,
+    criadoPorId: input.criadoPorId,
   });
 
   const cliente = await createClient(env, input);
@@ -511,6 +553,7 @@ export async function createLeadEvaluation(env: Env, input: CreateLeadEvaluation
     clienteId: cliente.id,
     dataAgendada: input.dataAgendada,
     executorId: input.executorId,
+    criadoPorId: input.criadoPorId,
     observacoes: input.observacoesAgendamento,
   });
 
@@ -2214,7 +2257,13 @@ export async function operationalSummaryV2(env: Env, unidadeId: number, from: st
   };
 }
 
-export async function audit(env: Env, identity: Identity | null, tool: string, unidadeId: number | null, success: boolean) {
+export async function audit(
+  env: Env,
+  identity: Pick<Identity, 'id' | 'clientId'> | null,
+  tool: string,
+  unidadeId: number | null,
+  success: boolean,
+) {
   try {
     await env.DB.prepare(`INSERT INTO mcp_audit_log
       (usuario_id, client_id, ferramenta, unidade_id, sucesso)

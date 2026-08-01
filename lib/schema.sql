@@ -442,6 +442,7 @@ CREATE TABLE IF NOT EXISTS agendamentos (
   atendimento_sessao_id INTEGER,
   procedimento_id INTEGER,                  -- Null para agendamento de avaliação
   executor_id INTEGER,
+  criado_por_id INTEGER,
   tipo TEXT NOT NULL DEFAULT 'procedimento'
     CHECK (tipo IN ('avaliacao','procedimento')),
   status TEXT NOT NULL DEFAULT 'pendente'
@@ -465,6 +466,7 @@ CREATE TABLE IF NOT EXISTS agendamentos (
   FOREIGN KEY (atendimento_sessao_id) REFERENCES atendimentos(id),
   FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
   FOREIGN KEY (executor_id) REFERENCES usuarios(id),
+  FOREIGN KEY (criado_por_id) REFERENCES usuarios(id),
   FOREIGN KEY (reagendado_de_id) REFERENCES agendamentos(id),
   FOREIGN KEY (etapa_modelo_id) REFERENCES procedimento_etapas_modelo(id),
   FOREIGN KEY (unidade_id) REFERENCES unidades(id)
@@ -472,6 +474,8 @@ CREATE TABLE IF NOT EXISTS agendamentos (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_agendamentos_legado_unique
   ON agendamentos(legado_fonte, legado_id)
   WHERE legado_fonte IS NOT NULL AND legado_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_agendamentos_criado_por
+  ON agendamentos(criado_por_id);
 
 -- Follow-up operacional da recepção
 CREATE TABLE IF NOT EXISTS followup_tarefas (

@@ -10,6 +10,10 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
+  "vars": {
+    "SDR_DEFAULT_UNIT_ID": "3",
+    "SDR_CREATED_BY_USER_ID": "58"
+  },
   "secrets": {
     "required": ["MCP_ALLOWED_EMAILS", "MCP_WRITE_ALLOWED_EMAILS", "SDR_API_KEY"]
   },
@@ -26,6 +30,10 @@
   "env": {
     "staging": {
       "name": "sorria-leste-mcp-staging",
+      "vars": {
+        "SDR_DEFAULT_UNIT_ID": "3",
+        "SDR_CREATED_BY_USER_ID": "58"
+      },
       "secrets": {
         "required": ["MCP_ALLOWED_EMAILS", "MCP_WRITE_ALLOWED_EMAILS", "SDR_API_KEY"]
       },

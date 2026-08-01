@@ -9,7 +9,7 @@ const MAX_OBSERVACOES_LENGTH = 2_000;
 const LeadEvaluationBody = z.object({
   nome: z.string().trim().min(1).max(120),
   origem: z.enum(['fachada', 'trafego_meta', 'trafego_google', 'organico', 'indicacao']),
-  unidadeId: z.coerce.number().int().positive(),
+  unidadeId: z.coerce.number().int().positive().optional(),
   telefone: z.string().trim().max(120).optional(),
   email: z.string().trim().email().max(160).optional(),
   cpf: z.string().trim().max(120).optional(),
@@ -22,6 +22,14 @@ const LeadEvaluationBody = z.object({
   executorId: z.coerce.number().int().positive().optional(),
   observacoesAgendamento: z.string().trim().max(300).optional(),
 }).strict();
+
+function positiveIntegerSetting(value: string, name: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`Configuração ${name} inválida.`);
+  }
+  return parsed;
+}
 
 function json(payload: unknown, init?: ResponseInit): Response {
   const headers = new Headers(init?.headers);
@@ -50,6 +58,7 @@ function isClientError(message: string, error: unknown): boolean {
     || message.includes('não encontrad')
     || message.includes('passado')
     || message.includes('CPF já cadastrado')
+    || message.includes('Criador')
     || message.includes('role de dentista')
     || message.includes('pertence à unidade');
 }
@@ -86,12 +95,18 @@ export async function handleSdrApi(request: Request, env: Env): Promise<Response
   let unidadeId: number | null = null;
   try {
     const parsed = LeadEvaluationBody.parse(await parseJsonBody(request));
-    unidadeId = parsed.unidadeId;
+    unidadeId = parsed.unidadeId
+      ?? positiveIntegerSetting(env.SDR_DEFAULT_UNIT_ID, 'SDR_DEFAULT_UNIT_ID');
+    const criadoPorId = positiveIntegerSetting(
+      env.SDR_CREATED_BY_USER_ID,
+      'SDR_CREATED_BY_USER_ID',
+    );
 
     const payload = await createLeadEvaluation(env, {
       nome: parsed.nome,
       origem: parsed.origem,
-      unidadeId: parsed.unidadeId,
+      unidadeId,
+      criadoPorId,
       telefone: parsed.telefone,
       email: parsed.email,
       cpf: parsed.cpf,
@@ -105,7 +120,10 @@ export async function handleSdrApi(request: Request, env: Env): Promise<Response
       observacoesAgendamento: parsed.observacoesAgendamento,
     });
 
-    await audit(env, null, 'api_sdr_lead_avaliacao', unidadeId, true);
+    await audit(env, {
+      id: criadoPorId,
+      clientId: 'sdr-api',
+    }, 'api_sdr_lead_avaliacao', unidadeId, true);
     return json({ ok: true, ...payload }, { status: 201 });
   } catch (error) {
     await audit(env, null, 'api_sdr_lead_avaliacao', unidadeId, false);

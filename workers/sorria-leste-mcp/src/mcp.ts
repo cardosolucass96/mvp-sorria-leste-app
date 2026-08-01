@@ -223,12 +223,13 @@ export function createServer(env: Env, props: unknown): McpServer {
     executorId: USER.optional(),
     observacoes: OPTIONAL_TEXT,
   }, async ({ unidadeId, clienteId, dataAgendada, executorId, observacoes }) =>
-    runWriteTool(env, props, 'criar_agendamento_avaliacao', unidadeId, () =>
+    runWriteTool(env, props, 'criar_agendamento_avaliacao', unidadeId, (identity) =>
       createEvaluationAppointment(env, {
         unidadeId,
         clienteId,
         dataAgendada,
         executorId,
+        criadoPorId: identity.id,
         observacoes,
       })),
   );

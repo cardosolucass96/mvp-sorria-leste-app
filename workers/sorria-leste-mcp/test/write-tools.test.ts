@@ -43,6 +43,7 @@ interface MockAppointment {
   id: number;
   cliente_id: number;
   executor_id: number | null;
+  criado_por_id: number | null;
   tipo: string;
   status: string;
   data_agendada: string | null;
@@ -110,13 +111,14 @@ class MockStatement implements D1PreparedStatement {
         id,
         cliente_id: Number(this.params[0]),
         executor_id: this.params[1] == null ? null : Number(this.params[1]),
+        criado_por_id: this.params[2] == null ? null : Number(this.params[2]),
         tipo: 'avaliacao',
-        status: String(this.params[2]),
-        data_agendada: this.nullableString(this.params[3]),
-        observacoes: this.nullableString(this.params[4]),
+        status: String(this.params[3]),
+        data_agendada: this.nullableString(this.params[4]),
+        observacoes: this.nullableString(this.params[5]),
         pago: 0,
         valor_pago: 0,
-        unidade_id: Number(this.params[5]),
+        unidade_id: Number(this.params[6]),
         created_at: '2026-07-25T10:05:00.000Z',
       });
       return { success: true, meta: { last_row_id: id, changes: 1 } };
@@ -196,6 +198,34 @@ class MockStatement implements D1PreparedStatement {
         }));
     }
 
+    if (sql.includes('from usuarios u') && sql.includes("and (u.role = 'avaliador' or ur.role = 'avaliador')")) {
+      const unitId = Number(this.params[0]);
+      const userIds = new Set(this.data.userUnits
+        .filter((row) => row.unidade_id === unitId)
+        .map((row) => row.usuario_id));
+      return this.data.users
+        .filter((user) => user.ativo === 1 && userIds.has(user.id))
+        .filter((user) => user.role === 'avaliador' || this.data.userRoles.some((row) =>
+          row.usuario_id === user.id && row.role === 'avaliador'))
+        .sort((left, right) => {
+          const leftPrimary = left.role === 'avaliador' ? 0 : 1;
+          const rightPrimary = right.role === 'avaliador' ? 0 : 1;
+          return leftPrimary - rightPrimary || left.id - right.id;
+        })
+        .slice(0, 1)
+        .map((user) => ({ id: user.id, nome: user.nome }));
+    }
+
+    if (sql.includes('from usuarios u') && sql.includes('join usuario_unidades uu on uu.usuario_id = u.id')
+      && sql.includes('where u.id = ?')) {
+      const [userId, unitId] = this.params.map(Number);
+      return this.data.users
+        .filter((user) => user.id === userId && user.ativo === 1)
+        .filter((user) => this.data.userUnits.some((row) =>
+          row.usuario_id === user.id && row.unidade_id === unitId))
+        .map((user) => ({ id: user.id }));
+    }
+
     if (sql.includes('from usuario_unidades where usuario_id = ? and unidade_id = ?')) {
       const [userId, unitId] = this.params.map(Number);
       return this.data.userUnits.some((row) => row.usuario_id === userId && row.unidade_id === unitId)
@@ -210,11 +240,13 @@ class MockStatement implements D1PreparedStatement {
         .map((appointment) => {
           const client = this.data.clients.find((item) => item.id === appointment.cliente_id);
           const executor = this.data.users.find((user) => user.id === appointment.executor_id);
+          const creator = this.data.users.find((user) => user.id === appointment.criado_por_id);
           return {
             id: appointment.id,
             unidade_id: appointment.unidade_id,
             cliente_id: appointment.cliente_id,
             executor_id: appointment.executor_id,
+            criado_por_id: appointment.criado_por_id,
             tipo: appointment.tipo,
             status: appointment.status,
             data_agendada: appointment.data_agendada,
@@ -223,6 +255,7 @@ class MockStatement implements D1PreparedStatement {
             cliente_nome: client?.nome ?? '',
             cliente_telefone: client?.telefone ?? null,
             executor_nome: executor?.nome ?? null,
+            criado_por_nome: creator?.nome ?? null,
           };
         });
     }
@@ -298,6 +331,8 @@ function createEnv(overrides: Partial<MockData> = {}) {
     MCP_ALLOWED_EMAILS: 'admin@sorria.com',
     MCP_WRITE_ALLOWED_EMAILS: 'sdr@sorria.com,admin@sorria.com',
     SDR_API_KEY: 'test-secret-key',
+    SDR_DEFAULT_UNIT_ID: '1',
+    SDR_CREATED_BY_USER_ID: '7',
     OAUTH_PROVIDER: {},
   } as Env;
 
@@ -367,6 +402,7 @@ describe('MCP write V1 repository tools', () => {
       clienteId: 1,
       dataAgendada: '2099-08-10T14:30',
       executorId: 8,
+      criadoPorId: 7,
       observacoes: 'Primeira avaliação',
     });
 
@@ -378,10 +414,12 @@ describe('MCP write V1 repository tools', () => {
       data_agendada: '2099-08-10T17:30:00.000Z',
       cliente: { id: 1, nome: 'Cliente Existente', telefone: '***1234' },
       executor: { id: 8, nome: 'Dr Avaliador' },
+      criadoPor: { id: 7, nome: 'SDR IA' },
     });
     expect(data.appointments[0]).toMatchObject({
       cliente_id: 1,
       executor_id: 8,
+      criado_por_id: 7,
       tipo: 'avaliacao',
       status: 'agendado',
       unidade_id: 1,
@@ -397,6 +435,7 @@ describe('MCP write V1 repository tools', () => {
 
     expect(appointment.status).toBe('pendente');
     expect(appointment.data_agendada).toBeNull();
+    expect(appointment.executor).toEqual({ id: 8, nome: 'Dr Avaliador' });
   });
 
   it('rejeita agendamento inválido', async () => {
@@ -425,9 +464,7 @@ describe('MCP write V1 repository tools', () => {
         origem: 'trafego_google',
         telefone: '(85) 98888-7777',
         email: 'lead@n8n.test',
-        unidadeId: 1,
         dataAgendada: '2099-09-10T11:15',
-        executorId: 8,
         observacoes: 'captado pelo fluxo',
         observacoesAgendamento: 'confirmado pelo SDR',
       }),
@@ -436,7 +473,14 @@ describe('MCP write V1 repository tools', () => {
     const payload = await response.json() as {
       ok: boolean;
       cliente: { id: number; telefone: string | null; email: string | null };
-      agendamento: { id: number; status: string; data_agendada: string | null };
+      agendamento: {
+        id: number;
+        unidadeId: number;
+        status: string;
+        data_agendada: string | null;
+        executor: { id: number; nome: string } | null;
+        criadoPor: { id: number; nome: string } | null;
+      };
     };
 
     expect(response.status).toBe(201);
@@ -444,11 +488,45 @@ describe('MCP write V1 repository tools', () => {
     expect(payload.cliente).toMatchObject({ id: 2, telefone: '***7777', email: 'l***@n8n.test' });
     expect(payload.agendamento).toMatchObject({
       id: 20,
+      unidadeId: 1,
       status: 'agendado',
       data_agendada: '2099-09-10T14:15:00.000Z',
+      executor: { id: 8, nome: 'Dr Avaliador' },
+      criadoPor: { id: 7, nome: 'SDR IA' },
     });
     expect(data.clients).toHaveLength(2);
+    expect(data.clients[1]?.telefone).toBe('(85) 98888-7777');
     expect(data.appointments).toHaveLength(1);
+    expect(data.appointments[0]).toMatchObject({
+      unidade_id: 1,
+      executor_id: 8,
+      criado_por_id: 7,
+    });
+  });
+
+  it('não cria cliente quando o usuário da IA não pertence à unidade solicitada', async () => {
+    const { env, data } = createEnv();
+    const response = await handleSdrApi(new Request('https://mcp.test/api/sdr/lead-avaliacao', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-secret-key',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        nome: 'Lead de outra unidade',
+        origem: 'trafego_meta',
+        unidadeId: 2,
+      }),
+    }), env);
+    const payload = await response.json() as { ok: boolean; error: string };
+
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({
+      ok: false,
+      error: 'Criador não encontrado ou não pertence à unidade informada.',
+    });
+    expect(data.clients).toHaveLength(1);
+    expect(data.appointments).toHaveLength(0);
   });
 
   it('aceita observações de até 2.000 caracteres no endpoint HTTP', async () => {

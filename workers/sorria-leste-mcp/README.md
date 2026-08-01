@@ -16,6 +16,8 @@ Para automações server-to-server como n8n, há também um endpoint HTTP direto
 
 - `POST /api/sdr/lead-avaliacao`: cria cliente e cria agendamento de avaliação em uma chamada.
 
+Na produção, o endpoint usa Pirambu (`unidadeId: 3`) quando `unidadeId` não é enviado, registra o usuário “IA de Atendimento” (`id: 58`) como criador e, quando `executorId` não é informado, escolhe automaticamente o primeiro avaliador ativo da unidade. Um `executorId` explícito continua tendo prioridade.
+
 Ele continua não clínico e não permite escrita fora da V1:
 
 - Não retorna prontuários, notas clínicas, anexos/R2, observações clínicas sensíveis ou HTML completo dos termos.
@@ -121,14 +123,19 @@ curl -X POST "https://<worker>/api/sdr/lead-avaliacao" \
     "origem": "trafego_meta",
     "telefone": "(85) 99999-0000",
     "email": "ana@example.com",
-    "unidadeId": 1,
+    "unidadeId": 3,
     "dataAgendada": "2026-08-10T14:30",
     "observacoes": "Lead captado pelo n8n",
     "observacoesAgendamento": "Primeira avaliação"
   }'
 ```
 
-Campos obrigatórios: `nome`, `origem`, `unidadeId`. O campo `observacoes` aceita até 2.000 caracteres. Sem `dataAgendada`, o agendamento nasce como `pendente`; com data, nasce como `agendado`. A data usa o fuso da clínica no formato `YYYY-MM-DDTHH:mm`.
+Campos obrigatórios: `nome` e `origem`. O campo `unidadeId` é opcional e usa Pirambu (`3`) por padrão; envie outro ID apenas quando a automação estiver autorizada naquela unidade. Para salvar o contato no cliente, o n8n precisa enviar `telefone` no corpo. O campo `observacoes` aceita até 2.000 caracteres. Sem `dataAgendada`, o agendamento nasce como `pendente`; com data, nasce como `agendado`. A data usa o fuso da clínica no formato `YYYY-MM-DDTHH:mm`.
+
+Configuração não secreta do endpoint:
+
+- `SDR_DEFAULT_UNIT_ID`: unidade padrão quando `unidadeId` for omitido.
+- `SDR_CREATED_BY_USER_ID`: usuário ativo e vinculado à unidade que ficará registrado como criador.
 
 ## Preparação
 
