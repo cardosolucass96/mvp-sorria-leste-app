@@ -33,16 +33,62 @@ export function parseEtapasValores(raw: string | null): Record<string, number> {
   }
 }
 
-export async function buscarEtapasComValor(item: { procedimento_id: number; etapas_valores: string | null }) {
+export function ajustarEtapasAoValorDoItem<T extends { valor: number }>(
+  etapas: T[],
+  valorItem?: number | null
+): T[] {
+  if (etapas.length === 0) return [];
+
+  const valoresAtuais = etapas.map((etapa) => ({
+    ...etapa,
+    valor: Math.max(0, Number(etapa.valor) || 0),
+  }));
+  const totalDesejado = Number(valorItem);
+
+  if (valorItem == null || !Number.isFinite(totalDesejado) || totalDesejado < 0) {
+    return valoresAtuais.map((etapa) => ({ ...etapa, valor: roundMoney(etapa.valor) }));
+  }
+
+  const totalEmCentavos = Math.round((totalDesejado + Number.EPSILON) * 100);
+  const somaAtual = valoresAtuais.reduce((sum, etapa) => sum + etapa.valor, 0);
+  const pesos = somaAtual > 0
+    ? valoresAtuais.map((etapa) => etapa.valor / somaAtual)
+    : valoresAtuais.map(() => 1 / valoresAtuais.length);
+  let centavosRestantes = totalEmCentavos;
+
+  return valoresAtuais.map((etapa, index) => {
+    const valorEmCentavos = index === valoresAtuais.length - 1
+      ? centavosRestantes
+      : Math.max(0, Math.min(
+          centavosRestantes,
+          Math.round(pesos[index] * totalEmCentavos)
+        ));
+    centavosRestantes -= valorEmCentavos;
+
+    return {
+      ...etapa,
+      valor: valorEmCentavos / 100,
+    };
+  });
+}
+
+export async function buscarEtapasComValor(item: {
+  procedimento_id: number;
+  etapas_valores: string | null;
+  valor?: number | null;
+  valor_final?: number | null;
+}) {
   const etapas = await query<EtapaModeloRow>(
     'SELECT id, nome, valor FROM procedimento_etapas_modelo WHERE procedimento_id = ? ORDER BY ordem ASC',
     [item.procedimento_id]
   );
   const overrides = parseEtapasValores(item.etapas_valores);
-  return etapas.map((etapa) => ({
+  const etapasComValor = etapas.map((etapa) => ({
     ...etapa,
-    valor: overrides[String(etapa.id)] ?? etapa.valor,
+    valor: Number(overrides[String(etapa.id)] ?? etapa.valor ?? 0),
   }));
+
+  return ajustarEtapasAoValorDoItem(etapasComValor, item.valor_final ?? item.valor);
 }
 
 export async function somarAlocacoesAtivasPorItem(itemId: number): Promise<number> {

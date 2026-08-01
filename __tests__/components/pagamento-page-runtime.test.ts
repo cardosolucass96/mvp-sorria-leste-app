@@ -278,6 +278,61 @@ describe('PagamentoPage runtime', () => {
     expect(screen.queryByText('Carregando pagamento...')).not.toBeInTheDocument();
   });
 
+  it('exibe na lista o valor customizado completo de procedimento com etapas', async () => {
+    mockUnitFetch.mockImplementation((url: string) => {
+      if (url === '/api/atendimentos/14') {
+        return mockJsonResponse({
+          id: 14,
+          cliente_id: 2,
+          cliente_nome: 'Maria Souza',
+          status: 'aguardando_pagamento',
+          motivo_saida: null,
+          total: 2000,
+          total_pago: 0,
+          itens: [
+            {
+              id: 101,
+              procedimento_id: 9,
+              procedimento_nome: 'Implante',
+              valor: 2000,
+              valor_original: 2000,
+              valor_final: 2000,
+              valor_pago: 0,
+              desconto_valor: 0,
+              desconto_motivo: null,
+              status: 'pendente',
+              executor_id: null,
+              dente_unico: '18',
+              etapas: [
+                { id: 10100031, item_atendimento_id: 101, nome: 'Cirurgia', valor: 1333.33, valor_pago: 0, saldo: 1333.33, financeiro_status: 'nao_pago' },
+                { id: 10100032, item_atendimento_id: 101, nome: 'Coroa', valor: 666.67, valor_pago: 0, saldo: 666.67, financeiro_status: 'nao_pago' },
+              ],
+              financeiro_status: 'nao_pago',
+              saldo: 2000,
+              destino_status: 'agendar',
+              destino_data_agendada: null,
+              destino_executor_id: null,
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/atendimentos/14/pagamentos?grouped=1') return mockJsonResponse([]);
+      if (url === '/api/formas-pagamento') return mockJsonResponse([]);
+      throw new Error(`Unhandled request: ${url}`);
+    });
+
+    render(React.createElement(PagamentoPage, { params: Promise.resolve({ id: '14' }) }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/R\$\s*2\.000,00/).length).toBeGreaterThan(0);
+    });
+
+    expect(screen.getAllByText(/R\$\s*1\.333,33/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/R\$\s*666,67/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/R\$\s*1\.500,00/)).not.toBeInTheDocument();
+  });
+
   it('usa o valor atual como base quando valor_original legado é menor ao salvar desconto', async () => {
     mockUnitFetch.mockImplementation((url: string, init?: RequestInit) => {
       if (url === '/api/atendimentos/14') {

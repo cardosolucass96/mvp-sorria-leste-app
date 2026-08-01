@@ -367,6 +367,8 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
         const etapas = await buscarEtapasComValor({
           procedimento_id: item.procedimento_id,
           etapas_valores: item.etapas_valores,
+          valor: item.valor,
+          valor_final: item.valor_final,
         });
 
         await Promise.all(etapas.map(async (etapa) => {

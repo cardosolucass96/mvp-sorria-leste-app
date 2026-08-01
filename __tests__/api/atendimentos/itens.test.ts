@@ -1202,6 +1202,51 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
     expect(status).toBe(200);
   });
 
+  it('sessão: preserva o rateio proporcional exibido ao editar item legado sem overrides', async () => {
+    const itemImplante = {
+      ...ITEM_LIMPEZA_PENDENTE,
+      id: 101,
+      procedimento_id: 9,
+      valor: 2000,
+      valor_final: 2000,
+      valor_original: 2000,
+      valor_pago: 0,
+      etapas_valores: null,
+    };
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from itens_atendimento where id', itemImplante);
+    mockQueryResponse('select id, valor from procedimento_etapas_modelo', [
+      { id: 31, valor: 1000 },
+      { id: 32, valor: 500 },
+    ]);
+    mockQueryResponse('from itens_atendimento i', {
+      ...itemImplante,
+      etapas_valores: JSON.stringify({ 31: 1333.33, 32: 700 }),
+      valor: 2033.33,
+      valor_final: 2033.33,
+      procedimento_nome: 'Implante',
+      executor_nome: null,
+    });
+
+    const { status } = await callRoute(updateItem, '/api/atendimentos/2/itens/101', {
+      method: 'PUT',
+      body: { etapa_modelo_id: 32, etapa_valor: 700 },
+    }, createRouteContext({ id: '2', itemId: '101' }));
+
+    expect(status).toBe(200);
+    const update = getExecutedQueries().find((query) => (
+      query.sql.includes('UPDATE itens_atendimento SET')
+      && query.sql.includes('etapas_valores = ?')
+    ));
+    expect(update).toBeDefined();
+    expect(JSON.parse(String(update?.params[0]))).toEqual({
+      31: 1333.33,
+      32: 700,
+    });
+    expect(update?.params[1]).toBeCloseTo(2033.33, 2);
+    expect(update?.params[2]).toBeCloseTo(2033.33, 2);
+  });
+
   it('valor: rejeita valor negativo', async () => {
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_LIMPEZA_PENDENTE);

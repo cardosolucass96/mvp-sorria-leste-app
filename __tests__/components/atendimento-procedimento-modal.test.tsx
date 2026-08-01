@@ -238,6 +238,15 @@ jest.mock('@/components/SeletorDentes', () => ({
       >
         Selecionar dois dentes
       </button>
+      <button
+        type="button"
+        onClick={() => onChange([
+          { dente: '16', faces: [{ nome: 'V' }] },
+          { dente: '26', faces: [{ nome: 'O' }] },
+        ])}
+      >
+        Selecionar dois dentes com faces
+      </button>
     </div>
   ),
 }));
@@ -341,6 +350,131 @@ afterEach(() => {
 });
 
 describe('AtendimentoDetalhePage modal de procedimento', () => {
+  it.each([
+    {
+      cenario: 'simples com valor padrão',
+      procedimento: { id: 1, nome: 'Limpeza', valor: 150, por_dente: 0, tem_face: 0, tem_etapas: 0 },
+      seletorDentes: null,
+      valorDigitado: null,
+      esperado: { quantidade: 1, valor: 150 },
+    },
+    {
+      cenario: 'simples com valor editado',
+      procedimento: { id: 1, nome: 'Limpeza', valor: 150, por_dente: 0, tem_face: 0, tem_etapas: 0 },
+      seletorDentes: null,
+      valorDigitado: '210',
+      esperado: { quantidade: 1, valor: 210 },
+    },
+    {
+      cenario: 'com etapas e valor padrão',
+      procedimento: { id: 1, nome: 'Canal', valor: 900, por_dente: 0, tem_face: 0, tem_etapas: 1 },
+      seletorDentes: null,
+      valorDigitado: null,
+      esperado: { quantidade: 1, valor: 900 },
+    },
+    {
+      cenario: 'com etapas e valor editado',
+      procedimento: { id: 1, nome: 'Canal', valor: 900, por_dente: 0, tem_face: 0, tem_etapas: 1 },
+      seletorDentes: null,
+      valorDigitado: '1200',
+      esperado: { quantidade: 1, valor: 1200 },
+    },
+    {
+      cenario: 'por dente com valor padrão',
+      procedimento: { id: 1, nome: 'Restauração', valor: 150, por_dente: 1, tem_face: 0, tem_etapas: 0 },
+      seletorDentes: 'Selecionar dois dentes',
+      valorDigitado: null,
+      esperado: { quantidade: 2, valor: 300 },
+    },
+    {
+      cenario: 'por dente com valor editado',
+      procedimento: { id: 1, nome: 'Restauração', valor: 150, por_dente: 1, tem_face: 0, tem_etapas: 0 },
+      seletorDentes: 'Selecionar dois dentes',
+      valorDigitado: '200',
+      esperado: { quantidade: 2, valor: 400 },
+    },
+    {
+      cenario: 'por dente com faces e valor editado',
+      procedimento: { id: 1, nome: 'Faceta', valor: 800, por_dente: 1, tem_face: 1, tem_etapas: 0 },
+      seletorDentes: 'Selecionar dois dentes com faces',
+      valorDigitado: '950',
+      esperado: { quantidade: 2, valor: 1900 },
+    },
+    {
+      cenario: 'por dente com etapas e valor editado',
+      procedimento: { id: 1, nome: 'Implante', valor: 1500, por_dente: 1, tem_face: 0, tem_etapas: 1 },
+      seletorDentes: 'Selecionar dois dentes',
+      valorDigitado: '2000',
+      esperado: { quantidade: 2, valor: 4000 },
+    },
+  ])('envia o valor correto ao adicionar procedimento $cenario', async ({
+    procedimento,
+    seletorDentes,
+    valorDigitado,
+    esperado,
+  }) => {
+    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === '/api/procedimentos') return mockJsonResponse([procedimento]);
+      if (url === '/api/usuarios?categoria_id=1') {
+        return mockJsonResponse([
+          { id: 8, nome: 'Dr. Executor', role: 'executor', roles: ['executor'] },
+        ]);
+      }
+      if (url === '/api/clientes/1/anexos') return mockJsonResponse([]);
+      throw new Error(`Unhandled fetch request: ${url}`);
+    });
+
+    render(<AtendimentoDetalhePage params={Promise.resolve({ id: '10' })} />);
+    await screen.findByRole('heading', { name: 'Atendimento #10' });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '+ Adicionar Procedimento' }));
+    });
+
+    const modal = await screen.findByTestId('procedimento-modal');
+    fireEvent.change(within(modal).getByLabelText('Procedimento *'), {
+      target: { value: String(procedimento.id) },
+    });
+
+    if (seletorDentes) {
+      fireEvent.click(within(modal).getByRole('button', { name: seletorDentes }));
+    }
+    if (valorDigitado != null) {
+      fireEvent.change(within(modal).getByLabelText('Valor (R$)'), {
+        target: { value: valorDigitado },
+      });
+    }
+
+    await act(async () => {
+      fireEvent.click(within(modal).getByRole('button', { name: /\+ Adicionar/i }));
+    });
+
+    await waitFor(() => {
+      expect(mockUnitFetch).toHaveBeenCalledWith(
+        '/api/atendimentos/10/itens',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    const postCall = mockUnitFetch.mock.calls.find(
+      ([url, init]: [string, RequestInit | undefined]) =>
+        url === '/api/atendimentos/10/itens' && init?.method === 'POST'
+    );
+    const body = JSON.parse(String(postCall?.[1]?.body));
+
+    expect(body).toMatchObject({
+      procedimento_id: procedimento.id,
+      ...esperado,
+    });
+    if (seletorDentes) {
+      expect(JSON.parse(body.dentes)).toHaveLength(2);
+    } else {
+      expect(body.dentes).toBeNull();
+    }
+  });
+
   it('rola o modal para o alerta quando falta selecionar dente obrigatório', async () => {
     (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
