@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento } from '@/lib/types';
 import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
 import { getClinicDayUtcRange } from '@/lib/time';
 import { obterValorEfetivoAgendamento, roundMoney } from '@/lib/helpers/pagamentoFlow';
+import { validarDentesProcedimento, type DenteProcedimentoPayload } from '@/lib/helpers/dentesProcedimento';
 
 interface ItemOrigem {
   criado_por_id: number;
@@ -22,6 +24,10 @@ interface ItemOrigemVinculado {
   criado_por_id: number;
   status: string;
   cliente_id: number;
+  dentes: string | null;
+  dente_unico: string | null;
+  procedimento_por_dente: number;
+  procedimento_tem_face: number;
 }
 
 interface EtapaModelo {
@@ -44,6 +50,8 @@ interface AgendamentoDoCliente {
   data_agendada: string | null;
   status: string;
   tipo: string;
+  procedimento_por_dente: number;
+  procedimento_tem_face: number;
 }
 
 // POST /api/agendamentos/[id]/chegou - Ação "Chegou" da tela Agenda (apenas admin/atendente)
@@ -56,6 +64,10 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
     const { id } = await context.params!;
     const agendamentoId = parseInt(id as string);
     const hojeRange = getClinicDayUtcRange();
+    const body = await request.json().catch(() => ({})) as {
+      dentes_por_agendamento?: Record<string, unknown>;
+    };
+    const dentesInformados = body.dentes_por_agendamento ?? {};
 
     // 1. Buscar agendamento disparador e validar status
     const agendamento = await queryOne<Agendamento>(
@@ -86,15 +98,20 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
     // 3. Buscar TODOS os agendamentos do cliente para hoje (pendente ou agendado)
     //    Inclui o agendamento disparador + qualquer outro com data_agendada = hoje
     const agendamentosHoje = await query<AgendamentoDoCliente>(
-      `SELECT * FROM agendamentos
-       WHERE cliente_id = ?
-         AND unidade_id = ?
-         AND status IN ('pendente', 'agendado')
+      `SELECT
+         a.*,
+         COALESCE(p.por_dente, 0) as procedimento_por_dente,
+         COALESCE(p.tem_face, 0) as procedimento_tem_face
+       FROM agendamentos a
+       LEFT JOIN procedimentos p ON p.id = a.procedimento_id
+       WHERE a.cliente_id = ?
+         AND a.unidade_id = ?
+         AND a.status IN ('pendente', 'agendado')
          AND (
-           id = ?
-           OR (data_agendada >= ? AND data_agendada < ?)
+           a.id = ?
+           OR (a.data_agendada >= ? AND a.data_agendada < ?)
          )
-       ORDER BY id ASC`,
+       ORDER BY a.id ASC`,
       [agendamento.cliente_id, unidadeId, agendamentoId, hojeRange.start, hojeRange.endExclusive]
     );
 
@@ -108,6 +125,22 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
     const soAvaliacao = agendamentosHoje.every(ag => ag.tipo === 'avaliacao' || !ag.procedimento_id);
     const agendamentosProcedimento = agendamentosHoje.filter(ag => ag.tipo !== 'avaliacao' && ag.procedimento_id);
     const agendamentosVinculados = agendamentosProcedimento.filter((ag) => ag.item_atendimento_origem_id != null);
+    const dentesValidados = new Map<number, DenteProcedimentoPayload[]>();
+
+    for (const ag of agendamentosProcedimento) {
+      if (ag.item_atendimento_origem_id != null || ag.procedimento_por_dente !== 1) continue;
+
+      const validacao = validarDentesProcedimento(dentesInformados[String(ag.id)], {
+        exigirFaces: ag.procedimento_tem_face === 1,
+      });
+      if (!validacao.ok) {
+        return NextResponse.json(
+          { error: `${ag.id}: ${validacao.error}`, agendamento_sem_dente_id: ag.id },
+          { status: 400 }
+        );
+      }
+      dentesValidados.set(ag.id, validacao.dentes);
+    }
 
     let novoAtendimentoId: number;
 
@@ -133,9 +166,14 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
            i.executor_id,
            i.criado_por_id,
            i.status,
-           a.cliente_id
+           a.cliente_id,
+           i.dentes,
+           i.dente_unico,
+           p.por_dente as procedimento_por_dente,
+           p.tem_face as procedimento_tem_face
          FROM itens_atendimento i
          INNER JOIN atendimentos a ON a.id = i.atendimento_id
+         INNER JOIN procedimentos p ON p.id = i.procedimento_id
          WHERE i.id IN (${itemOrigemIds.map(() => '?').join(', ')})
            AND a.unidade_id = ?`,
         [...itemOrigemIds, unidadeId]
@@ -150,6 +188,7 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
 
       const itensOrigemMap = new Map(itensOrigem.map((item) => [item.id, item]));
       const atendimentoOrigemIds = new Set<number>();
+      const dentesParaRecuperarNoItem = new Map<number, DenteProcedimentoPayload>();
 
       for (const ag of agendamentosVinculados) {
         const itemOrigem = itensOrigemMap.get(ag.item_atendimento_origem_id!);
@@ -186,6 +225,25 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
             { error: 'Não é possível registrar chegada para um procedimento vinculado que já foi concluído' },
             { status: 409 }
           );
+        }
+
+        if (itemOrigem.procedimento_por_dente === 1 && !itemOrigem.dentes && !itemOrigem.dente_unico) {
+          const validacao = validarDentesProcedimento(dentesInformados[String(ag.id)], {
+            exigirFaces: itemOrigem.procedimento_tem_face === 1,
+          });
+          if (!validacao.ok) {
+            return NextResponse.json(
+              { error: `${ag.id}: ${validacao.error}`, agendamento_sem_dente_id: ag.id },
+              { status: 400 }
+            );
+          }
+          if (validacao.dentes.length !== 1) {
+            return NextResponse.json(
+              { error: `${ag.id}: selecione exatamente um dente para o procedimento já vinculado` },
+              { status: 400 }
+            );
+          }
+          dentesParaRecuperarNoItem.set(itemOrigem.id, validacao.dentes[0]);
         }
 
         atendimentoOrigemIds.add(itemOrigem.atendimento_id);
@@ -228,6 +286,13 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
         [atendimentoOrigemId, unidadeId]
       );
       novoAtendimentoId = atendimentoOrigemId;
+
+      for (const [itemId, dente] of dentesParaRecuperarNoItem) {
+        await execute(
+          'UPDATE itens_atendimento SET dentes = ?, dente_unico = ? WHERE id = ?',
+          [JSON.stringify([dente]), dente.dente, itemId]
+        );
+      }
 
       for (const ag of agendamentosVinculados) {
         const itemOrigem = itensOrigemMap.get(ag.item_atendimento_origem_id!);
@@ -372,12 +437,11 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
           etapas_modelo: etapasModelo,
         });
         const valorPagoSalvo = roundMoney(Math.max(0, Number(ag.valor_pago) || 0));
-        const valorPago = valorPagoSalvo > 0
+        const valorPagoTotal = valorPagoSalvo > 0
           ? valorPagoSalvo
           : ag.pago
             ? itemValor
             : 0;
-        const statusItem = valorPago >= itemValor ? 'pago' : 'pendente';
 
         let criadoPorId = context.user.sub;
         if (ag.item_atendimento_origem_id) {
@@ -390,25 +454,38 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
           }
         }
 
-        await execute(
-          `INSERT INTO itens_atendimento
-            (atendimento_id, procedimento_id, valor, valor_original, valor_final, desconto_valor, valor_pago, status, executor_id, criado_por_id, origem_agendamento_id, etapa_modelo_id, etapa_label)
-           VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            novoAtendimentoId,
-            ag.procedimento_id,
-            itemValor,
-            itemValor, // valor_original = snapshot do valor inicial
-            itemValor,
-            valorPago,
-            statusItem,
-            ag.executor_id || null,
-            criadoPorId,
-            ag.id,
-            etapaModeloId,
-            etapaLabel,
-          ]
-        );
+        const dentesDoAgendamento = ag.procedimento_por_dente === 1
+          ? dentesValidados.get(ag.id) ?? []
+          : [];
+        const quantidadeItens = dentesDoAgendamento.length || 1;
+        const valorPagoPorItem = roundMoney(valorPagoTotal / quantidadeItens);
+        const groupId = ag.procedimento_por_dente === 1 ? randomUUID() : null;
+
+        for (const dente of dentesDoAgendamento.length > 0 ? dentesDoAgendamento : [null]) {
+          const statusItem = valorPagoPorItem >= itemValor ? 'pago' : 'pendente';
+          await execute(
+            `INSERT INTO itens_atendimento
+              (atendimento_id, procedimento_id, valor, valor_original, valor_final, desconto_valor, valor_pago, status, executor_id, criado_por_id, origem_agendamento_id, etapa_modelo_id, etapa_label, dentes, group_id, dente_unico)
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              novoAtendimentoId,
+              ag.procedimento_id,
+              itemValor,
+              itemValor, // valor_original = snapshot do valor inicial
+              itemValor,
+              valorPagoPorItem,
+              statusItem,
+              ag.executor_id || null,
+              criadoPorId,
+              ag.id,
+              etapaModeloId,
+              etapaLabel,
+              dente ? JSON.stringify([dente]) : null,
+              groupId,
+              dente?.dente ?? null,
+            ]
+          );
+        }
 
         await execute(
           `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = ? WHERE id = ?`,

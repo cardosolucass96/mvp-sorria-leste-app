@@ -155,7 +155,7 @@ interface PagamentoAlocacao {
   procedimento_nome: string;
   etapa_label: string | null;
   dentes: string | null;
-  dente_unico: string | null;
+  dente_unico?: string | null;
   quantidade: number | null;
   data_agendada: string | null;
   agendamento_status: string | null;
@@ -174,6 +174,7 @@ interface ItemProntuario {
   atendimento_id: number;
   concluido_at: string | null;
   dentes: string | null;
+  dente_unico: string | null;
   quantidade: number;
   item_observacoes: string | null;
   procedimento_nome: string;
@@ -191,6 +192,7 @@ interface ItemProntuario {
     etapa_label: string | null;
     executor_nome: string | null;
     dentes: string | null;
+    dente_unico?: string | null;
     quantidade: number;
     item_observacoes: string | null;
     concluido_at: string | null;
@@ -1297,7 +1299,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               <td>${escapeHtml(item.status)}</td>
               <td style=\"text-align:right\">${formatarMoeda(parseSafeNumber(item.valor))}</td>
               <td style=\"text-align:right\">${formatarMoeda(parseSafeNumber(item.valor_pago))}</td>
-              <td>${escapeHtml(formatarDentes(item.dentes) || '-')}</td>
+              <td>${escapeHtml(formatarDentes(item.dentes) || item.dente_unico || '-')}</td>
               <td>${escapeHtml(parseSafeNumber(item.quantidade))}</td>
             </tr>
             <tr>
@@ -2454,7 +2456,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
             </Card>
           ) : (
             ficha.prontuarios.map(item => {
-              const dentes = formatarDentes(item.dentes);
+              const dentes = formatarDentes(item.dentes) || item.dente_unico || null;
               const itens = item.itens?.length
                 ? item.itens
                 : [{
@@ -2463,6 +2465,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                     etapa_label: item.etapa_label,
                     executor_nome: item.executor_nome,
                     dentes: item.dentes,
+                    dente_unico: item.dente_unico,
                     quantidade: item.quantidade,
                     item_observacoes: item.item_observacoes,
                     concluido_at: item.concluido_at,
@@ -2501,7 +2504,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                       <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Procedimentos vinculados</p>
                       <div className="space-y-2">
                         {itens.map((procedimento) => {
-                          const dentesItem = formatarDentes(procedimento.dentes);
+                          const dentesItem = formatarDentes(procedimento.dentes) || procedimento.dente_unico || null;
                           return (
                             <div key={procedimento.item_id} className="text-sm text-muted">
                               <p className="font-medium text-foreground">
@@ -2969,8 +2972,9 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               </div>
             </div>
 
-            {modalProcedimento.dentes && (() => {
+            {(modalProcedimento.dentes || modalProcedimento.dente_unico) && (() => {
               const dentes = parseDentesLabels(modalProcedimento.dentes);
+              if (dentes.length === 0 && modalProcedimento.dente_unico) dentes.push(modalProcedimento.dente_unico);
               return dentes.length > 0 ? (
                 <div>
                   <p className="text-xs text-muted uppercase tracking-wide mb-1">Dentes</p>

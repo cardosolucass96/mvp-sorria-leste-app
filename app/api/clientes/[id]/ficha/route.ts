@@ -27,6 +27,7 @@ interface ProntuarioEvolucaoRow {
   item_id: number;
   concluido_at: string | null;
   dentes: string | null;
+  dente_unico: string | null;
   quantidade: number;
   item_observacoes: string | null;
   procedimento_nome: string;
@@ -190,7 +191,19 @@ export const GET = withAuth(async (_request, context) => {
       ),
       query(
         `SELECT 'procedimento' as tipo, i.created_at as data,
-                'Procedimento "' || p.nome || '" adicionado ao atendimento #' || a.id as descricao,
+                'Procedimento "' || p.nome || '"' ||
+                CASE
+                  WHEN COALESCE(
+                    i.dente_unico,
+                    CASE WHEN json_valid(i.dentes) THEN json_extract(i.dentes, '$[0].dente') END
+                  ) IS NOT NULL
+                  THEN ' • Dente ' || COALESCE(
+                    i.dente_unico,
+                    CASE WHEN json_valid(i.dentes) THEN json_extract(i.dentes, '$[0].dente') END
+                  )
+                  ELSE ''
+                END ||
+                ' adicionado ao atendimento #' || a.id as descricao,
                 a.id as ref_id
          FROM itens_atendimento i
          INNER JOIN atendimentos a ON i.atendimento_id = a.id
@@ -232,6 +245,7 @@ export const GET = withAuth(async (_request, context) => {
          i.id as item_id,
          i.concluido_at,
          i.dentes,
+         i.dente_unico,
          i.quantidade,
          i.observacoes as item_observacoes,
          p.nome as procedimento_nome,
@@ -255,6 +269,7 @@ export const GET = withAuth(async (_request, context) => {
       etapa_label: string | null;
       executor_nome: string | null;
       dentes: string | null;
+      dente_unico: string | null;
       quantidade: number;
       item_observacoes: string | null;
       concluido_at: string | null;
@@ -271,6 +286,7 @@ export const GET = withAuth(async (_request, context) => {
         etapa_label: row.etapa_label,
         executor_nome: row.executor_nome,
         dentes: row.dentes,
+        dente_unico: row.dente_unico,
         quantidade: row.quantidade,
         item_observacoes: row.item_observacoes,
         concluido_at: row.concluido_at,
@@ -295,6 +311,7 @@ export const GET = withAuth(async (_request, context) => {
         item_id: evolucao.itens[0]?.item_id ?? evolucao.item_id,
         concluido_at: evolucao.itens[0]?.concluido_at ?? evolucao.concluido_at,
         dentes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.dentes ?? null,
+        dente_unico: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.dente_unico ?? null,
         quantidade: evolucao.itens.length > 1 ? evolucao.itens.length : evolucao.itens[0]?.quantidade ?? evolucao.quantidade,
         item_observacoes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.item_observacoes ?? null,
       };

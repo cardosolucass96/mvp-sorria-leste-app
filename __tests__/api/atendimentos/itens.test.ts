@@ -200,7 +200,12 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     const ctx = createRouteContext({ id: '4' });
     const { status } = await callRoute(addItem, '/api/atendimentos/4/itens', {
       method: 'POST',
-      body: { procedimento_id: 3, executor_id: 4, criado_por_id: 3 },
+      body: {
+        procedimento_id: 3,
+        executor_id: 4,
+        criado_por_id: 3,
+        dentes: JSON.stringify([{ dente: '24', faces: [] }]),
+      },
     }, ctx);
 
     expect(status).toBe(201);
@@ -212,9 +217,8 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     expect(insertQuery).toBeDefined();
     expect(insertQuery!.params[2]).toBe(1);
     expect(insertQuery!.params[3]).toBe(1);
-    // Params: ..., valor, valor_original, valor_final, dentes, quantidade, observacoes, status, adicionado_em_execucao
-    expect(insertQuery!.params[10]).toBe('pago');
-    expect(insertQuery!.params[11]).toBe(1);
+    expect(insertQuery!.params[11]).toBe('pago');
+    expect(insertQuery!.params[12]).toBe(1);
   });
 
   it('rejeita adicionar em aguardando_pagamento', async () => {
@@ -425,6 +429,21 @@ describe('POST /api/atendimentos/[id]/itens', () => {
 
     expect(status).toBe(400);
     expect(data.error).toBe('Selecione ao menos uma face para cada dente');
+  });
+
+  it('rejeita procedimento por_dente sem dente mesmo quando não exige face', async () => {
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from procedimentos where id', PROC_CANAL);
+
+    const ctx = createRouteContext({ id: '2' });
+    const { status, data } = await callRoute<{ error: string }>(addItem, '/api/atendimentos/2/itens', {
+      method: 'POST',
+      body: { procedimento_id: 3, valor: 800 },
+    }, ctx);
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Selecione ao menos um dente');
+    expect(getExecutedQueries().some(q => q.sql.includes('INSERT INTO itens_atendimento'))).toBe(false);
   });
 
   it('salva valor_original = valor no INSERT (snapshot de orçamento)', async () => {

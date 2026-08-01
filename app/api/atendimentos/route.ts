@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { validarUsuarioPorRoles } from './_helpers';
 import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
 import { getClinicDayUtcRange, getClinicTrailingDaysUtcRange } from '@/lib/time';
 import type { AtendimentoStatus } from '@/lib/types';
+import { validarDentesProcedimento } from '@/lib/helpers/dentesProcedimento';
 import {
   getEffectiveUserRoles,
   isRestrictedDentistPatientView,
@@ -194,7 +196,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 export const POST = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const body = await request.json();
-    const { cliente_id, avaliador_id, tipo_orto, executor_id, procedimento_id, valor, criado_por_id, categoria_id, categoria_slug } = body;
+    const { cliente_id, avaliador_id, tipo_orto, executor_id, procedimento_id, valor, criado_por_id, categoria_id, categoria_slug, dentes } = body;
     const avaliadorIdInformado = Number.isInteger(avaliador_id) && Number(avaliador_id) > 0
       ? Number(avaliador_id)
       : null;
@@ -315,15 +317,35 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       }
 
       // Verifica procedimento
-      const procedimento = await queryOne<{ id: number; valor: number; nome: string }>(
+      const procedimentoBase = await queryOne<{ id: number; valor: number; nome: string }>(
         'SELECT id, valor, nome FROM procedimentos WHERE id = ? AND ativo = 1',
         [procedimento_id]
       );
-      if (!procedimento) {
+      if (!procedimentoBase) {
         return NextResponse.json({ error: 'Procedimento não encontrado' }, { status: 404 });
       }
+      const configuracaoDentes = await queryOne<{ por_dente: number; tem_face: number }>(
+        'SELECT por_dente, tem_face FROM procedimentos WHERE id = ?',
+        [procedimento_id]
+      );
+      const procedimento = {
+        ...procedimentoBase,
+        por_dente: configuracaoDentes?.por_dente ?? 0,
+        tem_face: configuracaoDentes?.tem_face ?? 0,
+      };
 
-      const valorFinal = valor != null ? valor : procedimento.valor;
+      const valorFinal = valor != null ? Number(valor) : Number(procedimento.valor);
+      if (!Number.isFinite(valorFinal) || valorFinal < 0) {
+        return NextResponse.json({ error: 'Valor inválido' }, { status: 400 });
+      }
+
+      const validacaoDentes = procedimento.por_dente
+        ? validarDentesProcedimento(dentes, { exigirFaces: Boolean(procedimento.tem_face) })
+        : null;
+      if (validacaoDentes && !validacaoDentes.ok) {
+        return NextResponse.json({ error: validacaoDentes.error }, { status: 400 });
+      }
+      const dentesArray = validacaoDentes?.ok ? validacaoDentes.dentes : [];
 
       // Cria atendimento já em aguardando_pagamento
       // NOTE: mantém `tipo='orto'` quando categoria for orto para compat com código legado que ainda lê tipo.
@@ -336,15 +358,41 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
       const atendimentoId = result.lastInsertRowid;
 
-      // Cria item — executor_id pode ser null (disponível para alguém assumir)
-      await execute(
-        `INSERT INTO itens_atendimento (
-          atendimento_id, procedimento_id, executor_id, criado_por_id,
-          valor, valor_original, valor_final, desconto_valor, quantidade, status
-        )
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, 'pendente')`,
-        [atendimentoId, procedimento_id, executor_id || null, criadoPorId, valorFinal, valorFinal, valorFinal]
-      );
+      // Cria um item por dente para manter o vínculo explícito em todo o fluxo.
+      if (procedimento.por_dente) {
+        const groupId = randomUUID();
+        for (const dente of dentesArray) {
+          await execute(
+            `INSERT INTO itens_atendimento (
+              atendimento_id, procedimento_id, executor_id, criado_por_id,
+              valor, valor_original, valor_final, desconto_valor, quantidade, status,
+              dentes, group_id, dente_unico
+            )
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, 'pendente', ?, ?, ?)`,
+            [
+              atendimentoId,
+              procedimento_id,
+              executor_id || null,
+              criadoPorId,
+              valorFinal,
+              valorFinal,
+              valorFinal,
+              JSON.stringify([dente]),
+              groupId,
+              dente.dente,
+            ]
+          );
+        }
+      } else {
+        await execute(
+          `INSERT INTO itens_atendimento (
+            atendimento_id, procedimento_id, executor_id, criado_por_id,
+            valor, valor_original, valor_final, desconto_valor, quantidade, status
+          )
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, 'pendente')`,
+          [atendimentoId, procedimento_id, executor_id || null, criadoPorId, valorFinal, valorFinal, valorFinal]
+        );
+      }
       
       // Busca atendimento criado
       const novoAtendimento = await queryOne<AtendimentoComCliente>(

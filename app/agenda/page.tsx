@@ -31,6 +31,7 @@ import { apiFetch } from '@/lib/utils/apiFetch';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useAuth } from '@/contexts/AuthContext';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 import { isProfissionalAgenda } from '@/lib/utils/usuariosProfissionais';
 import {
   type AgendaCalendarView,
@@ -68,6 +69,10 @@ interface Agendamento {
   pago: number;
   atendimento_status: string | null;
   atendimento_id: number | null;
+  procedimento_por_dente: number;
+  procedimento_tem_face: number;
+  item_origem_dentes: string | null;
+  item_origem_dente_unico: string | null;
 }
 
 const ATENDIMENTO_STATUS_LABEL: Record<string, string> = {
@@ -320,6 +325,12 @@ export default function AgendaPage() {
 
   // Loading por grupo (clienteId_dataKey)
   const [grupoLoading, setGrupoLoading] = useState<string | null>(null);
+  const [dentesChegadaDialog, setDentesChegadaDialog] = useState<{
+    isOpen: boolean;
+    grupo: GrupoCliente | null;
+    dentes: Record<number, DenteFaceInput[]>;
+    error: string;
+  }>({ isOpen: false, grupo: null, dentes: {}, error: '' });
   const [drawerClienteId, setDrawerClienteId] = useState<number | null>(null);
 
   // View mode + calendar state
@@ -1087,7 +1098,21 @@ export default function AgendaPage() {
 
   // ─── Chegou ───────────────────────────────────────────────────
 
-  const handleChegou = async (grupo: GrupoCliente) => {
+  const agendamentosQuePrecisamDente = (grupo: GrupoCliente) => grupo.agendamentos.filter((ag) => (
+    isAgendamentoAtivo(ag.status)
+    && ag.tipo !== 'avaliacao'
+    && ag.procedimento_id != null
+    && ag.procedimento_por_dente === 1
+    && (
+      ag.item_atendimento_origem_id == null
+      || (!ag.item_origem_dentes && !ag.item_origem_dente_unico)
+    )
+  ));
+
+  const registrarChegada = async (
+    grupo: GrupoCliente,
+    dentesPorAgendamento: Record<number, DenteFaceInput[]> = {},
+  ) => {
     const gatilho = grupo.agendamentos.find(
       ag => ag.status === 'pendente' || ag.status === 'agendado'
     );
@@ -1096,7 +1121,11 @@ export default function AgendaPage() {
     const key = `${grupo.cliente_id}_${grupo.data_key}`;
     setGrupoLoading(key);
     try {
-      const res = await unitFetch(`/api/agendamentos/${gatilho.id}/chegou`, { method: 'POST' });
+      const res = await unitFetch(`/api/agendamentos/${gatilho.id}/chegou`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dentes_por_agendamento: dentesPorAgendamento }),
+      });
       const data = await res.json() as {
         id?: number;
         agendamentos_agrupados?: number;
@@ -1118,6 +1147,7 @@ export default function AgendaPage() {
           toast.success('Chegada registrada');
           carregarAgendamentos();
         }
+        setDentesChegadaDialog({ isOpen: false, grupo: null, dentes: {}, error: '' });
         return;
       }
       if (res.status === 409) {
@@ -1127,12 +1157,52 @@ export default function AgendaPage() {
         );
         return;
       }
-      toast.error(data.error || 'Erro ao registrar chegada');
-    } catch {
-      toast.error('Erro ao registrar chegada');
+      const apiError = data.error || 'Erro ao registrar chegada';
+      if (dentesChegadaDialog.isOpen) {
+        setDentesChegadaDialog((current) => ({ ...current, error: apiError }));
+      }
+      toast.error(apiError);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao registrar chegada';
+      if (dentesChegadaDialog.isOpen) {
+        setDentesChegadaDialog((current) => ({ ...current, error: message }));
+      }
+      toast.error(message);
     } finally {
       setGrupoLoading(null);
     }
+  };
+
+  const handleChegou = async (grupo: GrupoCliente) => {
+    const pendentesDeDente = agendamentosQuePrecisamDente(grupo);
+    if (pendentesDeDente.length > 0) {
+      setDentesChegadaDialog({ isOpen: true, grupo, dentes: {}, error: '' });
+      return;
+    }
+    await registrarChegada(grupo);
+  };
+
+  const confirmarChegadaComDentes = async () => {
+    const grupo = dentesChegadaDialog.grupo;
+    if (!grupo) return;
+
+    for (const ag of agendamentosQuePrecisamDente(grupo)) {
+      const dentes = dentesChegadaDialog.dentes[ag.id] ?? [];
+      if (dentes.length === 0) {
+        setDentesChegadaDialog((current) => ({ ...current, error: `Selecione o dente de ${ag.procedimento_nome}.` }));
+        return;
+      }
+      if (ag.item_atendimento_origem_id != null && dentes.length !== 1) {
+        setDentesChegadaDialog((current) => ({ ...current, error: `Selecione exatamente um dente para ${ag.procedimento_nome}.` }));
+        return;
+      }
+      if (ag.procedimento_tem_face === 1 && dentes.some((item) => item.faces.length === 0)) {
+        setDentesChegadaDialog((current) => ({ ...current, error: `Selecione ao menos uma face para cada dente de ${ag.procedimento_nome}.` }));
+        return;
+      }
+    }
+
+    await registrarChegada(grupo, dentesChegadaDialog.dentes);
   };
 
   // ─── Faltou (todos os ativos do grupo) ───────────────────────
@@ -1787,6 +1857,60 @@ export default function AgendaPage() {
       )}
 
       {/* ─── Dialogs ─────────────────────────────────────────────── */}
+
+      {dentesChegadaDialog.isOpen && dentesChegadaDialog.grupo && (
+        <Modal
+          isOpen
+          onClose={() => setDentesChegadaDialog({ isOpen: false, grupo: null, dentes: {}, error: '' })}
+          title="Informar dente antes da chegada"
+          size="lg"
+        >
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              Estes procedimentos são cobrados por dente. A informação será gravada no atendimento ao confirmar a chegada.
+            </p>
+
+            {dentesChegadaDialog.error && (
+              <Alert type="error">{dentesChegadaDialog.error}</Alert>
+            )}
+
+            {agendamentosQuePrecisamDente(dentesChegadaDialog.grupo).map((ag) => (
+              <div key={ag.id} className="rounded-lg border border-border p-3">
+                <p className="mb-2 text-sm font-semibold">
+                  {ag.procedimento_nome}
+                  {ag.etapa_modelo_nome ? ` — ${ag.etapa_modelo_nome}` : ''}
+                </p>
+                <SeletorDentes
+                  valor={dentesChegadaDialog.dentes[ag.id] ?? []}
+                  onChange={(dentes) => setDentesChegadaDialog((current) => ({
+                    ...current,
+                    error: '',
+                    dentes: { ...current.dentes, [ag.id]: dentes },
+                  }))}
+                  mostrarFaces={ag.procedimento_tem_face === 1}
+                  expandidoInicial
+                />
+              </div>
+            ))}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setDentesChegadaDialog({ isOpen: false, grupo: null, dentes: {}, error: '' })}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                onClick={confirmarChegadaComDentes}
+                loading={grupoLoading === `${dentesChegadaDialog.grupo.cliente_id}_${dentesChegadaDialog.grupo.data_key}`}
+              >
+                Confirmar chegada
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}

@@ -132,6 +132,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       LEFT JOIN procedimentos p ON p.id = a.procedimento_id
       LEFT JOIN procedimento_etapas_modelo em ON em.id = a.etapa_modelo_id
       LEFT JOIN usuarios u ON u.id = a.executor_id
+      LEFT JOIN itens_atendimento item_origem ON item_origem.id = a.item_atendimento_origem_id
       LEFT JOIN atendimentos at_sessao ON at_sessao.id = a.atendimento_sessao_id
       ${whereClause}
     `;
@@ -143,6 +144,10 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         COALESCE(p.nome, 'Avaliação') AS procedimento_nome,
         em.nome AS etapa_modelo_nome,
         u.nome AS executor_nome,
+        COALESCE(p.por_dente, 0) AS procedimento_por_dente,
+        COALESCE(p.tem_face, 0) AS procedimento_tem_face,
+        item_origem.dentes AS item_origem_dentes,
+        item_origem.dente_unico AS item_origem_dente_unico,
         CAST((julianday('now') - julianday(a.created_at)) AS INTEGER) AS dias_desde_criacao,
         at_sessao.status AS atendimento_status,
         at_sessao.id AS atendimento_id

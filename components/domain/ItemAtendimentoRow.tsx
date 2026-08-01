@@ -38,7 +38,7 @@ export default function ItemAtendimentoRow({
   onRemove,
   showActions = true,
 }: ItemAtendimentoRowProps) {
-  const dentesFormatados = formatarDentes(item.dentes);
+  const dentesFormatados = formatarDentes(item.dentes) || item.dente_unico?.trim() || null;
   const denteLabel = formatarDenteUnicoComFaces(item);
 
   return (

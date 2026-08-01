@@ -22,7 +22,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
   return (
     <div className="space-y-4">
       {prontuarios.map(item => {
-        const dentes = formatarDentes(item.dentes);
+        const dentes = formatarDentes(item.dentes) || item.dente_unico || null;
         const itens = item.itens?.length
           ? item.itens
           : [{
@@ -31,6 +31,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
               etapa_label: item.etapa_label,
               executor_nome: item.executor_nome,
               dentes: item.dentes,
+              dente_unico: item.dente_unico,
               quantidade: item.quantidade,
               item_observacoes: item.item_observacoes,
               concluido_at: item.concluido_at,
@@ -84,7 +85,7 @@ export default function AbaProntuario({ prontuarios }: AbaProntuarioProps) {
                 </p>
                 <div className="space-y-2">
                   {itens.map((procedimento) => {
-                    const dentesItem = formatarDentes(procedimento.dentes);
+                    const dentesItem = formatarDentes(procedimento.dentes) || procedimento.dente_unico || null;
                     return (
                       <div key={procedimento.item_id} className="text-xs text-muted">
                         <p className="font-medium text-foreground">

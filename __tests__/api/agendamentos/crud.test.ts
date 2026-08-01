@@ -973,6 +973,79 @@ describe('POST /api/agendamentos/[id]/chegou', () => {
     expect(insertItem!.params).toContain('pago'); // status
   });
 
+  it('exige dente antes de criar item por_dente de agendamento avulso', async () => {
+    const agPorDente = {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      id: 40,
+      procedimento_id: 2,
+      status: 'agendado',
+      item_atendimento_origem_id: null,
+      procedimento_por_dente: 1,
+      procedimento_tem_face: 0,
+    };
+    mockQueryResponse('select * from agendamentos where id', agPorDente);
+    mockQueryResponse("status in ('pendente', 'agendado')", [agPorDente]);
+
+    const { status, data } = await callRoute<{ error: string }>(
+      chegouAgendamento,
+      '/api/agendamentos/40/chegou',
+      { method: 'POST', headers: { Authorization: 'Bearer test.jwt.token' } },
+      createRouteContext({ id: '40' })
+    );
+
+    expect(status).toBe(400);
+    expect(data.error).toContain('Selecione ao menos um dente');
+    expect(getExecutedQueries().some(q => q.sql.includes('INSERT INTO atendimentos'))).toBe(false);
+  });
+
+  it('cria um item por dente ao registrar chegada de agendamento avulso', async () => {
+    const agPorDente = {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      id: 41,
+      procedimento_id: 2,
+      status: 'agendado',
+      item_atendimento_origem_id: null,
+      procedimento_por_dente: 1,
+      procedimento_tem_face: 0,
+    };
+    mockQueryResponse('select * from agendamentos where id', agPorDente);
+    mockQueryResponse("status in ('pendente', 'agendado')", [agPorDente]);
+    mockQueryResponse("status not in ('finalizado'", []);
+    mockQueryResponse('select id, valor from procedimentos', { id: 2, valor: 200 });
+    setLastInsertId(410);
+    mockQueryResponse('inner join clientes c', {
+      id: 410,
+      cliente_id: 1,
+      status: 'aguardando_pagamento',
+      tipo: 'sessao',
+      cliente_nome: CLIENTE_BASICO.nome,
+    });
+
+    const { status } = await callRoute(
+      chegouAgendamento,
+      '/api/agendamentos/41/chegou',
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+        body: {
+          dentes_por_agendamento: {
+            41: [
+              { dente: '24', faces: [] },
+              { dente: '25', faces: [] },
+            ],
+          },
+        },
+      },
+      createRouteContext({ id: '41' })
+    );
+
+    expect(status).toBe(201);
+    const inserts = getExecutedQueries().filter(q => q.sql.includes('INSERT INTO itens_atendimento'));
+    expect(inserts).toHaveLength(2);
+    expect(inserts[0].params).toContain('24');
+    expect(inserts[1].params).toContain('25');
+  });
+
   it.each([
     {
       cenario: 'preserva o snapshot já reconciliado',
@@ -1078,6 +1151,62 @@ describe('POST /api/agendamentos/[id]/chegou', () => {
     expect(updateAtendimento).toBeDefined();
     expect(insertAtendimento).toBeUndefined();
     expect(insertItem).toBeUndefined();
+  });
+
+  it('completa o dente ausente do item vinculado antes de reativar o atendimento', async () => {
+    const agVinculado = {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      id: 78,
+      item_atendimento_origem_id: 88,
+      atendimento_origem_id: 12,
+      status: 'agendado',
+    };
+
+    mockQueryResponse('select * from agendamentos where id', agVinculado);
+    mockQueryResponse("status in ('pendente', 'agendado')", [agVinculado]);
+    mockQueryResponse('from itens_atendimento i', [{
+      id: 88,
+      atendimento_id: 12,
+      procedimento_id: 1,
+      executor_id: null,
+      criado_por_id: 3,
+      status: 'pendente',
+      cliente_id: 1,
+      dentes: null,
+      dente_unico: null,
+      procedimento_por_dente: 1,
+      procedimento_tem_face: 0,
+    }]);
+    mockQueryResponse("status not in ('finalizado', 'encerrado')\n           and unidade_id = ?\n           and id !=", []);
+    mockQueryResponse('where a.id = ?', {
+      id: 12,
+      cliente_id: 1,
+      status: 'aguardando_pagamento',
+      cliente_nome: CLIENTE_BASICO.nome,
+    });
+
+    const { status } = await callRoute(
+      chegouAgendamento,
+      '/api/agendamentos/78/chegou',
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+        body: {
+          dentes_por_agendamento: {
+            78: [{ dente: '24', faces: [] }],
+          },
+        },
+      },
+      createRouteContext({ id: '78' })
+    );
+
+    expect(status).toBe(201);
+    const updateDente = getExecutedQueries().find(q => q.sql.includes('SET dentes = ?, dente_unico = ?'));
+    expect(updateDente?.params).toEqual([
+      JSON.stringify([{ dente: '24', faces: [] }]),
+      '24',
+      88,
+    ]);
   });
 
   it('bloqueia chegada quando os agendamentos vinculados do grupo apontam para atendimentos de origem diferentes', async () => {

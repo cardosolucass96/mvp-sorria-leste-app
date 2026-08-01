@@ -18,6 +18,7 @@ export default function AbaProcedimentos({ procedimentos }: AbaProcedimentosProp
     <div className="space-y-2">
       {procedimentos.map(p => {
         const dentes = parseDentesLabels(p.dentes);
+        if (dentes.length === 0 && p.dente_unico) dentes.push(p.dente_unico);
         return (
           <div key={p.id} className="rounded-lg border border-border p-3">
             <div className="flex items-start justify-between gap-2">

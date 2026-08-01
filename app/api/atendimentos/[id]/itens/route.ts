@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
 import { resolveVendedorPadraoParaAtendimento } from '@/lib/helpers/atendimentoDefaults';
+import { validarDentesProcedimento } from '@/lib/helpers/dentesProcedimento';
 import { obterValorEfetivoItem } from '@/lib/helpers/pagamentoFlow';
 
 interface ItemAtendimento {
@@ -349,28 +350,13 @@ export const POST = withUnit(async (
       ? await resolveVendedorPadraoParaAtendimento(atendimento, context.user.sub)
       : criadoPorSolicitado ?? Number(context.user.sub);
 
-    interface DenteFaceDB { dente: string; faces: Array<{ nome: string }> }
-    let dentesArray: DenteFaceDB[] = [];
-    if (dentes) {
-      try {
-        const parsed = JSON.parse(dentes);
-        if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
-          dentesArray = parsed;
-        }
-      } catch {
-        // dentes is a plain string (legacy format) — skip per-dente logic
-      }
+    const validacaoDentes = procedimento.por_dente
+      ? validarDentesProcedimento(dentes, { exigirFaces: Boolean(procedimento.tem_face) })
+      : null;
+    if (validacaoDentes && !validacaoDentes.ok) {
+      return NextResponse.json({ error: validacaoDentes.error }, { status: 400 });
     }
-
-    if (procedimento.por_dente && procedimento.tem_face) {
-      const algumSemFace = dentesArray.some((item) => !Array.isArray(item.faces) || item.faces.length === 0);
-      if (dentesArray.length === 0 || algumSemFace) {
-        return NextResponse.json(
-          { error: 'Selecione ao menos uma face para cada dente' },
-          { status: 400 }
-        );
-      }
-    }
+    const dentesArray = validacaoDentes?.ok ? validacaoDentes.dentes : [];
 
     // Itens adicionados durante execução entram direto na fila do executor:
     // - status = 'pago' (visível para o executor sem precisar passar pelo pagamento)
@@ -381,7 +367,7 @@ export const POST = withUnit(async (
 
     // Fluxo por_dente: cria 1 item por dente com group_id compartilhado.
     // Faces (quando presentes) ficam apenas no JSON `dentes` do item.
-    if (procedimento.por_dente && dentesArray.length > 0) {
+    if (procedimento.por_dente) {
       const groupId = randomUUID();
       const valorPorDente = valorFinal / dentesArray.length;
       const itemIds: number[] = [];

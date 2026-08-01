@@ -12,6 +12,7 @@ import { formatarDataAgendada } from '@/lib/utils/formatters';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import type { CategoriaComRoles } from '@/lib/types';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 import { getClinicCalendarDayDifferenceFromStoredUtcInstant } from '@/lib/time';
 
 interface Agendamento {
@@ -20,6 +21,11 @@ interface Agendamento {
   etapa_modelo_nome: string | null;
   data_agendada: string | null;
   created_at: string;
+  item_atendimento_origem_id: number | null;
+  procedimento_por_dente: number;
+  procedimento_tem_face: number;
+  item_origem_dentes: string | null;
+  item_origem_dente_unico: string | null;
 }
 
 interface Cliente {
@@ -42,6 +48,8 @@ interface ProcedimentoLite {
   valor: number;
   categoria_id: number | null;
   ativo: number;
+  por_dente: number;
+  tem_face: number;
 }
 
 type TipoAtendimento = 'normal' | 'sessao';
@@ -70,6 +78,7 @@ function NovoAtendimentoForm() {
   const [procedimentoId, setProcedimentoId] = useState<string>('');
   const [executorId, setExecutorId] = useState<string>('');
   const [valorProcedimento, setValorProcedimento] = useState<string>('');
+  const [dentesProcedimento, setDentesProcedimento] = useState<DenteFaceInput[]>([]);
 
   // Dados estáticos
   const [categorias, setCategorias] = useState<CategoriaComRoles[]>([]);
@@ -80,6 +89,7 @@ function NovoAtendimentoForm() {
 
   const categoriaSelecionada = categorias.find(c => String(c.id) === categoriaId) || null;
   const pulaAvaliacao = categoriaSelecionada?.pula_avaliacao === 1;
+  const procedimentoSelecionado = procedimentosCategoria.find(p => String(p.id) === procedimentoId) || null;
 
   // Modal novo cliente
   const [modalNovoCliente, setModalNovoCliente] = useState(false);
@@ -90,6 +100,7 @@ function NovoAtendimentoForm() {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loadingAgendamentos, setLoadingAgendamentos] = useState(false);
   const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
+  const [dentesSessao, setDentesSessao] = useState<DenteFaceInput[]>([]);
   const [confirmandoSessao, setConfirmandoSessao] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -180,6 +191,7 @@ function NovoAtendimentoForm() {
       setProcedimentosCategoria([]);
       setExecutoresCategoria([]);
       setProcedimentoId('');
+      setDentesProcedimento([]);
       setExecutorId('');
       return;
     }
@@ -223,6 +235,7 @@ function NovoAtendimentoForm() {
     setClienteId(String(c.id));
     setClienteSelecionado(c);
     setAgendamentoSelecionado(null);
+    setDentesSessao([]);
     if (tipoAtendimento === 'sessao') {
       buscarAgendamentos(c.id);
     }
@@ -241,12 +254,38 @@ function NovoAtendimentoForm() {
 
   const handleConfirmarSessao = async () => {
     if (!agendamentoSelecionado) return;
+    const precisaDente = agendamentoSelecionado.procedimento_por_dente === 1
+      && (
+        agendamentoSelecionado.item_atendimento_origem_id == null
+        || (!agendamentoSelecionado.item_origem_dentes && !agendamentoSelecionado.item_origem_dente_unico)
+      );
+    if (precisaDente && dentesSessao.length === 0) {
+      mostrarError('Selecione ao menos um dente');
+      return;
+    }
+    if (precisaDente && agendamentoSelecionado.item_atendimento_origem_id != null && dentesSessao.length !== 1) {
+      mostrarError('Selecione exatamente um dente para este procedimento vinculado');
+      return;
+    }
+    if (
+      precisaDente
+      && agendamentoSelecionado.procedimento_tem_face === 1
+      && dentesSessao.some((item) => item.faces.length === 0)
+    ) {
+      mostrarError('Selecione ao menos uma face para cada dente');
+      return;
+    }
     setConfirmandoSessao(true);
     setError('');
     try {
       const res = await unitFetch(`/api/agendamentos/${agendamentoSelecionado.id}/chegou`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dentes_por_agendamento: precisaDente
+            ? { [agendamentoSelecionado.id]: dentesSessao }
+            : {},
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao confirmar chegada');
@@ -308,6 +347,22 @@ function NovoAtendimentoForm() {
           mostrarError('Selecione um procedimento');
           setSaving(false);
           return;
+        }
+        if (procedimentoSelecionado?.por_dente) {
+          if (dentesProcedimento.length === 0) {
+            mostrarError('Selecione ao menos um dente');
+            setSaving(false);
+            return;
+          }
+          if (
+            procedimentoSelecionado.tem_face
+            && dentesProcedimento.some((item) => item.faces.length === 0)
+          ) {
+            mostrarError('Selecione ao menos uma face para cada dente');
+            setSaving(false);
+            return;
+          }
+          payload.dentes = JSON.stringify(dentesProcedimento);
         }
         payload.procedimento_id = parseInt(procedimentoId);
         if (executorId) payload.executor_id = parseInt(executorId);
@@ -470,6 +525,7 @@ function NovoAtendimentoForm() {
                 onChange={(value) => {
                   setProcedimentoId(value);
                   setValorProcedimento('');
+                  setDentesProcedimento([]);
                 }}
                 options={procedimentosCategoria.map(p => ({
                   value: String(p.id),
@@ -489,6 +545,17 @@ function NovoAtendimentoForm() {
                   onChange={setValorProcedimento}
                   placeholder="0,00"
                 />
+              )}
+              {procedimentoSelecionado?.por_dente === 1 && (
+                <div className="rounded-lg border border-border p-3">
+                  <p className="mb-2 text-sm font-medium">Dente(s) do procedimento</p>
+                  <SeletorDentes
+                    valor={dentesProcedimento}
+                    onChange={setDentesProcedimento}
+                    mostrarFaces={procedimentoSelecionado.tem_face === 1}
+                    expandidoInicial
+                  />
+                </div>
               )}
               <Select
                 label="Executor (opcional)"
@@ -527,7 +594,10 @@ function NovoAtendimentoForm() {
                 <div className="border rounded-lg divide-y max-h-60 overflow-y-auto">
                   {agendamentos.map((ag) => (
                     <button key={ag.id} type="button"
-                      onClick={() => setAgendamentoSelecionado(ag)}
+                      onClick={() => {
+                        setAgendamentoSelecionado(ag);
+                        setDentesSessao([]);
+                      }}
                       className={`w-full flex items-center justify-between p-3 text-left transition-colors ${
                         agendamentoSelecionado?.id === ag.id
                           ? 'border-l-4 border-l-warning-500 bg-warning-500/10'
@@ -550,6 +620,21 @@ function NovoAtendimentoForm() {
                     </button>
                   ))}
                 </div>
+                {agendamentoSelecionado?.procedimento_por_dente === 1
+                  && (
+                    agendamentoSelecionado.item_atendimento_origem_id == null
+                    || (!agendamentoSelecionado.item_origem_dentes && !agendamentoSelecionado.item_origem_dente_unico)
+                  ) && (
+                    <div className="rounded-lg border border-border p-3">
+                      <p className="mb-2 text-sm font-medium">Dente(s) desta sessão</p>
+                      <SeletorDentes
+                        valor={dentesSessao}
+                        onChange={setDentesSessao}
+                        mostrarFaces={agendamentoSelecionado.procedimento_tem_face === 1}
+                        expandidoInicial
+                      />
+                    </div>
+                  )}
               </div>
             )}
           </Card>

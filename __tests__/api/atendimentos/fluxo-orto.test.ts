@@ -153,18 +153,61 @@ describe('POST /api/atendimentos — fluxo orto', () => {
     expect(insertItem!.params[4]).toBe(150);
   });
 
-  it('rejeita se executor_id e criado_por_id não enviados', async () => {
-    // executor_id é agora opcional, mas quando ausente precisa de criado_por_id
+  it('usa o usuário autenticado como criador quando executor_id e criado_por_id não são enviados', async () => {
+    setLastInsertId(17);
     mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
     mockQueryResponse("not in ('finalizado'", { count: 0 });
+    mockQueryResponse('SELECT id, valor, nome FROM procedimentos', { id: 1, valor: 150, nome: 'Limpeza' });
+    mockQueryResponse('WHERE a.id = ?', { id: 17, status: 'aguardando_pagamento' });
 
-    const { status, data } = await callRoute<{ error: string }>(createAtendimento, '/api/atendimentos', {
+    const { status } = await callRoute(createAtendimento, '/api/atendimentos', {
       method: 'POST',
       body: { cliente_id: 1, tipo_orto: true, procedimento_id: 1 },
     });
 
-    expect(status).toBe(400);
-    expect(data.error).toBe('Não foi possível identificar o criador do atendimento');
+    expect(status).toBe(201);
+    const insertItem = getExecutedQueries().find(q => q.sql.includes('INSERT INTO itens_atendimento'));
+    expect(insertItem?.params[3]).toBe(1);
+  });
+
+  it('exige e grava o dente quando o procedimento é por_dente', async () => {
+    setLastInsertId(18);
+    mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
+    mockQueryResponse('SELECT id, role FROM usuarios WHERE id', { id: 4, role: 'executor' });
+    mockQueryResponse('SELECT id, valor, nome FROM procedimentos', { id: 3, valor: 800, nome: 'Canal' });
+    mockQueryResponse('SELECT por_dente, tem_face FROM procedimentos', { por_dente: 1, tem_face: 0 });
+    mockQueryResponse('WHERE a.id = ?', { id: 18, status: 'aguardando_pagamento' });
+
+    const semDente = await callRoute<{ error: string }>(createAtendimento, '/api/atendimentos', {
+      method: 'POST',
+      body: { ...baseBody, procedimento_id: 3 },
+    });
+    expect(semDente.status).toBe(400);
+    expect(semDente.data.error).toBe('Selecione ao menos um dente');
+
+    resetMockDb();
+    setupCloudflareContextMock();
+    setLastInsertId(18);
+    mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
+    mockQueryResponse('SELECT id, role FROM usuarios WHERE id', { id: 4, role: 'executor' });
+    mockQueryResponse('SELECT id, valor, nome FROM procedimentos', { id: 3, valor: 800, nome: 'Canal' });
+    mockQueryResponse('SELECT por_dente, tem_face FROM procedimentos', { por_dente: 1, tem_face: 0 });
+    mockQueryResponse('WHERE a.id = ?', { id: 18, status: 'aguardando_pagamento' });
+
+    const comDente = await callRoute(createAtendimento, '/api/atendimentos', {
+      method: 'POST',
+      body: {
+        ...baseBody,
+        procedimento_id: 3,
+        dentes: JSON.stringify([{ dente: '24', faces: [] }]),
+      },
+    });
+    expect(comDente.status).toBe(201);
+    const insertItem = getExecutedQueries().find(q => q.sql.includes('INSERT INTO itens_atendimento'));
+    expect(insertItem?.params).toContain('24');
+    expect(insertItem?.params).toContain(JSON.stringify([{ dente: '24', faces: [] }]));
   });
 
   it('rejeita se procedimento_id não enviado', async () => {

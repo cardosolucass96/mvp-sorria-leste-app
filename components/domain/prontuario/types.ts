@@ -22,6 +22,7 @@ export interface ItemProcedimento {
   adicionado_em_execucao?: number | null;
   status: string;
   dentes: string | null;
+  dente_unico?: string | null;
   quantidade: number;
   observacoes: string | null;
   created_at: string;
@@ -53,6 +54,7 @@ export interface ItemProntuario {
   atendimento_id: number;
   concluido_at: string | null;
   dentes: string | null;
+  dente_unico?: string | null;
   quantidade: number;
   item_observacoes: string | null;
   procedimento_nome: string;
@@ -70,6 +72,7 @@ export interface ItemProntuario {
     etapa_label: string | null;
     executor_nome: string | null;
     dentes: string | null;
+    dente_unico?: string | null;
     quantidade: number;
     item_observacoes: string | null;
     concluido_at: string | null;
