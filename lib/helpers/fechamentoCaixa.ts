@@ -965,7 +965,7 @@ export async function construirBaseFechamentoCaixa(unidadeId: number, dataRefere
        i.adicionado_em_execucao,
        p.comissao_venda,
        p.comissao_acrescimo,
-       i.valor,
+       COALESCE(i.valor_final, i.valor) as valor,
        i.concluido_at,
        i.dentes,
        i.dente_unico,

@@ -51,6 +51,7 @@ function makeAuthPayload(role: 'admin' | 'atendente' | 'avaliador' | 'executor' 
     sub: idsByRole[role],
     email: `${role}@test.com`,
     role,
+    roles: [role],
     nome: `${role} Teste`,
     unidade_ids: [1, 2],
     unidade_atual: 1,
@@ -979,6 +980,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('atualiza status para executando', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     const item = { ...ITEM_RESTAURACAO_PAGO, executor_id: 4 };
     mockQueryResponse('select * from itens_atendimento where id', item);
@@ -994,8 +996,10 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('marca concluido_at automaticamente ao concluir', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_CANAL_EXECUTANDO);
+    mockQueryResponse('select id from prontuario_evolucao_itens', { id: 10 });
     mockQueryResponse('from itens_atendimento i', { ...ITEM_CANAL_EXECUTANDO, procedimento_nome: 'Canal', executor_nome: 'Dr. Carlos' });
 
     const ctx = createRouteContext({ id: '4', itemId: '3' });
@@ -1010,8 +1014,10 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('ao voltar automaticamente para aguardando_pagamento limpa contexto de liberação da execução', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_CANAL_EXECUTANDO);
+    mockQueryResponse('select id from prontuario_evolucao_itens', { id: 10 });
     mockQueryResponse('count(*) as total', { total: 2, concluidos: 2, pendentes_pagamento: 1 });
     mockQueryResponse('from itens_atendimento i', { ...ITEM_CANAL_EXECUTANDO, procedimento_nome: 'Canal', executor_nome: 'Dr. Carlos' });
 
@@ -1066,13 +1072,13 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
     expect(status).toBe(403);
   });
 
-  it('permite status sem restrição de executor se sem usuario_id', async () => {
+  it('usa o JWT do executor mesmo quando usuario_id não é enviado', async () => {
+    mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('executor'));
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_RESTAURACAO_PAGO, executor_id: 4 });
     mockQueryResponse('from itens_atendimento i', { ...ITEM_RESTAURACAO_PAGO, procedimento_nome: 'Restauração', executor_nome: 'Dr. Carlos' });
 
     const ctx = createRouteContext({ id: '4', itemId: '2' });
-    // Sem usuario_id → sem verificação de executor
     const { status } = await callRoute(updateItem, '/api/atendimentos/4/itens/2', {
       method: 'PUT',
       body: { status: 'executando' },
@@ -1194,6 +1200,51 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
     }, ctx);
 
     expect(status).toBe(200);
+  });
+
+  it('sessão: preserva o rateio proporcional exibido ao editar item legado sem overrides', async () => {
+    const itemImplante = {
+      ...ITEM_LIMPEZA_PENDENTE,
+      id: 101,
+      procedimento_id: 9,
+      valor: 2000,
+      valor_final: 2000,
+      valor_original: 2000,
+      valor_pago: 0,
+      etapas_valores: null,
+    };
+    mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
+    mockQueryResponse('select * from itens_atendimento where id', itemImplante);
+    mockQueryResponse('select id, valor from procedimento_etapas_modelo', [
+      { id: 31, valor: 1000 },
+      { id: 32, valor: 500 },
+    ]);
+    mockQueryResponse('from itens_atendimento i', {
+      ...itemImplante,
+      etapas_valores: JSON.stringify({ 31: 1333.33, 32: 700 }),
+      valor: 2033.33,
+      valor_final: 2033.33,
+      procedimento_nome: 'Implante',
+      executor_nome: null,
+    });
+
+    const { status } = await callRoute(updateItem, '/api/atendimentos/2/itens/101', {
+      method: 'PUT',
+      body: { etapa_modelo_id: 32, etapa_valor: 700 },
+    }, createRouteContext({ id: '2', itemId: '101' }));
+
+    expect(status).toBe(200);
+    const update = getExecutedQueries().find((query) => (
+      query.sql.includes('UPDATE itens_atendimento SET')
+      && query.sql.includes('etapas_valores = ?')
+    ));
+    expect(update).toBeDefined();
+    expect(JSON.parse(String(update?.params[0]))).toEqual({
+      31: 1333.33,
+      32: 700,
+    });
+    expect(update?.params[1]).toBeCloseTo(2033.33, 2);
+    expect(update?.params[2]).toBeCloseTo(2033.33, 2);
   });
 
   it('valor: rejeita valor negativo', async () => {

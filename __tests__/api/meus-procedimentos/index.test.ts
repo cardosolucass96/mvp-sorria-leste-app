@@ -228,6 +228,8 @@ describe('GET /api/meus-procedimentos — ordenação', () => {
     const execucaoQuery = queries.find(q => q.sql.includes('executor_id = ?'));
     expect(avaliacaoQuery!.sql).toContain('ORDER BY ia.created_at DESC');
     expect(execucaoQuery!.sql).toContain('ORDER BY ia.created_at DESC');
+    expect(avaliacaoQuery!.sql).toContain('COALESCE(ia.valor_final, ia.valor) as valor');
+    expect(execucaoQuery!.sql).toContain('COALESCE(ia.valor_final, ia.valor) as valor');
   });
 });
 

@@ -44,6 +44,13 @@ export type { TrocarSenhaModalProps } from './TrocarSenhaModal';
 export { default as ProntuarioDrawer } from './ProntuarioDrawer';
 export type { ProntuarioDrawerProps } from './ProntuarioDrawer';
 
+export { default as EvolucaoConclusaoModal } from './EvolucaoConclusaoModal';
+export type {
+  EvolucaoConclusaoItem,
+  EvolucaoConclusaoModalProps,
+  EvolucaoConclusaoResultado,
+} from './EvolucaoConclusaoModal';
+
 export { default as AgendaCalendario } from './AgendaCalendario';
 export type { AgendaCalendarioProps } from './AgendaCalendario';
 

@@ -1340,10 +1340,16 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 ? `${procedimento.procedimento_nome} — ${procedimento.etapa_label}`
                 : procedimento.procedimento_nome
             )).join(', ');
+            const executores = [...new Set(
+              itens
+                .map((procedimento) => procedimento.executor_nome)
+                .filter((nome): nome is string => Boolean(nome))
+            )].join(', ');
             const linhas = [
               `<strong>${escapeHtml(itens.length > 1 ? `Evolução com ${itens.length} procedimentos` : procedimentos)}</strong>`,
               `Procedimentos: ${escapeHtml(procedimentos)}`,
-              `Executor: ${escapeHtml(item.prontuario_autor || item.executor_nome || '-')}, evolução em ${escapeHtml(formatarDataHora(item.prontuario_data || item.concluido_at))}`,
+              `Executor responsável: ${escapeHtml(executores || item.executor_nome || '-')}`,
+              `Registrado por: ${escapeHtml(item.prontuario_autor || '-')} em ${escapeHtml(formatarDataHora(item.prontuario_data || item.concluido_at))}`,
               item.prontuario_descricao ? `Descrição: ${escapeHtml(item.prontuario_descricao)}` : null,
               item.prontuario_observacoes ? `Observações: ${escapeHtml(item.prontuario_observacoes)}` : null,
             ]
@@ -2472,7 +2478,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                           : item.etapa_label ? `${item.procedimento_nome} — ${item.etapa_label}` : item.procedimento_nome}
                       </h3>
                       <div className="flex flex-wrap gap-3 mt-1 text-sm text-muted">
-                        {!isEvolucaoAgrupada && item.executor_nome && <span>Executor: <span className="text-foreground">{item.executor_nome}</span></span>}
+                        {!isEvolucaoAgrupada && item.executor_nome && <span>Executor responsável: <span className="text-foreground">{item.executor_nome}</span></span>}
                         {!isEvolucaoAgrupada && dentes && <span>Dentes: <span className="text-foreground">{dentes}</span></span>}
                         {!isEvolucaoAgrupada && item.quantidade > 1 && <span>Qtd: <span className="text-foreground">{item.quantidade}</span></span>}
                         <Link href={`/atendimentos/${item.atendimento_id}`} className="text-info-600 hover:text-info-800">
@@ -2504,7 +2510,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                                   : procedimento.procedimento_nome}
                               </p>
                               <p>
-                                {procedimento.executor_nome && `Executor: ${procedimento.executor_nome}`}
+                                {procedimento.executor_nome && `Executor responsável: ${procedimento.executor_nome}`}
                                 {dentesItem && ` · Dentes: ${dentesItem}`}
                                 {procedimento.concluido_at && ` · Concluído em ${formatarDataHora(procedimento.concluido_at)}`}
                               </p>
@@ -2536,7 +2542,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                         </div>
                       )}
                       <div className="flex justify-end text-xs text-muted">
-                        Evolução preenchida por <span className="font-medium ml-1">{item.prontuario_autor}</span>
+                        Evolução registrada por <span className="font-medium ml-1">{item.prontuario_autor}</span>
                         {item.prontuario_data && <span className="ml-2">em {formatarDataHora(item.prontuario_data)}</span>}
                         {item.prontuario_updated_at && item.prontuario_updated_at !== item.prontuario_data && (
                           <span className="ml-2">(atualizado em {formatarDataHora(item.prontuario_updated_at)})</span>

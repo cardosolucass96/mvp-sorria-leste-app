@@ -26,6 +26,7 @@ interface ItemAtendimento {
   etapa_modelo_id: number | null;
   etapa_label: string | null;
   tem_etapas: number;
+  possui_agendamento_ativo: number;
 }
 
 interface ItemElegivelEvolucao {
@@ -35,6 +36,7 @@ interface ItemElegivelEvolucao {
   etapa_label: string | null;
   status: string;
   concluido_at: string | null;
+  possui_agendamento_ativo: number;
 }
 
 // GET /api/execucao/item/[id] - Busca um item de atendimento específico pelo ID
@@ -58,7 +60,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         c.nome as cliente_nome,
         c.id as cliente_id,
         a.categoria_id,
-        i.valor,
+        COALESCE(i.valor_final, i.valor) as valor,
         i.valor_final,
         i.valor_pago,
         i.adicionado_em_execucao,
@@ -69,7 +71,14 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         i.concluido_at,
         i.etapa_modelo_id,
         i.etapa_label,
-        p.tem_etapas
+        p.tem_etapas,
+        CASE WHEN EXISTS (
+          SELECT 1
+          FROM agendamentos ag
+          WHERE ag.item_atendimento_origem_id = i.id
+            AND ag.unidade_id = a.unidade_id
+            AND ag.status IN ('pendente', 'agendado')
+        ) THEN 1 ELSE 0 END as possui_agendamento_ativo
       FROM itens_atendimento i
       INNER JOIN atendimentos a ON i.atendimento_id = a.id
       INNER JOIN clientes c ON a.cliente_id = c.id
@@ -113,7 +122,14 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         p.nome as procedimento_nome,
         i.etapa_label,
         i.status,
-        i.concluido_at
+        i.concluido_at,
+        CASE WHEN EXISTS (
+          SELECT 1
+          FROM agendamentos ag
+          WHERE ag.item_atendimento_origem_id = i.id
+            AND ag.unidade_id = a.unidade_id
+            AND ag.status IN ('pendente', 'agendado')
+        ) THEN 1 ELSE 0 END as possui_agendamento_ativo
       FROM itens_atendimento i
       INNER JOIN atendimentos a ON a.id = i.atendimento_id
       INNER JOIN procedimentos p ON p.id = i.procedimento_id

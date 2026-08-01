@@ -32,7 +32,7 @@ export async function gerarComissoesExecucaoItem(itemId: number): Promise<void> 
   await garantirSchemaComissoesOrigem();
 
   const item = await queryOne<ItemExecucaoComComissao>(
-    `SELECT ia.id, ia.atendimento_id, ia.executor_id, ia.valor, p.comissao_execucao
+    `SELECT ia.id, ia.atendimento_id, ia.executor_id, COALESCE(ia.valor_final, ia.valor) as valor, p.comissao_execucao
      FROM itens_atendimento ia
      JOIN procedimentos p ON p.id = ia.procedimento_id
      WHERE ia.id = ?`,

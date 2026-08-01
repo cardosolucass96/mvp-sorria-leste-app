@@ -4,6 +4,8 @@ import { gerarComissoesExecucaoItem } from '@/lib/helpers/gerarComissoes';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
 import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
 import { nowUtcIso } from '@/lib/time';
+import { garantirProntuarioEvolucoesSchema } from '@/lib/helpers/garantirProntuarioEvolucoesSchema';
+import { ajustarEtapasAoValorDoItem } from '@/lib/helpers/pagamentoFlow';
 
 interface ItemAtendimento {
   id: number;
@@ -51,7 +53,6 @@ export const PUT = withUnit(async (
       valor_final,
       desconto_motivo,
       status,
-      usuario_id,
       dentes,
       etapa_modelo_id,
       etapa_valor,
@@ -90,13 +91,51 @@ export const PUT = withUnit(async (
       );
     }
     
-    // Validação: apenas o executor pode marcar como executando/concluído
+    // Status clínico nunca confia em IDs enviados pelo cliente: a identidade vem do JWT.
     if (status && ['executando', 'concluido'].includes(status)) {
-      if (usuario_id && item.executor_id && usuario_id !== item.executor_id) {
+      if (
+        item.executor_id !== context.user.sub
+        || !userHasAnyRole(context.user, ['executor', 'ortodontista'])
+      ) {
         return NextResponse.json(
           { error: 'Apenas o executor designado pode alterar o status deste procedimento' },
           { status: 403 }
         );
+      }
+
+      if (atendimento.status !== 'em_execucao') {
+        return NextResponse.json(
+          { error: 'O atendimento precisa estar em execução' },
+          { status: 400 }
+        );
+      }
+
+      if (status === 'executando' && item.status !== 'pago') {
+        return NextResponse.json(
+          { error: 'Apenas procedimentos pagos podem iniciar a execução' },
+          { status: 400 }
+        );
+      }
+
+      if (status === 'concluido') {
+        if (item.status !== 'executando') {
+          return NextResponse.json(
+            { error: 'O procedimento precisa estar em execução antes de ser concluído' },
+            { status: 400 }
+          );
+        }
+
+        await garantirProntuarioEvolucoesSchema();
+        const evolucao = await queryOne<{ id: number }>(
+          'SELECT id FROM prontuario_evolucao_itens WHERE item_atendimento_id = ?',
+          [parseInt(itemId)]
+        );
+        if (!evolucao) {
+          return NextResponse.json(
+            { error: 'Preencha o prontuário antes de concluir o procedimento' },
+            { status: 400 }
+          );
+        }
       }
     }
 
@@ -255,11 +294,18 @@ export const PUT = withUnit(async (
           overrides = {};
         }
       }
-      // Inicializa entradas faltantes com split igualitário do item.valor atual
-      for (const m of modelos) {
-        if (overrides[String(m.id)] === undefined) {
-          overrides[String(m.id)] = item.valor / modelos.length;
-        }
+      // Reconcilia todas as etapas com o valor atual antes de editar uma delas.
+      // Isso mantém o mesmo rateio proporcional exibido na tela para itens
+      // legados que ainda não possuem `etapas_valores` persistido.
+      const valoresBase = ajustarEtapasAoValorDoItem(
+        modelos.map((modelo) => ({
+          ...modelo,
+          valor: Number(overrides[String(modelo.id)] ?? modelo.valor ?? 0),
+        })),
+        item.valor_final ?? item.valor
+      );
+      for (const etapa of valoresBase) {
+        overrides[String(etapa.id)] = etapa.valor;
       }
       // Aplica a edição
       overrides[String(etapaId)] = etapaValorNum;
@@ -340,32 +386,11 @@ export const PUT = withUnit(async (
           valor: Number(overrides[String(modelo.id)] ?? modelo.valor ?? 0),
         }));
 
-        const somaAtual = valoresAtuais.reduce((sum, etapa) => sum + etapa.valor, 0);
         const totalDesejado = Number(valorNum.toFixed(2));
-        const novosValores: Record<string, number> = {};
-
-        if (somaAtual <= 0) {
-          const valorUnitario = Number((totalDesejado / valoresAtuais.length).toFixed(2));
-          let acumulado = 0;
-
-          valoresAtuais.forEach((etapa, index) => {
-            const valorEtapa = index === valoresAtuais.length - 1
-              ? Number((totalDesejado - acumulado).toFixed(2))
-              : valorUnitario;
-            novosValores[String(etapa.id)] = valorEtapa;
-            acumulado += valorEtapa;
-          });
-        } else {
-          let acumulado = 0;
-
-          valoresAtuais.forEach((etapa, index) => {
-            const valorEtapa = index === valoresAtuais.length - 1
-              ? Number((totalDesejado - acumulado).toFixed(2))
-              : Number(((etapa.valor / somaAtual) * totalDesejado).toFixed(2));
-            novosValores[String(etapa.id)] = valorEtapa;
-            acumulado += valorEtapa;
-          });
-        }
+        const novosValores = Object.fromEntries(
+          ajustarEtapasAoValorDoItem(valoresAtuais, totalDesejado)
+            .map((etapa) => [String(etapa.id), etapa.valor])
+        );
 
         updates.push('etapas_valores = ?');
         updateParams.push(JSON.stringify(novosValores));

@@ -31,7 +31,7 @@ describe('AbaProntuario — evoluções agrupadas', () => {
             prontuario_observacoes: 'Sem intercorrências',
             prontuario_data: '2026-07-25T12:00:00.000Z',
             prontuario_updated_at: '2026-07-25T12:00:00.000Z',
-            prontuario_autor: 'Dra. Ana',
+            prontuario_autor: 'Ana Atendente',
             itens: [
               {
                 item_id: 10,
@@ -64,6 +64,9 @@ describe('AbaProntuario — evoluções agrupadas', () => {
     expect(screen.getByText('Limpeza')).toBeInTheDocument();
     expect(screen.getByText('Descrição clínica compartilhada entre procedimentos.')).toBeInTheDocument();
     expect(screen.getAllByText('Descrição clínica compartilhada entre procedimentos.')).toHaveLength(1);
+    expect(screen.getAllByText(/Executor responsável:/)).toHaveLength(2);
+    expect(screen.getAllByText(/Executor responsável:/)[0]).toHaveTextContent('Dra. Ana');
+    expect(screen.getByText('Ana Atendente').parentElement).toHaveTextContent('Registrado por Ana Atendente');
   });
 
   it('mantém a exibição individual para evolução com um procedimento', () => {

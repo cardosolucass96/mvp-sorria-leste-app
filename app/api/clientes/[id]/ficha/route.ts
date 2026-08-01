@@ -61,7 +61,7 @@ export const GET = withAuth(async (_request, context) => {
               un.email as unidade_email,
               un.responsavel as unidade_responsavel,
               un.recibo_rodape as unidade_recibo_rodape,
-              COALESCE(SUM(i.valor), 0) as total,
+              COALESCE(SUM(COALESCE(i.valor_final, i.valor)), 0) as total,
               COALESCE(SUM(i.valor_pago), 0) as total_pago
        FROM atendimentos a
        LEFT JOIN usuarios u ON a.avaliador_id = u.id
@@ -75,7 +75,7 @@ export const GET = withAuth(async (_request, context) => {
 
     // Procedimentos (itens de todos os atendimentos)
     const procedimentos = await query(
-      `SELECT i.id, i.atendimento_id, i.valor, i.valor_final, i.valor_pago, i.adicionado_em_execucao, i.status,
+      `SELECT i.id, i.atendimento_id, COALESCE(i.valor_final, i.valor) as valor, i.valor_final, i.valor_pago, i.adicionado_em_execucao, i.status,
               i.dentes, i.dente_unico, i.group_id, i.quantidade, i.observacoes, i.created_at, i.concluido_at,
               p.nome as procedimento_nome,
               i.etapa_label,
@@ -278,19 +278,27 @@ export const GET = withAuth(async (_request, context) => {
       prontuariosMap.set(row.evolucao_id, atual);
     }
 
-    const prontuarios = Array.from(prontuariosMap.values()).map((evolucao) => ({
-      ...evolucao,
-      procedimento_nome: evolucao.itens.length > 1
-        ? `${evolucao.itens.length} procedimentos`
-        : evolucao.itens[0]?.procedimento_nome ?? evolucao.procedimento_nome,
-      etapa_label: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.etapa_label ?? null,
-      executor_nome: evolucao.itens.length > 1 ? evolucao.prontuario_autor : evolucao.itens[0]?.executor_nome ?? evolucao.executor_nome,
-      item_id: evolucao.itens[0]?.item_id ?? evolucao.item_id,
-      concluido_at: evolucao.itens[0]?.concluido_at ?? evolucao.concluido_at,
-      dentes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.dentes ?? null,
-      quantidade: evolucao.itens.length > 1 ? evolucao.itens.length : evolucao.itens[0]?.quantidade ?? evolucao.quantidade,
-      item_observacoes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.item_observacoes ?? null,
-    }));
+    const prontuarios = Array.from(prontuariosMap.values()).map((evolucao) => {
+      const executores = [...new Set(
+        evolucao.itens
+          .map((item) => item.executor_nome)
+          .filter((nome): nome is string => Boolean(nome))
+      )];
+
+      return {
+        ...evolucao,
+        procedimento_nome: evolucao.itens.length > 1
+          ? `${evolucao.itens.length} procedimentos`
+          : evolucao.itens[0]?.procedimento_nome ?? evolucao.procedimento_nome,
+        etapa_label: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.etapa_label ?? null,
+        executor_nome: executores.length > 0 ? executores.join(', ') : null,
+        item_id: evolucao.itens[0]?.item_id ?? evolucao.item_id,
+        concluido_at: evolucao.itens[0]?.concluido_at ?? evolucao.concluido_at,
+        dentes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.dentes ?? null,
+        quantidade: evolucao.itens.length > 1 ? evolucao.itens.length : evolucao.itens[0]?.quantidade ?? evolucao.quantidade,
+        item_observacoes: evolucao.itens.length > 1 ? null : evolucao.itens[0]?.item_observacoes ?? null,
+      };
+    });
 
     const restrictedDentistView = isRestrictedDentistPatientView(context.user);
     const historicoFiltrado = restrictedDentistView

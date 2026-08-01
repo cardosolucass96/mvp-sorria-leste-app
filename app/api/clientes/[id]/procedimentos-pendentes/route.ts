@@ -47,7 +47,7 @@ export const GET = withUnit(async (
          i.procedimento_id,
          p.nome as procedimento_nome,
          i.status,
-         i.valor,
+         COALESCE(i.valor_final, i.valor) as valor,
          i.valor_final,
          i.valor_pago,
          ROUND(MAX(0, COALESCE(i.valor_final, i.valor) - i.valor_pago), 2) as valor_pendente,

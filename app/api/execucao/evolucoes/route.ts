@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { batch, query } from '@/lib/db';
-import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
+import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
 import { garantirProntuarioEvolucoesSchema } from '@/lib/helpers/garantirProntuarioEvolucoesSchema';
 import { garantirSchemaComissoesOrigem, garantirSchemaProcedimentosComissaoAcrescimo } from '@/lib/helpers/garantirComissaoSchema';
 import { nowUtcIso } from '@/lib/time';
@@ -17,6 +17,7 @@ interface ItemElegivelRow {
   status: string;
   tem_etapas: number;
   evolucao_id: number | null;
+  possui_agendamento_ativo: number;
 }
 
 interface AtendimentoStatusRow {
@@ -68,7 +69,14 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
          i.executor_id,
          i.status,
          p.tem_etapas,
-         pei.evolucao_id
+         pei.evolucao_id,
+         CASE WHEN EXISTS (
+           SELECT 1
+           FROM agendamentos ag
+           WHERE ag.item_atendimento_origem_id = i.id
+             AND ag.unidade_id = a.unidade_id
+             AND ag.status IN ('pendente', 'agendado')
+         ) THEN 1 ELSE 0 END as possui_agendamento_ativo
        FROM itens_atendimento i
        INNER JOIN atendimentos a ON a.id = i.atendimento_id
        INNER JOIN procedimentos p ON p.id = i.procedimento_id
@@ -95,9 +103,29 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       return NextResponse.json({ error: 'O atendimento precisa estar em execução' }, { status: 400 });
     }
 
-    if (itens.some((item) => item.executor_id !== context.user.sub)) {
+    if (itens.some((item) => item.executor_id === null)) {
       return NextResponse.json(
-        { error: 'Apenas o executor responsável pode concluir estes procedimentos' },
+        { error: 'Todos os procedimentos precisam ter um executor definido' },
+        { status: 400 }
+      );
+    }
+
+    const executorIds = new Set(itens.map((item) => item.executor_id));
+    if (executorIds.size !== 1) {
+      return NextResponse.json(
+        { error: 'Uma evolução só pode reunir procedimentos do mesmo executor' },
+        { status: 400 }
+      );
+    }
+
+    const executorId = itens[0].executor_id as number;
+    const podeRegistrarEmNomeDoExecutor = userHasAnyRole(context.user, ['admin', 'atendente']);
+    const executorResponsavelLogado = executorId === context.user.sub
+      && userHasAnyRole(context.user, ['executor', 'ortodontista']);
+
+    if (!podeRegistrarEmNomeDoExecutor && !executorResponsavelLogado) {
+      return NextResponse.json(
+        { error: 'Apenas o executor responsável, um administrador ou um atendente pode concluir estes procedimentos' },
         { status: 403 }
       );
     }
@@ -116,9 +144,9 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       );
     }
 
-    if (itens.some((item) => Number(item.tem_etapas) === 1)) {
+    if (itens.some((item) => Number(item.possui_agendamento_ativo) === 1)) {
       return NextResponse.json(
-        { error: 'Procedimentos por etapas devem ser concluídos pelo fluxo de sessões atual' },
+        { error: 'Um ou mais procedimentos possuem agendamento futuro ativo' },
         { status: 400 }
       );
     }
@@ -154,8 +182,8 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
                 'execucao',
                 'execucao',
                 p.comissao_execucao,
-                ia.valor,
-                ROUND(ia.valor * (p.comissao_execucao / 100), 2),
+                COALESCE(ia.valor_final, ia.valor),
+                ROUND(COALESCE(ia.valor_final, ia.valor) * (p.comissao_execucao / 100), 2),
                 ?
               FROM itens_atendimento ia
               INNER JOIN procedimentos p ON p.id = ia.procedimento_id
@@ -218,6 +246,8 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       evolucao_uuid: uuid,
       atendimento_id: atendimentoId,
       item_ids: itemIds,
+      executor_id: executorId,
+      registrado_por_id: context.user.sub,
       atendimento_finalizado: atendimentoAtualizado?.status === 'finalizado',
       atendimento_voltou_para_pagamento: atendimentoAtualizado?.status === 'aguardando_pagamento',
     }, { status: 201 });

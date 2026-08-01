@@ -201,6 +201,8 @@ export interface ItemAtendimento {
   observacoes: string | null;
   created_at: string;
   concluido_at: string | null;
+  /** 1 quando existe agendamento pendente/agendado originado deste item. */
+  possui_agendamento_ativo?: number;
 }
 
 export interface Pagamento {

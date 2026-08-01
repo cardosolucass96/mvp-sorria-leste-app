@@ -75,7 +75,7 @@ export const GET = withUnit(async (
         c.id as cliente_id,
         c.nome as cliente_nome,
         i.status,
-        i.valor,
+        COALESCE(i.valor_final, i.valor) as valor,
         i.valor_final,
         i.valor_pago,
         i.adicionado_em_execucao,

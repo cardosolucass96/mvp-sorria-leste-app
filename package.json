@@ -20,6 +20,8 @@
     "d1:migrate:local": "wrangler d1 execute sorria-leste-db --local --file=lib/schema.sql",
     "d1:migrate:pagamentos-legado": "wrangler d1 execute sorria-leste-db --remote --file=lib/migrations/backfill_pagamentos_legado.sql",
     "d1:migrate:pagamentos-legado:local": "wrangler d1 execute sorria-leste-db --local --file=lib/migrations/backfill_pagamentos_legado.sql",
+    "d1:reconcile:valores-legado": "wrangler d1 execute sorria-leste-db --remote --file=lib/migrations/reconcile_valores_financeiros_legado.sql",
+    "d1:reconcile:valores-legado:local": "wrangler d1 execute sorria-leste-db --local --file=lib/migrations/reconcile_valores_financeiros_legado.sql",
     "d1:seed": "wrangler d1 execute sorria-leste-db --remote --file=lib/seed.sql",
     "d1:seed:formas-pagamento": "wrangler d1 execute sorria-leste-db --remote --file=lib/migrations/seed_formas_pagamento_todas_unidades.sql",
     "d1:seed:formas-pagamento:local": "wrangler d1 execute sorria-leste-db --local --file=lib/migrations/seed_formas_pagamento_todas_unidades.sql",

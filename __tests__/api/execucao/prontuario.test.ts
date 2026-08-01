@@ -15,11 +15,44 @@ import {
   getExecutedQueries,
 } from '../../helpers/db-mock';
 
+jest.mock('@/lib/auth/jwt', () => ({
+  extractToken: jest.fn().mockReturnValue('mock-token'),
+  verifyToken: jest.fn(),
+  generateToken: jest.fn().mockResolvedValue('mock-token'),
+}));
+
+import { extractToken, verifyToken } from '@/lib/auth/jwt';
 import { GET as getProntuario, POST as saveProntuario } from '@/app/api/execucao/item/[id]/prontuario/route';
+
+const mockVerifyToken = verifyToken as jest.MockedFunction<typeof verifyToken>;
+const mockExtractToken = extractToken as jest.MockedFunction<typeof extractToken>;
+
+function makeExecutorPayload() {
+  return {
+    sub: 4,
+    email: 'executor@test.com',
+    role: 'executor',
+    roles: ['executor'],
+    nome: 'Dr. Carlos Executor',
+    unidade_ids: [1],
+    unidade_atual: 1,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+  };
+}
 
 beforeEach(() => {
   resetMockDb();
   setupCloudflareContextMock();
+  mockVerifyToken.mockResolvedValue(makeExecutorPayload());
+  mockExtractToken.mockReturnValue('mock-token');
+  mockQueryResponse('from itens_atendimento i', {
+    id: 3,
+    executor_id: 4,
+    unidade_id: 1,
+    atendimento_status: 'em_execucao',
+    item_status: 'executando',
+  });
 });
 
 afterEach(() => {
@@ -45,6 +78,18 @@ const DESCRICAO_CURTA = 'Curta'; // < 10 chars
 // =============================================================================
 
 describe('GET /api/execucao/item/[id]/prontuario', () => {
+  it('exige autenticação', async () => {
+    mockExtractToken.mockReturnValueOnce(null);
+    const { status } = await callRoute(
+      getProntuario,
+      '/api/execucao/item/3/prontuario',
+      { headers: { Authorization: '' } },
+      createRouteContext({ id: '3' })
+    );
+
+    expect(status).toBe(401);
+  });
+
   it('retorna prontuário existente com usuario_nome', async () => {
     mockQueryResponse('from prontuarios p', PRONTUARIO_EXEMPLO);
 
@@ -92,6 +137,25 @@ describe('GET /api/execucao/item/[id]/prontuario', () => {
     expect(data.prontuario).not.toBeInstanceOf(Array);
     expect(data.prontuario.id).toBe(1);
   });
+
+  it('não expõe prontuário de outra unidade', async () => {
+    mockQueryResponse('from itens_atendimento i', {
+      id: 3,
+      executor_id: 4,
+      unidade_id: 2,
+      atendimento_status: 'em_execucao',
+      item_status: 'executando',
+    });
+
+    const { status } = await callRoute(
+      getProntuario,
+      '/api/execucao/item/3/prontuario',
+      {},
+      createRouteContext({ id: '3' })
+    );
+
+    expect(status).toBe(404);
+  });
 });
 
 // =============================================================================
@@ -99,6 +163,28 @@ describe('GET /api/execucao/item/[id]/prontuario', () => {
 // =============================================================================
 
 describe('POST /api/execucao/item/[id]/prontuario', () => {
+  it('permanece restrito ao executor responsável', async () => {
+    mockVerifyToken.mockResolvedValue({
+      ...makeExecutorPayload(),
+      sub: 8,
+      role: 'admin',
+      roles: ['admin'],
+    });
+
+    const { status } = await callRoute(
+      saveProntuario,
+      '/api/execucao/item/3/prontuario',
+      {
+        method: 'POST',
+        body: { usuario_id: 4, descricao: DESCRICAO_VALIDA },
+      },
+      createRouteContext({ id: '3' })
+    );
+
+    expect(status).toBe(403);
+    expect(getExecutedQueries().some((query) => query.sql.includes('INSERT INTO prontuarios'))).toBe(false);
+  });
+
   it('cria prontuário novo quando não existe', async () => {
     setLastInsertId(5);
     // queryOne para check existente → null (não mockado)
@@ -224,9 +310,10 @@ describe('POST /api/execucao/item/[id]/prontuario', () => {
     expect(status).toBe(400);
   });
 
-  it('rejeita sem usuario_id', async () => {
+  it('deriva o usuário do JWT quando usuario_id não é enviado', async () => {
+    mockQueryResponse('from prontuarios p', PRONTUARIO_EXEMPLO);
     const ctx = createRouteContext({ id: '3' });
-    const { status, data } = await callRoute<{ error: string }>(
+    const { status } = await callRoute(
       saveProntuario,
       '/api/execucao/item/3/prontuario',
       {
@@ -236,8 +323,9 @@ describe('POST /api/execucao/item/[id]/prontuario', () => {
       ctx
     );
 
-    expect(status).toBe(400);
-    expect(data.error).toBe('Usuário não identificado');
+    expect(status).toBe(200);
+    const insertQ = getExecutedQueries().find(q => q.sql.includes('INSERT INTO prontuarios'));
+    expect(insertQ?.params[1]).toBe(4);
   });
 
   it('faz trim na descrição antes de validar', async () => {

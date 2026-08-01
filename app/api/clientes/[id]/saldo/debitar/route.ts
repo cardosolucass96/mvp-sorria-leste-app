@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, batch } from '@/lib/db';
 import { nowUtcIso } from '@/lib/time';
+import { obterValorEfetivoItem } from '@/lib/helpers/pagamentoFlow';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -14,6 +15,7 @@ interface ItemAtendimento {
   id: number;
   atendimento_id: number;
   valor: number;
+  valor_final: number | null;
   valor_pago: number;
   status: string;
 }
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // Buscar o item e calcular valor restante
     const item = await queryOne<ItemAtendimento>(
-      'SELECT id, atendimento_id, valor, valor_pago, status FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
+      'SELECT id, atendimento_id, valor, valor_final, valor_pago, status FROM itens_atendimento WHERE id = ? AND atendimento_id = ?',
       [item_atendimento_id, atendimento_id]
     );
 
@@ -46,7 +48,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Item de atendimento não encontrado' }, { status: 404 });
     }
 
-    const valorRestante = item.valor - item.valor_pago;
+    const valorEfetivo = obterValorEfetivoItem(item);
+    const valorRestante = valorEfetivo - item.valor_pago;
     if (valorRestante <= 0) {
       return NextResponse.json({ error: 'Item já está totalmente pago' }, { status: 400 });
     }
@@ -83,13 +86,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         params: [clienteId, valorRestante, saldoAnterior, saldoNovo, item_atendimento_id, atendimento_id, observacoes ?? null],
       },
       {
-        sql: `UPDATE itens_atendimento SET valor_pago = valor, status = 'pago' WHERE id = ?`,
-        params: [item_atendimento_id],
+        sql: `UPDATE itens_atendimento SET valor_pago = ?, status = 'pago' WHERE id = ?`,
+        params: [valorEfetivo, item_atendimento_id],
       },
     ]);
 
     const itemAtualizado = await queryOne<ItemAtendimento>(
-      'SELECT id, atendimento_id, valor, valor_pago, status FROM itens_atendimento WHERE id = ?',
+      'SELECT id, atendimento_id, COALESCE(valor_final, valor) as valor, valor_final, valor_pago, status FROM itens_atendimento WHERE id = ?',
       [item_atendimento_id]
     );
 

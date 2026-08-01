@@ -973,6 +973,60 @@ describe('POST /api/agendamentos/[id]/chegou', () => {
     expect(insertItem!.params).toContain('pago'); // status
   });
 
+  it.each([
+    {
+      cenario: 'preserva o snapshot já reconciliado',
+      valorAgendamento: 1333.33,
+      valorEsperado: 1333.33,
+    },
+    {
+      cenario: 'corrige o valor bruto legado da etapa',
+      valorAgendamento: 1000,
+      valorEsperado: 1333.33,
+    },
+  ])('$cenario ao criar item de uma sessão agendada', async ({ valorAgendamento, valorEsperado }) => {
+    const agendamentoEtapa = {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      status: 'agendado',
+      procedimento_id: 9,
+      etapa_modelo_id: 31,
+      valor: valorAgendamento,
+      valor_pago: 0,
+      pago: 0,
+    };
+    mockQueryResponse('select * from agendamentos where id', agendamentoEtapa);
+    mockQueryResponse("status not in ('finalizado'", []);
+    mockQueryResponse("status in ('pendente', 'agendado')", [agendamentoEtapa]);
+    mockQueryResponse('select id, valor from procedimentos', { id: 9, valor: 2000 });
+    mockQueryResponse('select id, nome, valor from procedimento_etapas_modelo where procedimento_id', [
+      { id: 31, nome: 'Cirurgia', valor: 1000 },
+      { id: 32, nome: 'Coroa', valor: 500 },
+    ]);
+    setLastInsertId(350);
+    mockQueryResponse('inner join clientes c', {
+      id: 350,
+      cliente_id: 1,
+      status: 'aguardando_pagamento',
+      tipo: 'sessao',
+      cliente_nome: CLIENTE_BASICO.nome,
+      cliente_cpf: CLIENTE_BASICO.cpf,
+      cliente_telefone: CLIENTE_BASICO.telefone,
+    });
+
+    const { status } = await callRoute(
+      chegouAgendamento,
+      '/api/agendamentos/1/chegou',
+      { method: 'POST', headers: { Authorization: 'Bearer test.jwt.token' } },
+      createRouteContext({ id: '1' })
+    );
+
+    expect(status).toBe(201);
+    const insertItem = getExecutedQueries().find((query) => query.sql.includes('INSERT INTO itens_atendimento'));
+    expect(insertItem?.params.slice(2, 5)).toEqual([valorEsperado, valorEsperado, valorEsperado]);
+    expect(insertItem?.params[10]).toBe(31);
+    expect(insertItem?.params[11]).toBe('Cirurgia');
+  });
+
   it('reativa o atendimento de origem quando o agendamento está vinculado a procedimento pendente', async () => {
     const agVinculado = {
       ...AGENDAMENTO_PROCEDIMENTO,

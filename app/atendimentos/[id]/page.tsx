@@ -7,8 +7,15 @@ import Link from 'next/link';
 import { formatarMoeda, formatarDataHora, tempoDecorrido, nomeProcedimentoItem, formatarDenteUnicoComFaces, formatarDentes, formatarCPF, formatarCNPJ, formatarAgoraDaClinica } from '@/lib/utils/formatters';
 import { STATUS_CONFIG, PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 import type { AtendimentoStatus, AtendimentoTipo } from '@/lib/types';
-import { AnexosGallery, StatusBadge, StatusPipeline, type AnexoData } from '@/components/domain';
-import { ClipboardList, ChevronDown, ChevronRight, X, Trash2, CalendarPlus, Info, Pencil, Printer, Paperclip } from 'lucide-react';
+import {
+  AnexosGallery,
+  EvolucaoConclusaoModal,
+  StatusBadge,
+  StatusPipeline,
+  type AnexoData,
+  type EvolucaoConclusaoResultado,
+} from '@/components/domain';
+import { ClipboardList, ChevronDown, ChevronRight, X, Trash2, CalendarPlus, Info, Pencil, Printer, Paperclip, FileCheck2 } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Button, Card, EmptyState, ConfirmDialog, Modal, Select, Input, Textarea, useToast } from '@/components/ui';
 import ElapsedTime from '@/components/ui/ElapsedTime';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -74,6 +81,8 @@ interface ItemAtendimento {
   dente_unico: string | null;
   observacoes: string | null;
   progresso_etapas: ProgressoEtapa[] | null;
+  tem_etapas?: number;
+  possui_agendamento_ativo?: number;
 }
 
 interface AnexoClienteApi {
@@ -230,6 +239,10 @@ export default function AtendimentoDetalhePage({
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [imprimindoAtendimento, setImprimindoAtendimento] = useState(false);
   const [imprimindoRecibos, setImprimindoRecibos] = useState(false);
+  const [evolucaoAssistida, setEvolucaoAssistida] = useState<{
+    open: boolean;
+    itemIds: number[];
+  }>({ open: false, itemIds: [] });
 
   const escapeHtml = (value: unknown) => {
     return String(value ?? '')
@@ -1486,6 +1499,10 @@ export default function AtendimentoDetalhePage({
     && atendimento
     && ['triagem', 'avaliacao', 'aguardando_pagamento', 'em_execucao'].includes(atendimento.status)
   );
+  const podeConcluirAssistido = Boolean(
+    podeGerenciarEdicaoRecepcao
+    && atendimento?.status === 'em_execucao'
+  );
   const podEditarValor = podeEditarProcedimentosCompartilhados;
   const podEditarVendedor = podeEditarProcedimentosCompartilhados;
   const avaliadoresDisponiveis = (() => {
@@ -1508,6 +1525,60 @@ export default function AtendimentoDetalhePage({
     ];
   };
   const imprimindoAlgumDocumento = imprimindoAtendimento || imprimindoRecibos;
+
+  const getMotivoBloqueioClinico = (item: ItemAtendimento): string | null => {
+    if (item.status === 'concluido') return 'Concluído';
+    if (Number(item.possui_agendamento_ativo ?? 0) === 1) return 'Agendado para outra sessão';
+    if (!item.executor_id) return 'Defina um executor';
+    if (item.status === 'pendente') return 'Aguardando pagamento';
+    if (!['pago', 'executando'].includes(item.status)) return 'Indisponível nesta etapa';
+    return null;
+  };
+
+  const abrirEvolucaoAssistida = (itemIds: number[]) => {
+    setEvolucaoAssistida({ open: true, itemIds });
+  };
+
+  const renderAcaoClinica = (itensAlvo: ItemAtendimento[], grupo = false) => {
+    const elegiveis = itensAlvo.filter((item) => getMotivoBloqueioClinico(item) === null);
+    if (elegiveis.length === 0) {
+      return (
+        <span className="text-xs text-muted-foreground">
+          {getMotivoBloqueioClinico(itensAlvo[0]) || 'Indisponível'}
+        </span>
+      );
+    }
+
+    const executores = new Set(elegiveis.map((item) => item.executor_id));
+    if (executores.size !== 1) {
+      return <span className="text-xs text-muted-foreground">Executores diferentes</span>;
+    }
+
+    return (
+      <Button
+        variant="secondary"
+        size="xs"
+        onClick={(event) => {
+          event.stopPropagation();
+          abrirEvolucaoAssistida(elegiveis.map((item) => item.id));
+        }}
+      >
+        <FileCheck2 data-icon="inline-start" />
+        {grupo ? 'Concluir grupo' : 'Concluir e gerar prontuário'}
+      </Button>
+    );
+  };
+
+  const handleEvolucaoAssistidaConcluida = async (resultado: EvolucaoConclusaoResultado) => {
+    await carregarAtendimento();
+    if (resultado.atendimento_finalizado) {
+      toast.success('Todos os procedimentos foram concluídos. Atendimento finalizado.');
+    } else if (resultado.atendimento_voltou_para_pagamento) {
+      toast.success('Procedimentos concluídos. O atendimento voltou para pagamento.');
+    } else {
+      toast.success('Prontuário salvo e procedimentos concluídos.');
+    }
+  };
 
   const imprimirAtendimento = async () => {
     if (!atendimento) return;
@@ -2001,6 +2072,9 @@ export default function AtendimentoDetalhePage({
                   <th className="text-left">Executor</th>
                   <th className="text-right">Valor</th>
                   <th className="text-center">Status</th>
+                  {podeConcluirAssistido && (
+                    <th className="text-center">Ação clínica</th>
+                  )}
                   {podRemover && (
                     <th className="w-20 text-center">Ações</th>
                   )}
@@ -2059,6 +2133,9 @@ export default function AtendimentoDetalhePage({
                         </td>
                         <td className="px-4 py-3 text-right">{renderValorCell(item)}</td>
                         <td className="px-4 py-3 text-center"><StatusBadge type="item" status={item.status} item={item} /></td>
+                        {podeConcluirAssistido && (
+                          <td className="px-4 py-3 text-center">{renderAcaoClinica([item])}</td>
+                        )}
                         {podRemover && (
                           <td className="px-4 py-3 text-center">
                             <button onClick={() => handleRemoverItem(item.id)} className="text-error-500 hover:text-error-700 p-1" title="Remover">
@@ -2152,6 +2229,11 @@ export default function AtendimentoDetalhePage({
                               : primeiro}
                           />
                         </td>
+                        {podeConcluirAssistido && (
+                          <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>
+                            {renderAcaoClinica(grupoItens, true)}
+                          </td>
+                        )}
                         {podRemover && (
                           <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                             <button onClick={() => handleRemoverGrupo(groupId)} className="text-error-500 hover:text-error-700 p-1" title="Remover procedimento">
@@ -2175,6 +2257,9 @@ export default function AtendimentoDetalhePage({
                           <td className="px-4 py-2" />
                           <td className="px-4 py-2 text-right">{renderValorCell(item, true)}</td>
                           <td className="px-4 py-2 text-center"><StatusBadge type="item" status={item.status} item={item} size="sm" /></td>
+                          {podeConcluirAssistido && (
+                            <td className="px-4 py-2 text-center">{renderAcaoClinica([item])}</td>
+                          )}
                           {podRemover && (
                             <td className="px-4 py-2 text-center">
                               <button onClick={() => handleRemoverItem(item.id)} className="text-error-400 hover:text-error-600 p-1" title="Remover dente">
@@ -2211,6 +2296,23 @@ export default function AtendimentoDetalhePage({
         message={confirmDialog.message}
         confirmLabel={confirmDialog.confirmLabel}
         type={confirmDialog.type}
+      />
+
+      <EvolucaoConclusaoModal
+        open={evolucaoAssistida.open}
+        onClose={() => setEvolucaoAssistida({ open: false, itemIds: [] })}
+        itemIdsIniciais={evolucaoAssistida.itemIds}
+        registradorNome={user?.nome || 'Recepção'}
+        registroAssistido
+        itens={atendimento.itens.map((item) => ({
+          id: item.id,
+          label: nomeProcedimentoItem(item),
+          executor_id: item.executor_id,
+          executor_nome: item.executor_nome,
+          status: item.status,
+          possui_agendamento_ativo: item.possui_agendamento_ativo,
+        }))}
+        onSuccess={handleEvolucaoAssistidaConcluida}
       />
 
       <Modal

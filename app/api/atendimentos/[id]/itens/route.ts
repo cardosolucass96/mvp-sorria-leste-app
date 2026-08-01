@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
 import { resolveVendedorPadraoParaAtendimento } from '@/lib/helpers/atendimentoDefaults';
+import { obterValorEfetivoItem } from '@/lib/helpers/pagamentoFlow';
 
 interface ItemAtendimento {
   id: number;
@@ -11,6 +12,7 @@ interface ItemAtendimento {
   executor_id: number | null;
   criado_por_id: number | null;
   valor: number;
+  valor_final: number | null;
   status: string;
   created_at: string;
   concluido_at: string | null;
@@ -239,7 +241,10 @@ export const GET = withUnit(async (
       [parseInt(id as string)]
     );
 
-    return NextResponse.json(itens);
+    return NextResponse.json(itens.map((item) => {
+      const valorEfetivo = obterValorEfetivoItem(item);
+      return { ...item, valor: valorEfetivo };
+    }));
   } catch (error) {
     console.error('Erro ao buscar itens:', error);
     return NextResponse.json(

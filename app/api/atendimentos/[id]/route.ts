@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
-import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
+import { buscarEtapasComValor, obterValorEfetivoItem, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
 import { PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 import { validarUsuarioPorRoles } from '../_helpers';
 import { garantirCamposEmpresaUnidades } from '@/lib/helpers/unidadesEmpresa';
@@ -63,6 +63,7 @@ interface ItemAtendimento {
   por_dente: number;
   tem_etapas: number;
   etapa_label: string | null;
+  possui_agendamento_ativo: number;
   etapas?: EtapaItem[];
 }
 
@@ -198,14 +199,21 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         p.por_dente,
         p.tem_etapas,
         u.nome as executor_nome,
-        c.nome as criado_por_nome
+        c.nome as criado_por_nome,
+        CASE WHEN EXISTS (
+          SELECT 1
+          FROM agendamentos ag_ativo
+          WHERE ag_ativo.item_atendimento_origem_id = i.id
+            AND ag_ativo.unidade_id = ?
+            AND ag_ativo.status IN ('pendente', 'agendado')
+        ) THEN 1 ELSE 0 END as possui_agendamento_ativo
       FROM itens_atendimento i
       INNER JOIN procedimentos p ON i.procedimento_id = p.id
       LEFT JOIN usuarios u ON i.executor_id = u.id
       LEFT JOIN usuarios c ON i.criado_por_id = c.id
       WHERE i.atendimento_id = ?
       ORDER BY i.group_id NULLS LAST, i.created_at ASC`,
-      [parseInt(id)]
+      [context.unidadeId, parseInt(id)]
     );
     
     // Busca etapas pendentes para os itens
@@ -292,9 +300,11 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 
       itensComEtapas = itens.map(item => {
         const destinoItem = destinoMap.get(`${item.id}:item`);
+        const valorEfetivo = obterValorEfetivoItem(item);
         return {
           ...item,
-          valor_final: item.valor_final ?? item.valor,
+          valor: valorEfetivo,
+          valor_final: valorEfetivo,
           etapas: item.tem_etapas ? (modeloEtapasMap.get(item.id) ?? []) : [],
           progresso_etapas: progressoMap.get(item.id) ?? null,
           destino_status: destinoItem?.destino_status ?? null,

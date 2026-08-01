@@ -294,6 +294,8 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         const etapas = await buscarEtapasComValor({
           procedimento_id: itemOrigem.procedimento_id,
           etapas_valores: itemOrigem.etapas_valores,
+          valor: itemOrigem.valor,
+          valor_final: itemOrigem.valor_final,
         });
         const etapaSelecionada = etapas.find((etapa) => etapa.id === etapa_modelo_id);
 
