@@ -4,6 +4,7 @@ import { safeEqual } from './security';
 import type { Env } from './types';
 
 const MAX_BODY_LENGTH = 32_000;
+const MAX_OBSERVACOES_LENGTH = 2_000;
 
 const LeadEvaluationBody = z.object({
   nome: z.string().trim().min(1).max(120),
@@ -16,7 +17,7 @@ const LeadEvaluationBody = z.object({
   endereco: z.string().trim().max(300).optional(),
   sexo: z.enum(['masculino', 'feminino', 'outro']).optional(),
   planoOdontologico: z.enum(['Clin', 'Prime', 'OdontoArt']).optional(),
-  observacoes: z.string().trim().max(300).optional(),
+  observacoes: z.string().trim().max(MAX_OBSERVACOES_LENGTH).optional(),
   dataAgendada: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).optional(),
   executorId: z.coerce.number().int().positive().optional(),
   observacoesAgendamento: z.string().trim().max(300).optional(),

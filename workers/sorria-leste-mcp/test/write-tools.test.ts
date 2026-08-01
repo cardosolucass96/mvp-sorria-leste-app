@@ -451,6 +451,52 @@ describe('MCP write V1 repository tools', () => {
     expect(data.appointments).toHaveLength(1);
   });
 
+  it('aceita observações de até 2.000 caracteres no endpoint HTTP', async () => {
+    const { env, data } = createEnv();
+    const observacoes = 'A'.repeat(2_000);
+    const response = await handleSdrApi(new Request('https://mcp.test/api/sdr/lead-avaliacao', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-secret-key',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        nome: 'Lead com resumo longo',
+        origem: 'trafego_meta',
+        unidadeId: 1,
+        observacoes,
+      }),
+    }), env);
+
+    expect(response.status).toBe(201);
+    expect(data.clients[1]?.observacoes).toBe(observacoes);
+  });
+
+  it('rejeita observações acima de 2.000 caracteres no endpoint HTTP', async () => {
+    const { env } = createEnv();
+    const response = await handleSdrApi(new Request('https://mcp.test/api/sdr/lead-avaliacao', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-secret-key',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        nome: 'Lead com resumo grande demais',
+        origem: 'trafego_meta',
+        unidadeId: 1,
+        observacoes: 'A'.repeat(2_001),
+      }),
+    }), env);
+    const payload = await response.json() as {
+      ok: boolean;
+      issues: Array<{ path: string }>;
+    };
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.issues).toContainEqual(expect.objectContaining({ path: 'observacoes' }));
+  });
+
   it('bloqueia endpoint HTTP sem API key válida', async () => {
     const { env } = createEnv();
     const response = await handleSdrApi(new Request('https://mcp.test/api/sdr/lead-avaliacao', {

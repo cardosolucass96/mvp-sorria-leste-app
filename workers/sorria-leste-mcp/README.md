@@ -128,7 +128,7 @@ curl -X POST "https://<worker>/api/sdr/lead-avaliacao" \
   }'
 ```
 
-Campos obrigatórios: `nome`, `origem`, `unidadeId`. Sem `dataAgendada`, o agendamento nasce como `pendente`; com data, nasce como `agendado`. A data usa o fuso da clínica no formato `YYYY-MM-DDTHH:mm`.
+Campos obrigatórios: `nome`, `origem`, `unidadeId`. O campo `observacoes` aceita até 2.000 caracteres. Sem `dataAgendada`, o agendamento nasce como `pendente`; com data, nasce como `agendado`. A data usa o fuso da clínica no formato `YYYY-MM-DDTHH:mm`.
 
 ## Preparação
 
