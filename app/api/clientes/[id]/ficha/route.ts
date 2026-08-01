@@ -61,7 +61,7 @@ export const GET = withAuth(async (_request, context) => {
               un.email as unidade_email,
               un.responsavel as unidade_responsavel,
               un.recibo_rodape as unidade_recibo_rodape,
-              COALESCE(SUM(i.valor), 0) as total,
+              COALESCE(SUM(COALESCE(i.valor_final, i.valor)), 0) as total,
               COALESCE(SUM(i.valor_pago), 0) as total_pago
        FROM atendimentos a
        LEFT JOIN usuarios u ON a.avaliador_id = u.id
@@ -75,7 +75,7 @@ export const GET = withAuth(async (_request, context) => {
 
     // Procedimentos (itens de todos os atendimentos)
     const procedimentos = await query(
-      `SELECT i.id, i.atendimento_id, i.valor, i.valor_final, i.valor_pago, i.adicionado_em_execucao, i.status,
+      `SELECT i.id, i.atendimento_id, COALESCE(i.valor_final, i.valor) as valor, i.valor_final, i.valor_pago, i.adicionado_em_execucao, i.status,
               i.dentes, i.dente_unico, i.group_id, i.quantidade, i.observacoes, i.created_at, i.concluido_at,
               p.nome as procedimento_nome,
               i.etapa_label,

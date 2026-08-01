@@ -2,6 +2,7 @@ import { GET as buscarFichaCliente } from '@/app/api/clientes/[id]/ficha/route';
 import { callRoute, createRouteContext } from '../../helpers/api-test-helper';
 import {
   mockQueryResponse,
+  getExecutedQueries,
   resetMockDb,
   setupCloudflareContextMock,
   teardownCloudflareContextMock,
@@ -114,5 +115,9 @@ describe('GET /api/clientes/[id]/ficha - evoluções clínicas', () => {
       item_id: 12,
       quantidade: 1,
     });
+
+    const queries = getExecutedQueries().map((query) => query.sql.toLowerCase());
+    expect(queries.some((sql) => sql.includes('sum(coalesce(i.valor_final, i.valor))'))).toBe(true);
+    expect(queries.some((sql) => sql.includes('coalesce(i.valor_final, i.valor) as valor'))).toBe(true);
   });
 });

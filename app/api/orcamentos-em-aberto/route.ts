@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { query } from '@/lib/db';
-import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
+import {
+  buscarEtapasComValor,
+  buscarEtapasModelo,
+  obterValorEfetivoAgendamento,
+  roundMoney,
+  somarAlocacoesAtivasDaEtapa,
+} from '@/lib/helpers/pagamentoFlow';
 import { parseDentesLabels } from '@/lib/utils/formatters';
 
 type SituacaoAgendamento = 'sem_agendamento' | 'agendamento_sem_data' | 'agendado_com_data';
@@ -39,6 +45,7 @@ interface ActiveAgendamentoRow {
   atendimento_status: string;
   procedimento_id: number | null;
   procedimento_nome: string | null;
+  procedimento_valor: number | null;
   etapa_modelo_id: number | null;
   etapa_modelo_nome: string | null;
   status: string;
@@ -270,6 +277,7 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
          a.status AS atendimento_status,
          COALESCE(ag.procedimento_id, item_origem.procedimento_id) AS procedimento_id,
          p.nome AS procedimento_nome,
+         p.valor AS procedimento_valor,
          ag.etapa_modelo_id,
          em.nome AS etapa_modelo_nome,
          ag.status,
@@ -506,6 +514,15 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
       return created;
     };
 
+    const etapasModeloCache = new Map<number, ReturnType<typeof buscarEtapasModelo>>();
+    const carregarEtapasModelo = (procedimentoId: number) => {
+      const cached = etapasModeloCache.get(procedimentoId);
+      if (cached) return cached;
+      const promise = buscarEtapasModelo(procedimentoId);
+      etapasModeloCache.set(procedimentoId, promise);
+      return promise;
+    };
+
     for (const agendamento of activeAgendamentos) {
       const descriptorKey = originToDescriptorKey.get(
         buildOriginKey(
@@ -536,7 +553,16 @@ export const GET = withUnitRole(['admin', 'atendente'], async (
             porDente
           )
         : buildOriginKey(null, null, agendamento.agendamento_id);
-      const valorTotal = roundMoney(agendamento.valor ?? 0);
+      const etapasModelo = agendamento.etapa_modelo_id != null
+        ? await carregarEtapasModelo(agendamento.procedimento_id)
+        : [];
+      const valorTotal = obterValorEfetivoAgendamento({
+        valor: agendamento.valor,
+        valor_pago: agendamento.valor_pago,
+        procedimento_valor: agendamento.procedimento_valor,
+        etapa_modelo_id: agendamento.etapa_modelo_id,
+        etapas_modelo: etapasModelo,
+      });
       const valorPago = roundMoney(agendamento.valor_pago ?? 0);
       const saldoAberto = roundMoney(Math.max(0, valorTotal - valorPago));
 

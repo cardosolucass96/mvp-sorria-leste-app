@@ -182,8 +182,8 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
                 'execucao',
                 'execucao',
                 p.comissao_execucao,
-                ia.valor,
-                ROUND(ia.valor * (p.comissao_execucao / 100), 2),
+                COALESCE(ia.valor_final, ia.valor),
+                ROUND(COALESCE(ia.valor_final, ia.valor) * (p.comissao_execucao / 100), 2),
                 ?
               FROM itens_atendimento ia
               INNER JOIN procedimentos p ON p.id = ia.procedimento_id

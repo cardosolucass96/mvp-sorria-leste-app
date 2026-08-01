@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
-import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
+import { buscarEtapasComValor, obterValorEfetivoItem, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
 import { PROXIMOS_STATUS, STATUS_ANTERIOR } from '@/lib/constants/status';
 import { validarUsuarioPorRoles } from '../_helpers';
 import { garantirCamposEmpresaUnidades } from '@/lib/helpers/unidadesEmpresa';
@@ -300,9 +300,11 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 
       itensComEtapas = itens.map(item => {
         const destinoItem = destinoMap.get(`${item.id}:item`);
+        const valorEfetivo = obterValorEfetivoItem(item);
         return {
           ...item,
-          valor_final: item.valor_final ?? item.valor,
+          valor: valorEfetivo,
+          valor_final: valorEfetivo,
           etapas: item.tem_etapas ? (modeloEtapasMap.get(item.id) ?? []) : [],
           progresso_etapas: progressoMap.get(item.id) ?? null,
           destino_status: destinoItem?.destino_status ?? null,

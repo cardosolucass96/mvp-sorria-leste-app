@@ -201,4 +201,50 @@ describe('GET /api/orcamentos-em-aberto', () => {
     expect(itensQuery?.sql).toContain('i.adicionado_em_execucao = 0');
     expect(itensQuery?.sql).toContain('a.status AS atendimento_status');
   });
+
+  it('reconcilia agendamento legado sem item de origem antes de exibir o saldo', async () => {
+    mockQueryResponse('from itens_atendimento i', []);
+    mockQueryResponse('from agendamentos ag', [
+      {
+        agendamento_id: 401,
+        atendimento_origem_id: 12,
+        item_atendimento_origem_id: null,
+        cliente_id: 102,
+        cliente_nome: 'Carlos Lima',
+        cliente_telefone: null,
+        orcamento_em: '2026-07-11 08:00:00',
+        atendimento_status: 'finalizado',
+        procedimento_id: 9,
+        procedimento_nome: 'Implante',
+        procedimento_valor: 2000,
+        etapa_modelo_id: 31,
+        etapa_modelo_nome: 'Cirurgia',
+        status: 'agendado',
+        data_agendada: '2026-08-10 10:00:00',
+        valor: 1000,
+        valor_pago: 0,
+        agendamento_created_at: '2026-07-12 09:00:00',
+        item_origem_group_id: null,
+        item_origem_dente_unico: null,
+        item_origem_dentes: null,
+        item_origem_por_dente: 1,
+      },
+    ]);
+    mockQueryResponse('from procedimento_etapas_modelo where procedimento_id = ?', [
+      { id: 31, nome: 'Cirurgia', valor: 1000 },
+      { id: 32, nome: 'Coroa', valor: 500 },
+    ]);
+
+    const { status, data } = await callRoute<{
+      summary: { valor_total_aberto: number };
+      items: Array<{ procedimentos: Array<{ valor_total: number; saldo_aberto: number }> }>;
+    }>(listOrcamentosEmAberto, '/api/orcamentos-em-aberto');
+
+    expect(status).toBe(200);
+    expect(data.summary.valor_total_aberto).toBe(1333.33);
+    expect(data.items[0].procedimentos[0]).toMatchObject({
+      valor_total: 1333.33,
+      saldo_aberto: 1333.33,
+    });
+  });
 });

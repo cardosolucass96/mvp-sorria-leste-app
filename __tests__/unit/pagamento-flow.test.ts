@@ -1,4 +1,8 @@
-import { ajustarEtapasAoValorDoItem } from '@/lib/helpers/pagamentoFlow';
+import {
+  ajustarEtapasAoValorDoItem,
+  obterValorEfetivoAgendamento,
+  obterValorEfetivoItem,
+} from '@/lib/helpers/pagamentoFlow';
 
 const ETAPAS_IMPLANTE = [
   { id: 1, nome: 'Cirurgia', valor: 1000 },
@@ -72,5 +76,65 @@ describe('ajustarEtapasAoValorDoItem', () => {
     ], 1500);
 
     expect(resultado.map((etapa) => etapa.valor)).toEqual([900, 600]);
+  });
+});
+
+describe('fontes efetivas de valor', () => {
+  it('prioriza valor_final para itens legados', () => {
+    expect(obterValorEfetivoItem({ valor: 1500, valor_final: 2000 })).toBe(2000);
+    expect(obterValorEfetivoItem({ valor: 1500, valor_final: null })).toBe(1500);
+  });
+
+  it('preserva o snapshot já reconciliado do agendamento', () => {
+    expect(obterValorEfetivoAgendamento({
+      valor: 1333.33,
+      valor_pago: 0,
+      procedimento_valor: 2000,
+      etapa_modelo_id: 1,
+      etapas_modelo: ETAPAS_IMPLANTE,
+    })).toBe(1333.33);
+  });
+
+  it('reconcilia o valor bruto de uma etapa legado com o total do procedimento', () => {
+    expect(obterValorEfetivoAgendamento({
+      valor: 1000,
+      valor_pago: 0,
+      procedimento_valor: 2000,
+      etapa_modelo_id: 1,
+      etapas_modelo: ETAPAS_IMPLANTE,
+    })).toBe(1333.33);
+  });
+
+  it('preserva um valor de agendamento editado que não corresponde ao modelo legado', () => {
+    expect(obterValorEfetivoAgendamento({
+      valor: 1400,
+      valor_pago: 0,
+      procedimento_valor: 2000,
+      etapa_modelo_id: 1,
+      etapas_modelo: ETAPAS_IMPLANTE,
+    })).toBe(1400);
+  });
+
+  it('nunca retorna valor abaixo do que já foi pago', () => {
+    expect(obterValorEfetivoAgendamento({
+      valor: 500,
+      valor_pago: 700,
+      procedimento_valor: 2000,
+      etapa_modelo_id: 2,
+      etapas_modelo: ETAPAS_IMPLANTE,
+    })).toBe(700);
+  });
+
+  it('corrige agendamento legado sem pesos configurados', () => {
+    expect(obterValorEfetivoAgendamento({
+      valor: 2000,
+      valor_pago: 0,
+      procedimento_valor: 2000,
+      etapa_modelo_id: 1,
+      etapas_modelo: [
+        { id: 1, valor: null },
+        { id: 2, valor: null },
+      ],
+    })).toBe(1000);
   });
 });

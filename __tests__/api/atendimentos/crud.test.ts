@@ -413,6 +413,27 @@ describe('GET /api/atendimentos/[id]', () => {
     expect(data.total_pago).toBe(0);
   });
 
+  it('normaliza valor legado do item com a mesma fonte usada pelo total', async () => {
+    mockQueryResponse('from atendimentos a', atendimentoDetalhe);
+    mockQueryResponse('from itens_atendimento i', [{
+      ...itemBase,
+      valor: 1500,
+      valor_final: 2000,
+      valor_pago: 0,
+    }]);
+    mockQueryResponse('select sum(coalesce(valor_final, valor)) as total from itens_atendimento', { total: 2000 });
+    mockQueryResponse('coalesce(sum(valor_pago), 0) as total from itens_atendimento', { total: 0 });
+
+    const { status, data } = await callRoute<{
+      total: number;
+      itens: Array<{ valor: number; valor_final: number; saldo: number }>;
+    }>(getAtendimento, '/api/atendimentos/3', {}, createRouteContext({ id: '3' }));
+
+    expect(status).toBe(200);
+    expect(data.total).toBe(2000);
+    expect(data.itens[0]).toMatchObject({ valor: 2000, valor_final: 2000, saldo: 2000 });
+  });
+
   it('reconcilia as etapas com o valor customizado de itens por dente', async () => {
     const itensImplante = [
       {

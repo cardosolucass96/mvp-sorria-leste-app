@@ -105,6 +105,9 @@ describe('POST /api/execucao/evolucoes', () => {
     expect(queries.filter((q) => q.sql.includes('INSERT INTO prontuario_evolucao_itens'))).toHaveLength(2);
     expect(queries.some((q) => q.sql.includes("SET status = 'concluido'"))).toBe(true);
     expect(queries.filter((q) => q.sql.includes('INSERT INTO comissoes'))).toHaveLength(2);
+    expect(queries.filter((q) => q.sql.includes('INSERT INTO comissoes')).every((q) => (
+      q.sql.includes('COALESCE(ia.valor_final, ia.valor)')
+    ))).toBe(true);
     expect(batchSpy).toHaveBeenCalledTimes(1);
   });
 

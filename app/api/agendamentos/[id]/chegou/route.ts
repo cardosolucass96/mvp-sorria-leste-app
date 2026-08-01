@@ -4,6 +4,7 @@ import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento } from '@/lib/types';
 import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
 import { getClinicDayUtcRange } from '@/lib/time';
+import { obterValorEfetivoAgendamento, roundMoney } from '@/lib/helpers/pagamentoFlow';
 
 interface ItemOrigem {
   criado_por_id: number;
@@ -348,24 +349,34 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
 
         if (!procedimento) continue;
 
-        let itemValor = ag.valor ?? procedimento.valor;
         const etapaModeloId: number | null = ag.etapa_modelo_id ?? null;
         let etapaLabel: string | null = null;
+        let etapasModelo: EtapaModelo[] = [];
 
         if (etapaModeloId) {
-          const etapaModelo = await queryOne<EtapaModelo>(
-            'SELECT id, nome, valor FROM procedimento_etapas_modelo WHERE id = ?',
-            [etapaModeloId]
+          etapasModelo = await query<EtapaModelo>(
+            'SELECT id, nome, valor FROM procedimento_etapas_modelo WHERE procedimento_id = ? ORDER BY ordem ASC',
+            [ag.procedimento_id]
           );
+          const etapaModelo = etapasModelo.find((etapa) => etapa.id === etapaModeloId);
           if (etapaModelo) {
             etapaLabel = etapaModelo.nome;
-            if (etapaModelo.valor != null) {
-              itemValor = etapaModelo.valor;
-            }
           }
         }
 
-        const valorPago = ag.valor_pago ?? (ag.pago ? itemValor : 0);
+        const itemValor = obterValorEfetivoAgendamento({
+          valor: ag.valor,
+          valor_pago: ag.valor_pago,
+          procedimento_valor: procedimento.valor,
+          etapa_modelo_id: etapaModeloId,
+          etapas_modelo: etapasModelo,
+        });
+        const valorPagoSalvo = roundMoney(Math.max(0, Number(ag.valor_pago) || 0));
+        const valorPago = valorPagoSalvo > 0
+          ? valorPagoSalvo
+          : ag.pago
+            ? itemValor
+            : 0;
         const statusItem = valorPago >= itemValor ? 'pago' : 'pendente';
 
         let criadoPorId = context.user.sub;
