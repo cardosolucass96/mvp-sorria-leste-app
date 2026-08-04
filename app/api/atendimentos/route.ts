@@ -6,7 +6,7 @@ import { validarUsuarioPorRoles } from './_helpers';
 import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
 import { getClinicDayUtcRange, getClinicTrailingDaysUtcRange } from '@/lib/time';
 import type { AtendimentoStatus } from '@/lib/types';
-import { validarDentesProcedimento } from '@/lib/helpers/dentesProcedimento';
+import { validarDentesProcedimento, type DenteProcedimentoPayload } from '@/lib/helpers/dentesProcedimento';
 import {
   getEffectiveUserRoles,
   isRestrictedDentistPatientView,
@@ -196,10 +196,66 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
 export const POST = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
     const body = await request.json();
-    const { cliente_id, avaliador_id, tipo_orto, executor_id, procedimento_id, valor, criado_por_id, categoria_id, categoria_slug, dentes } = body;
+    const {
+      cliente_id,
+      avaliador_id,
+      tipo_orto,
+      executor_id,
+      procedimento_id,
+      valor,
+      criado_por_id,
+      categoria_id,
+      categoria_slug,
+      dentes,
+      procedimentos: procedimentosInformados,
+    } = body;
     const avaliadorIdInformado = Number.isInteger(avaliador_id) && Number(avaliador_id) > 0
       ? Number(avaliador_id)
       : null;
+
+    // O formato novo aceita vários procedimentos. O formato legado com os
+    // campos singulares continua válido para não quebrar integrações antigas.
+    const procedimentosBrutos = Array.isArray(procedimentosInformados)
+      ? procedimentosInformados
+      : procedimento_id
+        ? [{ procedimento_id, executor_id, valor, dentes }]
+        : [];
+    const procedimentosSolicitados: Array<{
+      procedimento_id: number;
+      executor_id: number | null;
+      valor: number | null;
+      dentes: unknown;
+    }> = [];
+
+    for (const procedimentoBruto of procedimentosBrutos) {
+      const procedimentoId = Number(procedimentoBruto?.procedimento_id);
+      if (!Number.isInteger(procedimentoId) || procedimentoId <= 0) {
+        return NextResponse.json({ error: 'Procedimento inválido' }, { status: 400 });
+      }
+
+      const executorBruto = procedimentoBruto?.executor_id;
+      const executorId = executorBruto === undefined || executorBruto === null || executorBruto === ''
+        ? null
+        : Number(executorBruto);
+      if (executorId !== null && (!Number.isInteger(executorId) || executorId <= 0)) {
+        return NextResponse.json({ error: 'Executor inválido' }, { status: 400 });
+      }
+
+      const valorBruto = procedimentoBruto?.valor;
+      const valorInformado = valorBruto === undefined || valorBruto === null || valorBruto === ''
+        ? null
+        : Number(valorBruto);
+      if (valorInformado !== null && (!Number.isFinite(valorInformado) || valorInformado < 0)) {
+        return NextResponse.json({ error: 'Valor inválido' }, { status: 400 });
+      }
+
+      procedimentosSolicitados.push({
+        procedimento_id: procedimentoId,
+        executor_id: executorId,
+        valor: valorInformado,
+        dentes: procedimentoBruto?.dentes,
+      });
+    }
     
     // Validações
     if (!cliente_id) {
@@ -288,26 +344,20 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     
     // === FLUXO CATEGORIA COM pula_avaliacao (antes: apenas orto) ===
     if (pulaAvaliacao) {
-      if (!procedimento_id) {
+      if (procedimentosSolicitados.length === 0) {
         return NextResponse.json(
-          { error: 'Procedimento é obrigatório para atendimento orto' },
+          {
+            error: tipo_orto
+              ? 'Procedimento é obrigatório para atendimento orto'
+              : 'Ao menos um procedimento é obrigatório para este atendimento',
+          },
           { status: 400 }
         );
       }
 
-      // executor_id é opcional — se não informado, fica disponível para alguém assumir
-      if (executor_id) {
-        const executorValido = await validarUsuarioPorRoles(executor_id, ['executor', 'ortodontista'], categoriaIdFinal);
-
-        if (executorValido === 'not_found') {
-          return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
-        }
-
-        if (executorValido !== 'ok') {
-          return NextResponse.json({ error: 'Usuário selecionado não é executor' }, { status: 400 });
-        }
-      }
-
+      // A forma antiga usava o executor como criador quando não recebia
+      // criado_por_id. Mantemos esse fallback para integrações existentes;
+      // o novo formulário envia explicitamente o usuário autenticado.
       const criadoPorId = criado_por_id || executor_id || context.user.sub;
       if (!criadoPorId) {
         return NextResponse.json(
@@ -316,36 +366,76 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         );
       }
 
-      // Verifica procedimento
-      const procedimentoBase = await queryOne<{ id: number; valor: number; nome: string }>(
-        'SELECT id, valor, nome FROM procedimentos WHERE id = ? AND ativo = 1',
-        [procedimento_id]
-      );
-      if (!procedimentoBase) {
-        return NextResponse.json({ error: 'Procedimento não encontrado' }, { status: 404 });
-      }
-      const configuracaoDentes = await queryOne<{ por_dente: number; tem_face: number }>(
-        'SELECT por_dente, tem_face FROM procedimentos WHERE id = ?',
-        [procedimento_id]
-      );
-      const procedimento = {
-        ...procedimentoBase,
-        por_dente: configuracaoDentes?.por_dente ?? 0,
-        tem_face: configuracaoDentes?.tem_face ?? 0,
-      };
+      const procedimentosParaCriar: Array<{
+        procedimento_id: number;
+        executor_id: number | null;
+        valor: number;
+        por_dente: number;
+        dentes: DenteProcedimentoPayload[];
+      }> = [];
 
-      const valorFinal = valor != null ? Number(valor) : Number(procedimento.valor);
-      if (!Number.isFinite(valorFinal) || valorFinal < 0) {
-        return NextResponse.json({ error: 'Valor inválido' }, { status: 400 });
-      }
+      // Valida todos os procedimentos antes de criar o atendimento, evitando
+      // que uma seleção inválida deixe itens parcialmente gravados.
+      for (const solicitado of procedimentosSolicitados) {
+        if (solicitado.executor_id) {
+          const executorValido = await validarUsuarioPorRoles(
+            solicitado.executor_id,
+            ['executor', 'ortodontista'],
+            categoriaIdFinal,
+          );
 
-      const validacaoDentes = procedimento.por_dente
-        ? validarDentesProcedimento(dentes, { exigirFaces: Boolean(procedimento.tem_face) })
-        : null;
-      if (validacaoDentes && !validacaoDentes.ok) {
-        return NextResponse.json({ error: validacaoDentes.error }, { status: 400 });
+          if (executorValido === 'not_found') {
+            return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
+          }
+
+          if (executorValido !== 'ok') {
+            return NextResponse.json({ error: 'Usuário selecionado não é executor' }, { status: 400 });
+          }
+        }
+
+        const procedimentoBase = await queryOne<{
+          id: number;
+          valor: number;
+          nome: string;
+        }>(
+          'SELECT id, valor, nome FROM procedimentos WHERE id = ? AND ativo = 1',
+          [solicitado.procedimento_id],
+        );
+        if (!procedimentoBase) {
+          return NextResponse.json({ error: 'Procedimento não encontrado' }, { status: 404 });
+        }
+
+        // Mantém a consulta separada para compatibilidade com integrações e
+        // bancos legados que ainda não expõem essas colunas no mesmo SELECT.
+        const configuracaoDentes = await queryOne<{ por_dente: number; tem_face: number }>(
+          'SELECT por_dente, tem_face FROM procedimentos WHERE id = ?',
+          [solicitado.procedimento_id],
+        );
+        const procedimento = {
+          ...procedimentoBase,
+          por_dente: configuracaoDentes?.por_dente ?? 0,
+          tem_face: configuracaoDentes?.tem_face ?? 0,
+        };
+
+        const valorFinal = solicitado.valor !== null ? solicitado.valor : Number(procedimento.valor);
+        const validacaoDentes = procedimento.por_dente
+          ? validarDentesProcedimento(solicitado.dentes, { exigirFaces: Boolean(procedimento.tem_face) })
+          : null;
+        if (validacaoDentes && !validacaoDentes.ok) {
+          const mensagem = tipo_orto && !Array.isArray(procedimentosInformados)
+            ? validacaoDentes.error
+            : `${procedimento.nome}: ${validacaoDentes.error}`;
+          return NextResponse.json({ error: mensagem }, { status: 400 });
+        }
+
+        procedimentosParaCriar.push({
+          procedimento_id: procedimento.id,
+          executor_id: solicitado.executor_id,
+          valor: valorFinal,
+          por_dente: procedimento.por_dente,
+          dentes: validacaoDentes?.ok ? validacaoDentes.dentes : [],
+        });
       }
-      const dentesArray = validacaoDentes?.ok ? validacaoDentes.dentes : [];
 
       // Cria atendimento já em aguardando_pagamento
       // NOTE: mantém `tipo='orto'` quando categoria for orto para compat com código legado que ainda lê tipo.
@@ -358,40 +448,51 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
       const atendimentoId = result.lastInsertRowid;
 
-      // Cria um item por dente para manter o vínculo explícito em todo o fluxo.
-      if (procedimento.por_dente) {
-        const groupId = randomUUID();
-        for (const dente of dentesArray) {
+      for (const procedimento of procedimentosParaCriar) {
+        // Cria um item por dente para manter o vínculo explícito em todo o fluxo.
+        if (procedimento.por_dente) {
+          const groupId = randomUUID();
+          for (const dente of procedimento.dentes) {
+            await execute(
+              `INSERT INTO itens_atendimento (
+                atendimento_id, procedimento_id, executor_id, criado_por_id,
+                valor, valor_original, valor_final, desconto_valor, quantidade, status,
+                dentes, group_id, dente_unico
+              )
+               VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, 'pendente', ?, ?, ?)`,
+              [
+                atendimentoId,
+                procedimento.procedimento_id,
+                procedimento.executor_id,
+                criadoPorId,
+                procedimento.valor,
+                procedimento.valor,
+                procedimento.valor,
+                JSON.stringify([dente]),
+                groupId,
+                dente.dente,
+              ],
+            );
+          }
+        } else {
           await execute(
             `INSERT INTO itens_atendimento (
               atendimento_id, procedimento_id, executor_id, criado_por_id,
               valor, valor_original, valor_final, desconto_valor, quantidade, status,
-              dentes, group_id, dente_unico
+              dentes
             )
-             VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, 'pendente', ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, 'pendente', NULL)`,
             [
               atendimentoId,
-              procedimento_id,
-              executor_id || null,
+              procedimento.procedimento_id,
+              procedimento.executor_id,
               criadoPorId,
-              valorFinal,
-              valorFinal,
-              valorFinal,
-              JSON.stringify([dente]),
-              groupId,
-              dente.dente,
+              procedimento.valor,
+              procedimento.valor,
+              procedimento.valor,
             ]
           );
         }
-      } else {
-        await execute(
-          `INSERT INTO itens_atendimento (
-            atendimento_id, procedimento_id, executor_id, criado_por_id,
-            valor, valor_original, valor_final, desconto_valor, quantidade, status
-          )
-           VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, 'pendente')`,
-          [atendimentoId, procedimento_id, executor_id || null, criadoPorId, valorFinal, valorFinal, valorFinal]
-        );
       }
       
       // Busca atendimento criado

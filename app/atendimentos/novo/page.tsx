@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ClipboardList, Search, Calendar } from 'lucide-react';
+import { ClipboardList, Search, Calendar, Plus, Trash2 } from 'lucide-react';
 import { Alert, LoadingState, PageHeader, Card, Button, Input, Select, SearchInput, Modal } from '@/components/ui';
 import { ClienteForm, ClienteFormData } from '@/components/domain';
 import usePageTitle from '@/lib/utils/usePageTitle';
@@ -52,6 +52,13 @@ interface ProcedimentoLite {
   tem_face: number;
 }
 
+interface ProcedimentoSelecionado {
+  procedimentoId: string;
+  executorId: string;
+  valor: string;
+  dentes: DenteFaceInput[];
+}
+
 type TipoAtendimento = 'normal' | 'sessao';
 
 function NovoAtendimentoForm() {
@@ -75,10 +82,9 @@ function NovoAtendimentoForm() {
   const [avaliadorId, setAvaliadorId] = useState('');
 
   // Campos do fluxo pula_avaliacao (orto-like)
-  const [procedimentoId, setProcedimentoId] = useState<string>('');
-  const [executorId, setExecutorId] = useState<string>('');
-  const [valorProcedimento, setValorProcedimento] = useState<string>('');
-  const [dentesProcedimento, setDentesProcedimento] = useState<DenteFaceInput[]>([]);
+  const [procedimentosSelecionados, setProcedimentosSelecionados] = useState<ProcedimentoSelecionado[]>([
+    { procedimentoId: '', executorId: '', valor: '', dentes: [] },
+  ]);
 
   // Dados estáticos
   const [categorias, setCategorias] = useState<CategoriaComRoles[]>([]);
@@ -89,8 +95,6 @@ function NovoAtendimentoForm() {
 
   const categoriaSelecionada = categorias.find(c => String(c.id) === categoriaId) || null;
   const pulaAvaliacao = categoriaSelecionada?.pula_avaliacao === 1;
-  const procedimentoSelecionado = procedimentosCategoria.find(p => String(p.id) === procedimentoId) || null;
-
   // Modal novo cliente
   const [modalNovoCliente, setModalNovoCliente] = useState(false);
   const [savingNovoCliente, setSavingNovoCliente] = useState(false);
@@ -190,9 +194,7 @@ function NovoAtendimentoForm() {
     if (!categoriaId || !pulaAvaliacao) {
       setProcedimentosCategoria([]);
       setExecutoresCategoria([]);
-      setProcedimentoId('');
-      setDentesProcedimento([]);
-      setExecutorId('');
+      setProcedimentosSelecionados([{ procedimentoId: '', executorId: '', valor: '', dentes: [] }]);
       return;
     }
     (async () => {
@@ -213,14 +215,6 @@ function NovoAtendimentoForm() {
       }
     })();
   }, [categoriaId, pulaAvaliacao]);
-
-  useEffect(() => {
-    const proc = procedimentosCategoria.find(p => String(p.id) === procedimentoId);
-    if (proc && !valorProcedimento) {
-      setValorProcedimento(String(proc.valor));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [procedimentoId]);
 
   // Pré-selecionar cliente vindo de ?cliente=
   useEffect(() => {
@@ -322,6 +316,28 @@ function NovoAtendimentoForm() {
     }
   };
 
+  const atualizarProcedimentoSelecionado = (
+    index: number,
+    changes: Partial<ProcedimentoSelecionado>,
+  ) => {
+    setProcedimentosSelecionados((current) => current.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, ...changes } : item
+    )));
+  };
+
+  const adicionarProcedimento = () => {
+    setProcedimentosSelecionados((current) => [
+      ...current,
+      { procedimentoId: '', executorId: '', valor: '', dentes: [] },
+    ]);
+  };
+
+  const removerProcedimento = (index: number) => {
+    setProcedimentosSelecionados((current) => (
+      current.length > 1 ? current.filter((_, itemIndex) => itemIndex !== index) : current
+    ));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clienteId) return;
@@ -343,30 +359,38 @@ function NovoAtendimentoForm() {
       };
 
       if (pulaAvaliacao) {
-        if (!procedimentoId) {
-          mostrarError('Selecione um procedimento');
+        const procedimentosValidos = procedimentosSelecionados.filter((item) => item.procedimentoId);
+        if (procedimentosValidos.length === 0) {
+          mostrarError('Selecione ao menos um procedimento');
           setSaving(false);
           return;
         }
-        if (procedimentoSelecionado?.por_dente) {
-          if (dentesProcedimento.length === 0) {
-            mostrarError('Selecione ao menos um dente');
+
+        for (const item of procedimentosValidos) {
+          const procedimento = procedimentosCategoria.find((proc) => String(proc.id) === item.procedimentoId);
+          if (!procedimento) {
+            mostrarError('Selecione um procedimento válido');
             setSaving(false);
             return;
           }
-          if (
-            procedimentoSelecionado.tem_face
-            && dentesProcedimento.some((item) => item.faces.length === 0)
-          ) {
-            mostrarError('Selecione ao menos uma face para cada dente');
+          if (procedimento.por_dente && item.dentes.length === 0) {
+            mostrarError(`Selecione ao menos um dente para ${procedimento.nome}`);
             setSaving(false);
             return;
           }
-          payload.dentes = JSON.stringify(dentesProcedimento);
+          if (procedimento.por_dente && procedimento.tem_face && item.dentes.some((dente) => dente.faces.length === 0)) {
+            mostrarError(`Selecione ao menos uma face para cada dente de ${procedimento.nome}`);
+            setSaving(false);
+            return;
+          }
         }
-        payload.procedimento_id = parseInt(procedimentoId);
-        if (executorId) payload.executor_id = parseInt(executorId);
-        if (valorProcedimento) payload.valor = parseFloat(valorProcedimento);
+
+        payload.procedimentos = procedimentosValidos.map((item) => ({
+          procedimento_id: parseInt(item.procedimentoId),
+          ...(item.executorId ? { executor_id: parseInt(item.executorId) } : {}),
+          ...(item.valor ? { valor: parseFloat(item.valor) } : {}),
+          ...(item.dentes.length > 0 ? { dentes: JSON.stringify(item.dentes) } : {}),
+        }));
         payload.criado_por_id = user?.id;
       } else {
         payload.avaliador_id = avaliadorId ? parseInt(avaliadorId) : null;
@@ -515,56 +539,91 @@ function NovoAtendimentoForm() {
         {/* 4 — Fluxo */}
         {pulaAvaliacao ? (
           <Card>
-            <h2 className="text-lg font-semibold mb-3">3. Procedimento e Executor</h2>
-            <p className="text-sm text-muted mb-3">Esta fila vai direto para pagamento, sem necessidade de avaliação.</p>
-            <div className="space-y-3">
-              <SearchableSelect
-                label="Procedimento"
-                name="procedimento_id"
-                value={procedimentoId}
-                onChange={(value) => {
-                  setProcedimentoId(value);
-                  setValorProcedimento('');
-                  setDentesProcedimento([]);
-                }}
-                options={procedimentosCategoria.map(p => ({
-                  value: String(p.id),
-                  label: p.nome,
-                }))}
-                placeholder="-- Selecionar --"
-                searchPlaceholder="Buscar procedimento..."
-                emptyMessage="Nenhum procedimento encontrado"
-                required
-              />
-              {procedimentoId && (
-                <Input
-                  label="Valor (R$)"
-                  name="valor"
-                  type="number"
-                  value={valorProcedimento}
-                  onChange={setValorProcedimento}
-                  placeholder="0,00"
-                />
-              )}
-              {procedimentoSelecionado?.por_dente === 1 && (
-                <div className="rounded-lg border border-border p-3">
-                  <p className="mb-2 text-sm font-medium">Dente(s) do procedimento</p>
-                  <SeletorDentes
-                    valor={dentesProcedimento}
-                    onChange={setDentesProcedimento}
-                    mostrarFaces={procedimentoSelecionado.tem_face === 1}
-                    expandidoInicial
-                  />
-                </div>
-              )}
-              <Select
-                label="Executor (opcional)"
-                name="executor_id"
-                value={executorId}
-                onChange={setExecutorId}
-                options={executoresCategoria.map(u => ({ value: String(u.id), label: u.nome }))}
-                placeholder="-- Deixar disponível para qualquer executor --"
-              />
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h2 className="text-lg font-semibold">3. Procedimentos e Execução</h2>
+                <p className="text-sm text-muted mt-1">Esta fila vai direto para pagamento, sem necessidade de avaliação. Adicione todos os procedimentos que serão feitos hoje.</p>
+              </div>
+              <Button type="button" variant="secondary" size="sm" onClick={adicionarProcedimento}>
+                <Plus className="w-4 h-4" aria-hidden="true" />
+                Adicionar
+              </Button>
+            </div>
+            <div className="space-y-4">
+              {procedimentosSelecionados.map((item, index) => {
+                const procedimento = procedimentosCategoria.find((proc) => String(proc.id) === item.procedimentoId) || null;
+
+                return (
+                  <div key={index} className="rounded-lg border border-border p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold">Procedimento {index + 1}</p>
+                      {procedimentosSelecionados.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removerProcedimento(index)}
+                          aria-label={`Remover procedimento ${index + 1}`}
+                        >
+                          <Trash2 className="w-4 h-4" aria-hidden="true" />
+                          Remover
+                        </Button>
+                      )}
+                    </div>
+                    <SearchableSelect
+                      label="Procedimento"
+                      name={`procedimento_id_${index}`}
+                      value={item.procedimentoId}
+                      onChange={(value) => {
+                        const selected = procedimentosCategoria.find((proc) => String(proc.id) === value);
+                        atualizarProcedimentoSelecionado(index, {
+                          procedimentoId: value,
+                          executorId: '',
+                          valor: selected ? String(selected.valor) : '',
+                          dentes: [],
+                        });
+                      }}
+                      options={procedimentosCategoria.map(p => ({
+                        value: String(p.id),
+                        label: p.nome,
+                      }))}
+                      placeholder="-- Selecionar --"
+                      searchPlaceholder="Buscar procedimento..."
+                      emptyMessage="Nenhum procedimento encontrado"
+                      required={procedimentosSelecionados.length === 1 && index === 0}
+                    />
+                    {item.procedimentoId && (
+                      <Input
+                        label="Valor (R$)"
+                        name={`valor_${index}`}
+                        type="number"
+                        value={item.valor}
+                        onChange={(value) => atualizarProcedimentoSelecionado(index, { valor: value })}
+                        placeholder="0,00"
+                      />
+                    )}
+                    {procedimento?.por_dente === 1 && (
+                      <div className="rounded-lg border border-border p-3">
+                        <p className="mb-2 text-sm font-medium">Dente(s) do procedimento</p>
+                        <SeletorDentes
+                          valor={item.dentes}
+                          onChange={(dentes) => atualizarProcedimentoSelecionado(index, { dentes })}
+                          mostrarFaces={procedimento.tem_face === 1}
+                          expandidoInicial
+                        />
+                      </div>
+                    )}
+                    <Select
+                      label="Executor (opcional)"
+                      name={`executor_id_${index}`}
+                      value={item.executorId}
+                      onChange={(value) => atualizarProcedimentoSelecionado(index, { executorId: value })}
+                      options={executoresCategoria.map(u => ({ value: String(u.id), label: u.nome }))}
+                      placeholder="-- Deixar disponível para qualquer executor --"
+                    />
+                  </div>
+                );
+              })}
             </div>
           </Card>
         ) : tipoAtendimento === 'normal' ? (

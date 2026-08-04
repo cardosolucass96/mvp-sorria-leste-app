@@ -318,4 +318,34 @@ describe('POST /api/atendimentos — fluxo orto', () => {
     const insertAt = queries.find(q => q.sql.includes('INSERT INTO atendimentos'));
     expect(insertAt!.sql).toContain('NULL');
   });
+
+  it('cria um item para cada procedimento enviado no array', async () => {
+    setLastInsertId(19);
+    mockQueryResponse('SELECT id FROM clientes WHERE id', { id: 1 });
+    mockQueryResponse("not in ('finalizado'", { count: 0 });
+    mockQueryResponse('SELECT id, role FROM usuarios WHERE id', { id: 4, role: 'executor' });
+    mockQueryResponse('SELECT id, valor, nome FROM procedimentos', { id: 1, valor: 150, nome: 'Procedimento' });
+    mockQueryResponse('WHERE a.id = ?', { id: 19, status: 'aguardando_pagamento' });
+
+    const { status } = await callRoute(createAtendimento, '/api/atendimentos', {
+      method: 'POST',
+      body: {
+        cliente_id: 1,
+        tipo_orto: true,
+        criado_por_id: 1,
+        procedimentos: [
+          { procedimento_id: 1, executor_id: 4, valor: 150 },
+          { procedimento_id: 2, executor_id: 4, valor: 300 },
+        ],
+      },
+    });
+
+    expect(status).toBe(201);
+    const queries = getExecutedQueries();
+    const procedureQueries = queries.filter((query) => query.sql.includes('SELECT id, valor, nome FROM procedimentos'));
+    const itemInserts = queries.filter((query) => query.sql.includes('INSERT INTO itens_atendimento'));
+    expect(procedureQueries.map((query) => query.params[0])).toEqual([1, 2]);
+    expect(itemInserts).toHaveLength(2);
+    expect(itemInserts.map((query) => query.params[4])).toEqual([150, 300]);
+  });
 });
