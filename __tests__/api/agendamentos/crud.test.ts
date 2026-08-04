@@ -815,6 +815,55 @@ describe('POST /api/agendamentos/[id]/chegou', () => {
     expect(updateAg).toBeDefined();
   });
 
+  it('respeita a seleção explícita de vários agendamentos na mesma chegada', async () => {
+    const segundoAgendamento = {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      id: 3,
+      procedimento_id: 2,
+      procedimento_nome: 'Restauração Classe 2',
+      data_agendada: null,
+    };
+    mockQueryResponse('select * from agendamentos where id', {
+      ...AGENDAMENTO_PROCEDIMENTO,
+      status: 'agendado',
+    });
+    mockQueryResponse("status in ('pendente', 'agendado')", [
+      { ...AGENDAMENTO_PROCEDIMENTO, status: 'agendado' },
+      { ...segundoAgendamento, status: 'pendente' },
+    ]);
+    mockQueryResponse("status not in ('finalizado'", []);
+    mockQueryResponse('select id, valor from procedimentos', { id: 1, valor: 150 });
+    setLastInsertId(110);
+    mockQueryResponse('inner join clientes c', {
+      id: 110,
+      cliente_id: 1,
+      status: 'aguardando_pagamento',
+      tipo: 'sessao',
+      cliente_nome: CLIENTE_BASICO.nome,
+    });
+
+    const { status, data } = await callRoute<{ agendamentos_agrupados: number }>(
+      chegouAgendamento,
+      '/api/agendamentos/1/chegou',
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test.jwt.token' },
+        body: { agendamento_ids: [1, 3] },
+      },
+      createRouteContext({ id: '1' })
+    );
+
+    expect(status).toBe(201);
+    expect(data.agendamentos_agrupados).toBe(2);
+
+    const queries = getExecutedQueries();
+    const queryAgendamentos = queries.find((query) => query.sql.includes('COALESCE(p.por_dente'));
+    expect(queryAgendamentos?.sql).toContain('a.id IN (?, ?)');
+    expect(queryAgendamentos?.params.slice(-2)).toEqual([1, 3]);
+    expect(queries.filter((query) => query.sql.includes('INSERT INTO itens_atendimento'))).toHaveLength(2);
+    expect(queries.filter((query) => query.sql.includes("UPDATE agendamentos SET status = 'realizado'")).length).toBe(2);
+  });
+
   it('usa o avaliador primário único da unidade ao chegar uma avaliação', async () => {
     mockQueryResponse('select * from agendamentos where id', {
       ...AGENDAMENTO_AVALIACAO,

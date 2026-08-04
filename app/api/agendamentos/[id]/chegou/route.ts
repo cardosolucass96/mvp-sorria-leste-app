@@ -65,9 +65,33 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
     const agendamentoId = parseInt(id as string);
     const hojeRange = getClinicDayUtcRange();
     const body = await request.json().catch(() => ({})) as {
+      agendamento_ids?: unknown;
       dentes_por_agendamento?: Record<string, unknown>;
     };
     const dentesInformados = body.dentes_por_agendamento ?? {};
+    const selecaoExplicita = body.agendamento_ids !== undefined;
+    if (selecaoExplicita && !Array.isArray(body.agendamento_ids)) {
+      return NextResponse.json({ error: 'Agendamentos selecionados inválidos' }, { status: 400 });
+    }
+    const agendamentoIdsSelecionados = selecaoExplicita
+      ? Array.from(new Set(
+        (body.agendamento_ids as unknown[]).map((valor) => Number(valor))
+      ))
+      : null;
+
+    if (
+      agendamentoIdsSelecionados
+      && (
+        agendamentoIdsSelecionados.length === 0
+        || agendamentoIdsSelecionados.some((valor) => !Number.isInteger(valor) || valor <= 0)
+        || !agendamentoIdsSelecionados.includes(agendamentoId)
+      )
+    ) {
+      return NextResponse.json(
+        { error: 'Selecione ao menos um agendamento e inclua o agendamento de referência' },
+        { status: 400 }
+      );
+    }
 
     // 1. Buscar agendamento disparador e validar status
     const agendamento = await queryOne<Agendamento>(
@@ -95,8 +119,14 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
       );
     }
 
-    // 3. Buscar TODOS os agendamentos do cliente para hoje (pendente ou agendado)
-    //    Inclui o agendamento disparador + qualquer outro com data_agendada = hoje
+    // 3. Buscar os agendamentos selecionados ou, no formato antigo, todos os
+    //    agendamentos do cliente para hoje (pendente ou agendado).
+    const filtroAgendamentos = agendamentoIdsSelecionados
+      ? `a.id IN (${agendamentoIdsSelecionados.map(() => '?').join(', ')})`
+      : `(a.id = ? OR (a.data_agendada >= ? AND a.data_agendada < ?))`;
+    const parametrosAgendamentos = agendamentoIdsSelecionados
+      ? [agendamento.cliente_id, unidadeId, ...agendamentoIdsSelecionados]
+      : [agendamento.cliente_id, unidadeId, agendamentoId, hojeRange.start, hojeRange.endExclusive];
     const agendamentosHoje = await query<AgendamentoDoCliente>(
       `SELECT
          a.*,
@@ -107,18 +137,26 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
        WHERE a.cliente_id = ?
          AND a.unidade_id = ?
          AND a.status IN ('pendente', 'agendado')
-         AND (
-           a.id = ?
-           OR (a.data_agendada >= ? AND a.data_agendada < ?)
-         )
+         AND ${filtroAgendamentos}
        ORDER BY a.id ASC`,
-      [agendamento.cliente_id, unidadeId, agendamentoId, hojeRange.start, hojeRange.endExclusive]
+      parametrosAgendamentos
     );
 
     // Garante que o disparador sempre está incluído (caso data_agendada seja null)
     const idsAgrupados = new Set(agendamentosHoje.map(a => a.id));
     if (!idsAgrupados.has(agendamentoId)) {
       agendamentosHoje.unshift(agendamento as unknown as AgendamentoDoCliente);
+      idsAgrupados.add(agendamentoId);
+    }
+
+    if (agendamentoIdsSelecionados) {
+      const idsAusentes = agendamentoIdsSelecionados.filter((idSelecionado) => !idsAgrupados.has(idSelecionado));
+      if (idsAusentes.length > 0) {
+        return NextResponse.json(
+          { error: 'Um ou mais agendamentos selecionados não estão disponíveis para este cliente' },
+          { status: 409 }
+        );
+      }
     }
 
     // 4. Determinar se é avaliação ou sessão de procedimento

@@ -103,8 +103,8 @@ function NovoAtendimentoForm() {
   // Sessão agendada
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loadingAgendamentos, setLoadingAgendamentos] = useState(false);
-  const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
-  const [dentesSessao, setDentesSessao] = useState<DenteFaceInput[]>([]);
+  const [agendamentosSelecionados, setAgendamentosSelecionados] = useState<Agendamento[]>([]);
+  const [dentesSessaoPorAgendamento, setDentesSessaoPorAgendamento] = useState<Record<number, DenteFaceInput[]>>({});
   const [confirmandoSessao, setConfirmandoSessao] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -228,8 +228,8 @@ function NovoAtendimentoForm() {
   const handleSelecionarCliente = (c: Cliente) => {
     setClienteId(String(c.id));
     setClienteSelecionado(c);
-    setAgendamentoSelecionado(null);
-    setDentesSessao([]);
+    setAgendamentosSelecionados([]);
+    setDentesSessaoPorAgendamento({});
     if (tipoAtendimento === 'sessao') {
       buscarAgendamentos(c.id);
     }
@@ -246,39 +246,70 @@ function NovoAtendimentoForm() {
     }
   };
 
+  const alternarAgendamentoSelecionado = (agendamento: Agendamento) => {
+    setAgendamentosSelecionados((current) => {
+      const jaSelecionado = current.some((item) => item.id === agendamento.id);
+      return jaSelecionado
+        ? current.filter((item) => item.id !== agendamento.id)
+        : [...current, agendamento];
+    });
+
+    if (agendamentosSelecionados.some((item) => item.id === agendamento.id)) {
+      setDentesSessaoPorAgendamento((current) => {
+        const proximo = { ...current };
+        delete proximo[agendamento.id];
+        return proximo;
+      });
+    }
+  };
+
+  const atualizarDentesSessao = (agendamentoId: number, dentes: DenteFaceInput[]) => {
+    setDentesSessaoPorAgendamento((current) => ({
+      ...current,
+      [agendamentoId]: dentes,
+    }));
+  };
+
+  const precisaSelecionarDentesSessao = (agendamento: Agendamento) => (
+    agendamento.procedimento_por_dente === 1
+    && (
+      agendamento.item_atendimento_origem_id == null
+      || (!agendamento.item_origem_dentes && !agendamento.item_origem_dente_unico)
+    )
+  );
+
   const handleConfirmarSessao = async () => {
-    if (!agendamentoSelecionado) return;
-    const precisaDente = agendamentoSelecionado.procedimento_por_dente === 1
-      && (
-        agendamentoSelecionado.item_atendimento_origem_id == null
-        || (!agendamentoSelecionado.item_origem_dentes && !agendamentoSelecionado.item_origem_dente_unico)
-      );
-    if (precisaDente && dentesSessao.length === 0) {
-      mostrarError('Selecione ao menos um dente');
-      return;
+    if (agendamentosSelecionados.length === 0) return;
+
+    const dentesPorAgendamento: Record<string, DenteFaceInput[]> = {};
+    for (const agendamento of agendamentosSelecionados) {
+      if (!precisaSelecionarDentesSessao(agendamento)) continue;
+
+      const dentes = dentesSessaoPorAgendamento[agendamento.id] ?? [];
+      if (dentes.length === 0) {
+        mostrarError(`Selecione ao menos um dente para ${agendamento.procedimento_nome}`);
+        return;
+      }
+      if (agendamento.item_atendimento_origem_id != null && dentes.length !== 1) {
+        mostrarError(`Selecione exatamente um dente para ${agendamento.procedimento_nome}`);
+        return;
+      }
+      if (agendamento.procedimento_tem_face === 1 && dentes.some((item) => item.faces.length === 0)) {
+        mostrarError(`Selecione ao menos uma face para cada dente de ${agendamento.procedimento_nome}`);
+        return;
+      }
+      dentesPorAgendamento[String(agendamento.id)] = dentes;
     }
-    if (precisaDente && agendamentoSelecionado.item_atendimento_origem_id != null && dentesSessao.length !== 1) {
-      mostrarError('Selecione exatamente um dente para este procedimento vinculado');
-      return;
-    }
-    if (
-      precisaDente
-      && agendamentoSelecionado.procedimento_tem_face === 1
-      && dentesSessao.some((item) => item.faces.length === 0)
-    ) {
-      mostrarError('Selecione ao menos uma face para cada dente');
-      return;
-    }
+
     setConfirmandoSessao(true);
     setError('');
     try {
-      const res = await unitFetch(`/api/agendamentos/${agendamentoSelecionado.id}/chegou`, {
+      const res = await unitFetch(`/api/agendamentos/${agendamentosSelecionados[0].id}/chegou`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          dentes_por_agendamento: precisaDente
-            ? { [agendamentoSelecionado.id]: dentesSessao }
-            : {},
+          agendamento_ids: agendamentosSelecionados.map((agendamento) => agendamento.id),
+          dentes_por_agendamento: dentesPorAgendamento,
         }),
       });
       const data = await res.json();
@@ -649,16 +680,14 @@ function NovoAtendimentoForm() {
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-muted mb-2">Selecione qual sessão o cliente veio fazer:</p>
+                <p className="text-sm text-muted mb-2">Selecione as sessões que o cliente veio fazer hoje. Você pode selecionar mais de uma:</p>
                 <div className="border rounded-lg divide-y max-h-60 overflow-y-auto">
                   {agendamentos.map((ag) => (
                     <button key={ag.id} type="button"
-                      onClick={() => {
-                        setAgendamentoSelecionado(ag);
-                        setDentesSessao([]);
-                      }}
+                      onClick={() => alternarAgendamentoSelecionado(ag)}
+                      aria-pressed={agendamentosSelecionados.some((item) => item.id === ag.id)}
                       className={`w-full flex items-center justify-between p-3 text-left transition-colors ${
-                        agendamentoSelecionado?.id === ag.id
+                        agendamentosSelecionados.some((item) => item.id === ag.id)
                           ? 'border-l-4 border-l-warning-500 bg-warning-500/10'
                           : 'hover:bg-surface-secondary/45'
                       }`}>
@@ -673,27 +702,32 @@ function NovoAtendimentoForm() {
                           {' • '}{diasAtras(ag.created_at)}
                         </p>
                       </div>
-                      {agendamentoSelecionado?.id === ag.id && (
+                      {agendamentosSelecionados.some((item) => item.id === ag.id) && (
                         <span className="text-warning-600 text-xs font-medium">Selecionado</span>
                       )}
                     </button>
                   ))}
                 </div>
-                {agendamentoSelecionado?.procedimento_por_dente === 1
-                  && (
-                    agendamentoSelecionado.item_atendimento_origem_id == null
-                    || (!agendamentoSelecionado.item_origem_dentes && !agendamentoSelecionado.item_origem_dente_unico)
-                  ) && (
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="mb-2 text-sm font-medium">Dente(s) desta sessão</p>
+                {agendamentosSelecionados
+                  .filter(precisaSelecionarDentesSessao)
+                  .map((agendamento) => (
+                    <div key={agendamento.id} className="rounded-lg border border-border p-3">
+                      <p className="mb-2 text-sm font-medium">
+                        Dente(s) de {agendamento.procedimento_nome}
+                      </p>
                       <SeletorDentes
-                        valor={dentesSessao}
-                        onChange={setDentesSessao}
-                        mostrarFaces={agendamentoSelecionado.procedimento_tem_face === 1}
+                        valor={dentesSessaoPorAgendamento[agendamento.id] ?? []}
+                        onChange={(dentes) => atualizarDentesSessao(agendamento.id, dentes)}
+                        mostrarFaces={agendamento.procedimento_tem_face === 1}
                         expandidoInicial
                       />
                     </div>
-                  )}
+                  ))}
+                {agendamentosSelecionados.length > 0 && (
+                  <p className="text-sm text-muted">
+                    {agendamentosSelecionados.length} procedimento(s) selecionado(s)
+                  </p>
+                )}
               </div>
             )}
           </Card>
@@ -707,7 +741,7 @@ function NovoAtendimentoForm() {
           {tipoAtendimento === 'sessao' ? (
             <Button type="button"
               onClick={handleConfirmarSessao}
-              disabled={!agendamentoSelecionado || confirmandoSessao}
+              disabled={agendamentosSelecionados.length === 0 || confirmandoSessao}
               loading={confirmandoSessao}>
               Confirmar Chegada
             </Button>
