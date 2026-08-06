@@ -116,6 +116,19 @@ interface ItemProcedimento {
   concluido_at: string | null;
 }
 
+interface ProntuarioRegistro {
+  id: number;
+  item_atendimento_id: number;
+  usuario_id: number;
+  usuario_nome: string;
+  descricao: string;
+  observacoes: string | null;
+  created_at: string;
+  updated_at: string;
+  evolucao_id?: number;
+  compartilhado?: boolean;
+}
+
 interface Pagamento {
   id: number;
   atendimento_id: number;
@@ -330,6 +343,14 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const [termoModalSuccess, setTermoModalSuccess] = useState('');
   const [abaAtiva, setAbaAtiva] = useState('dados');
   const [modalProcedimento, setModalProcedimento] = useState<ItemProcedimento | null>(null);
+  const [modalProntuario, setModalProntuario] = useState<{
+    item: ItemProcedimento;
+    prontuario: ProntuarioRegistro | null;
+  } | null>(null);
+  const [prontuarioForm, setProntuarioForm] = useState({ descricao: '', observacoes: '' });
+  const [prontuarioLoadingItemId, setProntuarioLoadingItemId] = useState<number | null>(null);
+  const [prontuarioSaving, setProntuarioSaving] = useState(false);
+  const [prontuarioError, setProntuarioError] = useState('');
   const [modalPagamento, setModalPagamento] = useState<Pagamento | null>(null);
   const [vinculos, setVinculos] = useState<VinculoCliente[]>([]);
   const [agendamentos, setAgendamentos] = useState<AgendamentoCompleto[]>([]);
@@ -619,6 +640,76 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     setFicha(data);
     await carregarAnexos(data.prontuarios);
   }, [id, carregarAnexos]);
+
+  const abrirEditorProntuario = async (item: ItemProcedimento) => {
+    setProntuarioLoadingItemId(item.id);
+    setProntuarioError('');
+    try {
+      const res = await unitFetch(`/api/clientes/${id}/procedimentos/${item.id}/prontuario`);
+      const data = await res.json() as { prontuario?: ProntuarioRegistro | null; error?: string };
+      if (!res.ok) {
+        const mensagem = data.error || 'Não foi possível carregar o prontuário.';
+        setProntuarioError(mensagem);
+        setError(mensagem);
+        return;
+      }
+
+      const prontuario = data.prontuario ?? null;
+      setModalProntuario({ item, prontuario });
+      setProntuarioForm({
+        descricao: prontuario?.descricao ?? '',
+        observacoes: prontuario?.observacoes ?? '',
+      });
+    } catch {
+      const mensagem = 'Não foi possível carregar o prontuário.';
+      setProntuarioError(mensagem);
+      setError(mensagem);
+    } finally {
+      setProntuarioLoadingItemId(null);
+    }
+  };
+
+  const fecharEditorProntuario = () => {
+    setModalProntuario(null);
+    setProntuarioForm({ descricao: '', observacoes: '' });
+    setProntuarioError('');
+  };
+
+  const salvarProntuario = async () => {
+    if (!modalProntuario) return;
+
+    const descricao = prontuarioForm.descricao.trim();
+    if (descricao.length < 10) {
+      setProntuarioError('A descrição do prontuário deve ter no mínimo 10 caracteres.');
+      return;
+    }
+
+    setProntuarioSaving(true);
+    setProntuarioError('');
+    try {
+      const res = await unitFetch(`/api/clientes/${id}/procedimentos/${modalProntuario.item.id}/prontuario`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          descricao,
+          observacoes: prontuarioForm.observacoes.trim(),
+        }),
+      });
+      const data = await res.json() as { message?: string; error?: string };
+      if (!res.ok) {
+        setProntuarioError(data.error || 'Não foi possível salvar o prontuário.');
+        return;
+      }
+
+      fecharEditorProntuario();
+      setSuccess(data.message || 'Prontuário salvo com sucesso.');
+      await carregarFicha();
+    } catch {
+      setProntuarioError('Não foi possível salvar o prontuário.');
+    } finally {
+      setProntuarioSaving(false);
+    }
+  };
 
   const carregarAgendamentos = useCallback(async () => {
     const res = await unitFetch(`/api/agendamentos?cliente_id=${id}&status=pendente,agendado,faltou,realizado,cancelado&order_by=data_agendada&order_dir=asc`);
@@ -1635,6 +1726,17 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     />
   );
 
+  const usuarioRoles = user?.roles?.length ? user.roles : user ? [user.role] : [];
+  const podeGerenciarProntuario = usuarioRoles.some((role) => role === 'admin' || role === 'atendente');
+  const itensComProntuario = new Set<number>();
+  for (const prontuario of ficha?.prontuarios ?? []) {
+    if (prontuario.itens?.length) {
+      prontuario.itens.forEach((item) => itensComProntuario.add(item.item_id));
+    } else {
+      itensComProntuario.add(prontuario.item_id);
+    }
+  }
+
   const totalGasto = ficha?.pagamentos.filter(p => !p.cancelado).reduce((s, p) => s + p.valor, 0) ?? 0;
   const atendimentosPorId = new Map((ficha?.atendimentos ?? []).map((atendimento) => [atendimento.id, atendimento] as const));
   const procedimentosAgrupados: ProcedimentoGrupoFicha[] = (() => {
@@ -2197,6 +2299,9 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                               <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Pago</th>
                               <th className="px-4 py-3 text-center text-xs font-medium text-muted uppercase">Status</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Data</th>
+                              {podeGerenciarProntuario && (
+                                <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase">Prontuário</th>
+                              )}
                               <th className="px-4 py-3 text-right text-xs font-medium text-muted uppercase">Ações</th>
                             </tr>
                           </thead>
@@ -2225,7 +2330,26 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                                   <td className="px-4 py-3 text-sm text-muted">
                                     {formatarData(item.concluido_at || item.created_at)}
                                   </td>
-                                  <td className="px-4 py-3 text-right space-x-3">
+                                  {podeGerenciarProntuario && (
+                                    <td className="px-4 py-3 text-left">
+                                      <button
+                                        onClick={() => void abrirEditorProntuario(item)}
+                                        disabled={prontuarioLoadingItemId === item.id}
+                                        className="text-sm text-primary-600 hover:text-primary-800 font-medium disabled:opacity-50"
+                                      >
+                                        {prontuarioLoadingItemId === item.id
+                                          ? 'Carregando...'
+                                          : itensComProntuario.has(item.id)
+                                            ? 'Editar'
+                                            : 'Adicionar'}
+                                      </button>
+                                      <span className="ml-2 text-xs text-muted">
+                                        {itensComProntuario.has(item.id) ? 'Registrado' : 'Pendente'}
+                                      </span>
+                                    </td>
+                                  )}
+                                  <td className="px-4 py-3 text-right">
+                                    <div className="flex flex-wrap justify-end gap-3">
                                     {podeEstornar && (
                                       <button
                                         onClick={() => handleEstornarProcedimento(item)}
@@ -2238,6 +2362,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                                     <button onClick={() => setModalProcedimento(item)} className="text-sm text-info-600 hover:text-info-800">
                                       Ver →
                                     </button>
+                                    </div>
                                   </td>
                                 </tr>
                               );
@@ -2910,6 +3035,76 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 onChange={e => setVinculoObservacao(e.target.value)}
               />
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL: Procedimento */}
+      {modalProntuario && (
+        <Modal
+          isOpen={!!modalProntuario}
+          onClose={fecharEditorProntuario}
+          title={modalProntuario.prontuario ? 'Editar prontuário' : 'Adicionar prontuário'}
+          description={modalProntuario.item.etapa_label
+            ? `${modalProntuario.item.procedimento_nome} — ${modalProntuario.item.etapa_label}`
+            : modalProntuario.item.procedimento_nome}
+          size="lg"
+          footer={(
+            <>
+              <Button variant="secondary" onClick={fecharEditorProntuario} disabled={prontuarioSaving}>
+                Cancelar
+              </Button>
+              <Button onClick={salvarProntuario} loading={prontuarioSaving}>
+                Salvar prontuário
+              </Button>
+            </>
+          )}
+        >
+          <div className="flex flex-col gap-4">
+            {prontuarioError && <Alert type="error">{prontuarioError}</Alert>}
+
+            <div className="rounded-lg border border-border bg-surface-secondary p-3 text-sm">
+              <p className="font-medium">{nomeProcedimentoItem({
+                procedimento_nome: modalProntuario.item.procedimento_nome,
+                etapa_label: modalProntuario.item.etapa_label,
+                dentes: modalProntuario.item.dentes,
+                dente_unico: modalProntuario.item.dente_unico,
+              })}</p>
+              <p className="mt-1 text-xs text-muted">Atendimento #{modalProntuario.item.atendimento_id}</p>
+              {modalProntuario.prontuario?.compartilhado && (
+                <p className="mt-2 text-xs text-warning-700">
+                  Esta evolução está vinculada a mais de um procedimento. A edição será refletida nos procedimentos vinculados.
+                </p>
+              )}
+            </div>
+
+            <Textarea
+              label="Descrição do prontuário"
+              name="descricao_prontuario_cliente"
+              value={prontuarioForm.descricao}
+              onChange={(value) => setProntuarioForm((prev) => ({ ...prev, descricao: value }))}
+              required
+              minLength={10}
+              rows={6}
+              placeholder="Descreva o procedimento realizado, evolução clínica e intercorrências."
+              disabled={prontuarioSaving}
+            />
+
+            <Textarea
+              label="Observações"
+              name="observacoes_prontuario_cliente"
+              value={prontuarioForm.observacoes}
+              onChange={(value) => setProntuarioForm((prev) => ({ ...prev, observacoes: value }))}
+              rows={4}
+              placeholder="Observações adicionais, orientações ou retorno."
+              disabled={prontuarioSaving}
+            />
+
+            {modalProntuario.prontuario && (
+              <p className="text-xs text-muted">
+                Registrado por {modalProntuario.prontuario.usuario_nome} em {formatarDataHora(modalProntuario.prontuario.created_at)}.
+              </p>
+            )}
           </div>
         </Modal>
       )}

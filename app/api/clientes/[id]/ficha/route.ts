@@ -258,7 +258,7 @@ export const GET = withAuth(async (_request, context) => {
        INNER JOIN procedimentos p ON i.procedimento_id = p.id
        LEFT JOIN usuarios u ON i.executor_id = u.id
        LEFT JOIN usuarios pu ON pe.usuario_id = pu.id
-       WHERE a.cliente_id = ? AND i.status = 'concluido'
+       WHERE a.cliente_id = ?
        ORDER BY pe.created_at DESC, i.concluido_at DESC, i.id ASC`,
       [clienteId]
     );
