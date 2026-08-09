@@ -33,6 +33,12 @@ export function getRequiredRuntimeEnv(name: string): string {
   return value;
 }
 
+export function areExternalSideEffectsEnabled(): boolean {
+  const configured = getOptionalRuntimeEnv('EXTERNAL_SIDE_EFFECTS_ENABLED');
+  if (configured === null) return true;
+  return configured.trim().toLowerCase() === 'true';
+}
+
 export function getAppBaseUrl() {
   return getOptionalRuntimeEnv('APP_BASE_URL') || 'https://sorria-leste-app.<seu-subdominio>.workers.dev';
 }

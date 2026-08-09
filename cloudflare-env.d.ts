@@ -7,6 +7,9 @@ interface CloudflareEnv {
   ASSETS: Fetcher;
   WORKER_SELF_REFERENCE: Service;
   ENVIRONMENT: string;
+  EXTERNAL_SIDE_EFFECTS_ENABLED?: string;
+  JWT_SECRET?: string;
+  BETTER_AUTH_SECRET?: string;
   AUTENTIQUE_API_TOKEN?: string;
   AUTENTIQUE_WEBHOOK_SECRET?: string;
   AUTENTIQUE_FOLDER_ID_VILA_UNIAO?: string;

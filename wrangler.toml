@@ -5,6 +5,7 @@ account_id = "d603948925acaef083c8eafe1a05c2c4"
 main = ".open-next/worker.js"
 compatibility_date = "2024-12-30"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+preview_urls = false
 
 # Diretório de assets estáticos
 [assets]
@@ -34,6 +35,32 @@ port = 8788
 # Variáveis de ambiente
 [vars]
 ENVIRONMENT = "production"
+EXTERNAL_SIDE_EFFECTS_ENABLED = "true"
+
+# Ambiente persistente de staging. Os bindings são declarados novamente porque
+# vars, D1, R2 e services não são herdados automaticamente pelos ambientes.
+[env.staging]
+name = "sorria-leste-app-staging"
+workers_dev = true
+preview_urls = false
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+EXTERNAL_SIDE_EFFECTS_ENABLED = "false"
+APP_BASE_URL = "https://sorria-leste-app-staging.lucas-cardoso.workers.dev"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "sorria-leste-db-staging"
+database_id = "8d2eb56d-9527-4292-b63f-3edb5650548c"
+
+[[env.staging.r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "sorria-leste-arquivos-staging"
+
+[[env.staging.services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "sorria-leste-app-staging"
 
 # Observabilidade
 [observability]
