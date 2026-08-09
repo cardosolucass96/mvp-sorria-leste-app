@@ -11,7 +11,7 @@ import {
   ListChecks,
   Settings2,
 } from 'lucide-react';
-import { Alert, Badge, Button, FilterBar, LoadingState, PageHeader, StatCard, Table, Tabs } from '@/components/ui';
+import { Alert, Badge, Button, FilterBar, LoadingState, PageHeader, Pagination, StatCard, Table, Tabs } from '@/components/ui';
 import type { BadgeProps, TableColumn } from '@/components/ui';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { formatarDataHora, formatarMoeda } from '@/lib/utils/formatters';
@@ -32,6 +32,7 @@ type QueueCounts = Record<QueueKey, number>;
 interface ProceduresResponse {
   items: ProcedimentoClienteOperacional[];
   total: number;
+  pages: number;
 }
 
 interface DashboardResponse {
@@ -91,6 +92,8 @@ export default function CentralProcedimentos() {
   const [items, setItems] = useState<ProcedimentoClienteOperacional[]>([]);
   const [counts, setCounts] = useState<QueueCounts | null>(null);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -98,7 +101,7 @@ export default function CentralProcedimentos() {
     setLoading(true);
     setError('');
     try {
-      const params = new URLSearchParams({ fila: activeQueue, limit: '100' });
+      const params = new URLSearchParams({ fila: activeQueue, limit: '50', page: String(page) });
       if (search.trim()) params.set('busca', search.trim());
       const [proceduresResponse, dashboardResponse] = await Promise.all([
         unitFetch(`/api/v2/procedimentos?${params}`),
@@ -109,13 +112,14 @@ export default function CentralProcedimentos() {
       if (!proceduresResponse.ok) throw new Error(procedures.error || 'Erro ao carregar procedimentos');
       if (!dashboardResponse.ok) throw new Error(dashboard.error || 'Erro ao carregar filas');
       setItems(procedures.items ?? []);
+      setPages(Math.max(1, procedures.pages ?? 1));
       setCounts(dashboard.filas);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Erro ao carregar a central');
     } finally {
       setLoading(false);
     }
-  }, [activeQueue, search, unitFetch]);
+  }, [activeQueue, page, search, unitFetch]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), search ? 250 : 0);
@@ -189,26 +193,38 @@ export default function CentralProcedimentos() {
       <Tabs
         variant="underline"
         activeTab={activeQueue}
-        onTabChange={(key) => setActiveQueue(key as QueueKey)}
+        onTabChange={(key) => {
+          setActiveQueue(key as QueueKey);
+          setPage(1);
+        }}
         tabs={QUEUES.map((queue) => ({ key: queue.key, label: queue.label, count: counts?.[queue.key] ?? 0 }))}
       />
       <FilterBar
         fields={[{ type: 'text', name: 'busca', label: 'Buscar', placeholder: 'Paciente ou procedimento' }]}
         values={{ busca: search }}
-        onChange={(_name, value) => setSearch(value)}
-        onClear={() => setSearch('')}
+        onChange={(_name, value) => {
+          setSearch(value);
+          setPage(1);
+        }}
+        onClear={() => {
+          setSearch('');
+          setPage(1);
+        }}
       />
       {loading ? (
         <LoadingState text="Carregando procedimentos..." />
       ) : (
-        <Table
-          columns={columns}
-          data={items}
-          keyExtractor={(item) => item.id}
-          emptyIcon={<Activity className="size-8 text-muted-foreground/50" />}
-          emptyMessage="Nenhum procedimento nesta fila"
-          caption={`Procedimentos da fila ${activeQueue}`}
-        />
+        <div className="flex flex-col gap-4">
+          <Table
+            columns={columns}
+            data={items}
+            keyExtractor={(item) => item.id}
+            emptyIcon={<Activity className="size-8 text-muted-foreground/50" />}
+            emptyMessage="Nenhum procedimento nesta fila"
+            caption={`Procedimentos da fila ${activeQueue}`}
+          />
+          <Pagination page={page} totalPages={pages} onPageChange={setPage} />
+        </div>
       )}
     </div>
   );
