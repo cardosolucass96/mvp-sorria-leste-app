@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createHash } from 'node:crypto';
+import { createHash, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,6 +9,12 @@ import { join, resolve } from 'node:path';
 const ROOT = resolve(import.meta.dirname, '..');
 const PROD_DB = 'sorria-leste-db';
 const STAGING_DB = 'sorria-leste-db-staging';
+const PROD_R2 = 'sorria-leste-arquivos';
+const STAGING_R2 = 'sorria-leste-arquivos-staging';
+const STAGING_URLS = [
+  'https://sorria-leste-app-staging.lucas-cardoso.workers.dev/',
+  'https://sorria-leste-mcp-staging.lucas-cardoso.workers.dev/',
+];
 const DEFAULT_SINCE = '2026-07-26T03:00:00.000Z';
 const DEFAULT_UNTIL = '2026-08-10T03:00:00.000Z';
 
@@ -20,6 +26,7 @@ function arg(name, fallback = null) {
 const since = arg('--since', DEFAULT_SINCE);
 const until = arg('--until', DEFAULT_UNTIL);
 const applyRemote = process.argv.includes('--apply');
+const realData = process.argv.includes('--real-data');
 const sinceMs = Date.parse(since);
 const untilMs = Date.parse(until);
 
@@ -108,6 +115,48 @@ function insert(table, row, mode = '') {
   return `INSERT ${mode ? `${mode} ` : ''}INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((key) => sqlValue(row[key])).join(', ')});`;
 }
 
+function upsert(table, row, conflictColumns, updateColumns = Object.keys(row)) {
+  const columns = Object.keys(row);
+  const conflicts = Array.isArray(conflictColumns) ? conflictColumns : [conflictColumns];
+  const updates = updateColumns
+    .filter((column) => !conflicts.includes(column))
+    .map((column) => `${column} = excluded.${column}`)
+    .join(', ');
+  return `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((key) => sqlValue(row[key])).join(', ')}) ON CONFLICT (${conflicts.join(', ')}) DO UPDATE SET ${updates};`;
+}
+
+function passwordForStaging(storedPassword) {
+  if (String(storedPassword).startsWith('pbkdf2:')) return storedPassword;
+  const salt = randomBytes(16);
+  const derived = pbkdf2Sync(String(storedPassword), salt, 100_000, 32, 'sha256');
+  return `pbkdf2:100000:${salt.toString('hex')}:${derived.toString('hex')}`;
+}
+
+function joinedText(...parts) {
+  const values = parts.map((part) => String(part || '').trim()).filter(Boolean);
+  return values.length ? values.join('\n\n') : null;
+}
+
+function safeR2Key(value) {
+  return String(value || '')
+    .replaceAll('\\', '/')
+    .split('/')
+    .filter((part) => part && part !== '.' && part !== '..')
+    .join('/');
+}
+
+async function assertStagingAccessProtected() {
+  for (const url of STAGING_URLS) {
+    const response = await fetch(url, { redirect: 'manual' });
+    const location = response.headers.get('location') || '';
+    const accessRedirect = [301, 302, 303, 307, 308].includes(response.status)
+      && /cloudflareaccess\.com/i.test(location);
+    if (!accessRedirect) {
+      throw new Error(`Importação real bloqueada: ${url} ainda não redireciona para o Cloudflare Access.`);
+    }
+  }
+}
+
 function unique(values) {
   return [...new Set(values.filter((value) => value !== null && value !== undefined))];
 }
@@ -175,7 +224,9 @@ function parseBookmark(output) {
 }
 
 try {
-  console.log(`Preparando cópia anonimizada de ${since} até ${until}...`);
+  if (realData && applyRemote) await assertStagingAccessProtected();
+
+  console.log(`Preparando cópia ${realData ? 'real protegida' : 'anonimizada'} de ${since} até ${until}...`);
 
   // A única operação permitida contra produção é exportação (leitura).
   wrangler(['d1', 'export', PROD_DB, '--remote', '--output', productionSql]);
@@ -189,6 +240,7 @@ try {
     'itens_atendimento', 'agendamentos', 'pagamentos_grupos', 'pagamentos',
     'pagamentos_alocacoes', 'formas_pagamento', 'comissoes',
     'prontuario_evolucoes', 'prontuario_evolucao_itens', 'followup_tarefas',
+    'anexos_cliente', 'anexos_execucao',
   ];
   const prod = Object.fromEntries(prodTables.map((table) => [table, readTable(productionDb, table)]));
   const stage = {
@@ -204,6 +256,7 @@ try {
   const procedimentosById = byId(prod.procedimentos);
   const categoriasById = byId(prod.categorias);
   const usuariosById = byId(prod.usuarios);
+  const activeProductionUsers = prod.usuarios.filter((user) => Number(user.ativo) === 1);
 
   const itensPorAtendimento = groupBy(prod.itens_atendimento, (row) => Number(row.atendimento_id));
   const pagamentosPorAtendimento = groupBy(prod.pagamentos, (row) => Number(row.atendimento_id));
@@ -301,10 +354,14 @@ try {
   const evolucoes = prod.prontuario_evolucoes.filter((row) => selectedEvolucoes.has(Number(row.id)));
   const followups = prod.followup_tarefas.filter((row) => selectedFollowups.has(Number(row.id)));
   const clientes = prod.clientes.filter((row) => selectedClientes.has(Number(row.id)));
+  const anexosCliente = prod.anexos_cliente.filter((row) => (
+    selectedClientes.has(Number(row.cliente_id)) && inWindow(row.created_at)
+  ));
+  const anexosExecucao = prod.anexos_execucao.filter((row) => selectedItens.has(Number(row.item_atendimento_id)));
 
   const batchSlug = `${since.slice(0, 10).replaceAll('-', '')}-${until.slice(0, 10).replaceAll('-', '')}`;
   const prefix = `prod14d-${batchSlug}`;
-  const importId = `${prefix}-anon`;
+  const importId = `${prefix}-${realData ? 'real' : 'anon'}`;
   const idFor = (type, source) => `${prefix}-${type}-${hash(source)}`;
   const clientId = (id) => -(1_000_000 + Number(id));
   const userId = (id) => -(2_000_000 + Number(id));
@@ -502,9 +559,12 @@ try {
   const clinicalIdByLegacy = new Map(clinicalAtendimentos.map((atendimento) => [Number(atendimento.id), idFor('atendimento', atendimento.id)]));
 
   const lines = [
-    '-- Gerado automaticamente; contém somente dados anonimizados.',
+    realData
+      ? '-- Gerado automaticamente; contém dados reais e só pode ser aplicado após validar Cloudflare Access.'
+      : '-- Gerado automaticamente; contém somente dados anonimizados.',
     'PRAGMA foreign_keys = ON;',
-    `DELETE FROM v2_importacoes_legado WHERE id = ${sqlValue(importId)};`,
+    `DELETE FROM v2_importacoes_legado WHERE id IN (${sqlValue(`${prefix}-anon`)}, ${sqlValue(`${prefix}-real`)});`,
+    `DELETE FROM anexos_cliente WHERE caminho LIKE ${sqlValue(`imports/${prefix}/%`)};`,
   ];
   const prefixedTables = [
     'eventos_dominio', 'comissoes_v2', 'procedimento_cliente_followups',
@@ -518,16 +578,16 @@ try {
   for (const table of prefixedTables) lines.push(`DELETE FROM ${table} WHERE id LIKE ${sqlValue(`${prefix}-%`)};`);
 
   for (const user of prod.usuarios) {
-    lines.push(insert('usuarios', {
+    lines.push(upsert('usuarios', {
       id: userId(user.id),
-      nome: `Profissional homologação #${user.id}`,
+      nome: realData ? user.nome : `Profissional homologação #${user.id}`,
       email: `profissional-${user.id}@staging.invalid`,
       senha: '!conta-importada-desabilitada!',
       role: ['atendente', 'avaliador', 'executor', 'admin'].includes(user.role) ? user.role : 'executor',
       ativo: 0,
-      valor_diaria: 0,
+      valor_diaria: realData ? user.valor_diaria : 0,
       created_at: user.created_at,
-    }, 'OR IGNORE'));
+    }, 'id'));
   }
   for (const role of prod.usuario_roles) {
     lines.push(insert('usuario_roles', {
@@ -539,21 +599,99 @@ try {
       usuario_id: userId(relation.usuario_id), unidade_id: mappedUnit(relation.unidade_id), created_at: relation.created_at,
     }, 'OR IGNORE'));
   }
+
+  if (realData) {
+    for (const user of activeProductionUsers) {
+      const email = String(user.email || '').toLowerCase().trim();
+      if (!email || !user.senha) throw new Error(`Usuário ativo ${user.id} sem credencial válida.`);
+      const primaryRole = ['atendente', 'avaliador', 'executor', 'admin'].includes(user.role) ? user.role : 'executor';
+      lines.push(upsert('usuarios', {
+        nome: user.nome,
+        email,
+        senha: passwordForStaging(user.senha),
+        role: primaryRole,
+        ativo: 1,
+        valor_diaria: user.valor_diaria,
+        created_at: user.created_at,
+      }, 'email'));
+      lines.push(`DELETE FROM usuario_roles WHERE usuario_id = (SELECT id FROM usuarios WHERE email = ${sqlValue(email)});`);
+      const effectiveRoles = unique([
+        ...prod.usuario_roles.filter((row) => Number(row.usuario_id) === Number(user.id)).map((row) => row.role),
+        primaryRole,
+      ]);
+      for (const role of effectiveRoles) {
+        lines.push(`INSERT OR IGNORE INTO usuario_roles (usuario_id, role, created_at) SELECT id, ${sqlValue(role)}, ${sqlValue(user.created_at)} FROM usuarios WHERE email = ${sqlValue(email)};`);
+      }
+      lines.push(`DELETE FROM usuario_unidades WHERE usuario_id = (SELECT id FROM usuarios WHERE email = ${sqlValue(email)});`);
+      const unitIds = unique(prod.usuario_unidades
+        .filter((row) => Number(row.usuario_id) === Number(user.id))
+        .map((row) => mappedUnit(row.unidade_id)));
+      for (const unitId of unitIds.length ? unitIds : [mappedUnit(null)]) {
+        lines.push(`INSERT OR IGNORE INTO usuario_unidades (usuario_id, unidade_id, created_at) SELECT id, ${sqlValue(unitId)}, ${sqlValue(user.created_at)} FROM usuarios WHERE email = ${sqlValue(email)};`);
+      }
+    }
+  }
+
   for (const client of clientes) {
-    lines.push(insert('clientes', {
+    lines.push(upsert('clientes', {
       id: clientId(client.id),
-      nome: `Paciente homologação #${client.id}`,
-      cpf: null,
-      telefone: null,
-      email: null,
-      data_nascimento: null,
-      endereco: null,
+      nome: realData ? client.nome : `Paciente homologação #${client.id}`,
+      cpf: realData ? client.cpf : null,
+      telefone: realData ? client.telefone : null,
+      email: realData ? client.email : null,
+      data_nascimento: realData ? client.data_nascimento : null,
+      endereco: realData ? client.endereco : null,
       origem: client.origem,
-      sexo: null,
-      plano_odontologico: null,
-      observacoes: `Registro anonimizado importado da produção (${batchSlug}).`,
+      sexo: realData ? client.sexo : null,
+      plano_odontologico: realData ? client.plano_odontologico : null,
+      observacoes: realData ? client.observacoes : `Registro anonimizado importado da produção (${batchSlug}).`,
       created_at: client.created_at,
-    }, 'OR IGNORE'));
+    }, 'id'));
+  }
+
+  const r2Copies = [];
+  if (realData) {
+    for (const attachment of anexosCliente) {
+      const targetKey = `imports/${prefix}/cliente/${attachment.id}/${safeR2Key(attachment.caminho)}`;
+      lines.push(upsert('anexos_cliente', {
+        id: -(7_000_000 + Number(attachment.id)),
+        cliente_id: clientId(attachment.cliente_id),
+        usuario_id: mappedUser(attachment.usuario_id),
+        nome_arquivo: attachment.nome_arquivo,
+        tipo_arquivo: attachment.tipo_arquivo,
+        caminho: targetKey,
+        tamanho: attachment.tamanho,
+        descricao: attachment.descricao,
+        created_at: attachment.created_at,
+      }, 'id'));
+      r2Copies.push({
+        sourceKey: attachment.caminho,
+        targetKey,
+        contentType: attachment.tipo_arquivo,
+      });
+    }
+    for (const attachment of anexosExecucao) {
+      const item = itensById.get(Number(attachment.item_atendimento_id));
+      const atendimento = item ? atendimentosById.get(Number(item.atendimento_id)) : null;
+      if (!atendimento || !selectedClientes.has(Number(atendimento.cliente_id))) continue;
+      const targetKey = `imports/${prefix}/execucao/${attachment.id}/${safeR2Key(attachment.caminho)}`;
+      lines.push(upsert('anexos_cliente', {
+        id: -(8_000_000 + Number(attachment.id)),
+        cliente_id: clientId(atendimento.cliente_id),
+        usuario_id: mappedUser(attachment.usuario_id),
+        nome_arquivo: attachment.nome_arquivo,
+        tipo_arquivo: attachment.tipo_arquivo,
+        caminho: targetKey,
+        tamanho: attachment.tamanho,
+        descricao: joinedText('Anexo clínico migrado da execução.', attachment.descricao),
+        created_at: attachment.created_at,
+      }, 'id'));
+      r2Copies.push({
+        sourceKey: attachment.caminho,
+        targetKey,
+        contentType: attachment.tipo_arquivo,
+      });
+    }
   }
 
   const referencedCatalogIds = unique(procedureRecords.map((record) => record.catalogId));
@@ -619,11 +757,13 @@ try {
       finalidade_avaliacao: agenda.tipo === 'avaliacao' ? 1 : 0,
       avaliador_id: agenda.tipo === 'avaliacao' && agenda.executor_id ? mappedUser(agenda.executor_id) : null,
       data_agendada: agenda.data_agendada, duracao_minutos: 60,
-      status: mapAgendaStatus(agenda.status), observacoes: null,
+      status: mapAgendaStatus(agenda.status), observacoes: realData ? agenda.observacoes : null,
       criado_por_id: mappedUser(agenda.criado_por_id || agenda.executor_id),
       cancelado_por_id: null,
       cancelado_em: agenda.status === 'cancelado' ? agenda.updated_at : null,
-      motivo_cancelamento: agenda.status === 'cancelado' ? 'Cancelamento importado do sistema legado' : null,
+      motivo_cancelamento: agenda.status === 'cancelado'
+        ? (realData ? agenda.motivo_cancelamento || 'Cancelamento importado do sistema legado' : 'Cancelamento importado do sistema legado')
+        : null,
       idempotency_key: `${prefix}-agenda-${agenda.id}`,
       created_at: agenda.created_at, updated_at: agenda.updated_at,
     }));
@@ -644,7 +784,10 @@ try {
       iniciado_em: status === 'aguardando' ? null : atendimento.liberado_em || atendimento.created_at,
       finalizado_em: status === 'finalizado' ? atendimento.finalizado_at || atendimento.created_at : null,
       cancelado_em: null, cancelado_por_id: null, motivo_cancelamento: null,
-      observacoes: null, idempotency_key: `${prefix}-atendimento-${atendimento.id}`,
+      observacoes: realData
+        ? joinedText(atendimento.observacoes, atendimento.observacoes_encerramento, atendimento.motivo_saida)
+        : null,
+      idempotency_key: `${prefix}-atendimento-${atendimento.id}`,
       created_at: atendimento.created_at,
       updated_at: atendimento.finalizado_at || atendimento.liberado_em || atendimento.created_at,
     }));
@@ -661,7 +804,7 @@ try {
       avaliador_id: mappedUser(atendimento.avaliador_id),
       status: concluded ? 'concluida' : 'em_andamento',
       motivo_sem_orcamento: concluded && linked.length === 0 ? 'Importação legado: avaliação concluída sem procedimento registrado.' : null,
-      observacoes: null,
+      observacoes: realData ? atendimento.observacoes : null,
       concluida_em: concluded ? atendimento.finalizado_at || atendimento.liberado_em || atendimento.created_at : null,
       cancelada_em: null, created_at: atendimento.created_at,
       updated_at: atendimento.finalizado_at || atendimento.liberado_em || atendimento.created_at,
@@ -673,7 +816,7 @@ try {
         id: budgetId, avaliacao_id: evaluationId,
         cliente_id: clientId(atendimento.cliente_id), unidade_id: mappedUnit(atendimento.unidade_id),
         avaliador_id: mappedUser(atendimento.avaliador_id), status,
-        observacoes: null, validade_em: null,
+        observacoes: realData ? atendimento.observacoes_encerramento : null, validade_em: null,
         apresentado_em: atendimento.liberado_em || atendimento.created_at,
         cancelado_em: null, cancelado_por_id: null, motivo_cancelamento: null,
         created_at: atendimento.created_at,
@@ -748,7 +891,7 @@ try {
       procedimento_cliente_id: procId,
       procedimento_cliente_etapa_id: model ? idFor('etapa', `${source.id}:${model.id}`) : null,
       profissional_id: agenda.executor_id ? mappedUser(agenda.executor_id) : null,
-      observacoes: null, created_at: agenda.created_at,
+      observacoes: realData ? agenda.observacoes : null, created_at: agenda.created_at,
     }));
   }
 
@@ -784,7 +927,9 @@ try {
       id: evolutionId, atendimento_clinico_id: clinicalIdByLegacy.get(Number(evolution.atendimento_id)),
       cliente_id: clientId(atendimento.cliente_id), unidade_id: mappedUnit(atendimento.unidade_id),
       profissional_id: mappedUser(evolution.usuario_id),
-      texto: 'Evolução clínica importada do legado; conteúdo livre omitido no staging.',
+      texto: realData
+        ? joinedText(evolution.descricao, evolution.observacoes) || 'Evolução clínica importada do legado.'
+        : 'Evolução clínica importada do legado; conteúdo livre omitido no staging.',
       idempotency_key: `${prefix}-evolucao-${evolution.id}`, created_at: evolution.created_at,
     }));
     const linkedProcIds = unique((evolutionLinks.get(Number(evolution.id)) || [])
@@ -815,7 +960,10 @@ try {
       id: receiptId, cliente_id: clientId(atendimento.cliente_id), unidade_id: unit,
       atendimento_clinico_id: clinicalIdByLegacy.get(Number(atendimento.id)) || null,
       recebido_por_id: mappedUser(forms[0].recebido_por_id), canal: 'importado', status,
-      valor_total_centavos: total, observacoes: 'Recebimento importado do sistema legado.',
+      valor_total_centavos: total,
+      observacoes: realData
+        ? joinedText('Recebimento importado do sistema legado.', ...forms.map((row) => row.observacoes))
+        : 'Recebimento importado do sistema legado.',
       idempotency_key: `${prefix}-recebimento-${groupKey}`,
       estornado_em: status === 'estornado' ? forms.map((row) => row.created_at).sort().at(-1) : null,
       estornado_por_id: status === 'estornado' ? mappedUser(forms[0].recebido_por_id) : null,
@@ -971,7 +1119,9 @@ try {
       status: followup.excluida_em ? 'cancelado' : followup.status === 'concluida' ? 'concluido' : 'aberto',
       responsavel_id: followup.responsavel_usuario_id ? mappedUser(followup.responsavel_usuario_id) : null,
       criado_por_id: mappedUser(followup.criado_por_id), vencimento_em: followup.vencimento_em,
-      descricao: `Follow-up ${type} importado do sistema legado; texto livre omitido.`,
+      descricao: realData
+        ? joinedText(followup.titulo, followup.descricao, followup.nota_conclusao) || `Follow-up ${type} importado do sistema legado.`
+        : `Follow-up ${type} importado do sistema legado; texto livre omitido.`,
       concluido_em: followup.concluida_em,
       concluido_por_id: followup.concluida_por_id ? mappedUser(followup.concluida_por_id) : null,
       created_at: followup.created_at, updated_at: followup.updated_at,
@@ -987,28 +1137,40 @@ try {
     agendamentos_sem_data_convertidos_em_pendencia: agendas.filter((row) => !row.data_agendada).length,
     recebimentos: paymentGroups.size,
     evolucoes: evolucoes.length,
+    usuarios_ativos_para_login: realData ? activeProductionUsers.length : 0,
+    anexos_r2: realData ? r2Copies.length : 0,
     followups_convertidos: followups.length - skippedFollowups,
     followups_sem_procedimento: skippedFollowups,
   };
   lines.push(insert('v2_importacoes_legado', {
     id: importId, origem: 'production', inicio_em: since, fim_em: until,
-    anonimizada: 1, status: 'preparada', totais_json: JSON.stringify(totals),
+    anonimizada: realData ? 0 : 1, status: 'preparada', totais_json: JSON.stringify(totals),
     bookmark_restauracao: null, aplicada_em: new Date().toISOString(), reconciliada_em: null,
   }));
   writeFileSync(importSql, `${lines.join('\n')}\n`, { mode: 0o600 });
 
   run('sqlite3', [stagingDb, `.read ${join(ROOT, 'migrations/0002_importacao_legado.sql')}`]);
   run('sqlite3', [stagingDb, `.read ${importSql}`]);
+  const activeEmailsSql = activeProductionUsers.map((user) => sqlValue(String(user.email).toLowerCase().trim())).join(', ') || "''";
   const localCheck = sqlite(stagingDb, `
     SELECT
       (SELECT COUNT(*) FROM pragma_foreign_key_check) AS foreign_key_errors,
       (SELECT COUNT(*) FROM procedimentos_cliente WHERE id LIKE '${prefix}-%') AS procedimentos,
       (SELECT COUNT(*) FROM agenda_compromissos WHERE id LIKE '${prefix}-%' AND (data_agendada IS NULL OR trim(data_agendada) = '')) AS agendas_sem_data,
       (SELECT COUNT(*) FROM clientes WHERE id <= -1000000 AND id > -2000000 AND (cpf IS NOT NULL OR telefone IS NOT NULL OR email IS NOT NULL OR endereco IS NOT NULL)) AS clientes_com_pii,
+      (SELECT COUNT(*) FROM clientes WHERE id <= -1000000 AND id > -2000000 AND nome NOT LIKE 'Paciente homologação #%') AS clientes_reais,
+      (SELECT COUNT(*) FROM usuarios WHERE ativo = 1 AND lower(email) IN (${activeEmailsSql})) AS usuarios_login_reais,
+      (SELECT COUNT(*) FROM anexos_cliente WHERE caminho LIKE 'imports/${prefix}/%') AS anexos,
       (SELECT COALESCE(SUM(valor_final_centavos), 0) FROM procedimentos_cliente WHERE id LIKE '${prefix}-%') AS valor_procedimentos_centavos,
       (SELECT COALESCE(SUM(valor_centavos - valor_estornado_centavos), 0) FROM recebimento_alocacoes WHERE id LIKE '${prefix}-%') AS valor_alocado_liquido_centavos
   `)[0];
-  if (Number(localCheck.foreign_key_errors) !== 0 || Number(localCheck.agendas_sem_data) !== 0 || Number(localCheck.clientes_com_pii) !== 0) {
+  const invalidRealCopy = realData && (
+    Number(localCheck.clientes_reais) !== clientes.length
+    || Number(localCheck.usuarios_login_reais) !== activeProductionUsers.length
+    || Number(localCheck.anexos) !== r2Copies.length
+  );
+  const invalidAnonymousCopy = !realData && Number(localCheck.clientes_com_pii) !== 0;
+  if (Number(localCheck.foreign_key_errors) !== 0 || Number(localCheck.agendas_sem_data) !== 0 || invalidRealCopy || invalidAnonymousCopy) {
     throw new Error(`Validação local falhou: ${JSON.stringify(localCheck)}`);
   }
 
@@ -1021,14 +1183,39 @@ try {
     const bookmark = parseBookmark(bookmarkOutput);
     if (!bookmark) throw new Error('Não foi possível obter o bookmark de restauração do staging.');
 
+    if (realData) {
+      for (const [index, copy] of r2Copies.entries()) {
+        const localObject = join(tempDir, `r2-object-${index}`);
+        try {
+          wrangler(['r2', 'object', 'get', `${PROD_R2}/${copy.sourceKey}`, '--remote', '--file', localObject]);
+          wrangler([
+            'r2', 'object', 'put', `${STAGING_R2}/${copy.targetKey}`, '--remote', '--file', localObject,
+            '--content-type', copy.contentType || 'application/octet-stream',
+          ]);
+        } catch {
+          throw new Error(`Falha ao copiar o anexo ${index + 1} de ${r2Copies.length}; nenhuma referência foi gravada no D1.`);
+        } finally {
+          rmSync(localObject, { force: true });
+        }
+        if ((index + 1) % 10 === 0 || index + 1 === r2Copies.length) {
+          console.log(`R2 staging: ${index + 1}/${r2Copies.length} anexos copiados.`);
+        }
+      }
+    }
+
     wrangler(['d1', 'migrations', 'apply', STAGING_DB, '--remote', '--env', 'staging']);
     wrangler(['d1', 'execute', STAGING_DB, '--remote', '--env', 'staging', '--file', importSql, '--yes']);
     const bookmarkSql = `UPDATE v2_importacoes_legado SET bookmark_restauracao = ${sqlValue(bookmark)}, status = 'reconciliada', reconciliada_em = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ${sqlValue(importId)};`;
     wrangler(['d1', 'execute', STAGING_DB, '--remote', '--env', 'staging', '--command', bookmarkSql, '--yes']);
 
-    const remoteOutput = wrangler(['d1', 'execute', STAGING_DB, '--remote', '--env', 'staging', '--json', '--command', `SELECT (SELECT COUNT(*) FROM procedimentos_cliente WHERE id LIKE '${prefix}-%') AS procedimentos, (SELECT COUNT(*) FROM agenda_compromissos WHERE id LIKE '${prefix}-%' AND (data_agendada IS NULL OR trim(data_agendada) = '')) AS agendas_sem_data, (SELECT COUNT(*) FROM clientes WHERE id <= -1000000 AND id > -2000000 AND (cpf IS NOT NULL OR telefone IS NOT NULL OR email IS NOT NULL OR endereco IS NOT NULL)) AS clientes_com_pii, (SELECT COALESCE(SUM(valor_final_centavos), 0) FROM procedimentos_cliente WHERE id LIKE '${prefix}-%') AS valor_procedimentos_centavos, (SELECT COALESCE(SUM(valor_centavos - valor_estornado_centavos), 0) FROM recebimento_alocacoes WHERE id LIKE '${prefix}-%') AS valor_alocado_liquido_centavos;`]);
+    const remoteOutput = wrangler(['d1', 'execute', STAGING_DB, '--remote', '--env', 'staging', '--json', '--command', `SELECT (SELECT COUNT(*) FROM procedimentos_cliente WHERE id LIKE '${prefix}-%') AS procedimentos, (SELECT COUNT(*) FROM agenda_compromissos WHERE id LIKE '${prefix}-%' AND (data_agendada IS NULL OR trim(data_agendada) = '')) AS agendas_sem_data, (SELECT COUNT(*) FROM clientes WHERE id <= -1000000 AND id > -2000000 AND (cpf IS NOT NULL OR telefone IS NOT NULL OR email IS NOT NULL OR endereco IS NOT NULL)) AS clientes_com_pii, (SELECT COUNT(*) FROM clientes WHERE id <= -1000000 AND id > -2000000 AND nome NOT LIKE 'Paciente homologação #%') AS clientes_reais, (SELECT COUNT(*) FROM usuarios WHERE ativo = 1 AND lower(email) IN (${activeEmailsSql})) AS usuarios_login_reais, (SELECT COUNT(*) FROM anexos_cliente WHERE caminho LIKE 'imports/${prefix}/%') AS anexos, (SELECT COALESCE(SUM(valor_final_centavos), 0) FROM procedimentos_cliente WHERE id LIKE '${prefix}-%') AS valor_procedimentos_centavos, (SELECT COALESCE(SUM(valor_centavos - valor_estornado_centavos), 0) FROM recebimento_alocacoes WHERE id LIKE '${prefix}-%') AS valor_alocado_liquido_centavos;`]);
     const remote = JSON.parse(remoteOutput)?.[0]?.results?.[0];
-    if (!remote || Number(remote.agendas_sem_data) !== 0 || Number(remote.clientes_com_pii) !== 0 || Number(remote.procedimentos) !== Number(localCheck.procedimentos)) {
+    const remoteModeInvalid = realData
+      ? Number(remote?.clientes_reais) !== clientes.length
+        || Number(remote?.usuarios_login_reais) !== activeProductionUsers.length
+        || Number(remote?.anexos) !== r2Copies.length
+      : Number(remote?.clientes_com_pii) !== 0;
+    if (!remote || Number(remote.agendas_sem_data) !== 0 || remoteModeInvalid || Number(remote.procedimentos) !== Number(localCheck.procedimentos)) {
       throw new Error(`Reconciliação remota falhou. Bookmark para restauração: ${bookmark}`);
     }
     console.log(JSON.stringify({ aplicado_no_staging: true, bookmark_restauracao: bookmark, reconciliacao_remota: remote }, null, 2));

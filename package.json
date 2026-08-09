@@ -36,6 +36,8 @@
     "d1:seed:v2:local": "wrangler d1 execute sorria-leste-db-staging --local --env staging --file=lib/seed.v2.staging.sql",
     "d1:copy-prod-window:v2:staging": "node scripts/migrate-prod-window-to-v2.mjs",
     "d1:copy-prod-window:v2:staging:apply": "node scripts/migrate-prod-window-to-v2.mjs --apply",
+    "d1:copy-prod-window:v2:staging:real": "node scripts/migrate-prod-window-to-v2.mjs --real-data",
+    "d1:copy-prod-window:v2:staging:real:apply": "node scripts/migrate-prod-window-to-v2.mjs --real-data --apply",
     "d1:seed:formas-pagamento": "wrangler d1 execute sorria-leste-db --remote --file=lib/migrations/seed_formas_pagamento_todas_unidades.sql",
     "d1:seed:formas-pagamento:local": "wrangler d1 execute sorria-leste-db --local --file=lib/migrations/seed_formas_pagamento_todas_unidades.sql",
     "d1:seed:local": "wrangler d1 execute sorria-leste-db --local --file=lib/seed.sql",
