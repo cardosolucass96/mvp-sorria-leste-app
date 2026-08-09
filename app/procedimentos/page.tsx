@@ -8,6 +8,8 @@ import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import type { CategoriaComRoles } from '@/lib/types';
+import CentralProcedimentos from '@/components/v2/CentralProcedimentos';
+import { useProcedureCentricFlow } from '@/lib/hooks/useProcedureCentricFlow';
 
 interface EtapaModelo {
   id?: number;
@@ -61,7 +63,7 @@ const initialFormData: FormData = {
   etapas: [],
 };
 
-export default function ProcedimentosPage() {
+export function CatalogoProcedimentosPage() {
   usePageTitle('Procedimentos');
   const { user } = useAuth();
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
@@ -700,4 +702,12 @@ export default function ProcedimentosPage() {
       </Modal>
     </div>
   );
+}
+
+export default function ProcedimentosPage() {
+  const procedureCentricFlow = useProcedureCentricFlow();
+  if (procedureCentricFlow === null) {
+    return <LoadingState text="Carregando ambiente operacional..." />;
+  }
+  return procedureCentricFlow ? <CentralProcedimentos /> : <CatalogoProcedimentosPage />;
 }

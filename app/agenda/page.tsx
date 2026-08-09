@@ -47,6 +47,8 @@ import {
   startOfAgendaWeek,
 } from '@/lib/utils/agendaCalendar';
 import { addDaysToClinicDateKey, getClinicDateKey } from '@/lib/time';
+import AgendaV2 from '@/components/v2/AgendaV2';
+import { useProcedureCentricFlow } from '@/lib/hooks/useProcedureCentricFlow';
 
 interface Agendamento {
   id: number;
@@ -283,7 +285,7 @@ function AgendaDayPanelSkeleton() {
   );
 }
 
-export default function AgendaPage() {
+export function LegacyAgendaPage() {
   usePageTitle('Agenda');
   const router = useRouter();
   const routerReplace = router.replace;
@@ -2465,4 +2467,10 @@ export default function AgendaPage() {
       </Modal>
     </div>
   );
+}
+
+export default function AgendaPage() {
+  const procedureCentricFlow = useProcedureCentricFlow();
+  if (procedureCentricFlow === null) return <LoadingState text="Carregando ambiente operacional..." />;
+  return procedureCentricFlow ? <AgendaV2 /> : <LegacyAgendaPage />;
 }

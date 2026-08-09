@@ -29,13 +29,41 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Lint V2 and integration points
+        run: npm run lint:v2
 
-      - name: Unit tests
-        run: npm test -- --runInBand
+      - name: V2 and compatibility tests
+        run: npm run test:v2
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Build application
+        run: npm run build
+
+      - name: Install MCP dependencies
+        run: npm ci --prefix workers/sorria-leste-mcp
+
+      - name: Type-check MCP staging
+        run: npm run check --prefix workers/sorria-leste-mcp
+
+      - name: Test MCP staging
+        run: npm test --prefix workers/sorria-leste-mcp
+
+      - name: Dry-run MCP staging
+        run: npm run deploy:dry-run:staging --prefix workers/sorria-leste-mcp
+
+      - name: Apply additive V2 migrations
+        run: npm run d1:migrate:v2:staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Deploy staging
         run: npm run deploy:staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy MCP staging
+        run: npm run deploy:staging --prefix workers/sorria-leste-mcp
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -10,7 +10,8 @@
     "test": "vitest run",
     "cf-typegen": "wrangler types src/env.d.ts",
     "deploy:dry-run": "wrangler deploy --dry-run --env=\"\"",
-    "deploy:dry-run:staging": "wrangler deploy --dry-run --env staging"
+    "deploy:dry-run:staging": "wrangler deploy --dry-run --env staging",
+    "deploy:staging": "wrangler deploy --env staging"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.8.1",

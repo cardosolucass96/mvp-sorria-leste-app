@@ -24,6 +24,10 @@ const CLINIC_UTC_OFFSET_MINUTES = -3 * 60;
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const LOCAL_DATETIME_INPUT_REGEX = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
 
+function usesProcedureCentricFlow(env: Env): boolean {
+  return env.PROCEDURE_CENTRIC_FLOW?.trim().toLowerCase() === 'true';
+}
+
 export interface CreateClientInput {
   nome: string;
   origem: string;
@@ -473,6 +477,44 @@ export async function createEvaluationAppointment(
     executor = await findDefaultEvaluator(env, input.unidadeId);
   }
 
+  if (usesProcedureCentricFlow(env)) {
+    if (!parsedDate) throw new Error('Data e hora são obrigatórias no ambiente staging V2.');
+    if (!executor) throw new Error('Avaliador é obrigatório no ambiente staging V2.');
+    if (!input.criadoPorId) throw new Error('Autor autenticado é obrigatório.');
+    const id = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT OR IGNORE INTO cliente_unidades_v2
+        (cliente_id, unidade_id, vinculado_por_id) VALUES (?, ?, ?)`)
+        .bind(cliente.id, input.unidadeId, input.criadoPorId),
+      env.DB.prepare(`INSERT INTO agenda_compromissos
+        (id, cliente_id, unidade_id, finalidade_avaliacao, avaliador_id,
+         data_agendada, status, observacoes, criado_por_id, idempotency_key)
+        VALUES (?, ?, ?, 1, ?, ?, 'agendado', ?, ?, ?)`)
+        .bind(
+          id,
+          cliente.id,
+          input.unidadeId,
+          executor.id,
+          parsedDate.utcIso,
+          normalizedObservacoes,
+          input.criadoPorId,
+          `mcp-avaliacao:${id}`,
+        ),
+    ]);
+    return {
+      id,
+      unidadeId: input.unidadeId,
+      cliente: { id: cliente.id, nome: cliente.nome, telefone: maskPhone(cliente.telefone) },
+      executor,
+      criadoPor: { id: input.criadoPorId, nome: null },
+      tipo: 'avaliacao',
+      status: 'agendado',
+      data_agendada: parsedDate.utcIso,
+      observacoes: maskNullableText(normalizedObservacoes),
+      criadoEm: new Date().toISOString(),
+    };
+  }
+
   const status = parsedDate ? 'agendado' : 'pendente';
   const insert = await env.DB.prepare(`INSERT INTO agendamentos
       (cliente_id, executor_id, criado_por_id, tipo, status, data_agendada, observacoes, pago, valor_pago, unidade_id)
@@ -568,11 +610,17 @@ export async function clientSummary(env: Env, clientId: number) {
   }>();
   if (!client) return null;
 
-  const atendimentos = await all<{ id: number; status: string; created_at: string; unidade_nome: string | null }>(
-    env.DB.prepare(`SELECT a.id, a.status, a.created_at, u.nome AS unidade_nome
-      FROM atendimentos a LEFT JOIN unidades u ON u.id = a.unidade_id
-      WHERE a.cliente_id = ? ORDER BY a.created_at DESC LIMIT 20`).bind(clientId),
-  );
+  const atendimentos = usesProcedureCentricFlow(env)
+    ? await all<{ id: string; status: string; created_at: string; unidade_nome: string | null }>(
+      env.DB.prepare(`SELECT a.id, a.status, a.created_at, u.nome AS unidade_nome
+        FROM atendimentos_clinicos a LEFT JOIN unidades u ON u.id = a.unidade_id
+        WHERE a.cliente_id = ? ORDER BY a.created_at DESC LIMIT 20`).bind(clientId),
+    )
+    : await all<{ id: number; status: string; created_at: string; unidade_nome: string | null }>(
+      env.DB.prepare(`SELECT a.id, a.status, a.created_at, u.nome AS unidade_nome
+        FROM atendimentos a LEFT JOIN unidades u ON u.id = a.unidade_id
+        WHERE a.cliente_id = ? ORDER BY a.created_at DESC LIMIT 20`).bind(clientId),
+    );
   return {
     id: client.id,
     nome: client.nome,
@@ -581,11 +629,40 @@ export async function clientSummary(env: Env, clientId: number) {
     cpf: maskCpf(client.cpf),
     origem: client.origem,
     cadastradoEm: client.created_at,
-    atendimentos: atendimentos.map((item) => ({ ...item, status: attendanceStatus(item.status) })),
+    atendimentos: usesProcedureCentricFlow(env)
+      ? atendimentos
+      : atendimentos.map((item) => ({ ...item, status: attendanceStatus(item.status) })),
   };
 }
 
 export async function listAppointments(env: Env, unidadeId: number, from: string, to: string, status: string | undefined, limit: number, offset: number) {
+  if (usesProcedureCentricFlow(env)) {
+    const conditions = ['a.unidade_id = ?', 'DATE(a.data_agendada) BETWEEN ? AND ?'];
+    const params: Array<string | number> = [unidadeId, from, to];
+    if (status && status !== 'pendente') {
+      conditions.push('a.status = ?');
+      params.push(status);
+    } else if (status === 'pendente') {
+      return [];
+    }
+    params.push(limit, offset);
+    const rows = await all<{
+      id: string; data_agendada: string; status: string; finalidade_avaliacao: number;
+      cliente_nome: string; cliente_telefone: string | null; procedimentos_resumo: string | null;
+      profissionais_resumo: string | null;
+    }>(env.DB.prepare(`SELECT a.id, a.data_agendada, a.status, a.finalidade_avaliacao,
+        c.nome AS cliente_nome, c.telefone AS cliente_telefone,
+        GROUP_CONCAT(DISTINCT pc.nome_snapshot) AS procedimentos_resumo,
+        GROUP_CONCAT(DISTINCT u.nome) AS profissionais_resumo
+      FROM agenda_compromissos a
+      JOIN clientes c ON c.id = a.cliente_id
+      LEFT JOIN agenda_compromisso_itens ai ON ai.agenda_compromisso_id = a.id
+      LEFT JOIN procedimentos_cliente pc ON pc.id = ai.procedimento_cliente_id
+      LEFT JOIN usuarios u ON u.id = ai.profissional_id
+      WHERE ${conditions.join(' AND ')}
+      GROUP BY a.id ORDER BY a.data_agendada ASC LIMIT ? OFFSET ?`).bind(...params));
+    return rows.map((row) => ({ ...row, cliente_telefone: maskPhone(row.cliente_telefone) }));
+  }
   const conditions = ['a.unidade_id = ?', 'a.data_agendada >= ?', 'a.data_agendada <= ?'];
   const params: Array<string | number> = [unidadeId, from, to];
   if (status) {
@@ -608,6 +685,28 @@ export async function listAppointments(env: Env, unidadeId: number, from: string
 }
 
 export async function listAttendances(env: Env, unidadeId: number, status: string | undefined, limit: number, offset: number) {
+  if (usesProcedureCentricFlow(env)) {
+    const allowed = new Set(['aguardando', 'em_andamento', 'finalizado', 'cancelado']);
+    const conditions = ['a.unidade_id = ?'];
+    const params: Array<string | number> = [unidadeId];
+    if (status && allowed.has(status)) {
+      conditions.push('a.status = ?');
+      params.push(status);
+    }
+    params.push(limit, offset);
+    return all<{
+      id: string; status: string; created_at: string; cliente_nome: string;
+      avaliador_nome: string | null; procedimentos_count: number;
+    }>(env.DB.prepare(`SELECT a.id, a.status, a.created_at, c.nome AS cliente_nome,
+        u.nome AS avaliador_nome, COUNT(DISTINCT ap.id) AS procedimentos_count
+      FROM atendimentos_clinicos a
+      JOIN clientes c ON c.id = a.cliente_id
+      LEFT JOIN avaliacoes av ON av.atendimento_clinico_id = a.id
+      LEFT JOIN usuarios u ON u.id = av.avaliador_id
+      LEFT JOIN atendimento_procedimentos ap ON ap.atendimento_clinico_id = a.id
+      WHERE ${conditions.join(' AND ')} GROUP BY a.id
+      ORDER BY a.created_at DESC LIMIT ? OFFSET ?`).bind(...params));
+  }
   const conditions = ['a.unidade_id = ?'];
   const params: Array<string | number> = [unidadeId];
   const dbStatus = dbAttendanceStatus(status);
@@ -630,6 +729,9 @@ export async function listAttendances(env: Env, unidadeId: number, status: strin
 }
 
 export async function operationalSummary(env: Env, unidadeId: number, from: string, to: string) {
+  if (usesProcedureCentricFlow(env)) {
+    return operationalSummaryV2(env, unidadeId, from, to);
+  }
   const byStatus = await all<{ status: string; total: number }>(env.DB.prepare(
     `SELECT CASE WHEN status = 'aguardando_pagamento' THEN 'aguardando_liberacao' ELSE status END AS status,
         COUNT(*) AS total FROM atendimentos
@@ -741,6 +843,25 @@ export async function listTeam(env: Env, unidadeId: number | undefined, role: st
 }
 
 export async function dayAgenda(env: Env, unidadeId: number, date: string, limit: number, offset: number) {
+  if (usesProcedureCentricFlow(env)) {
+    const rows = await all<{
+      id: string; data_agendada: string; status: string; finalidade_avaliacao: number;
+      cliente_id: number; cliente_nome: string; cliente_telefone: string | null;
+      procedimentos_resumo: string | null; profissionais_resumo: string | null;
+    }>(env.DB.prepare(`SELECT a.id, a.data_agendada, a.status, a.finalidade_avaliacao,
+        c.id AS cliente_id, c.nome AS cliente_nome, c.telefone AS cliente_telefone,
+        GROUP_CONCAT(DISTINCT pc.nome_snapshot) AS procedimentos_resumo,
+        GROUP_CONCAT(DISTINCT u.nome) AS profissionais_resumo
+      FROM agenda_compromissos a
+      JOIN clientes c ON c.id = a.cliente_id
+      LEFT JOIN agenda_compromisso_itens ai ON ai.agenda_compromisso_id = a.id
+      LEFT JOIN procedimentos_cliente pc ON pc.id = ai.procedimento_cliente_id
+      LEFT JOIN usuarios u ON u.id = ai.profissional_id
+      WHERE a.unidade_id = ? AND DATE(a.data_agendada) = ?
+      GROUP BY a.id ORDER BY a.data_agendada ASC LIMIT ? OFFSET ?`)
+      .bind(unidadeId, date, limit, offset));
+    return rows.map((row) => ({ ...row, cliente_telefone: maskPhone(row.cliente_telefone) }));
+  }
   const rows = await all<{
     id: number; data_agendada: string | null; status: string; tipo: string; cliente_id: number; cliente_nome: string; cliente_telefone: string | null; procedimento_nome: string | null; executor_nome: string | null;
   }>(env.DB.prepare(`SELECT a.id, a.data_agendada, a.status, a.tipo, c.id AS cliente_id,
@@ -2212,7 +2333,113 @@ export async function listTerms(env: Env, activeOnly: boolean) {
   );
 }
 
+export async function procedureQueuesV2(
+  env: Env,
+  unidadeId: number,
+  queue: string | undefined,
+  limit: number,
+  offset: number,
+) {
+  if (!usesProcedureCentricFlow(env)) {
+    throw new Error('Fluxo procedure-centric não está habilitado neste ambiente.');
+  }
+  const conditions = ['p.unidade_id = ?'];
+  const params: Primitive[] = [unidadeId];
+  const queueConditions: Record<string, string> = {
+    aguardando_decisao: "p.status_comercial = 'proposto'",
+    aguardando_pagamento: "p.status_comercial = 'aceito' AND p.status_financeiro <> 'quitado'",
+    aguardando_agendamento: "p.status_comercial = 'aceito' AND p.status_agenda = 'sem_agendamento' AND p.status_clinico IN ('nao_iniciado', 'em_execucao')",
+    agendados: "p.status_agenda = 'agendado'",
+    em_execucao: "p.status_clinico = 'em_execucao'",
+    executados_com_saldo: "p.status_clinico = 'concluido' AND p.status_financeiro <> 'quitado'",
+    concluidos: "p.status_clinico = 'concluido' AND p.status_financeiro = 'quitado'",
+  };
+  if (queue && queueConditions[queue]) conditions.push(queueConditions[queue]);
+  params.push(limit, offset);
+  return all<{
+    id: string; cliente_id: number; cliente_nome: string; nome_snapshot: string;
+    origem: string; status_comercial: string; status_clinico: string;
+    status_financeiro: string; status_agenda: string; created_at: string;
+  }>(env.DB.prepare(`SELECT p.id, p.cliente_id, p.cliente_nome, p.nome_snapshot,
+      p.origem, p.status_comercial, p.status_clinico, p.status_financeiro,
+      p.status_agenda, p.created_at
+    FROM v_procedimentos_cliente_operacional p
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY p.created_at DESC LIMIT ? OFFSET ?`).bind(...params));
+}
+
+export async function managerialIndicatorsV2(env: Env, unidadeId: number, from: string, to: string) {
+  if (!usesProcedureCentricFlow(env)) {
+    throw new Error('Fluxo procedure-centric não está habilitado neste ambiente.');
+  }
+  const row = await env.DB.prepare(`SELECT
+      (SELECT COUNT(DISTINCT a.id) FROM atendimentos_clinicos a
+        WHERE a.unidade_id = ?1 AND a.status = 'finalizado' AND DATE(a.finalizado_em) BETWEEN ?2 AND ?3) AS atendimentos_clinicos,
+      (SELECT COUNT(DISTINCT av.id) FROM avaliacoes av
+        WHERE av.unidade_id = ?1 AND av.status = 'concluida' AND DATE(av.concluida_em) BETWEEN ?2 AND ?3) AS avaliacoes_concluidas,
+      (SELECT COUNT(DISTINCT av.id) FROM avaliacoes av
+        WHERE av.unidade_id = ?1 AND av.status = 'concluida' AND DATE(av.concluida_em) BETWEEN ?2 AND ?3
+          AND EXISTS (SELECT 1 FROM procedimentos_cliente pc WHERE pc.avaliacao_id = av.id AND pc.status_comercial <> 'cancelado')) AS avaliacoes_com_orcamento,
+      (SELECT COUNT(DISTINCT o.id) FROM orcamentos o
+        WHERE o.unidade_id = ?1 AND DATE(o.apresentado_em) BETWEEN ?2 AND ?3) AS orcamentos_apresentados,
+      (SELECT COUNT(DISTINCT av.id) FROM avaliacoes av JOIN orcamentos o ON o.avaliacao_id = av.id
+        WHERE av.unidade_id = ?1 AND DATE(o.apresentado_em) BETWEEN ?2 AND ?3
+          AND EXISTS (SELECT 1 FROM procedimentos_cliente pc WHERE pc.avaliacao_id = av.id AND pc.status_comercial = 'aceito')) AS avaliacoes_convertidas,
+      (SELECT COALESCE(SUM(pc.valor_final_centavos), 0) FROM procedimentos_cliente pc
+        WHERE pc.unidade_id = ?1 AND pc.origem = 'avaliacao' AND pc.status_comercial <> 'cancelado' AND DATE(pc.created_at) BETWEEN ?2 AND ?3) AS valor_proposto_centavos,
+      (SELECT COALESCE(SUM(pc.valor_final_centavos), 0) FROM procedimentos_cliente pc
+        WHERE pc.unidade_id = ?1 AND pc.status_comercial = 'aceito' AND DATE(pc.aceito_em) BETWEEN ?2 AND ?3) AS valor_aceito_centavos,
+      (SELECT COALESCE(SUM(ra.valor_centavos - ra.valor_estornado_centavos), 0)
+        FROM recebimento_alocacoes ra JOIN recebimentos r ON r.id = ra.recebimento_id
+        WHERE r.unidade_id = ?1 AND r.status <> 'estornado' AND DATE(r.created_at) BETWEEN ?2 AND ?3) AS valor_recebido_centavos,
+      (SELECT COALESCE(SUM(pc.valor_final_centavos), 0) FROM procedimentos_cliente pc
+        WHERE pc.unidade_id = ?1 AND pc.status_clinico = 'concluido' AND DATE(pc.concluido_em) BETWEEN ?2 AND ?3) AS valor_executado_centavos`)
+    .bind(unidadeId, from, to)
+    .first<Record<string, number>>();
+  const metrics = row ?? {};
+  const percent = (numerator: number, denominator: number) => denominator > 0
+    ? Math.round((numerator / denominator) * 10_000) / 100
+    : 0;
+  return {
+    periodo: { inicio: from, fim: to },
+    ...metrics,
+    taxa_geracao: percent(metrics.avaliacoes_com_orcamento ?? 0, metrics.avaliacoes_concluidas ?? 0),
+    taxa_apresentacao: percent(metrics.orcamentos_apresentados ?? 0, metrics.avaliacoes_com_orcamento ?? 0),
+    conversao_comercial: percent(metrics.avaliacoes_convertidas ?? 0, metrics.orcamentos_apresentados ?? 0),
+  };
+}
+
 export async function operationalSummaryV2(env: Env, unidadeId: number, from: string, to: string) {
+  if (usesProcedureCentricFlow(env)) {
+    const [atendimentosPorStatus, agendaPorStatus, procedimentosPorFila, avaliacoesSemOrcamento] = await Promise.all([
+      all<{ status: string; total: number }>(env.DB.prepare(`SELECT status, COUNT(DISTINCT id) AS total
+        FROM atendimentos_clinicos WHERE unidade_id = ? AND DATE(created_at) BETWEEN ? AND ?
+        GROUP BY status ORDER BY status`).bind(unidadeId, from, to)),
+      all<{ status: string; total: number }>(env.DB.prepare(`SELECT status, COUNT(DISTINCT id) AS total
+        FROM agenda_compromissos WHERE unidade_id = ? AND DATE(data_agendada) BETWEEN ? AND ?
+        GROUP BY status ORDER BY status`).bind(unidadeId, from, to)),
+      env.DB.prepare(`SELECT
+        SUM(CASE WHEN status_comercial = 'proposto' THEN 1 ELSE 0 END) AS aguardando_decisao,
+        SUM(CASE WHEN status_comercial = 'aceito' AND status_financeiro <> 'quitado' THEN 1 ELSE 0 END) AS aguardando_pagamento,
+        SUM(CASE WHEN status_comercial = 'aceito' AND status_agenda = 'sem_agendamento' AND status_clinico IN ('nao_iniciado', 'em_execucao') THEN 1 ELSE 0 END) AS aguardando_agendamento,
+        SUM(CASE WHEN status_agenda = 'agendado' THEN 1 ELSE 0 END) AS agendados,
+        SUM(CASE WHEN status_clinico = 'em_execucao' THEN 1 ELSE 0 END) AS em_execucao,
+        SUM(CASE WHEN status_clinico = 'concluido' AND status_financeiro <> 'quitado' THEN 1 ELSE 0 END) AS executados_com_saldo,
+        SUM(CASE WHEN status_clinico = 'concluido' AND status_financeiro = 'quitado' THEN 1 ELSE 0 END) AS concluidos
+        FROM v_procedimentos_cliente_operacional WHERE unidade_id = ?`).bind(unidadeId).first<Record<string, number>>(),
+      all<{ motivo: string; total: number }>(env.DB.prepare(`SELECT motivo_sem_orcamento AS motivo, COUNT(DISTINCT id) AS total
+        FROM avaliacoes WHERE unidade_id = ? AND status = 'concluida'
+          AND DATE(concluida_em) BETWEEN ? AND ? AND motivo_sem_orcamento IS NOT NULL
+        GROUP BY motivo_sem_orcamento ORDER BY total DESC`).bind(unidadeId, from, to)),
+    ]);
+    return {
+      periodo: { inicio: from, fim: to },
+      atendimentosPorStatus,
+      agendaPorStatus,
+      procedimentosPorFila: procedimentosPorFila ?? {},
+      avaliacoesSemOrcamento,
+    };
+  }
   const atendimentosPorStatus = await all<{ status: string; total: number }>(env.DB.prepare(
     `SELECT CASE WHEN status = 'aguardando_pagamento' THEN 'aguardando_liberacao' ELSE status END AS status,
         COUNT(*) AS total FROM atendimentos

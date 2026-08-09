@@ -17,6 +17,8 @@ import { STATUS_CONFIG, STATUS_ORDER } from '@/lib/constants/status';
 import { formatarDataHora } from '@/lib/utils/formatters';
 import type { AtendimentoStatus } from '@/lib/types';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import AtendimentosClinicos from '@/components/v2/AtendimentosClinicos';
+import { useProcedureCentricFlow } from '@/lib/hooks/useProcedureCentricFlow';
 
 interface Atendimento {
   id: number;
@@ -39,7 +41,7 @@ const OPCOES_PERIODO = [
   { value: '30dias', label: 'Últimos 30 dias' },
 ];
 
-export default function AtendimentosPage() {
+export function LegacyAtendimentosPage() {
   usePageTitle('Atendimentos');
   const unitFetch = useUnitFetch();
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
@@ -235,4 +237,10 @@ export default function AtendimentosPage() {
       </div>
     </div>
   );
+}
+
+export default function AtendimentosPage() {
+  const procedureCentricFlow = useProcedureCentricFlow();
+  if (procedureCentricFlow === null) return <LoadingState text="Carregando ambiente operacional..." />;
+  return procedureCentricFlow ? <AtendimentosClinicos /> : <LegacyAtendimentosPage />;
 }

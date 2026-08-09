@@ -37,6 +37,8 @@ export interface KVNamespace {
 export interface Env {
   DB: D1Database;
   OAUTH_KV: KVNamespace;
+  /** Ativa as tabelas e regras procedure-centric somente no staging. */
+  PROCEDURE_CENTRIC_FLOW: string;
   /** Lista de e-mails autorizados a conectar o MCP, separada por vírgula. */
   MCP_ALLOWED_EMAILS: string;
   /** Lista de e-mails autorizados a usar escrita MCP mínima, separada por vírgula. */

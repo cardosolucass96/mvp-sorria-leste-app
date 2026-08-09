@@ -37,6 +37,7 @@ import { getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 import { PRINT_STYLE_TOKENS_BASE, PRINT_STYLE_TOKENS_CLIENT_HEADER } from '@/lib/printStyles';
 import { calculateAgeFromDateOnly, getStoredUtcInstantMillis } from '@/lib/time';
 import { isAcrescimoEmExecucaoACobrar } from '@/lib/utils/itemStatus';
+import { useProcedureCentricFlow } from '@/lib/hooks/useProcedureCentricFlow';
 
 const METODOS_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -327,11 +328,20 @@ interface AnexoClienteItem {
   descricao?: string | null;
 }
 
+interface EventoTimelineV2 {
+  tipo: string;
+  entidade_id: string;
+  titulo: string;
+  descricao: string | null;
+  data_evento: string;
+}
+
 export default function ClienteDetalhePage({ params }: { params: Promise<{ id: string }> }) {
   usePageTitle('Ficha do Cliente');
   const { id } = use(params);
   const { user } = useAuth();
   const unitFetch = useUnitFetch();
+  const procedureCentricFlow = useProcedureCentricFlow();
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [ficha, setFicha] = useState<FichaData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -367,6 +377,19 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const [anexosUploading, setAnexosUploading] = useState(false);
   const [selectedAtendimentos, setSelectedAtendimentos] = useState<number[]>([]);
   const [selectedPagamentos, setSelectedPagamentos] = useState<number[]>([]);
+  const [timelineV2, setTimelineV2] = useState<EventoTimelineV2[]>([]);
+  const [timelineV2Loading, setTimelineV2Loading] = useState(false);
+
+  useEffect(() => {
+    if (!procedureCentricFlow || abaAtiva !== 'historico') return;
+    let active = true;
+    setTimelineV2Loading(true);
+    void unitFetch(`/api/v2/clientes/${id}/timeline`)
+      .then((response) => response.ok ? response.json() as Promise<EventoTimelineV2[]> : [])
+      .then((events) => { if (active) setTimelineV2(Array.isArray(events) ? events : []); })
+      .finally(() => { if (active) setTimelineV2Loading(false); });
+    return () => { active = false; };
+  }, [abaAtiva, id, procedureCentricFlow, unitFetch]);
 
   // Saldo
   const [saldo, setSaldo] = useState({ saldo: 0, saldo_calculado: 0 });
@@ -1906,7 +1929,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     { key: 'agendamentos', label: 'Agendamentos', count: agendamentos.length },
     { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
     { key: 'anexos', label: 'Anexos', count: anexosCliente.length + anexosProntuario.length + termosDigitais.length },
-    { key: 'historico', label: 'Histórico', count: ficha?.historico.length },
+    { key: 'historico', label: procedureCentricFlow ? 'Linha do tempo' : 'Histórico', count: procedureCentricFlow ? timelineV2.length : ficha?.historico.length },
     { key: 'vinculados', label: 'Vinculados', count: vinculos.length },
   ];
 
@@ -1939,8 +1962,8 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
               >
                 Gerar termo
               </Button>
-              <Link href={`/atendimentos/novo?cliente=${id}`}>
-                <Button variant="secondary">Novo Atendimento</Button>
+              <Link href={procedureCentricFlow ? '/agenda' : `/atendimentos/novo?cliente=${id}`}>
+                <Button variant="secondary">{procedureCentricFlow ? 'Novo compromisso' : 'Novo Atendimento'}</Button>
               </Link>
               <Button onClick={() => setIsEditing(true)}>Editar</Button>
               <Button variant="danger" onClick={handleDelete}>Excluir</Button>
@@ -2873,7 +2896,32 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
           <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
             <Clock className="w-5 h-5" /> Histórico de Eventos
           </h2>
-          {!ficha?.historico.length ? (
+          {procedureCentricFlow ? (
+            timelineV2Loading ? <LoadingState text="Carregando linha do tempo..." /> : timelineV2.length === 0 ? (
+              <p className="text-center py-8 text-muted">Nenhum evento V2 registrado</p>
+            ) : (
+              <div className="relative">
+                <div className="absolute bottom-0 left-4 top-0 w-0.5 bg-border" />
+                <div className="space-y-4">
+                  {timelineV2.map((event) => (
+                    <div key={`${event.tipo}:${event.entidade_id}:${event.data_evento}`} className="relative flex gap-4">
+                      <div className="z-10 mt-1.5 h-3 w-3 shrink-0 rounded-full bg-primary" style={{ marginLeft: '10px' }} />
+                      <div className="flex-1 pb-2">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-muted">{event.tipo.replaceAll('_', ' ')}</span>
+                            <p className="mt-0.5 text-sm font-medium text-foreground">{event.titulo}</p>
+                            {event.descricao && <p className="mt-1 text-sm text-muted-foreground">{event.descricao}</p>}
+                          </div>
+                          <p className="shrink-0 text-xs text-muted">{formatarDataHora(event.data_evento)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          ) : !ficha?.historico.length ? (
             <p className="text-center py-8 text-muted">Nenhum evento registrado</p>
           ) : (() => {
             const TIPOS_SALDO = new Set(['credito', 'debito', 'estorno', 'transferencia_saida', 'transferencia_entrada']);

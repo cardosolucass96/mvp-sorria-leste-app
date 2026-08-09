@@ -17,6 +17,7 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "sorria-leste-db"
 database_id = "1a32c7e9-c5e7-4c53-89f0-3169d2ba7e4f"
+migrations_dir = "migrations"
 
 # Binding do R2 Bucket para arquivos
 [[r2_buckets]]
@@ -36,6 +37,7 @@ port = 8788
 [vars]
 ENVIRONMENT = "production"
 EXTERNAL_SIDE_EFFECTS_ENABLED = "true"
+PROCEDURE_CENTRIC_FLOW = "false"
 
 # Ambiente persistente de staging. Os bindings são declarados novamente porque
 # vars, D1, R2 e services não são herdados automaticamente pelos ambientes.
@@ -47,12 +49,14 @@ preview_urls = false
 [env.staging.vars]
 ENVIRONMENT = "staging"
 EXTERNAL_SIDE_EFFECTS_ENABLED = "false"
+PROCEDURE_CENTRIC_FLOW = "true"
 APP_BASE_URL = "https://sorria-leste-app-staging.lucas-cardoso.workers.dev"
 
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "sorria-leste-db-staging"
 database_id = "8d2eb56d-9527-4292-b63f-3edb5650548c"
+migrations_dir = "migrations"
 
 [[env.staging.r2_buckets]]
 binding = "R2_BUCKET"

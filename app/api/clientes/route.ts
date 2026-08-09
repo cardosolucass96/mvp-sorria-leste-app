@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, execute, batch } from '@/lib/db';
+import { query, batch } from '@/lib/db';
 import { Cliente } from '@/lib/types';
 import {
   applyPatientPrivacyToClientes,
@@ -7,6 +7,8 @@ import {
   getAuthenticatedRequestUser,
   isRestrictedDentistPatientView,
 } from '@/lib/auth/patientPrivacy';
+import { getUnidadeFromRequest } from '@/lib/auth/middleware';
+import { isProcedureCentricFlowEnabled } from '@/lib/v2/config';
 
 const PAGE_SIZE = 50;
 
@@ -124,10 +126,11 @@ export async function POST(request: NextRequest) {
     const planosValidos = ['Clin', 'Prime', 'OdontoArt'];
     const planoValido = plano_odontologico && planosValidos.includes(plano_odontologico) ? plano_odontologico : null;
 
-    const result = await execute(
-      `INSERT INTO clientes (nome, cpf, telefone, email, data_nascimento, endereco, origem, sexo, plano_odontologico, observacoes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+    const unidadeId = getUnidadeFromRequest(request, user);
+    const statements = [{
+      sql: `INSERT INTO clientes (nome, cpf, telefone, email, data_nascimento, endereco, origem, sexo, plano_odontologico, observacoes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
         nome.trim(),
         cpf?.trim() || null,
         telefone?.trim() || null,
@@ -138,12 +141,21 @@ export async function POST(request: NextRequest) {
         sexoValido,
         planoValido,
         observacoes?.trim() || null,
-      ]
-    );
+      ],
+    }];
+    if (isProcedureCentricFlowEnabled()) {
+      statements.push({
+        sql: `INSERT INTO cliente_unidades_v2 (cliente_id, unidade_id, vinculado_por_id)
+              VALUES (last_insert_rowid(), ?, ?)`,
+        params: [unidadeId, user.sub],
+      });
+    }
+    const [result] = await batch(statements);
+    const newClientId = Number(result.meta?.last_row_id ?? 0);
 
     const novoCliente = await query<Cliente>(
       'SELECT * FROM clientes WHERE id = ?',
-      [result.lastInsertRowid]
+      [newClientId]
     );
 
     return NextResponse.json(novoCliente[0], { status: 201 });

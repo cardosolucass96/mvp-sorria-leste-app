@@ -413,8 +413,13 @@ export const CPFS_VALIDOS = [
 export const UNIDADE_BARRA: Unidade = {
   id: 1,
   nome: 'Barra do Ceará',
+  razao_social: null,
+  cnpj: null,
   endereco: null,
   telefone: null,
+  email: null,
+  responsavel: null,
+  recibo_rodape: null,
   ativo: 1,
   created_at: '2025-01-01 00:00:00',
 };
@@ -422,8 +427,13 @@ export const UNIDADE_BARRA: Unidade = {
 export const UNIDADE_VILA: Unidade = {
   id: 2,
   nome: 'Vila União',
+  razao_social: null,
+  cnpj: null,
   endereco: null,
   telefone: null,
+  email: null,
+  responsavel: null,
+  recibo_rodape: null,
   ativo: 1,
   created_at: '2025-01-01 00:00:00',
 };

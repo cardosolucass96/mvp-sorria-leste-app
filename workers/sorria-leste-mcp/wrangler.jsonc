@@ -12,6 +12,7 @@
     "head_sampling_rate": 1
   },
   "vars": {
+    "PROCEDURE_CENTRIC_FLOW": "false",
     "SDR_DEFAULT_UNIT_ID": "3",
     "SDR_CREATED_BY_USER_ID": "58"
   },
@@ -33,6 +34,7 @@
       "name": "sorria-leste-mcp-staging",
       "preview_urls": false,
       "vars": {
+        "PROCEDURE_CENTRIC_FLOW": "true",
         "SDR_DEFAULT_UNIT_ID": "3",
         "SDR_CREATED_BY_USER_ID": "1"
       },

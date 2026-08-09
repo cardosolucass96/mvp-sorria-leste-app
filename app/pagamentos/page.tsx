@@ -8,6 +8,8 @@ import { PageHeader, Alert, StatCard, Table, LoadingState, Button } from '@/comp
 import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda, formatarData } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import Recebimentos from '@/components/v2/Recebimentos';
+import { useProcedureCentricFlow } from '@/lib/hooks/useProcedureCentricFlow';
 
 interface Atendimento {
   id: number;
@@ -22,7 +24,7 @@ interface AtendimentoComTotais extends Atendimento {
   total_pago: number;
 }
 
-export default function PagamentosPage() {
+export function LegacyPagamentosPage() {
   usePageTitle('Pagamentos');
   const unitFetch = useUnitFetch();
   const [atendimentos, setAtendimentos] = useState<AtendimentoComTotais[]>([]);
@@ -99,4 +101,10 @@ export default function PagamentosPage() {
       />
     </div>
   );
+}
+
+export default function PagamentosPage() {
+  const procedureCentricFlow = useProcedureCentricFlow();
+  if (procedureCentricFlow === null) return <LoadingState text="Carregando ambiente operacional..." />;
+  return procedureCentricFlow ? <Recebimentos /> : <LegacyPagamentosPage />;
 }
