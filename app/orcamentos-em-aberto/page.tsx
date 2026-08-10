@@ -25,6 +25,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { formatarDataHora, formatarMoeda, formatarTelefone } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import CentralProcedimentos from '@/components/v2/CentralProcedimentos';
+import { useProcedureCentricFlow } from '@/lib/hooks/useProcedureCentricFlow';
 
 type SituacaoAgendamento = 'sem_agendamento' | 'agendamento_sem_data' | 'agendado_com_data';
 
@@ -149,7 +151,7 @@ function getAgendamentoResumo(procedimento: ProcedimentoItem) {
   return 'Sem data agendada';
 }
 
-export default function OrcamentosEmAbertoPage() {
+export function LegacyOrcamentosEmAbertoPage() {
   usePageTitle('Orçamentos em Aberto');
   const router = useRouter();
   const unitFetch = useUnitFetch();
@@ -541,4 +543,10 @@ export default function OrcamentosEmAbertoPage() {
       )}
     </div>
   );
+}
+
+export default function OrcamentosEmAbertoPage() {
+  const procedureCentricFlow = useProcedureCentricFlow();
+  if (procedureCentricFlow === null) return <LoadingState text="Carregando ambiente operacional..." />;
+  return procedureCentricFlow ? <CentralProcedimentos /> : <LegacyOrcamentosEmAbertoPage />;
 }

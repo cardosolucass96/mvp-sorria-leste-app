@@ -140,6 +140,22 @@ afterEach(() => {
 });
 
 describe('termos digitais do cliente', () => {
+  it('bloqueia criação de documentos externos quando os efeitos externos estão desabilitados', async () => {
+    setMockCloudflareEnv({ EXTERNAL_SIDE_EFFECTS_ENABLED: 'false' });
+    const fetchSpy = jest.spyOn(global, 'fetch');
+
+    const { status, data } = await callRoute<{ error: string }>(
+      gerarTermoDigitalRoute,
+      '/api/clientes/1/termos/termo-consentimento/autentique',
+      { method: 'POST' },
+      createRouteContext({ id: '1', slug: 'termo-consentimento' }),
+    );
+
+    expect(status).toBe(503);
+    expect(data.error).toContain('Integrações externas estão desabilitadas');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('retorna draft no render do termo', async () => {
     setupClienteTermoMocks('<p>{{cliente_nome}}</p><p>{{campo_livre}}</p>');
 

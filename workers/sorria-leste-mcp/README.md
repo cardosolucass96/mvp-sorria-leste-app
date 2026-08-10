@@ -15,6 +15,7 @@ O servidor ajuda a consultar agenda, fila, clientes, equipe, categorias, atendim
 Para automações server-to-server como n8n, há também um endpoint HTTP direto protegido por API key:
 
 - `POST /api/sdr/lead-avaliacao`: cria cliente e cria agendamento de avaliação em uma chamada.
+- `POST /api/bi/relatorio-diario`: retorna métricas diárias agregadas por origem, sem dados pessoais.
 
 Na produção, o endpoint usa Pirambu (`unidadeId: 3`) quando `unidadeId` não é enviado, registra o usuário “IA de Atendimento” (`id: 58`) como criador e, quando `executorId` não é informado, escolhe automaticamente o primeiro avaliador ativo da unidade. Um `executorId` explícito continua tendo prioridade.
 
@@ -137,6 +138,25 @@ Configuração não secreta do endpoint:
 - `SDR_DEFAULT_UNIT_ID`: unidade padrão quando `unidadeId` for omitido.
 - `SDR_CREATED_BY_USER_ID`: usuário ativo e vinculado à unidade que ficará registrado como criador.
 
+### Relatório diário para BI
+
+Use uma chave exclusiva de leitura, `BI_API_KEY`; não reutilize a chave do SDR e não dê ao n8n acesso direto ao D1. O endpoint não retorna pacientes nem prontuários.
+
+```bash
+curl -X POST "https://<worker>/api/bi/relatorio-diario" \
+  -H "Authorization: Bearer $BI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"unidadeId":3,"data":"2026-08-05"}'
+```
+
+O dia é calculado no fuso `America/Fortaleza`, usando o intervalo UTC semiaberto `[03:00, 03:00 do dia seguinte)`. A resposta contém, por origem:
+
+- `atendimentosCriados`: atendimentos abertos naquela data;
+- `valorItensCriados`: valor orçado dos itens criados naquela data, que não representa caixa recebido;
+- `procedimentosAvaliados`: itens de atendimento criados por avaliadores naquela data;
+- `valorProcedimentosAvaliados`: valor dos procedimentos avaliados naquela data;
+- `recebidoBruto`: pagamentos não cancelados recebidos naquela data.
+
 ## Preparação
 
 1. O ambiente `staging` deve usar D1 separado ou cópia anonimizada. Aplique `lib/migrations/add_mcp_audit.sql` antes de publicar o Worker.
@@ -146,9 +166,10 @@ Configuração não secreta do endpoint:
    npx wrangler secret put MCP_ALLOWED_EMAILS --config workers/sorria-leste-mcp/wrangler.jsonc --env staging
    npx wrangler secret put MCP_WRITE_ALLOWED_EMAILS --config workers/sorria-leste-mcp/wrangler.jsonc --env staging
    npx wrangler secret put SDR_API_KEY --config workers/sorria-leste-mcp/wrangler.jsonc --env staging
+   npx wrangler secret put BI_API_KEY --config workers/sorria-leste-mcp/wrangler.jsonc --env staging
    ```
 
-   `MCP_ALLOWED_EMAILS` recebe administradores com leitura ampla. `MCP_WRITE_ALLOWED_EMAILS` recebe atendentes/admins autorizados à escrita V1. `SDR_API_KEY` protege o endpoint HTTP usado por n8n. Para mais de um e-mail, use uma lista separada por vírgulas.
+   `MCP_ALLOWED_EMAILS` recebe administradores com leitura ampla. `MCP_WRITE_ALLOWED_EMAILS` recebe atendentes/admins autorizados à escrita V1. `SDR_API_KEY` protege o endpoint de criação usado por n8n e `BI_API_KEY` protege o relatório diário somente leitura. Para mais de um e-mail, use uma lista separada por vírgulas.
 3. Gere os tipos e valide:
 
    ```bash

@@ -31,6 +31,8 @@ import {
   listUnits,
   operationalSummary,
   operationalSummaryV2,
+  managerialIndicatorsV2,
+  procedureQueuesV2,
   queuePanel,
   searchClients,
   unitFinancialSummary,
@@ -59,7 +61,8 @@ const DATE = z.string().refine(isDateOnly, 'Use uma data válida no formato AAAA
 const ROLE = z.enum(['admin', 'atendente', 'avaliador', 'executor', 'ortodontista']);
 const AGENDAMENTO_STATUS = z.enum(['pendente', 'agendado', 'realizado', 'faltou', 'cancelado']);
 const AGENDAMENTO_TIPO = z.enum(['avaliacao', 'procedimento']);
-const ATENDIMENTO_STATUS = z.enum(['triagem', 'avaliacao', 'aguardando_liberacao', 'em_execucao', 'finalizado', 'encerrado']);
+const ATENDIMENTO_STATUS = z.enum(['triagem', 'avaliacao', 'aguardando_liberacao', 'aguardando', 'em_andamento', 'em_execucao', 'finalizado', 'cancelado', 'encerrado']);
+const PROCEDURE_QUEUE_V2 = z.enum(['aguardando_decisao', 'aguardando_pagamento', 'aguardando_agendamento', 'agendados', 'em_execucao', 'executados_com_saldo', 'concluidos']);
 const FOLLOWUP_STATUS = z.enum(['aberta', 'concluida']);
 const FOLLOWUP_TIPO = z.enum(['orcamento', 'sem_posicao', 'retorno', 'cobranca', 'outro']);
 const ORIGEM_CLIENTE = z.enum(['fachada', 'trafego_meta', 'trafego_google', 'organico', 'indicacao']);
@@ -216,7 +219,7 @@ export function createServer(env: Env, props: unknown): McpServer {
     runWriteTool(env, props, 'criar_cliente', null, () => createClient(env, input)),
   );
 
-  server.tool('criar_agendamento_avaliacao', 'Cria apenas agendamento de avaliação para um cliente. Requer sorria.write.', {
+  server.tool('criar_agendamento_avaliacao', 'Cria apenas agendamento de avaliação para um cliente. No staging V2, data/hora são obrigatórias. Requer sorria.write.', {
     unidadeId: UNIT,
     clienteId: CLIENT,
     dataAgendada: CLINIC_DATETIME.optional(),
@@ -502,6 +505,28 @@ export function createServer(env: Env, props: unknown): McpServer {
       ensureDateRange(dataInicio, dataFim);
       return operationalSummaryV2(env, unidadeId, dataInicio, dataFim);
     }),
+  );
+
+  server.tool('listar_filas_procedimentos_v2', 'Lista procedimentos do paciente por fila independente no ambiente staging V2, sem valores financeiros.', {
+    unidadeId: UNIT,
+    fila: PROCEDURE_QUEUE_V2.optional(),
+    limite: PAGE,
+    offset: OFFSET,
+  }, async ({ unidadeId, fila, limite, offset }) =>
+    runReadTool(env, props, 'listar_filas_procedimentos_v2', unidadeId, () =>
+      procedureQueuesV2(env, unidadeId, fila, limite, offset)),
+  );
+
+  server.tool('indicadores_gerenciais_v2', 'Indicadores procedure-centric por unidade e período. Valores financeiros exigem sorria.finance.read.', {
+    unidadeId: UNIT,
+    dataInicio: DATE,
+    dataFim: DATE,
+  }, async ({ unidadeId, dataInicio, dataFim }) =>
+    runReadTool(env, props, 'indicadores_gerenciais_v2', unidadeId, async (identity) => {
+      assertFinancialScope(identity);
+      ensureDateRange(dataInicio, dataFim);
+      return managerialIndicatorsV2(env, unidadeId, dataInicio, dataFim);
+    }, { redactFinancial: false, requiresFinancialScope: true }),
   );
 
   server.tool('resumo_financeiro_unidade', 'Consolidado financeiro da unidade por período, com totais, taxas, recebimentos por método, por recebedor e pagamentos recentes.', {

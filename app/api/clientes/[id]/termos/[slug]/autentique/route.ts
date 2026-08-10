@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { execute, queryOne } from '@/lib/db';
+import { areExternalSideEffectsEnabled } from '@/lib/env';
 import { withUnit } from '@/lib/auth/middleware';
 import { garantirTermosDigitaisSchema } from '@/lib/helpers/garantirTermosDigitaisSchema';
 import { carregarTermoRenderizadoParaCliente } from '@/lib/helpers/termosCliente';
@@ -30,6 +31,13 @@ export const POST = withUnit(async (request: NextRequest, ctx) => {
 
     if (!SLUG_REGEX.test(slug)) {
       return NextResponse.json({ error: 'Slug inválido.' }, { status: 400 });
+    }
+
+    if (!areExternalSideEffectsEnabled()) {
+      return NextResponse.json(
+        { error: 'Integrações externas estão desabilitadas neste ambiente.' },
+        { status: 503 },
+      );
     }
 
     const cliente = await queryOne<Cliente>(

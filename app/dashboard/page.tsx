@@ -15,6 +15,8 @@ import type { AtendimentoStatus } from '@/lib/types';
 import { PageHeader, Card, Button, Input, StatCard, EmptyState, LoadingState, Alert } from '@/components/ui';
 import { addDaysToClinicDateKey, getClinicDateKey } from '@/lib/time';
 import usePageTitle from '@/lib/utils/usePageTitle';
+import DashboardV2 from '@/components/v2/DashboardV2';
+import { useProcedureCentricFlow } from '@/lib/hooks/useProcedureCentricFlow';
 
 interface DashboardData {
   resumo_operacional: {
@@ -69,7 +71,7 @@ function shiftDateKey(
   return formatUtcDateKey(date);
 }
 
-export default function DashboardAdminPage() {
+export function LegacyDashboardAdminPage() {
   usePageTitle('Dashboard');
   const { user, isLoading: authLoading, isAdmin, hasRole } = useAuth();
   const router = useRouter();
@@ -478,4 +480,10 @@ export default function DashboardAdminPage() {
       )}
     </div>
   );
+}
+
+export default function DashboardAdminPage() {
+  const procedureCentricFlow = useProcedureCentricFlow();
+  if (procedureCentricFlow === null) return <LoadingState text="Carregando ambiente operacional..." />;
+  return procedureCentricFlow ? <DashboardV2 /> : <LegacyDashboardAdminPage />;
 }
