@@ -15,7 +15,7 @@
     "SDR_CREATED_BY_USER_ID": "58"
   },
   "secrets": {
-    "required": ["MCP_ALLOWED_EMAILS", "MCP_WRITE_ALLOWED_EMAILS", "SDR_API_KEY"]
+    "required": ["MCP_ALLOWED_EMAILS", "MCP_WRITE_ALLOWED_EMAILS", "SDR_API_KEY", "BI_API_KEY"]
   },
   "kv_namespaces": [
     { "binding": "OAUTH_KV", "id": "6aa5c70fed4a4535873dcc91490c1d92" }

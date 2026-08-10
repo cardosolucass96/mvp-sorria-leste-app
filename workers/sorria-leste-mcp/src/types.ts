@@ -43,6 +43,8 @@ export interface Env {
   MCP_WRITE_ALLOWED_EMAILS: string;
   /** API key server-to-server para integrações SDR, como n8n. */
   SDR_API_KEY: string;
+  /** API key somente leitura para relatórios e BI. */
+  BI_API_KEY: string;
   /** Unidade usada pelo SDR quando o payload não informar unidadeId. */
   SDR_DEFAULT_UNIT_ID: string;
   /** Usuário registrado como criador dos agendamentos feitos pelo endpoint SDR. */
