@@ -87,8 +87,8 @@ export class CreditoTransacao {
     return partes;
   }
 
-  recalcular(itemId: number) {
-    this.add('INSERT OR IGNORE INTO financeiro_itens VALUES (?)', [itemId]);
+  recalcular(itemId: number, rastrear = true) {
+    if (rastrear) this.add('INSERT OR IGNORE INTO financeiro_itens VALUES (?)', [itemId]);
     this.comandos.push(...comandosRecalcularCredito(itemId));
   }
 }

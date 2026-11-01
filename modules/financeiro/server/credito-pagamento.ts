@@ -9,7 +9,7 @@ import type { NormalizedAlocacao, PagamentoFormaResolvedInput } from '../contrac
 export function receberComCredito(input: {
   clienteId: number; unidadeId: number; atendimentoId: number; recebidoPorId: number;
   observacoes: string | null; valorTotal: number; formas: PagamentoFormaResolvedInput[];
-  alocacoes: NormalizedAlocacao[]; body: unknown; chave?: string;
+  alocacoes: NormalizedAlocacao[]; body: unknown; rastrear: boolean; chave?: string;
 }) {
   const { clienteId, unidadeId, atendimentoId, recebidoPorId, observacoes, valorTotal, formas, alocacoes, chave } = input;
   return transacionarCredito(clienteId, 'recebimento', { unidadeId, atendimentoId, recebidoPorId, body: input.body }, chave, async tx => {
@@ -17,7 +17,7 @@ export function receberComCredito(input: {
     if (!at || !['aguardando_pagamento','em_execucao','finalizado','encerrado'].includes(at.status)) throw new CreditoErro('Atendimento indisponível para recebimento');
     const total = centavos(valorTotal);
     if (!Number.isSafeInteger(total) || total <= 0 || formas.reduce((s,f)=>s+centavos(f.valor),0) !== total || alocacoes.reduce((s,a)=>s+centavos(a.valor),0) !== total) throw new CreditoErro('Formas e alocações devem corresponder ao valor recebido', 400);
-    await tx.conta(clienteId);
+    if (input.rastrear) await tx.conta(clienteId);
     const itens = new Map<number, Awaited<ReturnType<typeof carregarCobertura>>>();
     for (const itemId of new Set(alocacoes.map(a=>a.item_id))) {
       const cobertura = await carregarCobertura(itemId, clienteId, unidadeId);
@@ -63,7 +63,7 @@ export function receberComCredito(input: {
       if (saldoForma) throw new CreditoErro('Não foi possível distribuir o recebimento', 400);
     }
     if (restantes.some(a=>a.restante)) throw new CreditoErro('Não foi possível distribuir as alocações', 400);
-    for (const itemId of itens.keys()) tx.recalcular(itemId);
+    for (const itemId of itens.keys()) tx.recalcular(itemId, input.rastrear);
     return { body: representante, status: 201 };
   });
 }

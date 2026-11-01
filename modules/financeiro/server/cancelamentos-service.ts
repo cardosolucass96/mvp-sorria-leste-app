@@ -1,6 +1,6 @@
 import 'server-only';
 import { queryOne } from '@/lib/db';
-import { usarCreditoRastreavel } from './credito-config';
+import { usarCreditoRastreavel, existeSchemaCredito } from './credito-config';
 import { cancelarComCredito } from './credito-cancelamento';
 import { serviceResult } from '@/shared/result';
 import { garantirEsquemaPagamentosGrupos } from '@/lib/helpers/pagamentosGrupos';
@@ -15,7 +15,7 @@ export async function cancelarPagamento(atendimentoId: number, pagamentoId: numb
     if (atendimento.unidade_id !== unidadeId) return serviceResult({ error: 'Atendimento não pertence a esta unidade' }, { status: 403 });
     if (typeof motivo !== 'string' || !motivo.trim()) return serviceResult({ error: 'Informe o motivo do cancelamento' }, { status: 400 });
     const cliente = await queryOne<{ cliente_id: number }>('SELECT cliente_id FROM atendimentos WHERE id=?', [atendimentoId]);
-    if (cliente && await usarCreditoRastreavel(cliente.cliente_id, unidadeId)) return cancelarComCredito(cliente.cliente_id, unidadeId, atendimentoId, pagamentoId, motivo.trim(), chave);
+    if (cliente && await existeSchemaCredito()) return cancelarComCredito(cliente.cliente_id, unidadeId, atendimentoId, pagamentoId, motivo.trim(), chave, await usarCreditoRastreavel(cliente.cliente_id, unidadeId));
     await garantirEsquemaPagamentosGrupos();
     const pagamento = await buscarPagamentoCancelamento(atendimentoId, pagamentoId);
     if (!pagamento) return serviceResult({ error: 'Pagamento não encontrado' }, { status: 404 });

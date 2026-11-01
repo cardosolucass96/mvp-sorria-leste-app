@@ -1,6 +1,6 @@
 import 'server-only';
 import { queryOne } from '@/lib/db';
-import { usarCreditoRastreavel } from './credito-config';
+import { usarCreditoRastreavel, existeSchemaCredito } from './credito-config';
 import { consultarRepeticaoCredito } from './credito-transacao';
 import { receberComCredito } from './credito-pagamento';
 import { serviceResult, type ServiceResult } from '@/shared/result';
@@ -175,7 +175,8 @@ export async function registrarPagamento(atendimentoId: number, unidadeId: numbe
 
     const cliente = await queryOne<{ cliente_id: number }>('SELECT cliente_id FROM atendimentos WHERE id=?', [atendimentoId]);
     const rastreavel = cliente ? await usarCreditoRastreavel(cliente.cliente_id, unidadeId) : false;
-    if (rastreavel && chave) {
+    const atomico = cliente ? await existeSchemaCredito() : false;
+    if (atomico && chave) {
       const repeticao = await consultarRepeticaoCredito(cliente!.cliente_id, 'recebimento', { unidadeId, atendimentoId, recebidoPorId, body }, chave);
       if (repeticao) return repeticao;
     }
@@ -239,8 +240,8 @@ export async function registrarPagamento(atendimentoId: number, unidadeId: numbe
         );
       }
 
-      if (rastreavel) return receberComCredito({ clienteId: cliente!.cliente_id, unidadeId, atendimentoId, recebidoPorId, observacoes: observacoes || null,
-        valorTotal, formas: formasNormalizadas, alocacoes: alocacoesNormalizadas, body, chave });
+      if (atomico) return receberComCredito({ clienteId: cliente!.cliente_id, unidadeId, atendimentoId, recebidoPorId, observacoes: observacoes || null,
+        valorTotal, formas: formasNormalizadas, alocacoes: alocacoesNormalizadas, body, rastrear: rastreavel, chave });
       const { pagamentoRepresentanteId, alocacaoIdsGeradas } = await criarGrupoDePagamentos({
         atendimentoId,
         recebidoPorId,
@@ -289,8 +290,8 @@ export async function registrarPagamento(atendimentoId: number, unidadeId: numbe
       );
     }
 
-    if (rastreavel) return receberComCredito({ clienteId: cliente!.cliente_id, unidadeId, atendimentoId, recebidoPorId, observacoes: observacoes || null,
-      valorTotal: valorNormalizado, formas: formasNormalizadas, alocacoes: alocacoesNormalizadas, body, chave });
+    if (atomico) return receberComCredito({ clienteId: cliente!.cliente_id, unidadeId, atendimentoId, recebidoPorId, observacoes: observacoes || null,
+      valorTotal: valorNormalizado, formas: formasNormalizadas, alocacoes: alocacoesNormalizadas, body, rastrear: rastreavel, chave });
     const { pagamentoRepresentanteId, alocacaoIdsGeradas } = await criarGrupoDePagamentos({
       atendimentoId,
       recebidoPorId,

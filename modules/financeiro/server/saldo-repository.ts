@@ -1,6 +1,21 @@
 import 'server-only';
+import { existeSchemaCredito } from './credito-config';
 import { query, queryOne, batch } from '@/lib/db';
 import type { SaldoRow, ItemSaldo, ItemSaldoComOrigem, ItemEstorno, MovimentacaoSaldo } from '../contracts/saldo';
+
+async function batchSaldoLegado(clientes: number[], comandos: Parameters<typeof batch>[0]) {
+  if (await existeSchemaCredito()) {
+    const id = crypto.randomUUID();
+    comandos.unshift({
+      sql: `INSERT INTO financeiro_operacoes(id,chave,assinatura,tipo,cliente_id,resposta,status,validado)
+        VALUES (?,?,?,'saldo_legado',?,'{}',200,CASE WHEN NOT EXISTS
+          (SELECT 1 FROM financeiro_contas WHERE cliente_id IN (${clientes.map(()=>'?').join(',')})) THEN 1 ELSE 0 END)`,
+      params: [id,id,'legado',clientes[0],...clientes],
+    });
+  }
+  try { await batch(comandos); return true; }
+  catch (error) { if (/financeiro_conflito/.test(String(error))) return false; throw error; }
+}
 
 export function buscarClienteSaldo(clienteId: number | string) {
   return queryOne<{ id: number }>('SELECT id FROM clientes WHERE id = ?', [clienteId]);
@@ -41,7 +56,7 @@ export function buscarPagamentoSaldo(pagamentoId: number) {
 }
 
 export async function persistirCreditarSaldo({ clienteId, valor, saldoAnterior, saldoNovo, pagamento_id, observacoes, timestamp }: { clienteId: number; valor: number; saldoAnterior: number; saldoNovo: number; pagamento_id?: number | null; observacoes?: string | null; timestamp: string; }) {
-  await batch([
+  return batchSaldoLegado([clienteId], [
     {
       sql: `INSERT INTO saldo_clientes (cliente_id, saldo, updated_at)
             VALUES (?, ?, ?)
@@ -60,7 +75,7 @@ export async function persistirCreditarSaldo({ clienteId, valor, saldoAnterior, 
 }
 
 export async function persistirDebitarSaldo({ clienteId, saldoNovo, saldoAnterior, valorRestante, valorEfetivo, status, item_atendimento_id, atendimento_id, observacoes, timestamp }: { clienteId: number; saldoNovo: number; saldoAnterior: number; valorRestante: number; valorEfetivo: number; status: string; item_atendimento_id: number; atendimento_id: number; observacoes?: string | null; timestamp: string; }) {
-  await batch([
+  return batchSaldoLegado([clienteId], [
     {
       sql: `INSERT INTO saldo_clientes (cliente_id, saldo, updated_at)
             VALUES (?, ?, ?)
@@ -82,7 +97,7 @@ export async function persistirDebitarSaldo({ clienteId, saldoNovo, saldoAnterio
 }
 
 export async function persistirEstornarSaldo({ clienteId, valor, saldoAnterior, saldoNovo, observacoes, timestamp }: { clienteId: number; valor: number; saldoAnterior: number; saldoNovo: number; observacoes?: string | null; timestamp: string; }) {
-  await batch([
+  return batchSaldoLegado([clienteId], [
     {
       sql: `UPDATE saldo_clientes SET saldo = ?, updated_at = ? WHERE cliente_id = ?`,
       params: [saldoNovo, timestamp, clienteId],
@@ -97,7 +112,7 @@ export async function persistirEstornarSaldo({ clienteId, valor, saldoAnterior, 
 }
 
 export async function persistirTransferirSaldo({ clienteOrigemId, cliente_destino_id, valor, saldoOrigemAnterior, saldoOrigemNovo, saldoDestinoAnterior, saldoDestinoNovo, observacoes, timestamp }: { clienteOrigemId: number; cliente_destino_id: number; valor: number; saldoOrigemAnterior: number; saldoOrigemNovo: number; saldoDestinoAnterior: number; saldoDestinoNovo: number; observacoes?: string | null; timestamp: string; }) {
-  await batch([
+  return batchSaldoLegado([clienteOrigemId, cliente_destino_id], [
     // Decrementar saldo da origem
     {
       sql: `INSERT INTO saldo_clientes (cliente_id, saldo, updated_at)
@@ -133,7 +148,7 @@ export async function persistirTransferirSaldo({ clienteOrigemId, cliente_destin
 }
 
 export async function persistirEstornarProcedimento({ clienteId, item, saldoAnterior, saldoNovo, timestamp }: { clienteId: number; item: ItemEstorno; saldoAnterior: number; saldoNovo: number; timestamp: string; }) {
-  await batch([
+  return batchSaldoLegado([clienteId], [
     {
       sql: `INSERT INTO saldo_clientes (cliente_id, saldo, updated_at)
             VALUES (?, ?, ?)

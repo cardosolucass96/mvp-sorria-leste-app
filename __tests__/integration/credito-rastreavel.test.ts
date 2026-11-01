@@ -1,3 +1,5 @@
+import * as saldoRepository from '@/modules/financeiro/server/saldo-repository';
+import * as pagamentoCredito from '@/modules/financeiro/server/credito-pagamento';
 import { readFileSync } from 'node:fs';
 import { createSqliteDb } from '../helpers/sqlite-db.cjs';
 import { __setMockDb, __resetMocks } from '../../__mocks__/opennextjs-cloudflare';
@@ -249,4 +251,43 @@ test('divisão antiga de sessões é bloqueada antes de modificar destinos ou or
   expect(result.status).toBe(409);
   expect(one('SELECT destino_status FROM itens_atendimento_destinos WHERE item_atendimento_id=1').destino_status).toBe('agendar');
   expect(await somarAlocacoesAtivasDaEtapa(1,1)).toBe(40);
+});
+
+
+test('recebimento em unidade não habilitada já é atômico, sem iniciar rastreamento do cliente', async () => {
+  const result=await callRoute(pagar,'/api/atendimentos/2/pagamentos',{method:'POST',headers:{'X-Unidade-Id':'2'},body:{valor:100,metodo:'pix',alocacoes:[{item_id:3,valor:100}]}},createRouteContext({id:'2'}));
+  expect(result.status).toBe(201);
+  expect(one('SELECT COUNT(*) n FROM financeiro_contas WHERE cliente_id=2').n).toBe(0);
+  expect(one('SELECT COUNT(*) n FROM financeiro_itens WHERE item_id=3').n).toBe(0);
+  expect(one('SELECT valor_pago FROM itens_atendimento WHERE id=3').valor_pago).toBe(100);
+});
+
+test('saldo legado não sobrescreve conta que aderiu durante a operação', async () => {
+  db.sqlite.exec('INSERT INTO saldo_clientes(cliente_id,saldo) VALUES (2,100)');
+  const persistir=saldoRepository.persistirDebitarSaldo;
+  const spy=jest.spyOn(saldoRepository,'persistirDebitarSaldo').mockImplementationOnce(async input => {
+    expect((await post(creditar,{valor:10},2)).status).toBe(201);
+    return persistir(input);
+  });
+  try {
+    const result=await callRoute(debitar,'/api/clientes/2/saldo/debitar',{method:'POST',headers:{'X-Unidade-Id':'2'},body:{item_atendimento_id:3,atendimento_id:2}},createRouteContext({id:'2'}));
+    expect(result.status).toBe(409); expect(wallet(2)).toBe(110);
+    expect(one('SELECT valor_pago FROM itens_atendimento WHERE id=3').valor_pago).toBe(0);
+  } finally { spy.mockRestore(); }
+});
+
+test('recebimento iniciado sem rastreamento revalida a cobertura após adesão em outra unidade', async () => {
+  const receber=pagamentoCredito.receberComCredito;
+  const spy=jest.spyOn(pagamentoCredito,'receberComCredito').mockImplementationOnce(async input => {
+    expect(input.rastrear).toBe(false);
+    expect((await post(creditar,{valor:100},2)).status).toBe(201);
+    expect((await callRoute(debitar,'/api/clientes/2/saldo/debitar',{method:'POST',headers:{'X-Unidade-Id':'2'},body:{item_atendimento_id:3,atendimento_id:2}},createRouteContext({id:'2'}))).status).toBe(200);
+    return receber(input);
+  });
+  try {
+    const result=await callRoute(pagar,'/api/atendimentos/2/pagamentos',{method:'POST',headers:{'X-Unidade-Id':'2'},body:{valor:100,metodo:'pix',alocacoes:[{item_id:3,valor:100}]}},createRouteContext({id:'2'}));
+    expect(result.status).toBe(400); expect(wallet(2)).toBe(0);
+    expect(one('SELECT valor_pago FROM itens_atendimento WHERE id=3').valor_pago).toBe(100);
+    expect(one('SELECT COUNT(*) n FROM pagamentos WHERE atendimento_id=2').n).toBe(0);
+  } finally { spy.mockRestore(); }
 });

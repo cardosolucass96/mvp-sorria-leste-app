@@ -53,7 +53,8 @@ export async function creditarSaldo(clienteId: number, body: unknown, unidadeId:
   const saldoNovo = roundMoney(saldoAnterior + valor);
   const timestamp = nowUtcIso();
 
-  await repository.persistirCreditarSaldo({ clienteId, valor, saldoAnterior, saldoNovo, pagamento_id, observacoes, timestamp });
+  const persistido = await repository.persistirCreditarSaldo({ clienteId, valor, saldoAnterior, saldoNovo, pagamento_id, observacoes, timestamp });
+  if (!persistido) return serviceResult({ error: 'O histórico financeiro mudou. Atualize e tente novamente.' }, { status: 409 });
 
   return serviceResult({ saldo: saldoNovo }, { status: 201 });
 }
@@ -105,7 +106,8 @@ export async function debitarSaldo(clienteId: number, body: unknown, unidadeId: 
   const saldoNovo = roundMoney(saldoAnterior - valorRestante);
   const timestamp = nowUtcIso();
 
-  await repository.persistirDebitarSaldo({ clienteId, saldoNovo, saldoAnterior, valorRestante, valorEfetivo, status: ['executando', 'concluido'].includes(item.status) ? item.status : 'pago', item_atendimento_id, atendimento_id, observacoes, timestamp });
+  const persistido = await repository.persistirDebitarSaldo({ clienteId, saldoNovo, saldoAnterior, valorRestante, valorEfetivo, status: ['executando', 'concluido'].includes(item.status) ? item.status : 'pago', item_atendimento_id, atendimento_id, observacoes, timestamp });
+  if (!persistido) return serviceResult({ error: 'O histórico financeiro mudou. Atualize e tente novamente.' }, { status: 409 });
 
   const itemAtualizado = await repository.buscarItemSaldoAtualizado(item_atendimento_id);
 
@@ -142,7 +144,8 @@ export async function estornarSaldo(clienteId: number, body: unknown, chave?: st
   const saldoNovo = roundMoney(saldoAnterior - valor);
   const timestamp = nowUtcIso();
 
-  await repository.persistirEstornarSaldo({ clienteId, valor, saldoAnterior, saldoNovo, observacoes, timestamp });
+  const persistido = await repository.persistirEstornarSaldo({ clienteId, valor, saldoAnterior, saldoNovo, observacoes, timestamp });
+  if (!persistido) return serviceResult({ error: 'O histórico financeiro mudou. Atualize e tente novamente.' }, { status: 409 });
 
   return serviceResult({ saldo: saldoNovo });
 }
@@ -196,7 +199,8 @@ export async function transferirSaldo(clienteOrigemId: number, body: unknown, ch
   const saldoDestinoNovo = roundMoney(saldoDestinoAnterior + valor);
   const timestamp = nowUtcIso();
 
-  await repository.persistirTransferirSaldo({ clienteOrigemId, cliente_destino_id, valor, saldoOrigemAnterior, saldoOrigemNovo, saldoDestinoAnterior, saldoDestinoNovo, observacoes, timestamp });
+  const persistido = await repository.persistirTransferirSaldo({ clienteOrigemId, cliente_destino_id, valor, saldoOrigemAnterior, saldoOrigemNovo, saldoDestinoAnterior, saldoDestinoNovo, observacoes, timestamp });
+  if (!persistido) return serviceResult({ error: 'O histórico financeiro mudou. Atualize e tente novamente.' }, { status: 409 });
 
   return serviceResult({
     saldo_origem: saldoOrigemNovo,
@@ -246,7 +250,8 @@ export async function estornarProcedimento(clienteId: number, body: unknown, uni
   const saldoNovo = roundMoney(saldoAnterior + item.valor_pago);
   const timestamp = nowUtcIso();
 
-  await repository.persistirEstornarProcedimento({ clienteId, item, saldoAnterior, saldoNovo, timestamp });
+  const persistido = await repository.persistirEstornarProcedimento({ clienteId, item, saldoAnterior, saldoNovo, timestamp });
+  if (!persistido) return serviceResult({ error: 'O histórico financeiro mudou. Atualize e tente novamente.' }, { status: 409 });
 
   return serviceResult({ saldo_novo: saldoNovo, valor_creditado: item.valor_pago });
 }

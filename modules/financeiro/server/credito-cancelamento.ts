@@ -2,8 +2,9 @@ import 'server-only';
 import { query, queryOne } from '@/lib/db';
 import { CreditoErro, transacionarCredito } from './credito-transacao';
 
-export function cancelarComCredito(clienteId: number, unidadeId: number, atendimentoId: number, pagamentoId: number, motivo: string, chave?: string) {
+export function cancelarComCredito(clienteId: number, unidadeId: number, atendimentoId: number, pagamentoId: number, motivo: string, chave?: string, rastrear = true) {
   return transacionarCredito(clienteId, 'cancelamento_pagamento', { unidadeId, atendimentoId, pagamentoId, motivo }, chave, async tx => {
+    if (rastrear) await tx.conta(clienteId);
     const pagamento = await queryOne<{ pagamento_grupo_id: number | null; cancelado: number }>(`SELECT p.pagamento_grupo_id,p.cancelado FROM pagamentos p JOIN atendimentos a ON a.id=p.atendimento_id
       WHERE p.id=? AND a.id=? AND a.cliente_id=? AND a.unidade_id=?`, [pagamentoId, atendimentoId, clienteId, unidadeId]);
     if (!pagamento) throw new CreditoErro('Pagamento não encontrado', 404);
@@ -28,7 +29,7 @@ export function cancelarComCredito(clienteId: number, unidadeId: number, atendim
     tx.add(`UPDATE pagamentos SET cancelado=1,motivo_cancelamento=? WHERE id IN (${marks})`, [motivo, ...ids]);
     if (pagamento.pagamento_grupo_id) tx.add('UPDATE pagamentos_grupos SET cancelado=1,motivo_cancelamento=? WHERE id=?', [motivo, pagamento.pagamento_grupo_id]);
     tx.add(`DELETE FROM comissoes WHERE pagamento_alocacao_id IN (SELECT id FROM pagamentos_alocacoes WHERE pagamento_id IN (${marks}))`, ids);
-    for (const itemId of new Set(alocacoes.map(a=>a.item_atendimento_id).filter((id): id is number=>id !== null))) tx.recalcular(itemId);
+    for (const itemId of new Set(alocacoes.map(a=>a.item_atendimento_id).filter((id): id is number=>id !== null))) tx.recalcular(itemId, rastrear);
     for (const agId of new Set(alocacoes.map(a=>a.agendamento_id).filter((id): id is number=>id !== null))) {
       const sum = `COALESCE((SELECT SUM(pa.valor_alocado) FROM pagamentos_alocacoes pa JOIN pagamentos p ON p.id=pa.pagamento_id
         WHERE pa.agendamento_id=agendamentos.id AND p.cancelado=0 AND NOT EXISTS(SELECT 1 FROM financeiro_liberacoes l WHERE l.alocacao_id=pa.id)),0)`;

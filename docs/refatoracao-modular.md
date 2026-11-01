@@ -26,7 +26,9 @@ Os valores do registro novo são inteiros em centavos. As tabelas legadas em rea
 
 ## Transação, concorrência e repetição
 
-As operações planejam as gravações e executam um único batch D1: saldo, extrato, origem, cobertura, pagamentos/grupo, comissão e resposta da operação são gravados ou revertidos juntos.
+As operações rastreáveis planejam as gravações e executam um único batch D1: saldo, extrato, origem, cobertura, pagamentos/grupo, comissão e resposta da operação são gravados ou revertidos juntos.
+
+Com a migração instalada, recebimentos e cancelamentos usam o escritor atômico também em unidades ainda não habilitadas, sem iniciar o rastreamento de suas contas. As gravações legadas de saldo verificam dentro do próprio batch que a conta não aderiu durante a solicitação; caso tenha aderido, são recusadas antes de alterar qualquer valor. Isso protege clientes compartilhados durante a transição. Unidades sem migração continuam no caminho anterior e não podem compartilhar este banco com uma versão antiga do servidor após ativação.
 
 Uma versão global detecta alteração entre a leitura e o início do batch. Triggers incrementam essa versão inclusive quando os escritores antigos alteram as tabelas financeiras. Uma restrição do banco aborta o batch quando a versão mudou. A resposta é 409 e permite atualizar os dados e tentar novamente. O controle global é conservador: alterações independentes também podem causar conflito. Deve-se medir a frequência desses conflitos antes de expansão; ele não é uma solução de alto volume por cliente.
 
@@ -84,7 +86,7 @@ O deploy exige revisão commitada, build da mesma revisão e migrações finance
 
 ## Ordem restante
 
-1. Validar esta operação financeira no D1 remoto e completar a migração do caminho de agenda/execução que hoje divide itens.
+1. Completar a migração do caminho de agenda/execução que hoje divide itens, mantendo as verificações financeiras no D1 remoto.
 2. Conciliar histórico somente quando origem e valores forem comprováveis; manter relatório dos casos ambíguos.
 3. Exercitar a operação completa de uma unidade piloto, incluindo clientes compartilhados, sessões, caixa, relatórios e comissões. Expandir apenas depois de dois fechamentos consecutivos conciliados, sem divergência inexplicada.
 4. Extrair UI por responsabilidade; seguir com atendimento/agenda, clientes/prontuário, caixa/relatórios e integrações.
