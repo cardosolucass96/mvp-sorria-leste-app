@@ -18,6 +18,8 @@ O início da etapa 2 está entregue para recebimentos e cancelamentos; crédito/
 
 Usar Node 22 (`.nvmrc`) e `npm ci`.
 
+O Jest fixa `America/Fortaleza` antes de iniciar os testes, pois fixtures legadas usam datas locais sem offset. A mesma base deve ser comparada nesse fuso, inclusive em runners cujo sistema operacional usa UTC. Isso não altera o tratamento de datas em produção.
+
 ```sh
 npm run typecheck
 npm run check:modules
