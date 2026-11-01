@@ -1,4 +1,6 @@
 import 'server-only';
+import { normalizarFormasPagamento } from './formas-pagamento-service';
+import { validarAlocacoes } from './alocacoes-service';
 import { queryOne } from '@/lib/db';
 import { usarCreditoRastreavel, existeSchemaCredito } from './credito-config';
 import { consultarRepeticaoCredito } from './credito-transacao';
@@ -6,117 +8,18 @@ import { receberComCredito } from './credito-pagamento';
 import { serviceResult, type ServiceResult } from '@/shared/result';
 import { roundMoney } from '@/shared/money';
 import { normalizarAlocacoes, agruparPagamentos } from '../domain/pagamentos';
-import { buscarEtapasComValor, recalcularFinanceiroItens } from './item-financeiro';
-import { buscarFormaPagamentoDaUnidade, calcularValorLiquido, calcularValorTaxa, garantirEsquemaFormasPagamento, isMetodoPagamentoValido } from '@/lib/helpers/formasPagamento';
+import { recalcularFinanceiroItens } from './item-financeiro';
+import { garantirEsquemaFormasPagamento } from '@/lib/helpers/formasPagamento';
 import { gerarComissoesVendaPorAlocacoes } from '@/lib/helpers/gerarComissoes';
 import { garantirEsquemaPagamentosGrupos } from '@/lib/helpers/pagamentosGrupos';
-import { buscarAtendimentoPagamento, buscarPagamento, buscarAlocacoesPagamentos, buscarItensPagamento, buscarPagamentosSimples, buscarPagamentosAgrupados, criarGrupoDePagamentos } from './pagamentos-repository';
-import type { AlocacaoPagamentoInput, PagamentoFormaInput, PagamentoFormaResolvedInput, NormalizedAlocacao, Atendimento, ItemPagamentoRow } from '../contracts/pagamentos';
+import { buscarAtendimentoPagamento, buscarPagamento, buscarAlocacoesPagamentos, buscarPagamentosSimples, buscarPagamentosAgrupados, criarGrupoDePagamentos } from './pagamentos-repository';
+import type { AlocacaoPagamentoInput, PagamentoFormaInput, Atendimento } from '../contracts/pagamentos';
 
 async function verificarAtendimentoUnidade(atendimentoId: number, unidadeId: number): Promise<{ error: ServiceResult } | { atendimento: Atendimento }> {
   const at = await buscarAtendimentoPagamento(atendimentoId);
   if (!at) return { error: serviceResult({ error: 'Atendimento não encontrado' }, { status: 404 }) };
   if (at.unidade_id !== unidadeId) return { error: serviceResult({ error: 'Atendimento não pertence a esta unidade' }, { status: 403 }) };
   return { atendimento: at };
-}
-
-async function normalizarFormasPagamento(
-  formas: PagamentoFormaInput[],
-  unidadeId: number
-): Promise<{ formas?: PagamentoFormaResolvedInput[]; error?: ServiceResult }> {
-  const formasNormalizadas: PagamentoFormaResolvedInput[] = [];
-
-  for (const forma of formas) {
-    const valor = roundMoney(Number(forma.valor || 0));
-    if (!Number.isFinite(valor) || valor <= 0) {
-      return {
-        error: serviceResult(
-          { error: 'Cada forma de pagamento deve ter valor maior que zero' },
-          { status: 400 }
-        ),
-      };
-    }
-
-    const formaPagamentoId = Number(forma.forma_pagamento_id ?? 0);
-    if (Number.isFinite(formaPagamentoId) && formaPagamentoId > 0) {
-      const configuracao = await buscarFormaPagamentoDaUnidade(formaPagamentoId, unidadeId);
-      if (!configuracao || !configuracao.ativo) {
-        return {
-          error: serviceResult(
-            { error: 'Forma de pagamento inválida, inativa ou de outra unidade' },
-            { status: 400 }
-          ),
-        };
-      }
-
-      formasNormalizadas.push({
-        forma_pagamento_id: configuracao.id,
-        metodo: configuracao.metodo_base,
-        valor,
-        forma_pagamento_grupo_snapshot: configuracao.grupo,
-        forma_pagamento_subgrupo_snapshot: configuracao.subgrupo,
-        taxa_percentual_snapshot: roundMoney(Number(configuracao.taxa_percentual ?? 0)),
-        taxa_fixa_snapshot: roundMoney(Number(configuracao.taxa_fixa ?? 0)),
-        valor_taxa: calcularValorTaxa(valor, configuracao.taxa_percentual, configuracao.taxa_fixa),
-        valor_liquido: calcularValorLiquido(valor, configuracao.taxa_percentual, configuracao.taxa_fixa),
-      });
-      continue;
-    }
-
-    if (!isMetodoPagamentoValido(forma.metodo)) {
-      return {
-        error: serviceResult({ error: 'Método de pagamento inválido' }, { status: 400 }),
-      };
-    }
-
-    formasNormalizadas.push({
-      forma_pagamento_id: null,
-      metodo: forma.metodo,
-      valor,
-      forma_pagamento_grupo_snapshot: null,
-      forma_pagamento_subgrupo_snapshot: '',
-      taxa_percentual_snapshot: 0,
-      taxa_fixa_snapshot: 0,
-      valor_taxa: 0,
-      valor_liquido: valor,
-    });
-  }
-
-  return { formas: formasNormalizadas };
-}
-
-async function validarAlocacoes(
-  atendimentoId: number,
-  alocacoes: NormalizedAlocacao[]
-): Promise<{ error: ServiceResult } | { itemIds: number[]; itensMap: Map<number, ItemPagamentoRow> }> {
-  if (alocacoes.length === 0) {
-    return { error: serviceResult({ error: 'Informe ao menos uma alocação de pagamento' }, { status: 400 }) };
-  }
-
-  const itemIds = [...new Set(alocacoes.map((alocacao) => alocacao.item_id).filter(Number.isFinite))];
-  const itens = await buscarItensPagamento(atendimentoId, itemIds);
-  const itensMap = new Map(itens.map((item) => [item.id, item]));
-
-  for (const alocacao of alocacoes) {
-    if (!Number.isFinite(alocacao.valor) || alocacao.valor <= 0) {
-      return { error: serviceResult({ error: 'Valor de alocação inválido' }, { status: 400 }) };
-    }
-
-    const item = itensMap.get(alocacao.item_id);
-    if (!item) {
-      return { error: serviceResult({ error: 'Item de atendimento inválido na alocação' }, { status: 400 }) };
-    }
-
-    if (alocacao.etapa_modelo_id) {
-      const etapas = await buscarEtapasComValor(item);
-      const etapa = etapas.find((et) => et.id === alocacao.etapa_modelo_id);
-      if (!etapa) {
-        return { error: serviceResult({ error: 'Sessão inválida na alocação' }, { status: 400 }) };
-      }
-    }
-  }
-
-  return { itemIds, itensMap };
 }
 
 export async function listarPagamentos(atendimentoId: number, unidadeId: number, grouped: boolean) {
