@@ -1851,7 +1851,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         setEstornandoItemId(item.id);
         try {
-          const res = await fetch(`/api/clientes/${id}/saldo/estornar-procedimento`, {
+          const res = await unitFetch(`/api/clientes/${id}/saldo/estornar-procedimento`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ item_atendimento_id: item.id }),

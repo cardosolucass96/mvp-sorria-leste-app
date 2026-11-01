@@ -12,7 +12,37 @@ Branch: `codex/modular-orcamentos-financeiro`.
 - `npm run check:modules` impede dependências de servidor/UI nas regras puras e acesso direto a detalhes internos de outro módulo. A importação `server-only` protege os módulos de servidor no build Next.
 - Ambiente Cloudflare `refactor` com D1 e R2 próprios e dados fictícios. Não compartilha recursos com produção nem com a V2 em staging. Autentique fica bloqueado antes de qualquer chamada de rede.
 
-O início da etapa 2 está entregue para recebimentos e cancelamentos; crédito/saldo do cliente e a retirada dos helpers legados ainda precisam ser extraídos. Esta entrega não inclui as correções de negócio das etapas 3 e 4.
+Recebimentos, cancelamentos e saldo/crédito do cliente agora têm serviços e repositórios próprios. A retirada completa dos helpers legados e o cálculo persistente de cobertura continuam pendentes.
+
+## Segunda entrega: saldo e crédito
+
+A extração de comportamento está no commit `a4ca8ed`, separada das correções seguintes para facilitar revisão e retorno. As sete rotas de saldo mantêm URLs e respostas; consulta, crédito, uso, transferência e devoluções são serviços do módulo financeiro. Não houve migração de banco.
+
+Correções desta entrega:
+
+- Extrato e operações exigem autenticação e perfil admin/atendente, seguindo o acesso já exigido pela consulta de saldo.
+- Uso de crédito verifica cliente, atendimento e unidade do procedimento. Devolução de procedimento verifica cliente e unidade. Crédito com referência a pagamento exige pagamento ativo do mesmo cliente e unidade.
+- O saldo continua global por cliente. Transferência e consulta não recebem filtro de unidade.
+- Valores inválidos, IDs incorretos, JSON inválido e transferência para o próprio cliente são rejeitados; cálculos monetários usam centavos.
+- Quitar com saldo preserva os estados clínicos `executando` e `concluido`.
+- A ficha do cliente envia a unidade selecionada ao devolver um procedimento.
+
+A suíte de saldo usa SQLite com o schema real e cobre também falha intermediária: se o extrato não grava, o saldo não muda. Essa propriedade do batch já existia; não equivale a proteção contra duas requisições concorrentes. Saldo e item continuam sendo lidos antes da transação.
+
+### Dependência para corrigir o recálculo
+
+Hoje o uso de crédito atualiza `itens_atendimento.valor_pago`, enquanto `recalcularFinanceiroItem` recompõe esse campo apenas pelas alocações de pagamentos ativos. A devolução de procedimento zera o campo, mas mantém as alocações do pagamento original. Portanto, o recálculo pode apagar crédito utilizado ou reapresentar valor que já foi devolvido.
+
+Não somar movimentos de saldo indiscriminadamente às alocações. Após devolver um procedimento, cancelar o pagamento original e receber um novo pagamento, um ajuste negativo sem vínculo com a origem pode consumir o recebimento novo. A próxima entrega precisa tratar o ciclo completo:
+
+1. Registrar alocações de crédito com origem na movimentação, item e sessão, em migração aditiva versionada.
+2. Vincular cada devolução às alocações exatas de pagamento/crédito que ela libera. A cobertura passa a ser a soma das fontes ainda válidas, sem apagar o histórico.
+3. Compartilhar esse cálculo entre item, sessões, orçamento, pagamento e cancelamento; preservar a origem ao encaminhar para agenda.
+4. Aplicar operações atômicas, idempotência e validação do saldo restante dentro da transação. Não basta validar o saldo antes do batch.
+5. Definir o cancelamento de um pagamento convertido em crédito: bloqueio até regularização ou reversão automática somente quando o crédito ainda estiver disponível. Essa decisão permanece aberta.
+6. Reconciliar o legado somente quando houver origem comprovável, habilitar por unidade e manter leitores compatíveis mesmo ao desligar novas gravações.
+
+Critérios de regressão: crédito usado resiste ao recálculo; devolver e recalcular não recria cobertura; devolver e pagar novamente usa somente a nova cobertura; cancelar pagamento não afeta crédito de outra origem; sessão e comissão acompanham a cobertura; duas tentativas simultâneas não duplicam débito ou devolução. Essas garantias ainda não são oferecidas por esta entrega.
 
 ## Validação reproduzível
 
@@ -52,7 +82,7 @@ O fluxo de CI valida PRs contra `main`, mas não publica automaticamente. Produ�
 
 ## Próximas entregas e critérios
 
-1. Completar a extração do saldo/crédito, com um cálculo persistente de cobertura compartilhado. Preservar contratos e comportamento durante a extração.
+1. Implementar o cálculo persistente de cobertura e o ciclo de reversão descritos acima. A extração do saldo/crédito está concluída.
 2. Introduzir operações financeiras indivisíveis, idempotência e validação concorrente de saldo restante. Validar cliente, item, atendimento e unidade em todas as entradas. Exercitar o D1 remoto, inclusive falhas intermediárias e requisições simultâneas.
 3. Permitir recebimento em atendimentos finalizados/encerrados sem mudar datas ou estado clínico. Preservar itens ao destinar para agenda, impedir duplicação e separar itens do dia dos futuros. Cada correção terá testes de regressão e entrega separada.
 4. Recuperar histórico somente quando origem e valores forem comprováveis. Pendências de origem ambígua ficam em relatório; não deduplicar apenas por nome/procedimento.
@@ -61,13 +91,13 @@ O fluxo de CI valida PRs contra `main`, mas não publica automaticamente. Produ�
 
 A ativação começa por uma unidade piloto e só se expande após dois fechamentos consecutivos conciliados, sem divergência financeira inexplicada. Os comandos desta entrega não iniciam essa ativação. O modelo comercial independente de atendimento e a V2 permanecem em um ciclo posterior.
 
-## Defeitos conhecidos preservados nesta extração
+## Defeitos conhecidos ainda pendentes
 
 - Orçamento pode continuar aberto após encerramento, mas o recebimento ainda é recusado nesse status.
 - Repetição de seleção de destinos pode duplicar agenda; itens removidos podem desaparecer da consulta após falta/cancelamento.
 - Pagamentos ainda usam gravações sequenciais e não possuem idempotência nem validação concorrente do valor restante.
-- Uso de saldo pode não sobreviver a uma recalculação e requer validação completa de pertencimento.
+- Uso de saldo pode não sobreviver a uma recalculação; devolução de procedimento ainda deixa as alocações anteriores ativas. A validação de pertencimento de saldo já foi corrigida, mas esses dois problemas de cobertura permanecem.
 - Reabertura do atendimento histórico na chegada continua no fluxo antigo; uma visita independente depende do próximo modelo.
 - A ordenação SQL de instantes legados pode distinguir representações equivalentes com e sem fração de segundo. Corrigir a normalização em entrega própria, com testes em todos os relatórios consumidores.
 
-Esses comportamentos não devem ser interpretados como corrigidos porque a arquitetura foi extraída. Dados reais e regras novas não foram migrados nesta entrega.
+Esses comportamentos não devem ser interpretados como corrigidos porque a arquitetura foi extraída. As correções de autorização e pertencimento foram publicadas apenas no ambiente refactor. Não houve migração de dados reais nem ativação em produção.
