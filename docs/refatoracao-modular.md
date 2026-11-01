@@ -39,7 +39,7 @@ Não somar movimentos de saldo indiscriminadamente às alocações. Após devolv
 2. Vincular cada devolução às alocações exatas de pagamento/crédito que ela libera. A cobertura passa a ser a soma das fontes ainda válidas, sem apagar o histórico.
 3. Compartilhar esse cálculo entre item, sessões, orçamento, pagamento e cancelamento; preservar a origem ao encaminhar para agenda.
 4. Aplicar operações atômicas, idempotência e validação do saldo restante dentro da transação. Não basta validar o saldo antes do batch.
-5. Definir o cancelamento de um pagamento convertido em crédito: bloqueio até regularização ou reversão automática somente quando o crédito ainda estiver disponível. Essa decisão permanece aberta.
+5. Implementar a regra aprovada: cancelar o pagamento original reverte automaticamente o crédito somente se esse crédito ainda não foi usado nem transferido. Havendo uso ou transferência, bloquear. Decidir pela origem rastreada, não apenas pelo saldo total do cliente; histórico sem origem comprovável exige conciliação antes de reversão automática.
 6. Reconciliar o legado somente quando houver origem comprovável, habilitar por unidade e manter leitores compatíveis mesmo ao desligar novas gravações.
 
 Critérios de regressão: crédito usado resiste ao recálculo; devolver e recalcular não recria cobertura; devolver e pagar novamente usa somente a nova cobertura; cancelar pagamento não afeta crédito de outra origem; sessão e comissão acompanham a cobertura; duas tentativas simultâneas não duplicam débito ou devolução. Essas garantias ainda não são oferecidas por esta entrega.
