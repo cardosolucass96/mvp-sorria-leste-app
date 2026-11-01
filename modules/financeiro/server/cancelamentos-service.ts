@@ -1,16 +1,21 @@
 import 'server-only';
+import { queryOne } from '@/lib/db';
+import { usarCreditoRastreavel } from './credito-config';
+import { cancelarComCredito } from './credito-cancelamento';
 import { serviceResult } from '@/shared/result';
 import { garantirEsquemaPagamentosGrupos } from '@/lib/helpers/pagamentosGrupos';
 import { removerComissoesVendaPorAlocacoes } from '@/lib/helpers/gerarComissoes';
 import { recalcularFinanceiroAgendamentos, recalcularFinanceiroItens } from './item-financeiro';
 import { buscarAtendimentoCancelamento, buscarPagamentoCancelamento, buscarPagamentosDoGrupo, marcarGrupoCancelado, marcarPagamentoCancelado, buscarAlocacoesCancelamento } from './cancelamentos-repository';
 
-export async function cancelarPagamento(atendimentoId: number, pagamentoId: number, unidadeId: number, motivo: string) {
+export async function cancelarPagamento(atendimentoId: number, pagamentoId: number, unidadeId: number, motivo: string, chave?: string) {
   try {
     const atendimento = await buscarAtendimentoCancelamento(atendimentoId);
     if (!atendimento) return serviceResult({ error: 'Atendimento não encontrado' }, { status: 404 });
     if (atendimento.unidade_id !== unidadeId) return serviceResult({ error: 'Atendimento não pertence a esta unidade' }, { status: 403 });
-    if (!motivo?.trim()) return serviceResult({ error: 'Informe o motivo do cancelamento' }, { status: 400 });
+    if (typeof motivo !== 'string' || !motivo.trim()) return serviceResult({ error: 'Informe o motivo do cancelamento' }, { status: 400 });
+    const cliente = await queryOne<{ cliente_id: number }>('SELECT cliente_id FROM atendimentos WHERE id=?', [atendimentoId]);
+    if (cliente && await usarCreditoRastreavel(cliente.cliente_id, unidadeId)) return cancelarComCredito(cliente.cliente_id, unidadeId, atendimentoId, pagamentoId, motivo.trim(), chave);
     await garantirEsquemaPagamentosGrupos();
     const pagamento = await buscarPagamentoCancelamento(atendimentoId, pagamentoId);
     if (!pagamento) return serviceResult({ error: 'Pagamento não encontrado' }, { status: 404 });

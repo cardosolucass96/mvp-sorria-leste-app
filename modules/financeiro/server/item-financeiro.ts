@@ -1,5 +1,6 @@
 import 'server-only';
-import { execute, query, queryOne } from '@/lib/db';
+import { batch, execute, query, queryOne } from '@/lib/db';
+import { coberturaRastreada, comandosRecalcularCredito, itemTemCoberturaRastreada } from './credito-cobertura';
 import type { EtapaModeloFinanceiro } from '../contracts';
 import { ajustarEtapasAoValorDoItem, obterValorEfetivoItem, obterValorEfetivoAgendamento, parseEtapasValores, roundMoney } from '../public';
 
@@ -39,6 +40,8 @@ export async function buscarEtapasModelo(procedimentoId: number): Promise<EtapaM
 }
 
 export async function somarAlocacoesAtivasPorItem(itemId: number): Promise<number> {
+  const credito = await coberturaRastreada(itemId);
+  if (credito !== null) return credito;
   const result = await queryOne<SomaRow>(
     `SELECT COALESCE(SUM(pa.valor_alocado), 0) as total
      FROM pagamentos_alocacoes pa
@@ -61,6 +64,8 @@ export async function somarAlocacoesAtivasPorAgendamento(agendamentoId: number):
 }
 
 export async function somarAlocacoesAtivasDaEtapa(itemId: number, etapaModeloId: number): Promise<number> {
+  const credito = await coberturaRastreada(itemId, etapaModeloId);
+  if (credito !== null) return credito;
   const result = await queryOne<SomaRow>(
     `SELECT COALESCE(SUM(pa.valor_alocado), 0) as total
      FROM pagamentos_alocacoes pa
@@ -72,6 +77,10 @@ export async function somarAlocacoesAtivasDaEtapa(itemId: number, etapaModeloId:
 }
 
 export async function recalcularFinanceiroItem(itemId: number): Promise<void> {
+  if (await itemTemCoberturaRastreada(itemId)) {
+    await batch(comandosRecalcularCredito(itemId));
+    return;
+  }
   const item = await queryOne<ItemFinanceiroRow>(
     `SELECT id, valor, valor_final, valor_pago, status, procedimento_id, etapas_valores
      FROM itens_atendimento

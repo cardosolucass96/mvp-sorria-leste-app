@@ -1,4 +1,8 @@
 import 'server-only';
+import { queryOne } from '@/lib/db';
+import { usarCreditoRastreavel } from './credito-config';
+import { consultarRepeticaoCredito } from './credito-transacao';
+import { receberComCredito } from './credito-pagamento';
 import { serviceResult, type ServiceResult } from '@/shared/result';
 import { roundMoney } from '@/shared/money';
 import { normalizarAlocacoes, agruparPagamentos } from '../domain/pagamentos';
@@ -145,7 +149,7 @@ export async function listarPagamentos(atendimentoId: number, unidadeId: number,
     );
   }
 }
-export async function registrarPagamento(atendimentoId: number, unidadeId: number, recebidoPorId: number, body: unknown) {
+export async function registrarPagamento(atendimentoId: number, unidadeId: number, recebidoPorId: number, body: unknown, chave?: string) {
   try {
     const {
       valor,
@@ -169,7 +173,14 @@ export async function registrarPagamento(atendimentoId: number, unidadeId: numbe
     if ('error' in check) return check.error;
     const atendimento = check.atendimento;
 
-    if (!['aguardando_pagamento', 'em_execucao'].includes(atendimento.status)) {
+    const cliente = await queryOne<{ cliente_id: number }>('SELECT cliente_id FROM atendimentos WHERE id=?', [atendimentoId]);
+    const rastreavel = cliente ? await usarCreditoRastreavel(cliente.cliente_id, unidadeId) : false;
+    if (rastreavel && chave) {
+      const repeticao = await consultarRepeticaoCredito(cliente!.cliente_id, 'recebimento', { unidadeId, atendimentoId, recebidoPorId, body }, chave);
+      if (repeticao) return repeticao;
+    }
+    const statusPermitidos = rastreavel ? ['aguardando_pagamento','em_execucao','finalizado','encerrado'] : ['aguardando_pagamento','em_execucao'];
+    if (!statusPermitidos.includes(atendimento.status)) {
       return serviceResult(
         { error: 'Não é possível registrar pagamento neste status' },
         { status: 400 }
@@ -228,6 +239,8 @@ export async function registrarPagamento(atendimentoId: number, unidadeId: numbe
         );
       }
 
+      if (rastreavel) return receberComCredito({ clienteId: cliente!.cliente_id, unidadeId, atendimentoId, recebidoPorId, observacoes: observacoes || null,
+        valorTotal, formas: formasNormalizadas, alocacoes: alocacoesNormalizadas, body, chave });
       const { pagamentoRepresentanteId, alocacaoIdsGeradas } = await criarGrupoDePagamentos({
         atendimentoId,
         recebidoPorId,
@@ -276,6 +289,8 @@ export async function registrarPagamento(atendimentoId: number, unidadeId: numbe
       );
     }
 
+    if (rastreavel) return receberComCredito({ clienteId: cliente!.cliente_id, unidadeId, atendimentoId, recebidoPorId, observacoes: observacoes || null,
+      valorTotal: valorNormalizado, formas: formasNormalizadas, alocacoes: alocacoesNormalizadas, body, chave });
     const { pagamentoRepresentanteId, alocacaoIdsGeradas } = await criarGrupoDePagamentos({
       atendimentoId,
       recebidoPorId,

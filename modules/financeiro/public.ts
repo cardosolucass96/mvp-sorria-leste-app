@@ -2,3 +2,4 @@
 export { roundMoney } from '@/shared/money';
 export * from './contracts';
 export * from './domain/valores';
+export { criarChavesOperacao } from './domain/chaves-operacao';

@@ -3,6 +3,8 @@ import { serviceResult } from '@/shared/result';
 import { nowUtcIso } from '@/lib/time';
 import { obterValorEfetivoItem, roundMoney } from '../public';
 import { isSaldoId, isSaldoBody, normalizarValorSaldo, observacoesSaldoValidas } from '../domain/saldo';
+import { usarCreditoRastreavel } from './credito-config';
+import { creditarRastreado, debitarRastreado, estornarRastreado, transferirRastreado, devolverProcedimentoRastreado } from './credito-saldo';
 import * as repository from './saldo-repository';
 import type { CreditarSaldoInput, DebitarSaldoInput, EstornarSaldoInput, TransferirSaldoInput, EstornarProcedimentoInput } from '../contracts/saldo';
 
@@ -18,7 +20,7 @@ export async function consultarMovimentacoesSaldo(clienteId: number) {
   return serviceResult(await repository.buscarMovimentacoesSaldo(clienteId));
 }
 
-export async function creditarSaldo(clienteId: number, body: unknown, unidadeId: number) {
+export async function creditarSaldo(clienteId: number, body: unknown, unidadeId: number, chave?: string) {
   if (!isSaldoId(clienteId)) return serviceResult({ error: 'Cliente inválido' }, { status: 400 });
   if (!isSaldoBody(body) || !observacoesSaldoValidas(body.observacoes)) return serviceResult({ error: 'Dados de saldo inválidos' }, { status: 400 });
   if (!isSaldoId(unidadeId)) return serviceResult({ error: 'Unidade inválida' }, { status: 400 });
@@ -33,6 +35,9 @@ export async function creditarSaldo(clienteId: number, body: unknown, unidadeId:
   if (valor === null) {
     return serviceResult({ error: 'Valor deve ser maior que zero' }, { status: 400 });
   }
+
+  if (pagamento_id != null && !isSaldoId(pagamento_id)) return serviceResult({ error: 'Pagamento inválido' }, { status: 400 });
+  if (await usarCreditoRastreavel(clienteId, unidadeId)) return creditarRastreado(clienteId, unidadeId, valor, pagamento_id ?? null, observacoes ?? null, chave);
 
   if (pagamento_id != null) {
     if (!isSaldoId(pagamento_id)) return serviceResult({ error: 'Pagamento inválido' }, { status: 400 });
@@ -53,7 +58,7 @@ export async function creditarSaldo(clienteId: number, body: unknown, unidadeId:
   return serviceResult({ saldo: saldoNovo }, { status: 201 });
 }
 
-export async function debitarSaldo(clienteId: number, body: unknown, unidadeId: number) {
+export async function debitarSaldo(clienteId: number, body: unknown, unidadeId: number, chave?: string) {
   if (!isSaldoId(clienteId)) return serviceResult({ error: 'Cliente inválido' }, { status: 400 });
   if (!isSaldoBody(body) || !observacoesSaldoValidas(body.observacoes)) return serviceResult({ error: 'Dados de saldo inválidos' }, { status: 400 });
   if (!isSaldoId(unidadeId)) return serviceResult({ error: 'Unidade inválida' }, { status: 400 });
@@ -67,6 +72,8 @@ export async function debitarSaldo(clienteId: number, body: unknown, unidadeId: 
   if (!isSaldoId(item_atendimento_id) || !isSaldoId(atendimento_id)) {
     return serviceResult({ error: 'item_atendimento_id e atendimento_id são obrigatórios' }, { status: 400 });
   }
+
+  if (await usarCreditoRastreavel(clienteId, unidadeId)) return debitarRastreado(clienteId, unidadeId, item_atendimento_id, atendimento_id, observacoes ?? null, chave);
 
   // Buscar o item e calcular valor restante
   const item = await repository.buscarItemSaldo(item_atendimento_id, atendimento_id);
@@ -105,7 +112,7 @@ export async function debitarSaldo(clienteId: number, body: unknown, unidadeId: 
   return serviceResult({ saldo: saldoNovo, item: itemAtualizado });
 }
 
-export async function estornarSaldo(clienteId: number, body: unknown) {
+export async function estornarSaldo(clienteId: number, body: unknown, chave?: string) {
   if (!isSaldoId(clienteId)) return serviceResult({ error: 'Cliente inválido' }, { status: 400 });
   if (!isSaldoBody(body) || !observacoesSaldoValidas(body.observacoes)) return serviceResult({ error: 'Dados de saldo inválidos' }, { status: 400 });
   const cliente = await repository.buscarClienteSaldo(clienteId);
@@ -119,6 +126,8 @@ export async function estornarSaldo(clienteId: number, body: unknown) {
   if (valor === null) {
     return serviceResult({ error: 'Valor deve ser maior que zero' }, { status: 400 });
   }
+
+  if (await usarCreditoRastreavel(clienteId)) return estornarRastreado(clienteId, valor, observacoes ?? null, chave);
 
   const saldoAtual = await repository.buscarSaldo(clienteId);
   const saldoAnterior = saldoAtual?.saldo ?? 0;
@@ -138,7 +147,7 @@ export async function estornarSaldo(clienteId: number, body: unknown) {
   return serviceResult({ saldo: saldoNovo });
 }
 
-export async function transferirSaldo(clienteOrigemId: number, body: unknown) {
+export async function transferirSaldo(clienteOrigemId: number, body: unknown, chave?: string) {
   if (!isSaldoId(clienteOrigemId)) return serviceResult({ error: 'Cliente inválido' }, { status: 400 });
   if (!isSaldoBody(body) || !observacoesSaldoValidas(body.observacoes)) return serviceResult({ error: 'Dados de saldo inválidos' }, { status: 400 });
   const clienteOrigem = await repository.buscarClienteSaldo(clienteOrigemId);
@@ -165,6 +174,8 @@ export async function transferirSaldo(clienteOrigemId: number, body: unknown) {
   if (!clienteDestino) {
     return serviceResult({ error: 'Cliente de destino não encontrado' }, { status: 404 });
   }
+
+  if (await usarCreditoRastreavel(clienteOrigemId) || await usarCreditoRastreavel(cliente_destino_id)) return transferirRastreado(clienteOrigemId, cliente_destino_id, valor, observacoes ?? null, chave);
 
   // Verificar saldo de origem
   const saldoOrigem = await repository.buscarSaldo(clienteOrigemId);
@@ -193,7 +204,7 @@ export async function transferirSaldo(clienteOrigemId: number, body: unknown) {
   });
 }
 
-export async function estornarProcedimento(clienteId: number, body: unknown, unidadeId: number) {
+export async function estornarProcedimento(clienteId: number, body: unknown, unidadeId: number, chave?: string) {
   if (!isSaldoId(clienteId)) return serviceResult({ error: 'Cliente inválido' }, { status: 400 });
   if (!isSaldoBody(body) || !observacoesSaldoValidas(body.observacoes)) return serviceResult({ error: 'Dados de saldo inválidos' }, { status: 400 });
   if (!isSaldoId(unidadeId)) return serviceResult({ error: 'Unidade inválida' }, { status: 400 });
@@ -207,6 +218,8 @@ export async function estornarProcedimento(clienteId: number, body: unknown, uni
   if (!isSaldoId(item_atendimento_id)) {
     return serviceResult({ error: 'item_atendimento_id é obrigatório' }, { status: 400 });
   }
+
+  if (await usarCreditoRastreavel(clienteId, unidadeId)) return devolverProcedimentoRastreado(clienteId, unidadeId, item_atendimento_id, chave);
 
   const item = await repository.buscarItemEstorno(item_atendimento_id);
 

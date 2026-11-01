@@ -1,3 +1,4 @@
+import { usarCreditoRastreavel } from '@/modules/financeiro/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
@@ -337,6 +338,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     return NextResponse.json({
       ...redactPatientContactFields(atendimento, context.user),
       itens: itensComEtapas,
+      recebimento_pendente_habilitado: await usarCreditoRastreavel(atendimento.cliente_id, context.unidadeId),
       total: totalResult?.total || 0,
       total_pago: totalPagoResult?.total || 0,
     });

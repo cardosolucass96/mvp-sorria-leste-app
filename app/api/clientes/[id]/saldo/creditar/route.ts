@@ -5,7 +5,7 @@ import { creditarSaldo } from '@/modules/financeiro/server';
 export const POST = withUnitRole(['admin', 'atendente'], async (request, context) => {
   try {
     const { id } = await context.params!;
-    const result = await creditarSaldo(Number(id), await request.json().catch(() => null), context.unidadeId);
+    const result = await creditarSaldo(Number(id), await request.json().catch(() => null), context.unidadeId, request.headers.get('Idempotency-Key') ?? undefined);
     return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
     console.error('Erro ao creditar saldo:', error);

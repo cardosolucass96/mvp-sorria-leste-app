@@ -15,7 +15,7 @@ function createSqliteDb() {
       },
       all: async () => ({ results: sqlite.prepare(sql).all(...params), success: true }),
       raw: async () => sqlite.prepare(sql).all(...params).map(Object.values),
-      run: async () => {
+      run: () => {
         const result = sqlite.prepare(sql).run(...params);
         return { results: [], success: true, meta: { changes: Number(result.changes), last_row_id: Number(result.lastInsertRowid) } };
       },
@@ -28,7 +28,7 @@ function createSqliteDb() {
       sqlite.exec('BEGIN');
       try {
         const results = [];
-        for (const statement of statements) results.push(await statement.run());
+        for (const statement of statements) results.push(statement.run());
         sqlite.exec('COMMIT');
         return results;
       } catch (error) {

@@ -1,3 +1,4 @@
+import { atendimentoTemCreditoRastreado } from '@/modules/financeiro/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { execute, query, queryOne } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
@@ -223,6 +224,14 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       }
     }
 
+    const historicoRastreado = await atendimentoTemCreditoRastreado(atendimentoId);
+    if (historicoRastreado && acaoFinal === 'liberar_execucao') {
+      const sessoes = await queryOne<{ id: number }>(`SELECT i.id FROM itens_atendimento i
+        JOIN procedimento_etapas_modelo e ON e.procedimento_id=i.procedimento_id
+        WHERE i.atendimento_id=? LIMIT 1`, [atendimentoId]);
+      if (sessoes) return NextResponse.json({ error: 'Não é possível dividir um procedimento com histórico financeiro vinculado. Preserve o procedimento original.' }, { status: 409 });
+    }
+
     await execute('DELETE FROM itens_atendimento_destinos WHERE atendimento_id = ?', [atendimentoId]);
 
     for (const destino of destinosNormalizados) {
@@ -303,7 +312,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     let agendamentosCriados = 0;
     let itensHoje = 0;
-    const preservarItensOriginais = acaoFinal === 'finalizar_continuacao';
+    const preservarItensOriginais = acaoFinal === 'finalizar_continuacao' || historicoRastreado;
 
     for (const item of itens) {
       const destinosItem = destinosPorItem.get(item.id) ?? [];

@@ -1,3 +1,4 @@
+import { itemTemCoberturaRastreada } from '@/modules/financeiro/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { query, queryOne, execute } from '@/lib/db';
@@ -504,6 +505,8 @@ export const DELETE = withUnit(async (
       }
       itensParaRemover = [item];
     }
+
+    if ((await Promise.all(itensParaRemover.map(item => itemTemCoberturaRastreada(item.id)))).some(Boolean)) return NextResponse.json({ error: 'Atendimento possui histórico financeiro rastreado; os procedimentos devem ser preservados' }, { status: 409 });
 
     const tabelasDisponiveis = new Map<string, boolean>();
 
