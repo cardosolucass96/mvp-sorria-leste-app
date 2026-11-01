@@ -277,9 +277,9 @@ describe('Prontuário e Anexos', () => {
 
   test('API de anexos deve existir com GET, POST e DELETE', () => {
     const content = readFile('app/api/execucao/item/[id]/anexos/route.ts');
-    expect(content).toContain('export async function GET');
-    expect(content).toContain('export async function POST');
-    expect(content).toContain('export async function DELETE');
+    expect(content).toMatch(/export (?:async function|const) GET/);
+    expect(content).toMatch(/export (?:async function|const) POST/);
+    expect(content).toMatch(/export (?:async function|const) DELETE/);
   });
 
   test('Upload de anexo deve validar tipo de arquivo', () => {
@@ -295,7 +295,7 @@ describe('Prontuário e Anexos', () => {
 
   test('[C-H7] DELETE de anexo deve validar propriedade (pertence ao item)', () => {
     const content = readFile('app/api/execucao/item/[id]/anexos/route.ts');
-    const deleteFunction = content.split('export async function DELETE')[1] || '';
+    const deleteFunction = content.split(/export (?:async function|const) DELETE/)[1] || '';
     // Deve verificar item_atendimento_id para garantir que o anexo pertence ao item
     const validatesOwnership = deleteFunction.includes('item_atendimento_id');
     // E deve retornar 403 se não pertencer
@@ -860,17 +860,17 @@ describe('API — CRUD Completo', () => {
   describe('Usuários', () => {
     test('GET /api/usuarios deve listar', () => {
       const content = readFile('app/api/usuarios/route.ts');
-      expect(content).toContain('export async function GET');
+      expect(content).toMatch(/export (?:async function|const) GET/);
     });
 
     test('POST /api/usuarios deve criar', () => {
       const content = readFile('app/api/usuarios/route.ts');
-      expect(content).toContain('export async function POST');
+      expect(content).toMatch(/export (?:async function|const) POST/);
     });
 
     test('PUT /api/usuarios/[id] deve atualizar', () => {
       const content = readFile('app/api/usuarios/[id]/route.ts');
-      expect(content).toContain('export async function PUT');
+      expect(content).toMatch(/export (?:async function|const) PUT/);
     });
 
     test('Deve validar email único', () => {

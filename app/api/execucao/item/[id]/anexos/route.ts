@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/middleware';
+import { checkExecutionAttachmentAccess } from '@/lib/auth/attachmentAccess';
 import { query, execute, getR2Bucket } from '@/lib/db';
 
 interface Anexo {
@@ -36,12 +38,16 @@ const MAX_SIZE_VIDEO = 50 * 1024 * 1024;
 const MAX_SIZE_OTHER = 10 * 1024 * 1024;
 
 // GET /api/execucao/item/[id]/anexos - Lista anexos do item
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (request: NextRequest, context) => {
   try {
-    const { id } = await params;
+    const { id: rawId } = await context.params!;
+    const id = String(rawId);
+    const targetId = Number(id);
+    if (!Number.isSafeInteger(targetId) || targetId <= 0) {
+      return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+    }
+    const forbidden = await checkExecutionAttachmentAccess(context.user, targetId, 'read');
+    if (forbidden) return forbidden;
 
     const anexos = await query<Anexo>(
       `SELECT a.*, u.nome as usuario_nome
@@ -60,32 +66,29 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // POST /api/execucao/item/[id]/anexos - Faz upload de anexo para R2
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withAuth(async (request: NextRequest, context) => {
   try {
-    const { id } = await params;
+    const { id: rawId } = await context.params!;
+    const id = String(rawId);
+    const targetId = Number(id);
+    if (!Number.isSafeInteger(targetId) || targetId <= 0) {
+      return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+    }
+    const forbidden = await checkExecutionAttachmentAccess(context.user, targetId, 'write');
+    if (forbidden) return forbidden;
     const formData = await request.formData();
     
     const file = formData.get('arquivo') as File;
-    const usuario_id = formData.get('usuario_id') as string;
+    const usuario_id = String(context.user.sub);
     const descricao = formData.get('descricao') as string;
     const titulo = formData.get('titulo') as string;
 
     if (!file) {
       return NextResponse.json(
         { error: 'Arquivo é obrigatório' },
-        { status: 400 }
-      );
-    }
-
-    if (!usuario_id) {
-      return NextResponse.json(
-        { error: 'Usuário é obrigatório' },
         { status: 400 }
       );
     }
@@ -110,7 +113,7 @@ export async function POST(
     }
 
     // Gerar chave única para o R2
-    const timestamp = Date.now();
+    const timestamp = crypto.randomUUID();
     const ext = file.name.split('.').pop() || 'bin';
     const r2Key = `execucao/${id}/${timestamp}.${ext}`;
 
@@ -163,13 +166,10 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});
 
 // DELETE /api/execucao/item/[id]/anexos?anexo_id=X - Remove anexo
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (request: NextRequest, context) => {
   try {
     const { searchParams } = new URL(request.url);
     const anexoId = searchParams.get('anexo_id');
@@ -181,7 +181,14 @@ export async function DELETE(
       );
     }
 
-    const { id } = await params;
+    const { id: rawId } = await context.params!;
+    const id = String(rawId);
+    const targetId = Number(id);
+    if (!Number.isSafeInteger(targetId) || targetId <= 0) {
+      return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+    }
+    const forbidden = await checkExecutionAttachmentAccess(context.user, targetId, 'write');
+    if (forbidden) return forbidden;
 
     // Buscar caminho do arquivo e validar que pertence ao item
     const anexo = await query<{ caminho: string; item_atendimento_id: number }>(
@@ -196,6 +203,8 @@ export async function DELETE(
       );
     }
 
+    await execute('DELETE FROM anexos_execucao WHERE id = ?', [parseInt(anexoId)]);
+
     if (anexo.length > 0 && anexo[0].caminho) {
       // Remover do R2
       try {
@@ -207,9 +216,6 @@ export async function DELETE(
       }
     }
 
-    // Remover do banco
-    await execute('DELETE FROM anexos_execucao WHERE id = ?', [parseInt(anexoId)]);
-
     return NextResponse.json({ message: 'Anexo removido com sucesso' });
   } catch (error) {
     console.error('Erro ao remover anexo:', error);
@@ -218,4 +224,4 @@ export async function DELETE(
       { status: 500 }
     );
   }
-}
+});

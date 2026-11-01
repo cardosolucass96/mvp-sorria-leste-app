@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne, execute } from '@/lib/db';
+import { query, queryOne, execute, batch } from '@/lib/db';
 import { Usuario } from '@/lib/types';
+import { withRole } from '@/lib/auth/middleware';
 import { ALL_ROLES } from '@/lib/constants/roles';
 import { garantirSchemaUsuariosValorDiaria } from '@/lib/helpers/garantirUsuarioSchema';
 
-interface RouteParams {
-  params: Promise<{ id: string }>;
-}
-
 // GET /api/usuarios/[id] - Buscar usuário por ID (com suas unidades e roles)
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withRole(['admin'], async (request: NextRequest, context) => {
+  const params = context.params!;
   try {
     await garantirSchemaUsuariosValorDiaria();
     const { id } = await params;
@@ -55,10 +53,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+});
 
 // PUT /api/usuarios/[id] - Atualizar usuário
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export const PUT = withRole(['admin'], async (request: NextRequest, context) => {
+  const params = context.params!;
   try {
     await garantirSchemaUsuariosValorDiaria();
     const { id } = await params;
@@ -126,8 +125,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    const comandos: { sql: string; params: unknown[] }[] = [];
+    const adicionar = (sql: string, params: unknown[]) => comandos.push({ sql, params });
+
     // Atualiza
-    await execute(
+    adicionar(
       `UPDATE usuarios SET
         nome = COALESCE(?, nome),
         email = COALESCE(?, email),
@@ -147,9 +149,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Atualizar unidades (se informadas)
     if (Array.isArray(unidade_ids)) {
-      await execute('DELETE FROM usuario_unidades WHERE usuario_id = ?', [id]);
+      adicionar('DELETE FROM usuario_unidades WHERE usuario_id = ?', [id]);
       for (const uid of unidade_ids) {
-        await execute(
+        adicionar(
           'INSERT OR IGNORE INTO usuario_unidades (usuario_id, unidade_id) VALUES (?, ?)',
           [id, uid]
         );
@@ -158,14 +160,16 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Atualizar roles efetivas (M2M). Se `roles` não foi enviado, não mexe.
     if (rolesEfetivas) {
-      await execute('DELETE FROM usuario_roles WHERE usuario_id = ?', [id]);
+      adicionar('DELETE FROM usuario_roles WHERE usuario_id = ?', [id]);
       for (const r of rolesEfetivas) {
-        await execute(
+        adicionar(
           'INSERT OR IGNORE INTO usuario_roles (usuario_id, role) VALUES (?, ?)',
           [id, r]
         );
       }
     }
+
+    await batch(comandos);
 
     const updated = await queryOne<Usuario>(
       'SELECT id, nome, email, role, valor_diaria, ativo, created_at FROM usuarios WHERE id = ?',
@@ -209,10 +213,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+});
 
 // DELETE /api/usuarios/[id] - Excluir usuário (soft delete)
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export const DELETE = withRole(['admin'], async (request: NextRequest, context) => {
+  const params = context.params!;
   try {
     const { id } = await params;
     
@@ -242,4 +247,4 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+});

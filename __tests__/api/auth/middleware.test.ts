@@ -126,8 +126,9 @@ describe('generateToken / verifyToken', () => {
   test('token com assinatura modificada é rejeitado', async () => {
     const token = await generateToken(mockUser);
     const parts = token.split('.');
-    // Modificar um char da assinatura
-    const tampered = `${parts[0]}.${parts[1]}.${parts[2].slice(0, -1)}X`;
+    // Altera bits significativos; o último caractere base64 pode mudar apenas padding.
+    const first = parts[2][0] === 'A' ? 'B' : 'A';
+    const tampered = `${parts[0]}.${parts[1]}.${first}${parts[2].slice(1)}`;
 
     const payload = await verifyToken(tampered);
     expect(payload).toBeNull();

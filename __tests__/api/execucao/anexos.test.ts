@@ -29,6 +29,7 @@ beforeEach(() => {
   resetMockDb();
   resetR2Store();
   setupCloudflareContextMock();
+  mockQueryResponse('from itens_atendimento i join atendimentos a', { unidade_id: 1, avaliador_id: 1, executor_id: 4, criado_por_id: 1 });
 });
 
 afterEach(() => {
@@ -82,7 +83,7 @@ describe('GET /api/execucao/item/[id]/anexos', () => {
     await callRoute(listAnexos, '/api/execucao/item/3/anexos', {}, ctx);
 
     const queries = getExecutedQueries();
-    expect(queries[0].sql).toContain('ORDER BY a.created_at DESC');
+    expect(queries.find(q => q.sql.includes('SELECT a.*'))!.sql).toContain('ORDER BY a.created_at DESC');
   });
 
   it('filtra por item_atendimento_id', async () => {
@@ -92,8 +93,8 @@ describe('GET /api/execucao/item/[id]/anexos', () => {
     await callRoute(listAnexos, '/api/execucao/item/3/anexos', {}, ctx);
 
     const queries = getExecutedQueries();
-    expect(queries[0].sql).toContain('a.item_atendimento_id = ?');
-    expect(queries[0].params[0]).toBe(3);
+    expect(queries.find(q => q.sql.includes('SELECT a.*'))!.sql).toContain('a.item_atendimento_id = ?');
+    expect(queries.find(q => q.sql.includes('SELECT a.*'))!.params[0]).toBe(3);
   });
 });
 
@@ -126,7 +127,7 @@ describe('POST /api/execucao/item/[id]/anexos', () => {
 
     expect(status).toBe(201);
     expect(data.id).toBe(10);
-    expect(data.caminho).toMatch(/^execucao\/3\/\d+\.jpg$/);
+    expect(data.caminho).toMatch(/^execucao\/3\/[0-9a-f-]+\.jpg$/);
     expect(data.message).toBe('Arquivo enviado com sucesso');
   });
 
@@ -145,7 +146,7 @@ describe('POST /api/execucao/item/[id]/anexos', () => {
     const store = getR2Store();
     expect(store.size).toBe(1);
     const key = Array.from(store.keys())[0];
-    expect(key).toMatch(/^execucao\/3\/\d+\.pdf$/);
+    expect(key).toMatch(/^execucao\/3\/[0-9a-f-]+\.pdf$/);
   });
 
   it('registra metadados no banco', async () => {
@@ -164,7 +165,7 @@ describe('POST /api/execucao/item/[id]/anexos', () => {
     const insertQ = queries.find(q => q.sql.includes('INSERT INTO anexos_execucao'));
     expect(insertQ).toBeDefined();
     expect(insertQ!.params[0]).toBe(3);            // item_atendimento_id
-    expect(insertQ!.params[1]).toBe(4);            // usuario_id
+    expect(insertQ!.params[1]).toBe(1);            // autor autenticado
     expect(insertQ!.params[2]).toBe('imagem.png');  // nome_arquivo
     expect(insertQ!.params[3]).toBe('image/png');   // tipo_arquivo
     expect(insertQ!.params[6]).toBe('Radiografia'); // descricao
@@ -352,7 +353,7 @@ describe('POST /api/execucao/item/[id]/anexos', () => {
     expect(data.error).toBe('Arquivo é obrigatório');
   });
 
-  it('rejeita sem usuario_id', async () => {
+  it('usa o autor autenticado quando usuario_id não é enviado', async () => {
     const file = createFile('foto.jpg', 'image/jpeg', 100);
     const formData = new FormData();
     formData.append('arquivo', file);
@@ -365,11 +366,11 @@ describe('POST /api/execucao/item/[id]/anexos', () => {
       ctx
     );
 
-    expect(status).toBe(400);
-    expect(data.error).toBe('Usuário é obrigatório');
+    expect(status).toBe(201);
+    expect(data).toMatchObject({ message: 'Arquivo enviado com sucesso' });
   });
 
-  it('gera chave R2 com pattern correto: execucao/{id}/{timestamp}.{ext}', async () => {
+  it('gera chave R2 com pattern correto: execucao/{id}/{uuid}.{ext}', async () => {
     setLastInsertId(21);
     const file = createFile('documento.pdf', 'application/pdf', 500);
     const formData = new FormData();
@@ -384,7 +385,7 @@ describe('POST /api/execucao/item/[id]/anexos', () => {
       ctx
     );
 
-    expect(data.caminho).toMatch(/^execucao\/7\/\d+\.pdf$/);
+    expect(data.caminho).toMatch(/^execucao\/7\/[0-9a-f-]+\.pdf$/);
   });
 
   it('salva descricao quando fornecida', async () => {

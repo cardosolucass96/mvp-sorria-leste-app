@@ -1,6 +1,6 @@
 import { atendimentoTemCreditoRastreado } from '@/modules/financeiro/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { execute, query, queryOne } from '@/lib/db';
+import { batch, query, queryOne } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { buscarEtapasComValor, roundMoney, somarAlocacoesAtivasDaEtapa } from '@/lib/helpers/pagamentoFlow';
 import { resolverExecutorDestinoId } from '@/lib/utils/destinoExecutor';
@@ -124,7 +124,7 @@ async function itemTemDependenciasQueBloqueiamExclusao(itemId: number): Promise<
   return Number(result?.count ?? 0) > 0;
 }
 
-async function criarAgendamentoFuturo({
+function prepararAgendamentoFuturo({
   atendimento,
   item,
   etapaModeloId,
@@ -145,11 +145,12 @@ async function criarAgendamentoFuturo({
   valor: number;
   valorPago: number;
 }) {
-  const result = await execute(
+  return {
+    sql:
     `INSERT INTO agendamentos
       (cliente_id, atendimento_origem_id, procedimento_id, item_atendimento_origem_id, executor_id, data_agendada, status, etapa_modelo_id, pago, valor, valor_pago, unidade_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
+    params: [
       atendimento.cliente_id,
       atendimento.id,
       item.procedimento_id,
@@ -162,18 +163,22 @@ async function criarAgendamentoFuturo({
       valor,
       valorPago,
       atendimento.unidade_id,
-    ]
-  );
-
-  return result.lastInsertRowid as number;
+    ],
+  };
 }
 
 export const POST = withUnit(async (request: NextRequest, context: UnitAuthenticatedContext) => {
   try {
+    const comandos: Parameters<typeof batch>[0] = [];
+    const adicionar = (sql: string, params: unknown[]) => comandos.push({ sql, params });
     const params = await context.params;
     const atendimentoId = parseInt(params!.id as string);
     const body = await request.json();
     const destinos = (body.destinos ?? []) as DestinoInput[];
+    if (!Array.isArray(destinos) || destinos.length === 0) {
+      return NextResponse.json({ error: 'destinos é obrigatório' }, { status: 400 });
+    }
+
     const destinosNormalizados = destinos.map((destino) => {
       const dataAgendadaUtc = clinicDateTimeInputToUtcIso(destino.data_agendada);
       if (destino.data_agendada && !dataAgendadaUtc) {
@@ -186,10 +191,6 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       };
     });
     const acaoFinal = (body.acao_final ?? 'liberar_execucao') as AcaoFinal;
-
-    if (!Array.isArray(destinos) || destinos.length === 0) {
-      return NextResponse.json({ error: 'destinos é obrigatório' }, { status: 400 });
-    }
 
     if (!['liberar_execucao', 'finalizar_continuacao'].includes(acaoFinal)) {
       return NextResponse.json({ error: 'acao_final inválida' }, { status: 400 });
@@ -232,10 +233,10 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       if (sessoes) return NextResponse.json({ error: 'Não é possível dividir um procedimento com histórico financeiro vinculado. Preserve o procedimento original.' }, { status: 409 });
     }
 
-    await execute('DELETE FROM itens_atendimento_destinos WHERE atendimento_id = ?', [atendimentoId]);
+    adicionar('DELETE FROM itens_atendimento_destinos WHERE atendimento_id = ?', [atendimentoId]);
 
     for (const destino of destinosNormalizados) {
-      await execute(
+      adicionar(
         `INSERT INTO itens_atendimento_destinos
           (atendimento_id, item_atendimento_id, etapa_modelo_id, destino_status, data_agendada, executor_id)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -254,6 +255,9 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       'SELECT * FROM itens_atendimento WHERE atendimento_id = ? ORDER BY id ASC',
       [atendimentoId]
     );
+    if (destinosNormalizados.some(destino => !itens.some(item => item.id === destino.item_id))) {
+      return NextResponse.json({ error: 'Procedimento não pertence a este atendimento' }, { status: 400 });
+    }
     const destinosPorItem = new Map<number, DestinoInput[]>();
     for (const destino of destinosNormalizados) {
       const atual = destinosPorItem.get(destino.item_id) ?? [];
@@ -325,7 +329,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         const destino = destinosItem[0];
         if (!destino || destino.destino_status === 'fazer_hoje') {
           if (destino && destino.executor_id !== undefined && (destino.executor_id ?? null) !== (item.executor_id ?? null)) {
-            await execute(
+            adicionar(
               'UPDATE itens_atendimento SET executor_id = ? WHERE id = ?',
               [destino.executor_id ?? null, item.id]
             );
@@ -340,14 +344,14 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
           destino.executor_id !== undefined &&
           executorDestinoId !== (item.executor_id ?? null)
         ) {
-          await execute(
+          adicionar(
             'UPDATE itens_atendimento SET executor_id = ? WHERE id = ?',
             [executorDestinoId, item.id]
           );
         }
 
         const preservarItemOrigem = preservarItensOriginais || await itemTemDependenciasQueBloqueiamExclusao(item.id);
-        const agendamentoId = await criarAgendamentoFuturo({
+        comandos.push(prepararAgendamentoFuturo({
           atendimento,
           item,
           etapaModeloId: null,
@@ -357,21 +361,21 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
           destinoStatus: destino.destino_status,
           valor: roundMoney(item.valor_final ?? item.valor),
           valorPago: roundMoney(item.valor_pago),
-        });
+        }));
         agendamentosCriados += 1;
 
         if (preservarItemOrigem) {
           continue;
         }
 
-        await execute(
+        adicionar(
           `UPDATE pagamentos_alocacoes
-           SET agendamento_id = ?, item_atendimento_id = NULL
+           SET agendamento_id = last_insert_rowid(), item_atendimento_id = NULL
            WHERE item_atendimento_id = ? AND (etapa_modelo_id IS NULL OR etapa_modelo_id = 0)`,
-          [agendamentoId, item.id]
+          [item.id]
         );
-        await execute('DELETE FROM itens_atendimento_destinos WHERE item_atendimento_id = ?', [item.id]);
-        await execute('DELETE FROM itens_atendimento WHERE id = ?', [item.id]);
+        adicionar('DELETE FROM itens_atendimento_destinos WHERE item_atendimento_id = ?', [item.id]);
+        adicionar('DELETE FROM itens_atendimento WHERE id = ?', [item.id]);
         continue;
       }
 
@@ -393,7 +397,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         const valorPagoEtapa = await somarAlocacoesAtivasDaEtapa(item.id, etapa.id);
 
         if (!destino || destino.destino_status === 'fazer_hoje') {
-          const insertResult = await execute(
+          adicionar(
             `INSERT INTO itens_atendimento
               (atendimento_id, procedimento_id, executor_id, criado_por_id, valor, valor_original, valor_final, desconto_valor, valor_pago, dentes, quantidade, group_id, dente_unico, observacoes, status, etapa_modelo_id, etapa_label)
              VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -416,18 +420,17 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
               etapa.nome,
             ]
           );
-          const novoItemId = insertResult.lastInsertRowid as number;
-          await execute(
+          adicionar(
             `UPDATE pagamentos_alocacoes
-             SET item_atendimento_id = ?
+             SET item_atendimento_id = last_insert_rowid()
              WHERE item_atendimento_id = ? AND etapa_modelo_id = ?`,
-            [novoItemId, item.id, etapa.id]
+            [item.id, etapa.id]
           );
           itensHoje += 1;
           continue;
         }
 
-        const agendamentoId = await criarAgendamentoFuturo({
+        comandos.push(prepararAgendamentoFuturo({
           atendimento,
           item,
           etapaModeloId: etapa.id,
@@ -437,18 +440,18 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
           destinoStatus: destino.destino_status,
           valor: valorEtapa,
           valorPago: valorPagoEtapa,
-        });
+        }));
         agendamentosCriados += 1;
 
         if (preservarItensOriginais) {
           continue;
         }
 
-        await execute(
+        adicionar(
           `UPDATE pagamentos_alocacoes
-           SET agendamento_id = ?, item_atendimento_id = NULL
+           SET agendamento_id = last_insert_rowid(), item_atendimento_id = NULL
            WHERE item_atendimento_id = ? AND etapa_modelo_id = ?`,
-          [agendamentoId, item.id, etapa.id]
+          [item.id, etapa.id]
         );
       }
 
@@ -456,13 +459,13 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         continue;
       }
 
-      await execute('DELETE FROM itens_atendimento_destinos WHERE item_atendimento_id = ?', [item.id]);
-      await execute('DELETE FROM itens_atendimento WHERE id = ?', [item.id]);
+      adicionar('DELETE FROM itens_atendimento_destinos WHERE item_atendimento_id = ?', [item.id]);
+      adicionar('DELETE FROM itens_atendimento WHERE id = ?', [item.id]);
     }
 
     if (acaoFinal === 'finalizar_continuacao') {
       const finalizadoAt = nowUtcIso();
-      await execute(
+      adicionar(
         `UPDATE atendimentos
          SET status = 'finalizado',
              finalizado_at = ?,
@@ -473,6 +476,8 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         [finalizadoAt, atendimentoId, context.unidadeId]
       );
     }
+
+    await batch(comandos);
 
     return NextResponse.json({
       agendamentos_criados: agendamentosCriados,

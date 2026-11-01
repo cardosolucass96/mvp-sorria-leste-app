@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
-import { query, queryOne, execute } from '@/lib/db';
+import { query, queryOne, batch } from '@/lib/db';
 import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento } from '@/lib/types';
 import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
@@ -61,6 +61,9 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
   context: UnitAuthenticatedContext
 ) => {
   try {
+    const comandos: Parameters<typeof batch>[0] = [];
+    const adicionar = (sql: string, params: unknown[]) => comandos.push({ sql, params }) - 1;
+    let indiceNovoAtendimento: number | null = null;
     const { id } = await context.params!;
     const agendamentoId = parseInt(id as string);
     const hojeRange = getClinicDayUtcRange();
@@ -180,7 +183,7 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
       dentesValidados.set(ag.id, validacao.dentes);
     }
 
-    let novoAtendimentoId: number;
+    let novoAtendimentoId: number | null = null;
 
     if (!soAvaliacao && agendamentosVinculados.length > 0) {
       if (agendamentosVinculados.length !== agendamentosProcedimento.length) {
@@ -313,7 +316,7 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
         );
       }
 
-      await execute(
+      adicionar(
         `UPDATE atendimentos
          SET status = 'aguardando_pagamento',
              finalizado_at = NULL,
@@ -326,7 +329,7 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
       novoAtendimentoId = atendimentoOrigemId;
 
       for (const [itemId, dente] of dentesParaRecuperarNoItem) {
-        await execute(
+        adicionar(
           'UPDATE itens_atendimento SET dentes = ?, dente_unico = ? WHERE id = ?',
           [JSON.stringify([dente]), dente.dente, itemId]
         );
@@ -337,14 +340,14 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
         if (!itemOrigem) continue;
 
         if (ag.executor_id != null && !['executando', 'concluido'].includes(itemOrigem.status) && ag.executor_id !== itemOrigem.executor_id) {
-          await execute(
+          adicionar(
             'UPDATE itens_atendimento SET executor_id = ? WHERE id = ?',
             [ag.executor_id, itemOrigem.id]
           );
         }
 
         if (ag.etapa_modelo_id != null) {
-          await execute(
+          adicionar(
             `DELETE FROM itens_atendimento_destinos
              WHERE atendimento_id = ?
                AND item_atendimento_id = ?
@@ -352,7 +355,7 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
             [atendimentoOrigemId, itemOrigem.id, ag.etapa_modelo_id]
           );
         } else {
-          await execute(
+          adicionar(
             `DELETE FROM itens_atendimento_destinos
              WHERE atendimento_id = ?
                AND item_atendimento_id = ?
@@ -361,16 +364,18 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
           );
         }
 
-        await execute(
-          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = ? WHERE id = ?`,
-          [novoAtendimentoId, ag.id]
+        adicionar(
+          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = COALESCE(?,
+              (SELECT id FROM atendimentos WHERE agendamento_id = ? ORDER BY id DESC LIMIT 1)) WHERE id = ?`,
+          [novoAtendimentoId, agendamentoId, ag.id]
         );
       }
 
       for (const ag of agendamentosHoje.filter(a => a.tipo === 'avaliacao' || !a.procedimento_id)) {
-        await execute(
-          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = ? WHERE id = ?`,
-          [novoAtendimentoId, ag.id]
+        adicionar(
+          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = COALESCE(?,
+              (SELECT id FROM atendimentos WHERE agendamento_id = ? ORDER BY id DESC LIMIT 1)) WHERE id = ?`,
+          [novoAtendimentoId, agendamentoId, ag.id]
         );
       }
     } else if (soAvaliacao) {
@@ -398,18 +403,18 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
         ?? await resolveAvaliadorPadraoDaUnidade(unidadeId, context.user.sub);
       const statusInicial = avaliadorId ? 'avaliacao' : 'triagem';
 
-      const atendimentoResult = await execute(
+      indiceNovoAtendimento = adicionar(
         `INSERT INTO atendimentos (cliente_id, avaliador_id, status, tipo, agendamento_id, observacoes, unidade_id)
          VALUES (?, ?, ?, 'normal', ?, ?, ?)`,
         [agendamento.cliente_id, avaliadorId, statusInicial, agendamentoId, `Avaliação agendada (#${agendamentoId})`, unidadeId]
       );
-      novoAtendimentoId = atendimentoResult.lastInsertRowid as number;
 
       // Marca todos os agendamentos de avaliação como realizados
       for (const ag of agendamentosHoje) {
-        await execute(
-          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = ? WHERE id = ?`,
-          [novoAtendimentoId, ag.id]
+        adicionar(
+          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = COALESCE(?,
+              (SELECT id FROM atendimentos WHERE agendamento_id = ? ORDER BY id DESC LIMIT 1)) WHERE id = ?`,
+          [novoAtendimentoId, agendamentoId, ag.id]
         );
       }
     } else {
@@ -436,12 +441,11 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
         ? `Sessão com ${agendamentosProcedimento.length} procedimentos (agendamentos: ${agendamentosProcedimento.map(a => `#${a.id}`).join(', ')})`
         : `Sessão originada do agendamento #${agendamentoId}`;
 
-      const atendimentoResult = await execute(
+      indiceNovoAtendimento = adicionar(
         `INSERT INTO atendimentos (cliente_id, status, tipo, agendamento_id, observacoes, unidade_id)
          VALUES (?, 'aguardando_pagamento', 'sessao', ?, ?, ?)`,
         [agendamento.cliente_id, agendamentoId, observacoes, unidadeId]
       );
-      novoAtendimentoId = atendimentoResult.lastInsertRowid as number;
 
       // Criar itens para cada agendamento de procedimento
       for (const ag of agendamentosProcedimento) {
@@ -501,12 +505,12 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
 
         for (const dente of dentesDoAgendamento.length > 0 ? dentesDoAgendamento : [null]) {
           const statusItem = valorPagoPorItem >= itemValor ? 'pago' : 'pendente';
-          await execute(
+          adicionar(
             `INSERT INTO itens_atendimento
               (atendimento_id, procedimento_id, valor, valor_original, valor_final, desconto_valor, valor_pago, status, executor_id, criado_por_id, origem_agendamento_id, etapa_modelo_id, etapa_label, dentes, group_id, dente_unico)
-             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES ((SELECT id FROM atendimentos WHERE agendamento_id = ? ORDER BY id DESC LIMIT 1), ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              novoAtendimentoId,
+              agendamentoId,
               ag.procedimento_id,
               itemValor,
               itemValor, // valor_original = snapshot do valor inicial
@@ -525,19 +529,26 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
           );
         }
 
-        await execute(
-          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = ? WHERE id = ?`,
-          [novoAtendimentoId, ag.id]
+        adicionar(
+          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = COALESCE(?,
+              (SELECT id FROM atendimentos WHERE agendamento_id = ? ORDER BY id DESC LIMIT 1)) WHERE id = ?`,
+          [novoAtendimentoId, agendamentoId, ag.id]
         );
       }
 
       // Marca agendamentos de avaliação no grupo como realizados também
       for (const ag of agendamentosHoje.filter(a => a.tipo === 'avaliacao' || !a.procedimento_id)) {
-        await execute(
-          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = ? WHERE id = ?`,
-          [novoAtendimentoId, ag.id]
+        adicionar(
+          `UPDATE agendamentos SET status = 'realizado', atendimento_sessao_id = COALESCE(?,
+              (SELECT id FROM atendimentos WHERE agendamento_id = ? ORDER BY id DESC LIMIT 1)) WHERE id = ?`,
+          [novoAtendimentoId, agendamentoId, ag.id]
         );
       }
+    }
+
+    const resultados = await batch(comandos);
+    if (indiceNovoAtendimento !== null) {
+      novoAtendimentoId = resultados[indiceNovoAtendimento].meta!.last_row_id;
     }
 
     // 6. Retornar o novo atendimento para redirecionamento

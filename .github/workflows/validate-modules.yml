@@ -19,6 +19,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run check:modules
       - run: npm run lint:modules
+      - run: npm run lint:access
+      - run: npm run test:access
       - run: npm run test:modules
       - run: npm run test:baseline
       - run: npm run build:refactor
