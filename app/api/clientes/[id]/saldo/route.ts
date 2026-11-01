@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne, query } from '@/lib/db';
+import { consultarSaldo } from '@/modules/financeiro/server';
 import {
   ensureCanManagePatientRegistration,
   getAuthenticatedRequestUser,
@@ -7,27 +7,6 @@ import {
 
 interface RouteParams {
   params: Promise<{ id: string }>;
-}
-
-interface SaldoCliente {
-  cliente_id: number;
-  saldo: number;
-  updated_at: string;
-}
-
-interface Movimentacao {
-  id: number;
-  cliente_id: number;
-  tipo: string;
-  valor: number;
-  saldo_anterior: number;
-  saldo_novo: number;
-  pagamento_id: number | null;
-  item_atendimento_id: number | null;
-  atendimento_id: number | null;
-  cliente_destino_id: number | null;
-  observacoes: string | null;
-  created_at: string;
 }
 
 // GET /api/clientes/[id]/saldo - Saldo atual + últimas movimentações
@@ -42,39 +21,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
 
-    const cliente = await queryOne<{ id: number }>('SELECT id FROM clientes WHERE id = ?', [id]);
-    if (!cliente) {
-      return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
-    }
-
-    const saldoRow = await queryOne<SaldoCliente>(
-      'SELECT saldo, updated_at FROM saldo_clientes WHERE cliente_id = ?',
-      [id]
-    );
-
-    const movimentacoes = await query<Movimentacao>(
-      `SELECT m.*
-       FROM movimentacoes_saldo m
-       WHERE m.cliente_id = ?
-       ORDER BY m.created_at DESC
-       LIMIT 20`,
-      [id]
-    );
-
-    const saldoCalculadoRow = await queryOne<{ saldo_calculado: number }>(
-      `SELECT COALESCE(SUM(ia.valor_pago), 0) AS saldo_calculado
-       FROM itens_atendimento ia
-       JOIN atendimentos a ON a.id = ia.atendimento_id
-       WHERE a.cliente_id = ? AND ia.status != 'concluido' AND ia.valor_pago > 0`,
-      [id]
-    );
-
-    return NextResponse.json({
-      saldo: saldoRow?.saldo ?? 0,
-      saldo_calculado: saldoCalculadoRow?.saldo_calculado ?? 0,
-      updated_at: saldoRow?.updated_at ?? null,
-      movimentacoes,
-    });
+    const result = await consultarSaldo(id);
+    return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
     console.error('Erro ao buscar saldo do cliente:', error);
     return NextResponse.json({ error: 'Erro ao buscar saldo do cliente' }, { status: 500 });

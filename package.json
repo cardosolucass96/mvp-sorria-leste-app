@@ -40,8 +40,8 @@
     "typecheck": "tsc --noEmit --incremental false",
     "check:modules": "node scripts/check-module-boundaries.mjs",
     "test:baseline": "node scripts/check-test-baseline.mjs",
-    "test:modules": "jest --runInBand --runTestsByPath __tests__/integration/modulos-financeiros.test.ts __tests__/api/orcamentos-em-aberto/route.test.ts __tests__/api/pagamentos/crud.test.ts __tests__/api/pagamentos/distribuicao.test.ts __tests__/api/pagamentos/cancelamento-grupo.test.ts __tests__/unit/pagamento-flow.test.ts __tests__/components/orcamentos-em-aberto-page.test.tsx __tests__/components/pagamento-page-runtime.test.ts __tests__/unit/external-effects.test.ts",
-    "lint:modules": "eslint modules shared scripts/check-module-boundaries.mjs scripts/check-test-baseline.mjs scripts/refactor-env.mjs app/api/orcamentos-em-aberto app/api/atendimentos/\\[id\\]/pagamentos app/api/system/release",
+    "test:modules": "jest --runInBand --runTestsByPath __tests__/integration/modulos-financeiros.test.ts __tests__/api/orcamentos-em-aberto/route.test.ts __tests__/api/pagamentos/crud.test.ts __tests__/api/pagamentos/distribuicao.test.ts __tests__/api/pagamentos/cancelamento-grupo.test.ts __tests__/unit/pagamento-flow.test.ts __tests__/components/orcamentos-em-aberto-page.test.tsx __tests__/components/pagamento-page-runtime.test.ts __tests__/unit/external-effects.test.ts __tests__/integration/saldo-module.test.ts",
+    "lint:modules": "eslint modules shared scripts/check-module-boundaries.mjs scripts/check-test-baseline.mjs scripts/refactor-env.mjs app/api/orcamentos-em-aberto app/api/atendimentos/\\[id\\]/pagamentos app/api/system/release app/api/clientes/\\[id\\]/saldo",
     "build:refactor": "node scripts/refactor-env.mjs build",
     "deploy:refactor": "node scripts/refactor-env.mjs deploy"
   },
