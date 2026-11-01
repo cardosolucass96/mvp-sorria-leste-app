@@ -36,7 +36,14 @@
     "d1:timestamps:normalize:local:bulk": "node scripts/d1-timestamps-utc.mjs bulk-apply --local",
     "d1:timestamps:normalize:remote:bulk": "node scripts/d1-timestamps-utc.mjs bulk-apply --remote",
     "d1:backup:local": "node scripts/d1-timestamps-utc.mjs backup --local",
-    "d1:backup:remote": "node scripts/d1-timestamps-utc.mjs backup --remote"
+    "d1:backup:remote": "node scripts/d1-timestamps-utc.mjs backup --remote",
+    "typecheck": "tsc --noEmit --incremental false",
+    "check:modules": "node scripts/check-module-boundaries.mjs",
+    "test:baseline": "node scripts/check-test-baseline.mjs",
+    "test:modules": "jest --runInBand --runTestsByPath __tests__/integration/modulos-financeiros.test.ts __tests__/api/orcamentos-em-aberto/route.test.ts __tests__/api/pagamentos/crud.test.ts __tests__/api/pagamentos/distribuicao.test.ts __tests__/api/pagamentos/cancelamento-grupo.test.ts __tests__/unit/pagamento-flow.test.ts __tests__/components/orcamentos-em-aberto-page.test.tsx __tests__/components/pagamento-page-runtime.test.ts __tests__/unit/external-effects.test.ts",
+    "lint:modules": "eslint modules shared scripts/check-module-boundaries.mjs scripts/check-test-baseline.mjs scripts/refactor-env.mjs app/api/orcamentos-em-aberto app/api/atendimentos/\\[id\\]/pagamentos app/api/system/release",
+    "build:refactor": "node scripts/refactor-env.mjs build",
+    "deploy:refactor": "node scripts/refactor-env.mjs deploy"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

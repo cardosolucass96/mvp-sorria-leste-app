@@ -259,48 +259,8 @@ describe('Validações de Itens', () => {
 // 5. VALIDAÇÕES DE PAGAMENTO
 // ===========================================
 
-describe('Validações de Pagamento', () => {
-
-  test('POST pagamento deve validar valor > 0', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    expect(content).toMatch(/valor.*<=?\s*0|!valor/);
-  });
-
-  test('POST pagamento deve validar método de pagamento', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    expect(content).toContain('metodo');
-    expect(content).toMatch(/dinheiro|pix|cartao/);
-  });
-
-  test('POST pagamento registra valor e atualiza itens como pago', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    // Modelo simplificado: valor é registrado no pagamento e todos os itens pendentes ficam pagos
-    expect(content).toContain('valor');
-    expect(content).toContain('UPDATE itens_atendimento');
-  });
-
-  test('POST pagamento deve atualizar valor_pago dos itens', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    expect(content).toContain('valor_pago');
-    expect(content).toContain('UPDATE itens_atendimento');
-  });
-
-  test('[C-H4] POST pagamento valida que atendimento existe e pertence ao contexto', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    // Validação via atendimento_id extraído da rota (modelo simplificado sem item_id no body)
-    expect(content).toContain('atendimento_id');
-    expect(content).toContain('atendimentoId');
-  });
-
-  test('POST pagamento deve verificar status do atendimento', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    expect(content).toContain('.includes(atendimento.status)');
-  });
-});
-
-// ===========================================
-// 6. PRONTUÁRIO E ANEXOS
-// ===========================================
+// As validações de pagamento agora são exercitadas pela API com SQL real em
+// integration/modulos-financeiros.test.ts, sem depender do texto do código.
 
 describe('Prontuário e Anexos', () => {
 

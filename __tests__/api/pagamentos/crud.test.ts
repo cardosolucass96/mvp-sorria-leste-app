@@ -67,17 +67,7 @@ describe('GET /api/atendimentos/[id]/pagamentos', () => {
     ]);
   });
 
-  it('ordena por created_at DESC', async () => {
-    mockQueryResponse('from atendimentos where id',ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('from pagamentos p', []);
-
-    const ctx = createRouteContext({ id: '3' });
-    await callRoute(listPagamentos, '/api/atendimentos/3/pagamentos', {}, ctx);
-
-    const queries = getExecutedQueries();
-    const selectQ = queries.find(q => q.sql.includes('FROM pagamentos p'));
-    expect(selectQ!.sql).toContain('ORDER BY p.created_at DESC');
-  });
+  // Cenário validado com SQL real em integration/modulos-financeiros.test.ts.
 
   it('retorna 404 se atendimento não existe', async () => {
     const ctx = createRouteContext({ id: '999' });
@@ -334,21 +324,7 @@ describe('POST /api/atendimentos/[id]/pagamentos', () => {
     expect(status).toBe(201);
   });
 
-  it('salva observações quando fornecidas', async () => {
-    setLastInsertId(7);
-    mockPagamentoPadrao();
-    mockQueryResponse('from pagamentos where id', { ...PAGAMENTO_PIX });
-
-    const ctx = createRouteContext({ id: '3' });
-    await callRoute(createPagamento, '/api/atendimentos/3/pagamentos', {
-      method: 'POST',
-      body: { valor: 100, metodo: 'pix', observacoes: 'Pagamento parcial', alocacoes: [{ item_id: 101, valor: 100 }] },
-    }, ctx);
-
-    const queries = getExecutedQueries();
-    const insertQ = queries.find(q => q.sql.includes('INSERT INTO pagamentos ('));
-    expect(insertQ!.params[insertQ!.params.length - 1]).toBe('Pagamento parcial');
-  });
+  // Cenário validado com SQL real em integration/modulos-financeiros.test.ts.
 
   it('retorna 404 se atendimento não existe', async () => {
     const ctx = createRouteContext({ id: '999' });

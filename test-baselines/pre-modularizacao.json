@@ -1,0 +1,316 @@
+{
+  "revision": "a0aa68b1436e8c272d0aea78c203eaca85e55c95",
+  "captured_at": "2026-11-01",
+  "minimum_tests": 2617,
+  "maximum_skipped": 112,
+  "known_failures": [
+    {
+      "file": "__tests__/components/atendimento-detalhe-page.test.tsx",
+      "test": "AtendimentoDetalhePage impressão imprime recibos somente com a seção de pagamentos"
+    },
+    {
+      "file": "__tests__/components/followup-page.test.tsx",
+      "test": "FollowupPage admin pode criar tarefa, mas continua sem CTAs de edição da tarefa"
+    },
+    {
+      "file": "__tests__/components/followup-page.test.tsx",
+      "test": "FollowupPage admin responsável pela tarefa vê botão de concluir sem editar ou excluir"
+    },
+    {
+      "file": "__tests__/components/fechamento-caixa-page.test.tsx",
+      "test": "FechamentoCaixaPage mostra o filtro de um único dia e os blocos principais do resumo"
+    },
+    {
+      "file": "__tests__/api/dashboard/dashboard.test.ts",
+      "test": "GET /api/dashboard — comissões do usuário minhasComissoes retorna soma do mês corrente"
+    },
+    {
+      "file": "__tests__/integration/fluxo-normal.test.ts",
+      "test": "Integração — Fluxo Normal Completo Etapa 4 — Adicionar procedimentos POST /api/atendimentos/1/itens adiciona Restauração (por_dente)"
+    },
+    {
+      "file": "__tests__/integration/fluxo-normal.test.ts",
+      "test": "Integração — Fluxo Normal Completo Etapa 6 — Registrar pagamento POST /api/atendimentos/1/pagamentos com distribuição por item"
+    },
+    {
+      "file": "__tests__/integration/fluxo-normal.test.ts",
+      "test": "Integração — Fluxo Normal Completo Etapa 7 — Itens marcados como pagos UPDATE de valor_pago inclui CASE para mudar status para \"pago\""
+    },
+    {
+      "file": "__tests__/integration/fluxo-normal.test.ts",
+      "test": "Integração — Fluxo Normal Completo Etapa 8 — Aguardando Pagamento → Em Execução PUT avança para em_execucao (requer pelo menos 1 pagamento ativo)"
+    },
+    {
+      "file": "__tests__/integration/fluxo-normal.test.ts",
+      "test": "Integração — Fluxo Normal Completo Etapa 15 — Dashboard atualizado GET /api/dashboard reflete atendimento finalizado"
+    },
+    {
+      "file": "__tests__/integration/fluxo-normal.test.ts",
+      "test": "Integração — Fluxo Normal Completo Verificação de sequência de queries pagamento com distribuição gera queries na ordem correta"
+    },
+    {
+      "file": "__tests__/sprint12.test.ts",
+      "test": "Correção: rotas usam JWT para identificar usuário logado POST pagamento com JWT usa user.sub como recebido_por_id"
+    },
+    {
+      "file": "__tests__/sprint12.test.ts",
+      "test": "Correção: rotas usam JWT para identificar usuário logado PUT atendimento para em_execucao usa context.user.sub como liberado_por_id"
+    },
+    {
+      "file": "__tests__/sprint12.test.ts",
+      "test": "Performance: Índices SQL no schema todas as FKs têm índice correspondente"
+    },
+    {
+      "file": "__tests__/revisao-completa.test.ts",
+      "test": "Validações de Pagamento POST pagamento deve validar método de pagamento"
+    },
+    {
+      "file": "__tests__/revisao-completa.test.ts",
+      "test": "Validações de Pagamento POST pagamento registra valor e atualiza itens como pago"
+    },
+    {
+      "file": "__tests__/revisao-completa.test.ts",
+      "test": "Validações de Pagamento POST pagamento deve atualizar valor_pago dos itens"
+    },
+    {
+      "file": "__tests__/revisao-completa.test.ts",
+      "test": "Frontend — Consistência Sidebar e Navegação Sidebar deve ter link /execucao"
+    },
+    {
+      "file": "__tests__/revisao-completa.test.ts",
+      "test": "Frontend — Páginas Críticas Página de Pagamento deve ter seleção de método"
+    },
+    {
+      "file": "__tests__/revisao-completa.test.ts",
+      "test": "Frontend — Páginas Críticas Fila de Execução deve ter seção \"Meus Procedimentos\""
+    },
+    {
+      "file": "__tests__/revisao-completa.test.ts",
+      "test": "Frontend — Páginas Críticas Fila de Execução deve ter seção \"Disponíveis\""
+    },
+    {
+      "file": "__tests__/revisao-completa.test.ts",
+      "test": "Frontend — Páginas Críticas Fila de Execução deve usar contexto de autenticação"
+    },
+    {
+      "file": "__tests__/revisao-completa.test.ts",
+      "test": "Alternância Admin/Dentista AuthContext — ViewMode hasRole deve tratar viewMode dentista como avaliador+executor"
+    },
+    {
+      "file": "__tests__/api/unidades/crud.test.ts",
+      "test": "PUT /api/unidades/[id] atualiza nome da unidade"
+    },
+    {
+      "file": "__tests__/api/unidades/crud.test.ts",
+      "test": "PUT /api/unidades/[id] atualiza endereco e telefone"
+    },
+    {
+      "file": "__tests__/api/unidades/crud.test.ts",
+      "test": "PUT /api/unidades/[id] desativa unidade (ativo = false)"
+    },
+    {
+      "file": "__tests__/security/input-validation.test.ts",
+      "test": "Segurança — Validação de Input SQL Injection — Busca de Clientes payload \"' OR 1=1 --\" é passado como parâmetro (não concatenado na SQL)"
+    },
+    {
+      "file": "__tests__/security/input-validation.test.ts",
+      "test": "Segurança — Validação de Input SQL Injection — Busca de Clientes payload \"'; DROP TABLE clientes; --\" é passado como parâmetro (não concatenado na SQL)"
+    },
+    {
+      "file": "__tests__/security/input-validation.test.ts",
+      "test": "Segurança — Validação de Input SQL Injection — Busca de Clientes payload \"' UNION SELECT * FROM usuarios --\" é passado como parâmetro (não concatenado na SQL)"
+    },
+    {
+      "file": "__tests__/security/input-validation.test.ts",
+      "test": "Segurança — Validação de Input SQL Injection — Busca de Clientes payload \"' UNION SELECT id,nome,email,senha,role,1,1,1,1,1,1 FROM usuarios --\" é passado como parâmetro (não concatenado na SQL)"
+    },
+    {
+      "file": "__tests__/security/input-validation.test.ts",
+      "test": "Segurança — Validação de Input SQL Injection — Busca de Clientes payload \"1'; DELETE FROM clientes WHERE '1'='1\" é passado como parâmetro (não concatenado na SQL)"
+    },
+    {
+      "file": "__tests__/security/input-validation.test.ts",
+      "test": "Segurança — Validação de Input SQL Injection — Busca de Clientes payload \"Robert'); DROP TABLE clientes;--\" é passado como parâmetro (não concatenado na SQL)"
+    },
+    {
+      "file": "__tests__/security/input-validation.test.ts",
+      "test": "Segurança — Validação de Input SQL Injection — Busca de Clientes payload \"' OR ''='\" é passado como parâmetro (não concatenado na SQL)"
+    },
+    {
+      "file": "__tests__/security/input-validation.test.ts",
+      "test": "Segurança — Validação de Input SQL Injection — Busca de Clientes payload \"' AND 1=0 UNION SELECT password FROM users --\" é passado como parâmetro (não concatenado na SQL)"
+    },
+    {
+      "file": "__tests__/security/input-validation.test.ts",
+      "test": "Segurança — Validação de Input SQL Injection — Busca de Clientes payload \"1 OR 1=1\" é passado como parâmetro (não concatenado na SQL)"
+    },
+    {
+      "file": "__tests__/api/smoke.test.ts",
+      "test": "Smoke Test — Infraestrutura de Testes de API callRoute GET retorna JSON mockado"
+    },
+    {
+      "file": "__tests__/api/smoke.test.ts",
+      "test": "Smoke Test — Infraestrutura de Testes de API callRoute GET com searchParams funciona"
+    },
+    {
+      "file": "__tests__/api/procedimentos/crud.test.ts",
+      "test": "GET /api/procedimentos retorna apenas procedimentos ativos por padrão"
+    },
+    {
+      "file": "__tests__/integration/edge-cases.test.ts",
+      "test": "Integração — Edge Cases e Fluxos de Erro Procedimento por_dente adicionar item com múltiplos dentes registra dentes e quantidade"
+    },
+    {
+      "file": "__tests__/integration/edge-cases.test.ts",
+      "test": "Integração — Edge Cases e Fluxos de Erro Aguardando → Em Execução exige pagamento aguardando → em_execucao sem pagamento ativo → 400"
+    },
+    {
+      "file": "__tests__/integration/edge-cases.test.ts",
+      "test": "Integração — Edge Cases e Fluxos de Erro Métodos de pagamento aceitos método \"dinheiro\" é aceito"
+    },
+    {
+      "file": "__tests__/integration/edge-cases.test.ts",
+      "test": "Integração — Edge Cases e Fluxos de Erro Métodos de pagamento aceitos método \"pix\" é aceito"
+    },
+    {
+      "file": "__tests__/integration/edge-cases.test.ts",
+      "test": "Integração — Edge Cases e Fluxos de Erro Métodos de pagamento aceitos método \"cartao_debito\" é aceito"
+    },
+    {
+      "file": "__tests__/integration/edge-cases.test.ts",
+      "test": "Integração — Edge Cases e Fluxos de Erro Métodos de pagamento aceitos método \"cartao_credito\" é aceito"
+    },
+    {
+      "file": "__tests__/components/elapsed-time.test.tsx",
+      "test": "ElapsedTime atualiza automaticamente enquanto o atendimento está em aberto"
+    },
+    {
+      "file": "__tests__/sprint8.test.ts",
+      "test": "Sprint 8 - Execução (Dentista Executor) Páginas de Execução página de listagem deve usar useAuth"
+    },
+    {
+      "file": "__tests__/sprint8.test.ts",
+      "test": "Sprint 8 - Execução (Dentista Executor) Páginas de Execução página de listagem deve filtrar por executor_id"
+    },
+    {
+      "file": "__tests__/sprint8.test.ts",
+      "test": "Sprint 8 - Execução (Dentista Executor) Páginas de Execução página deve alertar sobre volta para aguardando_pagamento"
+    },
+    {
+      "file": "__tests__/sprint8.test.ts",
+      "test": "Sprint 8 - Execução (Dentista Executor) Páginas de Execução página deve mostrar seções de meus procedimentos e disponíveis"
+    },
+    {
+      "file": "__tests__/sprint8.test.ts",
+      "test": "Sprint 8 - Execução (Dentista Executor) Menu Sidebar Sidebar deve ter item Execução para executor e admin"
+    },
+    {
+      "file": "__tests__/sprint-frontend-3.test.ts",
+      "test": "Sprint 3: usuarios/page.tsx usa Select do Sprint 1"
+    },
+    {
+      "file": "__tests__/sprint-frontend-3.test.ts",
+      "test": "Sprint 3: execucao/page.tsx importa componentes do barrel @/components/ui"
+    },
+    {
+      "file": "__tests__/sprint-frontend-3.test.ts",
+      "test": "Sprint 3: execucao/page.tsx usa PageHeader"
+    },
+    {
+      "file": "__tests__/sprint-frontend-3.test.ts",
+      "test": "Sprint 3: execucao/page.tsx usa Card do Sprint 1"
+    },
+    {
+      "file": "__tests__/sprint-frontend-3.test.ts",
+      "test": "Sprint 3: execucao/page.tsx usa LoadingState"
+    },
+    {
+      "file": "__tests__/sprint-frontend-3.test.ts",
+      "test": "Sprint 3: execucao/page.tsx usa EmptyState"
+    },
+    {
+      "file": "__tests__/sprint-frontend-3.test.ts",
+      "test": "Sprint 3: execucao/page.tsx usa StatusBadge do Sprint 2"
+    },
+    {
+      "file": "__tests__/sprint-frontend-3.test.ts",
+      "test": "Sprint 3: Header centraliza MENU_ITEMS, ROLE_LABELS, VIEW_MODE_LABELS importa MENU_ITEMS de navigation"
+    },
+    {
+      "file": "__tests__/sprint-frontend-0.test.ts",
+      "test": "Sprint 0: status constants METODO_PAGAMENTO_LABELS tem 4 métodos"
+    },
+    {
+      "file": "__tests__/sprint-frontend-0.test.ts",
+      "test": "Sprint 0: navigation MENU_ITEMS tem 14 itens"
+    },
+    {
+      "file": "__tests__/api/followup/crud.test.ts",
+      "test": "POST /api/followup/[id]/concluir bloqueia admin que não é o responsável da tarefa"
+    },
+    {
+      "file": "__tests__/sprint-frontend-5.test.ts",
+      "test": "Sprint 5: usePageTitle em todas as páginas [ 'execucao', 'page.tsx' ] usa usePageTitle"
+    },
+    {
+      "file": "__tests__/sprint-frontend-5.test.ts",
+      "test": "Sprint 5: Transitions nos componentes UI Select.tsx tem transitions"
+    },
+    {
+      "file": "__tests__/sprint-frontend-5.test.ts",
+      "test": "Sprint 5: Transitions nos componentes UI Textarea.tsx tem transitions"
+    },
+    {
+      "file": "__tests__/sprint-frontend-5.test.ts",
+      "test": "Sprint 5: Focus styles para navegação por teclado Input.tsx tem focus:ring styles"
+    },
+    {
+      "file": "__tests__/sprint-frontend-5.test.ts",
+      "test": "Sprint 5: Focus styles para navegação por teclado Select.tsx tem focus:ring styles"
+    },
+    {
+      "file": "__tests__/sprint-frontend-5.test.ts",
+      "test": "Sprint 5: Focus styles para navegação por teclado Textarea.tsx tem focus:ring styles"
+    },
+    {
+      "file": "__tests__/sprint-frontend-5.test.ts",
+      "test": "Sprint 5: Empty states nas listas execucao usa EmptyState"
+    },
+    {
+      "file": "__tests__/integration/fluxo-orto.test.ts",
+      "test": "Integração — Fluxo Orto Etapa 2 — Criar atendimento orto (pula triagem/avaliação) atendimento orto requer executor_id"
+    },
+    {
+      "file": "__tests__/integration/fluxo-orto.test.ts",
+      "test": "Integração — Fluxo Orto Etapa 3 — Pagamento do procedimento orto POST /api/atendimentos/10/pagamentos registra pagamento"
+    },
+    {
+      "file": "__tests__/integration/fluxo-orto.test.ts",
+      "test": "Integração — Fluxo Orto Etapa 4 — Aguardando Pagamento → Em Execução PUT libera para execução"
+    },
+    {
+      "file": "__tests__/components/impressao-relatorios.test.tsx",
+      "test": "relatorios de impressao relatorio do cliente usa marca Sorria Leste e formata dentes legivelmente"
+    },
+    {
+      "file": "__tests__/components/impressao-relatorios.test.tsx",
+      "test": "relatorios de impressao relatorio do atendimento tenta grouped e faz fallback para pagamentos simples"
+    },
+    {
+      "file": "__tests__/sprint2.test.ts",
+      "test": "Sprint 2 - Login Simples + Usuários Página de Login página de login deve ter atalhos de acesso rápido"
+    },
+    {
+      "file": "__tests__/api/pagamentos/crud.test.ts",
+      "test": "GET /api/atendimentos/[id]/pagamentos ordena por created_at DESC"
+    },
+    {
+      "file": "__tests__/api/pagamentos/crud.test.ts",
+      "test": "POST /api/atendimentos/[id]/pagamentos salva observações quando fornecidas"
+    },
+    {
+      "file": "__tests__/sprint5.test.ts",
+      "test": "Sprint 5 - Atendimentos e Pipeline Status e Transições pagamento→execução deve exigir procedimento pago"
+    }
+  ]
+}

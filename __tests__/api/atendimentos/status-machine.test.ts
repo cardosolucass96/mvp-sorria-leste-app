@@ -49,6 +49,7 @@ function makeAuthPayload(role: 'admin' | 'atendente' | 'avaliador' | 'executor' 
     sub: idsByRole[role],
     email: `${role}@test.com`,
     role,
+    roles: [role],
     nome: `${role} Teste`,
     unidade_ids: [1, 2],
     unidade_atual: 1,

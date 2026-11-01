@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getOptionalRuntimeEnv, getRequiredRuntimeEnv } from '@/lib/env';
+import { assertExternalSideEffectsEnabled } from '@/shared/server/external-effects';
 
 const AUTENTIQUE_GRAPHQL_URL = 'https://api.autentique.com.br/v2/graphql';
 
@@ -88,6 +89,7 @@ async function parseAutentiqueResponse<T>(response: Response): Promise<T> {
 }
 
 async function executeAutentiqueGraphql<T>(query: string, variables: Record<string, unknown>) {
+  assertExternalSideEffectsEnabled();
   const response = await fetch(AUTENTIQUE_GRAPHQL_URL, {
     method: 'POST',
     headers: {
@@ -128,6 +130,7 @@ export function getAutentiqueFolderIdForUnit(unitName: string | null | undefined
 }
 
 async function createDocument(title: string, html: string, signer: AutentiqueSignerPayload, folderId?: string | null) {
+  assertExternalSideEffectsEnabled();
   const hasFolderId = Boolean(folderId);
   const folderVariableDefinition = hasFolderId ? ',\n      $folder_id: UUID' : '';
   const folderArgument = hasFolderId ? '\n        folder_id: $folder_id' : '';

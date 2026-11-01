@@ -32,7 +32,7 @@ afterEach(() => {
 describe('PUT /api/atendimentos/[id]/pagamentos/[pagamentoId]', () => {
   it('cancela o grupo inteiro quando o pagamento pertence a um grupo', async () => {
     mockQueryResponse('select id, unidade_id from atendimentos where id', ATENDIMENTO_AGUARDANDO_PGTO);
-    mockQueryResponse('from pagamentos\n       where id', {
+    mockQueryResponse('where id = ? and atendimento_id = ?', {
       id: 31,
       atendimento_id: 3,
       pagamento_grupo_id: 90,

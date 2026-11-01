@@ -42,3 +42,28 @@ enabled = true
 [observability.logs]
 enabled = true
 invocation_logs = true
+
+# Validação da modularização, independente da V2 em staging.
+[env.refactor]
+name = "sorria-leste-app-refactor"
+
+[env.refactor.vars]
+ENVIRONMENT = "refactor"
+EXTERNAL_SIDE_EFFECTS_ENABLED = "false"
+APP_BASE_URL = "https://sorria-leste-app-refactor.lucas-cardoso.workers.dev"
+
+[[env.refactor.d1_databases]]
+binding = "DB"
+database_name = "sorria-leste-db-refactor"
+database_id = "8d29206a-83fb-4874-bbfa-182ee25436aa"
+
+[[env.refactor.r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "sorria-leste-arquivos-refactor"
+
+[[env.refactor.services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "sorria-leste-app-refactor"
+
+[env.refactor.version_metadata]
+binding = "CF_VERSION_METADATA"

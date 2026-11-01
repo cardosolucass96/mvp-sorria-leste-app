@@ -10,7 +10,7 @@ import usePageTitle from '@/lib/utils/usePageTitle';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import { getExecutorDestinoInicial } from '@/lib/utils/destinoExecutor';
 import { isExecutorDisponivel } from '@/lib/utils/usuariosProfissionais';
-import { roundMoney } from '@/lib/helpers/pagamentoFlow';
+import { roundMoney } from '@/modules/financeiro/public';
 import { buildFormaPagamentoSelectOptions, getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 import type { FormaPagamentoComTaxa, Usuario } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
