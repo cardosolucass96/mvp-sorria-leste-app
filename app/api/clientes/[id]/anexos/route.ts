@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/middleware';
+import { checkPatientAttachmentAccess } from '@/lib/auth/attachmentAccess';
 import { query, queryOne, execute, getR2Bucket } from '@/lib/db';
 
 interface AnexoCliente {
@@ -36,12 +38,16 @@ const MAX_SIZE_VIDEO = 50 * 1024 * 1024;
 const MAX_SIZE_OTHER = 10 * 1024 * 1024;
 
 // GET /api/clientes/[id]/anexos — lista anexos do cliente
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (_request: NextRequest, context) => {
   try {
-    const { id } = await params;
+    const { id: rawId } = await context.params!;
+    const id = String(rawId);
+    const targetId = Number(id);
+    if (!Number.isSafeInteger(targetId) || targetId <= 0) {
+      return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+    }
+    const forbidden = await checkPatientAttachmentAccess(context.user, targetId, 'read');
+    if (forbidden) return forbidden;
     const clienteId = parseInt(id, 10);
     if (isNaN(clienteId)) {
       return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
@@ -64,15 +70,19 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // POST /api/clientes/[id]/anexos — upload de anexo para R2
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withAuth(async (request: NextRequest, context) => {
   try {
-    const { id } = await params;
+    const { id: rawId } = await context.params!;
+    const id = String(rawId);
+    const targetId = Number(id);
+    if (!Number.isSafeInteger(targetId) || targetId <= 0) {
+      return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+    }
+    const forbidden = await checkPatientAttachmentAccess(context.user, targetId, 'write');
+    if (forbidden) return forbidden;
     const clienteId = parseInt(id, 10);
     if (isNaN(clienteId)) {
       return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
@@ -80,20 +90,14 @@ export async function POST(
 
     const formData = await request.formData();
     const file = formData.get('arquivo') as File | null;
-    const usuarioIdRaw = formData.get('usuario_id') as string | null;
+    const usuarioIdRaw = String(context.user.sub);
     const descricao = (formData.get('descricao') as string | null)?.trim() || null;
     const titulo = (formData.get('titulo') as string | null)?.trim() || file?.name;
 
     if (!file) {
       return NextResponse.json({ error: 'Arquivo é obrigatório' }, { status: 400 });
     }
-    if (!usuarioIdRaw) {
-      return NextResponse.json({ error: 'Usuário é obrigatório' }, { status: 400 });
-    }
-    const usuarioId = parseInt(usuarioIdRaw, 10);
-    if (isNaN(usuarioId)) {
-      return NextResponse.json({ error: 'usuario_id inválido' }, { status: 400 });
-    }
+    const usuarioId = context.user.sub;
 
     // Valida tipo
     if (!TIPOS_PERMITIDOS.includes(file.type)) {
@@ -124,7 +128,7 @@ export async function POST(
     }
 
     // Gera chave única no R2
-    const timestamp = Date.now();
+    const timestamp = crypto.randomUUID();
     const ext = file.name.split('.').pop() || 'bin';
     const r2Key = `clientes/${clienteId}/${timestamp}.${ext}`;
 
@@ -161,15 +165,19 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});
 
 // PUT /api/clientes/[id]/anexos — atualiza titulo/descricao do anexo
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PUT = withAuth(async (request: NextRequest, context) => {
   try {
-    const { id } = await params;
+    const { id: rawId } = await context.params!;
+    const id = String(rawId);
+    const targetId = Number(id);
+    if (!Number.isSafeInteger(targetId) || targetId <= 0) {
+      return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+    }
+    const forbidden = await checkPatientAttachmentAccess(context.user, targetId, 'write');
+    if (forbidden) return forbidden;
     const clienteId = parseInt(id, 10);
     if (isNaN(clienteId)) {
       return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
@@ -213,15 +221,19 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
+});
 
 // DELETE /api/clientes/[id]/anexos?anexo_id=X — remove anexo
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (request: NextRequest, context) => {
   try {
-    const { id } = await params;
+    const { id: rawId } = await context.params!;
+    const id = String(rawId);
+    const targetId = Number(id);
+    if (!Number.isSafeInteger(targetId) || targetId <= 0) {
+      return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+    }
+    const forbidden = await checkPatientAttachmentAccess(context.user, targetId, 'write');
+    if (forbidden) return forbidden;
     const clienteId = parseInt(id, 10);
     if (isNaN(clienteId)) {
       return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
@@ -253,6 +265,8 @@ export async function DELETE(
       );
     }
 
+    await execute('DELETE FROM anexos_cliente WHERE id = ?', [anexoId]);
+
     // Remove do R2 (não falha se o arquivo não existir)
     if (anexo.caminho) {
       try {
@@ -263,7 +277,6 @@ export async function DELETE(
       }
     }
 
-    await execute('DELETE FROM anexos_cliente WHERE id = ?', [anexoId]);
 
     return NextResponse.json({ message: 'Anexo removido com sucesso' });
   } catch (error) {
@@ -273,4 +286,4 @@ export async function DELETE(
       { status: 500 }
     );
   }
-}
+});

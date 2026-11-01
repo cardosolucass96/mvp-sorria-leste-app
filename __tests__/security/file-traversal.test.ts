@@ -23,6 +23,7 @@ import {
   getExecutedQueries,
 } from '../helpers/db-mock';
 
+import { generateToken } from '@/lib/auth/jwt';
 import { GET as getArquivos } from '@/app/api/arquivos/[...path]/route';
 import { POST as postAnexos, DELETE as deleteAnexos } from '@/app/api/execucao/item/[id]/anexos/route';
 
@@ -31,6 +32,8 @@ describe('Segurança — Path Traversal & Acesso a Arquivos', () => {
     setupCloudflareContextMock();
     resetMockDb();
     resetR2Store();
+    mockQueryResponse('from itens_atendimento i join atendimentos a', { unidade_id: 1, avaliador_id: 1, executor_id: 1, criado_por_id: 1 });
+    mockQueryResponse('select cliente_id, null as item_id from anexos_cliente', { cliente_id: null, item_id: 1 });
   });
 
   afterEach(() => {
@@ -126,13 +129,13 @@ describe('Segurança — Path Traversal & Acesso a Arquivos', () => {
       expect(status).toBe(200);
     });
 
-    test('Cache-Control é definido como público (1 ano)', async () => {
+    test('Cache-Control impede cache compartilhado', async () => {
       const ctx = createRouteContext({ path: ['execucao', '1', 'photo.jpg'] });
       const { headers } = await callRoute(
         getArquivos, '/api/arquivos/execucao/1/photo.jpg', {}, ctx
       );
 
-      expect(headers.get('Cache-Control')).toBe('public, max-age=31536000');
+      expect(headers.get('Cache-Control')).toBe('private, no-store');
     });
 
     test('download=true retorna Content-Disposition com nome original', async () => {
@@ -179,27 +182,19 @@ describe('Segurança — Path Traversal & Acesso a Arquivos', () => {
       expect(headers.get('Content-Type')).toBe('application/octet-stream');
     });
 
-    test('acesso a arquivo de outro item (sem verificação de ownership)', async () => {
-      // Arquivo pertence ao item 1, mas qualquer um pode acessar
+    test('arquivo de outra unidade é recusado mesmo com URL conhecida', async () => {
+      mockQueryResponse('from itens_atendimento i join atendimentos a', { unidade_id: 2, avaliador_id: 1, executor_id: 2, criado_por_id: 1 });
+      const token = await generateToken({ id: 2, nome: 'Executor', email: 'executor@example.test', role: 'executor', roles: ['executor'], unidade_ids: [1], unidade_atual: 1 });
       const ctx = createRouteContext({ path: ['execucao', '1', 'photo.jpg'] });
-      const { status } = await callRoute(
-        getArquivos, '/api/arquivos/execucao/1/photo.jpg', {}, ctx
-      );
-
-      // ⚠ LIMITAÇÃO MVP: Sem verificação de ownership
-      // Qualquer pessoa com a URL pode acessar o arquivo
-      expect(status).toBe(200);
+      const { status } = await callRoute(getArquivos, '/api/arquivos/execucao/1/photo.jpg', { headers: { Authorization: `Bearer ${token}` } }, ctx);
+      expect(status).toBe(403);
     });
 
-    test('keys R2 do prefixo internal/ são acessíveis (sem restrição de prefixo)', async () => {
-      // ⚠ LIMITAÇÃO MVP: Não há restrição de prefixo
+    test('objeto interno sem registro de anexo não é servido', async () => {
+      mockQueryResponse('select cliente_id, null as item_id from anexos_cliente', []);
       const ctx = createRouteContext({ path: ['internal', 'secrets.json'] });
-      const { status } = await callRoute(
-        getArquivos, '/api/arquivos/internal/secrets.json', {}, ctx
-      );
-
-      // Se o atacante adivinhar a key, pode acessar qualquer objeto no R2
-      expect(status).toBe(200);
+      const { status } = await callRoute(getArquivos, '/api/arquivos/internal/secrets.json', {}, ctx);
+      expect(status).toBe(404);
     });
   });
 
@@ -374,7 +369,7 @@ describe('Segurança — Path Traversal & Acesso a Arquivos', () => {
       expect(status).toBe(400);
     });
 
-    test('upload sem usuario_id retorna 400', async () => {
+    test('upload usa o autor da sessão sem depender de usuario_id', async () => {
       const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' });
       const formData = new FormData();
       formData.append('arquivo', file);
@@ -386,7 +381,7 @@ describe('Segurança — Path Traversal & Acesso a Arquivos', () => {
         ctx
       );
 
-      expect(status).toBe(400);
+      expect(status).toBe(201);
     });
   });
 
@@ -395,7 +390,7 @@ describe('Segurança — Path Traversal & Acesso a Arquivos', () => {
   // ═════════════════════════════════════════════
 
   describe('R2 key format', () => {
-    test('arquivo é salvo com key no formato execucao/{id}/{timestamp}.{ext}', async () => {
+    test('arquivo é salvo com key no formato execucao/{id}/{uuid}.{ext}', async () => {
       const file = new File(['data'], 'minha_foto.jpg', { type: 'image/jpeg' });
       const formData = new FormData();
       formData.append('arquivo', file);
@@ -417,7 +412,7 @@ describe('Segurança — Path Traversal & Acesso a Arquivos', () => {
       const keys = Array.from(store.keys());
       const matchingKey = keys.find((k) => k.startsWith('execucao/42/'));
       expect(matchingKey).toBeDefined();
-      expect(matchingKey).toMatch(/^execucao\/42\/\d+\.jpg$/);
+      expect(matchingKey).toMatch(/^execucao\/42\/[0-9a-f-]+\.jpg$/);
     });
 
     test('extensão é derivada do nome original do arquivo', async () => {
@@ -530,35 +525,19 @@ describe('Segurança — Path Traversal & Acesso a Arquivos', () => {
   // ═════════════════════════════════════════════
 
   describe('segurança geral — /api/arquivos/', () => {
-    test('⚠ endpoint é acessível sem autenticação (limitação MVP)', async () => {
-      await mockR2Bucket.put('execucao/1/photo.jpg', Buffer.from('data'), {
-        httpMetadata: { contentType: 'image/jpeg' },
-      });
-
-      // Sem nenhum header de autenticação
+    test('endpoint recusa acesso sem autenticação', async () => {
+      await mockR2Bucket.put('execucao/1/photo.jpg', Buffer.from('data'));
       const ctx = createRouteContext({ path: ['execucao', '1', 'photo.jpg'] });
-      const { status } = await callRoute(
-        getArquivos, '/api/arquivos/execucao/1/photo.jpg', {}, ctx
-      );
-
-      // ⚠ Deveria exigir autenticação — mas no MVP é público
-      expect(status).toBe(200);
+      const { status } = await callRoute(getArquivos, '/api/arquivos/execucao/1/photo.jpg', { headers: { Authorization: '' } }, ctx);
+      expect(status).toBe(401);
     });
 
-    test('R2 key enumeration: adivinhando KEY consegue acessar arquivo', async () => {
-      // Arquivo de outro item
-      await mockR2Bucket.put('execucao/999/confidential.pdf', Buffer.from('secret'), {
-        httpMetadata: { contentType: 'application/pdf' },
-      });
-
-      // Atacante adivinha a key
+    test('adivinhar chave não permite acessar objeto sem registro de anexo', async () => {
+      await mockR2Bucket.put('execucao/999/confidential.pdf', Buffer.from('secret'));
+      mockQueryResponse('select cliente_id, null as item_id from anexos_cliente', []);
       const ctx = createRouteContext({ path: ['execucao', '999', 'confidential.pdf'] });
-      const { status } = await callRoute(
-        getArquivos, '/api/arquivos/execucao/999/confidential.pdf', {}, ctx
-      );
-
-      // ⚠ Sem auth, se souber a key, acessa
-      expect(status).toBe(200);
+      const { status } = await callRoute(getArquivos, '/api/arquivos/execucao/999/confidential.pdf', {}, ctx);
+      expect(status).toBe(404);
     });
 
     test('path segments são unidos por / (comportamento de join)', async () => {

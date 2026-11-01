@@ -259,48 +259,8 @@ describe('Validações de Itens', () => {
 // 5. VALIDAÇÕES DE PAGAMENTO
 // ===========================================
 
-describe('Validações de Pagamento', () => {
-
-  test('POST pagamento deve validar valor > 0', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    expect(content).toMatch(/valor.*<=?\s*0|!valor/);
-  });
-
-  test('POST pagamento deve validar método de pagamento', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    expect(content).toContain('metodo');
-    expect(content).toMatch(/dinheiro|pix|cartao/);
-  });
-
-  test('POST pagamento registra valor e atualiza itens como pago', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    // Modelo simplificado: valor é registrado no pagamento e todos os itens pendentes ficam pagos
-    expect(content).toContain('valor');
-    expect(content).toContain('UPDATE itens_atendimento');
-  });
-
-  test('POST pagamento deve atualizar valor_pago dos itens', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    expect(content).toContain('valor_pago');
-    expect(content).toContain('UPDATE itens_atendimento');
-  });
-
-  test('[C-H4] POST pagamento valida que atendimento existe e pertence ao contexto', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    // Validação via atendimento_id extraído da rota (modelo simplificado sem item_id no body)
-    expect(content).toContain('atendimento_id');
-    expect(content).toContain('atendimentoId');
-  });
-
-  test('POST pagamento deve verificar status do atendimento', () => {
-    const content = readFile('app/api/atendimentos/[id]/pagamentos/route.ts');
-    expect(content).toContain('.includes(atendimento.status)');
-  });
-});
-
-// ===========================================
-// 6. PRONTUÁRIO E ANEXOS
-// ===========================================
+// As validações de pagamento agora são exercitadas pela API com SQL real em
+// integration/modulos-financeiros.test.ts, sem depender do texto do código.
 
 describe('Prontuário e Anexos', () => {
 
@@ -317,9 +277,9 @@ describe('Prontuário e Anexos', () => {
 
   test('API de anexos deve existir com GET, POST e DELETE', () => {
     const content = readFile('app/api/execucao/item/[id]/anexos/route.ts');
-    expect(content).toContain('export async function GET');
-    expect(content).toContain('export async function POST');
-    expect(content).toContain('export async function DELETE');
+    expect(content).toMatch(/export (?:async function|const) GET/);
+    expect(content).toMatch(/export (?:async function|const) POST/);
+    expect(content).toMatch(/export (?:async function|const) DELETE/);
   });
 
   test('Upload de anexo deve validar tipo de arquivo', () => {
@@ -335,7 +295,7 @@ describe('Prontuário e Anexos', () => {
 
   test('[C-H7] DELETE de anexo deve validar propriedade (pertence ao item)', () => {
     const content = readFile('app/api/execucao/item/[id]/anexos/route.ts');
-    const deleteFunction = content.split('export async function DELETE')[1] || '';
+    const deleteFunction = content.split(/export (?:async function|const) DELETE/)[1] || '';
     // Deve verificar item_atendimento_id para garantir que o anexo pertence ao item
     const validatesOwnership = deleteFunction.includes('item_atendimento_id');
     // E deve retornar 403 se não pertencer
@@ -900,17 +860,17 @@ describe('API — CRUD Completo', () => {
   describe('Usuários', () => {
     test('GET /api/usuarios deve listar', () => {
       const content = readFile('app/api/usuarios/route.ts');
-      expect(content).toContain('export async function GET');
+      expect(content).toMatch(/export (?:async function|const) GET/);
     });
 
     test('POST /api/usuarios deve criar', () => {
       const content = readFile('app/api/usuarios/route.ts');
-      expect(content).toContain('export async function POST');
+      expect(content).toMatch(/export (?:async function|const) POST/);
     });
 
     test('PUT /api/usuarios/[id] deve atualizar', () => {
       const content = readFile('app/api/usuarios/[id]/route.ts');
-      expect(content).toContain('export async function PUT');
+      expect(content).toMatch(/export (?:async function|const) PUT/);
     });
 
     test('Deve validar email único', () => {

@@ -415,6 +415,11 @@ export const UNIDADE_BARRA: Unidade = {
   nome: 'Barra do Ceará',
   endereco: null,
   telefone: null,
+  razao_social: null,
+  cnpj: null,
+  email: null,
+  responsavel: null,
+  recibo_rodape: null,
   ativo: 1,
   created_at: '2025-01-01 00:00:00',
 };
@@ -424,6 +429,11 @@ export const UNIDADE_VILA: Unidade = {
   nome: 'Vila União',
   endereco: null,
   telefone: null,
+  razao_social: null,
+  cnpj: null,
+  email: null,
+  responsavel: null,
+  recibo_rodape: null,
   ativo: 1,
   created_at: '2025-01-01 00:00:00',
 };

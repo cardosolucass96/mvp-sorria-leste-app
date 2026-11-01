@@ -1,42 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne } from '@/lib/db';
+import { NextResponse } from 'next/server';
+import { withRole } from '@/lib/auth/middleware';
+import { consultarMovimentacoesSaldo } from '@/modules/financeiro/server';
 
-// GET /api/clientes/[id]/saldo/movimentacoes - Lista últimas movimentações
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withRole(['admin', 'atendente'], async (_request, context) => {
   try {
-    const { id } = await params;
-    const clienteId = parseInt(id);
-
-    // Verifica se cliente existe
-    const cliente = await queryOne<{ id: number }>(
-      'SELECT id FROM clientes WHERE id = ?',
-      [clienteId]
-    );
-
-    if (!cliente) {
-      return NextResponse.json(
-        { error: 'Cliente não encontrado' },
-        { status: 404 }
-      );
-    }
-
-    const movimentacoes = await query(
-      `SELECT * FROM movimentacoes_saldo
-       WHERE cliente_id = ?
-       ORDER BY created_at DESC
-       LIMIT 20`,
-      [clienteId]
-    );
-
-    return NextResponse.json(movimentacoes);
+    const { id } = await context.params!;
+    const result = await consultarMovimentacoesSaldo(Number(id));
+    return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
     console.error('Erro ao buscar movimentações:', error);
-    return NextResponse.json(
-      { error: 'Erro ao buscar movimentações' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Erro ao buscar movimentações' }, { status: 500 });
   }
-}
+});

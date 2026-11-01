@@ -1,6 +1,6 @@
 import { execute, query, queryOne } from '@/lib/db';
 import { SQLITE_UTC_NOW_EXPRESSION } from '@/lib/time';
-import { roundMoney } from '@/lib/helpers/pagamentoFlow';
+import { roundMoney } from '@/modules/financeiro/public';
 import type {
   FormaPagamentoComTaxa,
   FormaPagamentoHistorico,

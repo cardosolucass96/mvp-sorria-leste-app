@@ -10,7 +10,7 @@ import usePageTitle from '@/lib/utils/usePageTitle';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import { getExecutorDestinoInicial } from '@/lib/utils/destinoExecutor';
 import { isExecutorDisponivel } from '@/lib/utils/usuariosProfissionais';
-import { roundMoney } from '@/lib/helpers/pagamentoFlow';
+import { roundMoney, criarChavesOperacao } from '@/modules/financeiro/public';
 import { buildFormaPagamentoSelectOptions, getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 import type { FormaPagamentoComTaxa, Usuario } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
@@ -118,6 +118,7 @@ interface FormaPagamentoState {
 }
 
 interface Atendimento {
+  recebimento_pendente_habilitado?: boolean;
   id: number;
   cliente_id: number;
   cliente_nome: string;
@@ -276,6 +277,7 @@ export default function PagamentoPage({
   const { id } = use(params);
   const router = useRouter();
   const unitFetch = useUnitFetch();
+  const [chavesFinanceiras] = useState(criarChavesOperacao);
   const { currentUnidade } = useAuth();
 
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
@@ -801,15 +803,18 @@ export default function PagamentoPage({
         };
       }
 
+      const requestBody = JSON.stringify(payload);
+      const chave = chavesFinanceiras.obter(`pagamento:${id}`, requestBody);
       const res = await unitFetch(`/api/atendimentos/${id}/pagamentos`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chave },
+        body: requestBody,
       });
       if (!res.ok) {
         const data = await res.json() as ApiErrorResponse;
         throw new Error(data.error || 'Erro ao registrar pagamento');
       }
+      chavesFinanceiras.concluir(`pagamento:${id}`, requestBody);
       setObservacoesPagamento('');
       setMultiplasFormas(false);
       setFormasPagamento([
@@ -887,15 +892,18 @@ export default function PagamentoPage({
   const handleCancelarPagamento = async (pagamentoId: number) => {
     if (!motivoCancelamento.trim()) return;
     try {
+      const requestBody = JSON.stringify({ motivo: motivoCancelamento });
+      const chave = chavesFinanceiras.obter(`cancelamento:${id}:${pagamentoId}`, requestBody);
       const res = await unitFetch(`/api/atendimentos/${id}/pagamentos/${pagamentoId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ motivo: motivoCancelamento }),
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chave },
+        body: requestBody,
       });
       if (!res.ok) {
         const data = await res.json() as ApiErrorResponse;
         throw new Error(data.error || 'Erro ao cancelar pagamento');
       }
+      chavesFinanceiras.concluir(`cancelamento:${id}:${pagamentoId}`, requestBody);
       setCancelandoId(null);
       setMotivoCancelamento('');
       await carregarDados();
@@ -917,7 +925,8 @@ export default function PagamentoPage({
     );
   }
 
-  const modoSomenteHistorico = ['finalizado', 'encerrado'].includes(atendimento.status);
+  const atendimentoEncerrado = ['finalizado', 'encerrado'].includes(atendimento.status);
+  const modoSomenteHistorico = atendimentoEncerrado && !atendimento.recebimento_pendente_habilitado;
   const podeGerenciarDestinos = atendimento.status === 'aguardando_pagamento';
   const podeRegistrarCobranca = !modoSomenteHistorico;
   const temItensHojePlanejados = resumoDestinos.fazer_hoje > 0;
@@ -979,6 +988,10 @@ export default function PagamentoPage({
           </div>
         </CardContent>
       </Card>
+
+      {atendimentoEncerrado && atendimento.recebimento_pendente_habilitado && (
+        <Alert type="info">Você pode receber valores pendentes. O atendimento permanece encerrado.</Alert>
+      )}
 
       {modoSomenteHistorico && (
         <Alert type="info">{mensagemModoHistorico}</Alert>

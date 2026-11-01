@@ -7,6 +7,7 @@ module.exports = {
   roots: ['<rootDir>'],
   testMatch: ['**/__tests__/**/*.test.ts'],
   moduleNameMapper: {
+    '^server-only$': '<rootDir>/__mocks__/server-only.ts',
     '^@/(.*)$': '<rootDir>/$1',
     '^@opennextjs/cloudflare$': '<rootDir>/__mocks__/opennextjs-cloudflare.ts',
   },

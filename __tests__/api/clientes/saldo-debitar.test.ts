@@ -20,9 +20,11 @@ afterEach(() => {
 describe('POST /api/clientes/[id]/saldo/debitar', () => {
   it('usa valor_final ao quitar item legado e sincroniza valor_pago', async () => {
     mockQueryResponse('select id from clientes where id', { id: 5 });
-    mockQueryResponse('where id = ? and atendimento_id = ?', {
+    mockQueryResponse('where ia.id = ? and ia.atendimento_id = ?', {
       id: 101,
       atendimento_id: 20,
+      atendimento_cliente_id: 5,
+      unidade_id: 1,
       valor: 1500,
       valor_final: 2000,
       valor_pago: 500,
@@ -47,6 +49,6 @@ describe('POST /api/clientes/[id]/saldo/debitar', () => {
     const movimentacao = queries.find((query) => query.sql.includes('INSERT INTO movimentacoes_saldo'));
     const quitacao = queries.find((query) => query.sql.includes('UPDATE itens_atendimento SET valor_pago'));
     expect(movimentacao?.params[1]).toBe(1500);
-    expect(quitacao?.params).toEqual([2000, 101]);
+    expect(quitacao?.params).toEqual([2000, 'pago', 101]);
   });
 });

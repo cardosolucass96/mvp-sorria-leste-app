@@ -6,11 +6,13 @@
  * O proxy serve arquivos diretamente do R2 com headers corretos.
  */
 
-import { callRoute, createRouteContext } from '../../helpers/api-test-helper';
+import { NextRequest } from 'next/server';
+import { generateToken } from '@/lib/auth/jwt';
 import {
   setupCloudflareContextMock,
   teardownCloudflareContextMock,
   resetMockDb,
+  mockQueryResponse,
   mockR2Bucket,
   resetR2Store,
 } from '../../helpers/db-mock';
@@ -21,6 +23,7 @@ beforeEach(() => {
   resetMockDb();
   resetR2Store();
   setupCloudflareContextMock();
+  mockQueryResponse('select cliente_id, null as item_id from anexos_cliente', { cliente_id: 1, item_id: null });
 });
 
 afterEach(() => {
@@ -31,8 +34,9 @@ afterEach(() => {
 async function callProxy(pathSegments: string[], query = '') {
   const params = Promise.resolve({ path: pathSegments });
   const url = `http://localhost/api/arquivos/${pathSegments.join('/')}${query}`;
-  const req = new Request(url, { method: 'GET' });
-  return getArquivo(req as any, { params } as any);
+  const token = await generateToken({ id: 1, nome: 'Admin', email: 'admin@example.test', role: 'admin', roles: ['admin'], unidade_ids: [1], unidade_atual: 1 });
+  const req = new NextRequest(url, { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+  return getArquivo(req, { params });
 }
 
 // =============================================================================
@@ -52,7 +56,7 @@ describe('GET /api/arquivos/[...path]', () => {
     expect(res.headers.get('Content-Type')).toBe('image/jpeg');
   });
 
-  it('define Cache-Control público de 1 ano', async () => {
+  it('impede cache compartilhado de documentos privados', async () => {
     await mockR2Bucket.put('execucao/3/abc.pdf', Buffer.from('PDF_CONTENT'), {
       httpMetadata: { contentType: 'application/pdf' },
     });
@@ -60,7 +64,7 @@ describe('GET /api/arquivos/[...path]', () => {
     const res = await callProxy(['execucao', '3', 'abc.pdf']);
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('Cache-Control')).toBe('public, max-age=31536000');
+    expect(res.headers.get('Cache-Control')).toBe('private, no-store');
   });
 
   it('define Content-Length correto', async () => {
@@ -92,7 +96,7 @@ describe('GET /api/arquivos/[...path]', () => {
     const res = await callProxy(['execucao', '3', 'ts123.pdf'], '?download=true');
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('Content-Disposition')).toBe('attachment; filename="receita-paciente.pdf"');
+    expect(res.headers.get('Content-Disposition')).toBe("attachment; filename*=UTF-8''receita-paciente.pdf");
   });
 
   it('usa nome do key como fallback no download sem customMetadata', async () => {

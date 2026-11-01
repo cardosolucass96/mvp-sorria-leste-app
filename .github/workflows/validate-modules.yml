@@ -1,0 +1,31 @@
+name: Validar modularização
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [codex/modular-orcamentos-financeiro]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run check:modules
+      - run: npm run lint:modules
+      - run: npm run lint:access
+      - run: npm run test:access
+      - run: npm run test:modules
+      - run: npm run test:baseline
+      - run: npm run build:refactor
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultado-testes
+          path: tmp/test-baseline-current.json

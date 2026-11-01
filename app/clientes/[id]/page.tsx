@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, use, useCallback, useRef } from 'react';
+import { criarChavesOperacao } from '@/modules/financeiro/public';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -332,6 +333,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const { id } = use(params);
   const { user } = useAuth();
   const unitFetch = useUnitFetch();
+  const [chavesFinanceiras] = useState(criarChavesOperacao);
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [ficha, setFicha] = useState<FichaData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -1851,13 +1853,16 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         setEstornandoItemId(item.id);
         try {
-          const res = await fetch(`/api/clientes/${id}/saldo/estornar-procedimento`, {
+          const requestBody = JSON.stringify({ item_atendimento_id: item.id });
+          const chave = chavesFinanceiras.obter(`devolucao:${id}`, requestBody);
+          const res = await unitFetch(`/api/clientes/${id}/saldo/estornar-procedimento`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item_atendimento_id: item.id }),
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chave },
+            body: requestBody,
           });
           const data = await res.json();
           if (!res.ok) { setError(data.error || 'Erro ao gerar estorno'); return; }
+          chavesFinanceiras.concluir(`devolucao:${id}`, requestBody);
           setSuccess(`Estorno de ${formatarMoeda(data.valor_creditado)} gerado com sucesso!`);
           await Promise.all([carregarSaldo(), carregarFicha()]);
         } catch {
@@ -1873,16 +1878,16 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     if (!transferenciaDestinoId || !transferenciaValor) return;
     setTransferindo(true);
     try {
+      const requestBody = JSON.stringify({ cliente_destino_id: transferenciaDestinoId, valor: parseFloat(transferenciaValor) });
+      const chave = chavesFinanceiras.obter(`transferencia:${id}`, requestBody);
       const res = await fetch(`/api/clientes/${id}/saldo/transferir`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cliente_destino_id: transferenciaDestinoId,
-          valor: parseFloat(transferenciaValor),
-        }),
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chave },
+        body: requestBody,
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Erro ao transferir'); setTransferindo(false); return; }
+      chavesFinanceiras.concluir(`transferencia:${id}`, requestBody);
       setModalTransferencia(false);
       setTransferenciaDestinoId(null);
       setTransferenciaDestinoNome('');

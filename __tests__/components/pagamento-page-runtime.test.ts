@@ -424,4 +424,43 @@ describe('PagamentoPage runtime', () => {
       valor_final: 100,
     });
   });
+
+  it('permite cobrar pendência encerrada somente quando o servidor habilita', async () => {
+    const original = mockUnitFetch.getMockImplementation()!;
+    mockUnitFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      const response = await original(url, init);
+      if (url !== '/api/atendimentos/14') return response;
+      return mockJsonResponse({ ...await response.json(), status: 'finalizado', recebimento_pendente_habilitado: true });
+    });
+    render(React.createElement(PagamentoPage, { params: Promise.resolve({ id: '14' }) }));
+    await screen.findByText('Maria Souza');
+    expect(screen.getByRole('button', { name: 'Confirmar pagamento' })).toBeInTheDocument();
+    expect(screen.getByText('Você pode receber valores pendentes. O atendimento permanece encerrado.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Salvar destinos e liberar/ })).not.toBeInTheDocument();
+  });
+
+  it('repete a mesma chave após falha de rede no recebimento', async () => {
+    const original = mockUnitFetch.getMockImplementation()!;
+    let attempts = 0;
+    mockUnitFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/atendimentos/14/pagamentos' && init?.method === 'POST') {
+        if (++attempts === 1) throw new Error('Conexão interrompida');
+        return mockJsonResponse({ id: 123 }, { status: 201 });
+      }
+      return original(url, init);
+    });
+    render(React.createElement(PagamentoPage, { params: Promise.resolve({ id: '14' }) }));
+    await screen.findByText('Maria Souza');
+    const select = screen.getByRole('checkbox', { name: 'Limpeza' }) as HTMLInputElement;
+    if (!select.checked) fireEvent.click(select);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar pagamento' }));
+    await screen.findByText('Conexão interrompida');
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar pagamento' }));
+    await waitFor(() => expect(attempts).toBe(2));
+    const calls = mockUnitFetch.mock.calls.filter(([url, init]) => url === '/api/atendimentos/14/pagamentos' && init?.method === 'POST');
+    const first = calls[0][1].headers['Idempotency-Key'];
+    expect(first).toEqual(expect.any(String));
+    expect(calls[1][1].headers['Idempotency-Key']).toBe(first);
+  });
+
 });

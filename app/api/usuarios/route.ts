@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, execute } from '@/lib/db';
+import { query, batch } from '@/lib/db';
 import { Usuario } from '@/lib/types';
 import { hashPassword } from '@/lib/auth';
+import { withAuth, withRole } from '@/lib/auth/middleware';
 import { ALL_ROLES } from '@/lib/constants/roles';
 import { garantirSchemaUsuariosValorDiaria } from '@/lib/helpers/garantirUsuarioSchema';
 
 // GET /api/usuarios - Listar todos os usuários (com suas unidades e roles)
 // Params: ?unidade_id=X | ?categoria_id=X | ?role=X | ?roles=a,b
 // (filtra por roles válidas p/ a categoria ou pela(s) role(s) informada(s))
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     await garantirSchemaUsuariosValorDiaria();
     const { searchParams } = new URL(request.url);
@@ -178,10 +179,10 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 // POST /api/usuarios - Criar novo usuário
-export async function POST(request: Request) {
+export const POST = withRole(['admin'], async (request: NextRequest) => {
   try {
     await garantirSchemaUsuariosValorDiaria();
     const body = await request.json();
@@ -251,30 +252,24 @@ export async function POST(request: Request) {
     // Hash da senha padrão
     const senhaHash = await hashPassword('Sorria@123');
 
-    const result = await execute(
-      'INSERT INTO usuarios (nome, email, role, valor_diaria, senha) VALUES (?, ?, ?, ?, ?)',
-      [nome.trim(), email.toLowerCase().trim(), primariaParaColuna, valorDiariaNum, senhaHash]
-    );
-
-    const userId = result.lastInsertRowid as number;
-
-    // Atribuir unidades (se informadas, senão atribui a unidade 1)
+    const emailNormalizado = email.toLowerCase().trim();
     const idsToAssign = Array.isArray(unidade_ids) && unidade_ids.length > 0 ? unidade_ids : [1];
-    for (const uid of idsToAssign) {
-      await execute(
-        'INSERT OR IGNORE INTO usuario_unidades (usuario_id, unidade_id) VALUES (?, ?)',
-        [userId, uid]
-      );
-    }
+    const resultados = await batch([
+      {
+        sql: 'INSERT INTO usuarios (nome, email, role, valor_diaria, senha) VALUES (?, ?, ?, ?, ?)',
+        params: [nome.trim(), emailNormalizado, primariaParaColuna, valorDiariaNum, senhaHash],
+      },
+      ...idsToAssign.map((uid: number) => ({
+        sql: 'INSERT OR IGNORE INTO usuario_unidades (usuario_id, unidade_id) VALUES ((SELECT id FROM usuarios WHERE email = ?), ?)',
+        params: [emailNormalizado, uid],
+      })),
+      ...rolesEfetivas.map((r) => ({
+        sql: 'INSERT OR IGNORE INTO usuario_roles (usuario_id, role) VALUES ((SELECT id FROM usuarios WHERE email = ?), ?)',
+        params: [emailNormalizado, r],
+      })),
+    ]);
 
-    // Atribuir todas as roles efetivas (M2M)
-    for (const r of rolesEfetivas) {
-      await execute(
-        'INSERT OR IGNORE INTO usuario_roles (usuario_id, role) VALUES (?, ?)',
-        [userId, r]
-      );
-    }
-
+    const userId = resultados[0].meta?.last_row_id;
     const novoUsuario = await query<Usuario>(
       'SELECT id, nome, email, role, valor_diaria, ativo, created_at FROM usuarios WHERE id = ?',
       [userId]
@@ -292,4 +287,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-}
+});
