@@ -3,4 +3,3 @@ export interface EtapaModeloFinanceiro {
   nome: string;
   valor: number | null;
 }
-

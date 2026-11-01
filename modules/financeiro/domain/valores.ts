@@ -118,4 +118,3 @@ export function obterValorEfetivoAgendamento({
 
   return Math.max(valorBase, valorPago);
 }
-

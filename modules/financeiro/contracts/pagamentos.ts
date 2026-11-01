@@ -122,4 +122,3 @@ export interface NormalizedAlocacao {
   etapa_modelo_id: number | null;
   valor: number;
 }
-

@@ -68,4 +68,3 @@ export function agruparPagamentos(
     return right - left;
   });
 }
-
