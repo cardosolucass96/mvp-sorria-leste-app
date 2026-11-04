@@ -517,7 +517,7 @@ describe('AgendaPage', () => {
     expect(await screen.findByText('Editar Agendamento')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Executor (opcional)'), { target: { value: '12' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Data', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
     fireEvent.click(screen.getByRole('button', { name: /16 de julho de 2026/ }));
     fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '10' } });
     fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '30' } });
@@ -571,7 +571,7 @@ describe('AgendaPage', () => {
 
     expect(await screen.findByText('Editar grupo de agendamentos')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Data', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
     fireEvent.click(screen.getByRole('button', { name: /18 de julho de 2026/ }));
     fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '11' } });
     fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '00' } });
@@ -635,7 +635,7 @@ describe('AgendaPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Faltou/Reagendar' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Data', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
     fireEvent.click(screen.getByRole('button', { name: /19 de julho de 2026/ }));
     fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '09' } });
     fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '00' } });
@@ -704,7 +704,7 @@ describe('AgendaPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Faltou/Reagendar' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Data', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
     fireEvent.click(screen.getByRole('button', { name: /20 de julho de 2026/ }));
     fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '15' } });
     fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '30' } });
@@ -762,7 +762,7 @@ describe('AgendaPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Faltou/Reagendar' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Data', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
     fireEvent.click(screen.getByRole('button', { name: /21 de julho de 2026/ }));
     fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '08' } });
     fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '00' } });
