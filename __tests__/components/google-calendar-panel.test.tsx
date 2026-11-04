@@ -1,0 +1,41 @@
+import React from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import GoogleCalendarPanel from '@/components/domain/GoogleCalendarPanel';
+const fetchMock = jest.fn();
+let role = 'admin';
+jest.mock('@/lib/hooks/useUnitFetch', () => ({ useUnitFetch: () => fetchMock }));
+jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ currentUnidade: 1, viewMode: 'admin',
+  hasRole: (roles: string | string[]) => (Array.isArray(roles) ? roles : [roles]).includes(role),
+}) }));
+const reply = (data: unknown, ok = true) => ({ ok, json: async () => data });
+beforeEach(() => { role = 'admin'; fetchMock.mockReset(); });
+test('disconnected unit offers connection without exposing credentials', async () => {
+  fetchMock.mockResolvedValue(reply({ connected: false }));
+  render(<GoogleCalendarPanel />);
+  expect(await screen.findByRole('button', { name: 'Conectar Google' })).toBeVisible();
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/integracoes/google'));
+  expect(screen.queryByText(/client.secret/i)).not.toBeInTheDocument();
+});
+test('dentist cannot see the unit-wide external calendar or trigger requests', () => {
+  role = 'executor';
+  render(<GoogleCalendarPanel />);
+  expect(screen.queryByRole('region', { name: 'Integração Google Agenda' })).not.toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+test('connected unit displays conflicts and schedules retry', async () => {
+  fetchMock.mockImplementation(async (url: string) => reply(url.endsWith('/sync') ? { ok: true } : {
+    connected: true, email: 'agenda@example.test', status: 'connected', pending: 2,
+    conflicts: [{ agendamento_id: 7, conflict: 'Alterado nos dois sistemas' }],
+  }));
+  render(<GoogleCalendarPanel />);
+  expect(await screen.findByText(/Agendamento #7/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Sincronizar agora' }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/integracoes/google/sync', expect.objectContaining({ method: 'POST' })));
+  expect(await screen.findByText('Sincronização solicitada.')).toBeVisible();
+});
+test('failed connection read shows explicit unavailability', async () => {
+  fetchMock.mockResolvedValue(reply({ error: 'Unavailable' }, false));
+  render(<GoogleCalendarPanel />);
+  expect(await screen.findByText('Google Agenda ainda não está disponível neste ambiente.')).toBeVisible();
+});

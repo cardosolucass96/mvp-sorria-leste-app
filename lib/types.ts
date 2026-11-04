@@ -379,6 +379,7 @@ export interface ItemAtendimentoCompleto extends ItemAtendimento {
 }
 
 export interface Agendamento {
+  duracao_minutos?: number | null;
   id: number;
   cliente_id: number;
   atendimento_origem_id: number;

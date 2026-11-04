@@ -29,6 +29,8 @@ const PUBLIC_API_PATHS = new Set([
   '/api/auth/login',
   '/api/auth/dev-login',
   '/api/webhooks/autentique',
+  '/api/integracoes/google/callback',
+  '/api/integracoes/google/webhook',
 ]);
 
 export const config = {

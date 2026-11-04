@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, UserCheck, UserX, MessageCircle, CalendarClock, X, Plus, FileText, List, CalendarDays, Pencil } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import GoogleCalendarPanel from '@/components/domain/GoogleCalendarPanel';
 import LoadingState from '@/components/ui/LoadingState';
 import Spinner from '@/components/ui/Spinner';
 import Alert from '@/components/ui/Alert';
@@ -49,6 +50,7 @@ import {
 import { addDaysToClinicDateKey, getClinicDateKey } from '@/lib/time';
 
 interface Agendamento {
+  duracao_minutos?: number | null;
   id: number;
   cliente_id: number;
   atendimento_origem_id: number | null;
@@ -452,6 +454,8 @@ export default function AgendaPage() {
   const [novoEtapaLabel, setNovoEtapaLabel] = useState('');
   const [novoExecId, setNovoExecId] = useState('');
   const [novoData, setNovoData] = useState('');
+  const [novoDuracao, setNovoDuracao] = useState('');
+  const [editarDuracao, setEditarDuracao] = useState('');
   const [novoObs, setNovoObs] = useState('');
   const [novoSalvando, setNovoSalvando] = useState(false);
   const [novoError, setNovoError] = useState('');
@@ -641,6 +645,7 @@ export default function AgendaPage() {
     setNovoEtapaLabel(options.etapaLabel ?? '');
     setNovoExecId('');
     setNovoData('');
+    setNovoDuracao('');
     setNovoObs('');
     // Carrega procedimentos e profissionais da agenda
     if (novoProcedimentos.length === 0) {
@@ -794,6 +799,7 @@ export default function AgendaPage() {
   const abrirEditarAgendamento = useCallback(async (agendamento: Agendamento) => {
     if (!canManageAgenda || !isAgendamentoAtivo(agendamento.status)) return;
     await carregarProfissionaisAgenda();
+    setEditarDuracao(agendamento.duracao_minutos ? String(agendamento.duracao_minutos) : '');
     setEditarAgendamentoDialog({
       isOpen: true,
       agendamento,
@@ -883,6 +889,7 @@ export default function AgendaPage() {
         data_agendada: novoData || null,
         observacoes: novoObs || null,
       };
+      if (novoDuracao) body.duracao_minutos = Number(novoDuracao);
       if (novoTipo === 'avaliacao') {
         body.tipo = 'avaliacao';
       } else {
@@ -923,6 +930,7 @@ export default function AgendaPage() {
     if (!agendamento) return;
 
     const body: Record<string, unknown> = {};
+    if (editarDuracao !== (agendamento.duracao_minutos ? String(agendamento.duracao_minutos) : '')) body.duracao_minutos = editarDuracao ? Number(editarDuracao) : null;
     const executorAtual = agendamento.executor_id ? String(agendamento.executor_id) : '';
     const dataAtual = toDateTimeLocal(agendamento.data_agendada);
     const observacoesAtuais = agendamento.observacoes ?? '';
@@ -1664,6 +1672,8 @@ export default function AgendaPage() {
         }
       />
 
+      <GoogleCalendarPanel key={currentUnidade} />
+
       {/* Filtros */}
       <div className="card">
         <form onSubmit={handleBuscar} className="flex gap-4 items-end flex-wrap">
@@ -2100,6 +2110,8 @@ export default function AgendaPage() {
             />
           </div>
 
+          <div className="mt-4"><Input label="Duração (minutos)" name="editar_duracao" type="number" min={5} max={480} value={editarDuracao} onChange={setEditarDuracao} hint="Em branco: duração padrão da unidade (30 min se não configurada)." /></div>
+
           <div className="mt-4">
             <Textarea
               label="Observações (opcional)"
@@ -2437,6 +2449,8 @@ export default function AgendaPage() {
               onChange={setNovoData}
               min={getDateTimeLocalMinValue()}
             />
+
+            <Input label="Duração (minutos)" name="duracao_minutos" type="number" min={5} max={480} value={novoDuracao} onChange={setNovoDuracao} hint="Em branco: duração padrão da unidade (30 min se não configurada)." />
 
             <Textarea
               label="Observações (opcional)"

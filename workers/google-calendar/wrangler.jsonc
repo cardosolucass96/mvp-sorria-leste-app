@@ -1,0 +1,19 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "sorria-leste-google-calendar",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "vars": {
+    "GOOGLE_CALENDAR_ENABLED": "false",
+    "GOOGLE_APP_BASE_URL": "https://app.sorrialeste.com.br"
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "sorria-leste-db", "database_id": "1a32c7e9-c5e7-4c53-89f0-3169d2ba7e4f" }],
+  "queues": {
+    "producers": [{ "binding": "CALENDAR_QUEUE", "queue": "sorria-leste-google-calendar" }],
+    "consumers": [{ "queue": "sorria-leste-google-calendar", "max_batch_size": 1, "max_retries": 5, "dead_letter_queue": "sorria-leste-google-calendar-dlq" }]
+  },
+  "triggers": { "crons": ["* * * * *"] }
+}

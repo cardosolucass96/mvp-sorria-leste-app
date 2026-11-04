@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { duration } from '@/modules/google-calendar/server/mapping';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { AgendamentoCompleto } from '@/lib/types';
@@ -13,6 +14,7 @@ import {
 } from '@/lib/auth/patientPrivacy';
 
 interface CriarAgendamentoBody {
+  duracao_minutos?: number | null;
   cliente_id?: number;
   atendimento_origem_id?: number | null;
   procedimento_id?: number | null;
@@ -195,6 +197,9 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     }
 
     const body = await request.json() as CriarAgendamentoBody;
+    if (body.duracao_minutos != null && !duration(body.duracao_minutos)) {
+      return NextResponse.json({ error: 'Duração deve ser um inteiro entre 5 e 480 minutos' }, { status: 400 });
+    }
     const {
       cliente_id,
       item_atendimento_origem_id,
@@ -374,8 +379,8 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     const result = await execute(
       `INSERT INTO agendamentos
-        (cliente_id, atendimento_origem_id, procedimento_id, item_atendimento_origem_id, executor_id, tipo, data_agendada, status, observacoes, reagendado_de_id, etapa_modelo_id, pago, valor, valor_pago, unidade_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (cliente_id, atendimento_origem_id, procedimento_id, item_atendimento_origem_id, executor_id, tipo, data_agendada, status, observacoes, reagendado_de_id, etapa_modelo_id, pago, valor, valor_pago, unidade_id, duracao_minutos)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         cliente_id,
         atendimento_origem_id || null,
@@ -392,6 +397,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
         valorAgendamento,
         valorPagoAgendamento,
         context.unidadeId,
+        body.duracao_minutos ?? null,
       ]
     );
 

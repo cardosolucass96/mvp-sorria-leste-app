@@ -47,7 +47,13 @@
     "migrate:refactor": "node scripts/migrate-financeiro-refactor.mjs apply",
     "creditos:refactor": "node scripts/migrate-financeiro-refactor.mjs",
     "test:access": "jest --runInBand --runTestsByPath __tests__/integration/acessos-e-gravacoes.test.ts __tests__/integration/agenda-atomicidade.test.ts __tests__/api/usuarios/crud.test.ts __tests__/api/usuarios/validacoes.test.ts __tests__/api/arquivos/proxy.test.ts __tests__/api/execucao/anexos.test.ts __tests__/api/atendimentos/selecionar-hoje.test.ts __tests__/api/agendamentos/crud.test.ts __tests__/security/file-traversal.test.ts __tests__/api/auth/middleware.test.ts",
-    "lint:access": "eslint app/api/usuarios app/api/arquivos app/api/clientes/\\[id\\]/anexos app/api/execucao/item/\\[id\\]/anexos app/api/agendamentos/\\[id\\]/chegou app/api/atendimentos/\\[id\\]/selecionar-hoje lib/auth/attachmentAccess.ts"
+    "lint:access": "eslint app/api/usuarios app/api/arquivos app/api/clientes/\\[id\\]/anexos app/api/execucao/item/\\[id\\]/anexos app/api/agendamentos/\\[id\\]/chegou app/api/atendimentos/\\[id\\]/selecionar-hoje lib/auth/attachmentAccess.ts",
+    "google:secrets:prepare": "node scripts/prepare-google-calendar-secrets.mjs",
+    "google:worker:types": "wrangler types --config workers/google-calendar/wrangler.jsonc --env-interface Env workers/google-calendar/worker-configuration.d.ts",
+    "google:worker:typecheck": "tsc -p workers/google-calendar/tsconfig.json",
+    "google:worker:dry-run": "wrangler deploy --dry-run --config workers/google-calendar/wrangler.jsonc",
+    "google:worker:deploy": "wrangler deploy --config workers/google-calendar/wrangler.jsonc",
+    "test:google-calendar": "jest --config jest.node.config.js --runInBand --runTestsByPath __tests__/integration/google-calendar.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

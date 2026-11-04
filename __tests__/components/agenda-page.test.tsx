@@ -158,7 +158,8 @@ function makeAgendamento(overrides: Record<string, unknown> = {}) {
 }
 
 function getLastUnitFetchUrl(): string {
-  const lastCall = mockUnitFetch.mock.calls[mockUnitFetch.mock.calls.length - 1];
+  const agendaCalls = mockUnitFetch.mock.calls.filter(([url]) => String(url).startsWith('/api/agendamentos?'));
+  const lastCall = agendaCalls[agendaCalls.length - 1];
   return String(lastCall?.[0] ?? '');
 }
 

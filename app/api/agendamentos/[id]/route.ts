@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { duration } from '@/modules/google-calendar/server/mapping';
 import { queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento, AgendamentoCompleto } from '@/lib/types';
@@ -8,6 +9,7 @@ import { clinicDateTimeInputToUtcIso } from '@/lib/time';
 import { isRestrictedDentistPatientView, redactPatientContactFields } from '@/lib/auth/patientPrivacy';
 
 interface AtualizarAgendamentoBody {
+  duracao_minutos?: number | null;
   data_agendada?: string | null;
   executor_id?: number | null;
   observacoes?: string | null;
@@ -83,6 +85,14 @@ export const PUT = withUnit(async (
 
     const updates: string[] = [];
     const params: unknown[] = [];
+
+    if (body.duracao_minutos !== undefined) {
+      if (body.duracao_minutos !== null && !duration(body.duracao_minutos)) {
+        return NextResponse.json({ error: 'Duração deve ser um inteiro entre 5 e 480 minutos' }, { status: 400 });
+      }
+      updates.push('duracao_minutos = ?');
+      params.push(body.duracao_minutos);
+    }
 
     // Caso: agendar/reagendar com data
     if (body.data_agendada !== undefined) {
@@ -174,9 +184,9 @@ export const PUT = withUnit(async (
       return NextResponse.json({ error: 'Nenhum campo para atualizar' }, { status: 400 });
     }
 
-    params.push(agendamentoId);
+    params.push(agendamentoId, context.unidadeId);
     await execute(
-      `UPDATE agendamentos SET ${updates.join(', ')} WHERE id = ?`,
+      `UPDATE agendamentos SET ${updates.join(', ')} WHERE id = ? AND unidade_id = ?`,
       params
     );
 
