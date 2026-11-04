@@ -25,17 +25,33 @@ test('dentist cannot see the unit-wide external calendar or trigger requests', (
 });
 test('connected unit displays conflicts and schedules retry', async () => {
   fetchMock.mockImplementation(async (url: string) => reply(url.endsWith('/sync') ? { ok: true } : {
-    connected: true, email: 'agenda@example.test', status: 'connected', pending: 2,
+    connected: true, email: 'agenda@example.test', status: 'error', pending: 2,
     conflicts: [{ agendamento_id: 7, conflict: 'Alterado nos dois sistemas' }],
   }));
   render(<GoogleCalendarPanel />);
   expect(await screen.findByText(/Agendamento #7/)).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Sincronizar agora' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/integracoes/google/sync', expect.objectContaining({ method: 'POST' })));
-  expect(await screen.findByText('Sincronização solicitada.')).toBeVisible();
+  expect(await screen.findByText('Atualização solicitada.')).toBeVisible();
 });
 test('failed connection read shows explicit unavailability', async () => {
   fetchMock.mockResolvedValue(reply({ error: 'Unavailable' }, false));
   render(<GoogleCalendarPanel />);
   expect(await screen.findByText('Google Agenda ainda não está disponível neste ambiente.')).toBeVisible();
+});
+
+test('loads events automatically and reloads when the period changes, without manual sync controls', async () => {
+  fetchMock.mockImplementation(async (url: string) => reply(url.includes('/events?') ? { items: [] } : {
+    connected: true, email: 'agenda@example.test', status: 'connected', pending: 0,
+  }));
+  render(<GoogleCalendarPanel />);
+  await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url.includes('/events?'))).toBe(true));
+  expect(screen.queryByRole('button', { name: 'Sincronizar agora' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Buscar eventos' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Tentar novamente' })).toBeNull();
+  fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-01-01' } });
+  await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url.includes('from=2026-01-01'))).toBe(true));
+  const before = fetchMock.mock.calls.filter(([url]) => url.includes('/events?')).length;
+  fireEvent(window, new Event('focus'));
+  await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url.includes('/events?')).length).toBeGreaterThan(before));
 });

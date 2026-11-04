@@ -16,6 +16,7 @@ export default function GoogleAgendaCalendario<T extends CalendarAppointment>(pr
   const unitFetch = useUnitFetch();
   const window = googleWindow(props.focusedDate, props.view);
   const key = `${currentUnidade}:${allowed}:${window.start}:${window.end}`;
+  const [retry, setRetry] = useState(0);
   const [result, setResult] = useState<{ key: string; items: ExternalEvent[]; warning: string }>({ key: '', items: [], warning: '' });
   useEffect(() => {
     if (!allowed) return;
@@ -37,13 +38,15 @@ export default function GoogleAgendaCalendario<T extends CalendarAppointment>(pr
     }
     void load();
     const timer = setInterval(() => { if (!document.hidden) void load(); }, 30000);
-    return () => { active = false; clearInterval(timer); };
-  }, [allowed, key, unitFetch, window.start, window.end]);
+    const onFocus = () => { if (!document.hidden) void load(); };
+    globalThis.window.addEventListener('focus', onFocus);
+    return () => { active = false; clearInterval(timer); globalThis.window.removeEventListener('focus', onFocus); };
+  }, [allowed, key, unitFetch, window.start, window.end, retry]);
   const items = allowed && result.key === key ? result.items : [];
   const day = props.selectedDay ? formatAgendaDateKey(props.selectedDay) : null;
   const selected = items.filter(event => externalEventDays(event, props.focusedDate, props.view).some(entry => entry.dateKey === day));
   return <div className="space-y-3">
-    {allowed && result.key === key && result.warning && <p role="status" className="text-sm text-muted-foreground">{result.warning}</p>}
+    {allowed && result.key === key && result.warning && <p role="status" className="text-sm text-muted-foreground">{result.warning} <button type="button" className="underline" onClick={() => setRetry(value => value + 1)}>Tentar novamente</button></p>}
     <AgendaCalendario {...props} externalEvents={items} />
     {selected.length > 0 && <section className="card space-y-2" aria-label="Eventos do Google no dia selecionado">
       <h3 className="font-semibold">Google Agenda · dia selecionado</h3>
