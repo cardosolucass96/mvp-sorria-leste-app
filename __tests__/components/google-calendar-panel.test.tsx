@@ -42,22 +42,13 @@ test('failed connection read shows explicit unavailability', async () => {
   expect(await screen.findByText('Google Agenda ainda não está disponível neste ambiente.')).toBeVisible();
 });
 
-test('loads events automatically and reloads when the period changes, without manual sync controls', async () => {
+test('connection panel does not display a separate external event list or date filters', async () => {
   fetchMock.mockImplementation(async (url: string) => reply(url.includes('/events?') ? { items: [] } : {
     connected: true, email: 'agenda@example.test', status: 'connected', pending: 0,
   }));
   render(<GoogleCalendarPanel />);
-  await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url.includes('/events?'))).toBe(true));
-  expect(screen.queryByRole('button', { name: 'Sincronizar agora' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Buscar eventos' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Tentar novamente' })).toBeNull();
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Fortaleza' });
-  fireEvent.change(screen.getByLabelText('Até'), { target: { value: today } });
-  await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url.includes('to=' + today))).toBe(true));
-  const before = fetchMock.mock.calls.filter(([url]) => url.includes('/events?')).length;
-  const now = Date.now();
-  const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 16000);
-  fireEvent(window, new Event('focus'));
-  await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url.includes('/events?')).length).toBeGreaterThan(before));
-  clock.mockRestore();
+  expect(await screen.findByText(/agenda@example.test/)).toBeVisible();
+  expect(screen.queryByText('Eventos externos do Google')).toBeNull();
+  expect(screen.queryByLabelText('De')).toBeNull();
+  expect(screen.queryByLabelText('Até')).toBeNull();
 });

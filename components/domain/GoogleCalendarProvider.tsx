@@ -19,14 +19,14 @@ export function useGoogleCalendarData() {
   return context;
 }
 
-export default function GoogleCalendarProvider({ children, calendarRange }: { children: ReactNode; calendarRange?: Range }) {
+export default function GoogleCalendarProvider({ children, calendarRange, eventsEnabled = true }: { children: ReactNode; calendarRange?: Range; eventsEnabled?: boolean }) {
   const { currentUnidade, user, hasRole, viewMode } = useAuth();
   const allowed = hasRole(['admin', 'atendente']) && viewMode !== 'dentista';
   const unitFetch = useUnitFetch();
   const [listRange, setRange] = useState<Range>(() => ({ start: formatAgendaDateKey(new Date()), end: formatAgendaDateKey(new Date(Date.now() + 30 * 86400000)) }));
   const range = calendarRange ?? listRange;
   const scope = `${user?.id ?? ''}:${currentUnidade}:${allowed}:${viewMode}`;
-  const key = `${scope}:${range.start}:${range.end}`;
+  const key = `${scope}:${eventsEnabled}:${range.start}:${range.end}`;
   const [result, setResult] = useState<{ key: string; data: Data; loading: boolean }>({ key: '', data: empty, loading: false });
   const control = useRef<(force?: boolean) => Promise<void>>(async () => {});
   const cache = useRef(new Map<string, { at: number; data: Data }>());
@@ -57,6 +57,8 @@ export default function GoogleCalendarProvider({ children, calendarRange }: { ch
         latest = { ...latest, status, error: '' };
         if (!status.connected || status.status === 'disconnecting' || status.status === 'reconnect') {
           latest = { ...empty, status }; cache.current.clear();
+        } else if (!eventsEnabled) {
+          latest = { ...empty, status };
         } else if (!valid) {
           latest = { ...latest, items: [], warning: 'Selecione um período válido de até 93 dias.', stale: false };
         } else {
@@ -105,7 +107,7 @@ export default function GoogleCalendarProvider({ children, calendarRange }: { ch
     window.addEventListener('focus', visible);
     document.addEventListener('visibilitychange', visible);
     return () => { active = false; clearInterval(timer); window.removeEventListener('focus', visible); document.removeEventListener('visibilitychange', visible); };
-  }, [allowed, scope, key, range.start, range.end, unitFetch]);
+  }, [allowed, scope, key, range.start, range.end, unitFetch, eventsEnabled]);
 
   return <Context.Provider value={{ data: allowed && result.key === key ? result.data : empty,
     loading: allowed && (result.key !== key || result.loading), range, setRange, calendarMode: Boolean(calendarRange), refresh }}>{children}</Context.Provider>;

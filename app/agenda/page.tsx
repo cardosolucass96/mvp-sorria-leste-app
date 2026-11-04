@@ -1648,7 +1648,7 @@ export default function AgendaPage() {
   if (loading && !hasLoadedAgendamentos) return <LoadingState text="Carregando agenda..." />;
 
   return (
-    <GoogleCalendarProvider calendarRange={viewMode === 'calendario' ? googleWindow(focusedDate, calendarSubview) : undefined}>
+    <GoogleCalendarProvider eventsEnabled={viewMode === 'calendario'} calendarRange={viewMode === 'calendario' ? googleWindow(focusedDate, calendarSubview) : undefined}>
     <div className="space-y-6">
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 

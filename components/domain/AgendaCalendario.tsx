@@ -128,7 +128,7 @@ function formatDayHeader(date: Date): string {
 
 function renderEventLabel<T extends AgendamentoMinimal>(group: AgendaEventGroup<T>): string {
   if (!group.hasExplicitTime) {
-    return group.firstName;
+    return group.statusDom === 'google' ? `Dia inteiro · ${group.firstName}` : group.firstName;
   }
 
   return `${group.timeLabel} ${group.firstName}`;
@@ -431,7 +431,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                             getStatusStyle(group.statusDom)
                           )}
                         >
-                          <span className="truncate">{renderEventLabel(group)}</span>
+                          <span className="truncate" title={renderEventLabel(group)}>{renderEventLabel(group)}</span>
                           {group.total > 1 ? (
                             <span className="shrink-0 rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-semibold">
                               +{group.total - 1}
@@ -499,7 +499,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                                   onSelectDay(date);
                                 }}
                               >
-                                <span className="truncate">{group.firstName}</span>
+                                <span className="truncate" title={renderEventLabel(group)}>{group.hasExplicitTime ? group.firstName : renderEventLabel(group)}</span>
                                 {group.total > 1 ? (
                                   <span className="shrink-0 rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-semibold">
                                     {group.total}
@@ -581,7 +581,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
                                   }}
                                 >
                                   <span className="shrink-0 font-semibold">{group.timeLabel}</span>
-                                  <span className="truncate">{group.firstName}</span>
+                                  <span className="truncate" title={renderEventLabel(group)}>{group.hasExplicitTime ? group.firstName : renderEventLabel(group)}</span>
                                   {group.total > 1 ? (
                                     <span className="shrink-0 rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-semibold">
                                       {group.total}

@@ -1,7 +1,8 @@
 'use client';
 import { useGoogleCalendarData } from './GoogleCalendarProvider';
-import { externalEventDays } from '@/modules/google-calendar/calendar-display';
+import { externalEventDays, externalEventTime } from '@/modules/google-calendar/calendar-display';
 import { formatAgendaDateKey } from '@/lib/utils/agendaCalendar';
+import GoogleEventLink from './GoogleEventLink';
 import AgendaCalendario, { type AgendaCalendarioProps } from './AgendaCalendario';
 
 type CalendarAppointment = {
@@ -18,8 +19,10 @@ export default function GoogleAgendaCalendario<T extends CalendarAppointment>(pr
     <AgendaCalendario {...props} externalEvents={items} />
     {selected.length > 0 && <section className="card space-y-2" aria-label="Eventos do Google no dia selecionado">
       <h3 className="font-semibold">Google Agenda · dia selecionado</h3>
-      <p className="text-sm text-muted-foreground">Eventos externos. Para alterar, use o Google Agenda. Para associar a uma consulta, use o painel Google Agenda acima.</p>
-      {selected.map(event => <div key={event.event_id} className="text-sm"><strong>{event.summary}</strong> · {event.all_day ? 'Dia inteiro' : externalEventDays(event, props.focusedDate, props.view).find(entry => entry.dateKey === day)?.time}</div>)}
+      {selected.map(event => <div key={event.event_id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 py-2 last:border-0">
+        <div><p className="text-sm font-medium">{event.summary}</p><p className="text-sm text-muted-foreground">{externalEventTime(event)}</p></div>
+        {!event.all_day && !event.recurring && <GoogleEventLink event={event} />}
+      </div>)}
     </section>}
   </div>;
 }

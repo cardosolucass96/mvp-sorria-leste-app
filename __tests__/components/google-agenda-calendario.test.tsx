@@ -29,7 +29,9 @@ test.each(['mes', 'semana'] as const)('merges native and Google events in %s wit
   expect(screen.getByText(/Paciente/)).toBeVisible();
   const details = screen.getByRole('region', { name: 'Eventos do Google no dia selecionado' });
   expect(within(details).getByText('Reunião da equipe')).toBeVisible();
-  expect(within(details).queryByRole('button')).toBeNull();
+  expect(within(details).getByText('09:00–10:00')).toBeVisible();
+  expect(within(details).getByRole('button', { name: 'Confirmar vínculo' })).toBeDisabled();
+  expect(within(details).queryByRole('button', { name: 'Chegou' })).toBeNull();
 });
 test('unit switch clears old events immediately and ignores delayed response', async () => {
   let finish!: (value: unknown) => void;
@@ -60,5 +62,14 @@ test('all-day end date is exclusive and overnight events occupy both clinic days
   const days = externalEventDays({ ...event, all_day: 1, start_at: '2030-01-10', end_at: '2030-01-12' }, props.focusedDate, 'mes');
   expect(days.map(day => day.dateKey)).toEqual(['2030-01-10', '2030-01-11']);
   const overnight = externalEventDays({ ...event, start_at: '2030-01-11T02:00:00Z', end_at: '2030-01-11T04:00:00Z' }, props.focusedDate, 'semana');
-  expect(overnight.map(day => [day.dateKey, day.time])).toEqual([['2030-01-10', '23:00'], ['2030-01-11', '00:00']]);
+  expect(overnight.map(day => [day.dateKey, day.time])).toEqual([['2030-01-10', '23:00–24:00'], ['2030-01-11', '00:00–01:00']]);
+});
+
+test.each(['mes', 'semana'] as const)('labels all-day Google events explicitly in %s', async view => {
+  fetchMock.mockResolvedValue(reply([{ ...event, summary: 'Feriado', all_day: 1, start_at: '2030-01-10', end_at: '2030-01-11' }]));
+  render(<GoogleAgendaCalendario {...props} view={view} />);
+  expect(await screen.findByText('Dia inteiro · Google · Feriado')).toBeVisible();
+  const details = screen.getByRole('region', { name: 'Eventos do Google no dia selecionado' });
+  expect(within(details).getByText('Dia inteiro')).toBeVisible();
+  expect(within(details).queryByText('Vincular a consulta')).toBeNull();
 });
