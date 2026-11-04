@@ -458,7 +458,7 @@ test('Google title identifies the unit while location is explicitly cleared', as
   db.sqlite.exec("UPDATE unidades SET nome='Barra do Ceará',endereco='Av. Pres. Castelo Branco, 5185 - Lj 05' WHERE id=1");
   const loaded = await loadAppointment(getDb(), 1, 1);
   const payload = toGoogle(loaded!, connection(), 'remote', config.baseUrl);
-  expect(payload.summary).toBe('Sorria Leste • Barra do Ceará • Paciente');
+  expect(payload.summary).toBe('Barra do Ceará • Paciente');
   expect(payload.location).toBe('');
   expect(await loadAppointment(getDb(), 1, 2)).toBeNull();
 

@@ -33,7 +33,7 @@ export function toGoogle(event: Appointment, connection: GoogleConnection, event
   ].filter(Boolean);
   const description = [`Agendamento #${event.id}\n${baseUrl}/agenda`, ...details].join('\n\n');
   return {
-    id: eventId, summary: `Sorria Leste • ${unit} • ${event.cliente_nome}`,
+    id: eventId, summary: `${unit} • ${event.cliente_nome}`,
     location: '',
     status: 'confirmed',
     description,
