@@ -4,7 +4,7 @@ import { CalendarRequestError, endpoint, getDb } from '@/modules/google-calendar
 import { duration } from '@/modules/google-calendar/server/mapping';
 export const GET = withUnitRole(['admin', 'atendente'], async (_request, context) => endpoint(async () => {
   const db = getDb();
-  const row = await db.prepare(`SELECT id,email,status,last_sync_at,last_error,default_duration FROM google_calendar_connections WHERE unidade_id=?`)
+  const row = await db.prepare(`SELECT id,email,status,last_sync_at,last_error,default_duration,calendar_id,calendar_name FROM google_calendar_connections WHERE unidade_id=?`)
     .bind(context.unidadeId).first<{ id: string }>();
   if (!row) return NextResponse.json({ connected: false });
   const pending = await db.prepare('SELECT COUNT(DISTINCT agendamento_id) AS total FROM google_calendar_outbox WHERE connection_id=?').bind(row.id).first<{ total: number }>();

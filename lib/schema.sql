@@ -672,6 +672,7 @@ CREATE TABLE IF NOT EXISTS google_calendar_connections (
   google_subject TEXT NOT NULL,
   email TEXT NOT NULL,
   calendar_id TEXT NOT NULL,
+  calendar_name TEXT NOT NULL DEFAULT 'Agenda principal',
   refresh_token TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'connected' CHECK(status IN ('connected','error','reconnect','disconnecting')),
   default_duration INTEGER NOT NULL DEFAULT 30 CHECK(default_duration BETWEEN 5 AND 480),
@@ -761,6 +762,7 @@ CREATE TABLE IF NOT EXISTS google_calendar_archives (
   google_subject TEXT NOT NULL,
   connection_id TEXT NOT NULL,
   calendar_id TEXT NOT NULL,
+  calendar_name TEXT NOT NULL DEFAULT 'Agenda principal',
   default_duration INTEGER NOT NULL,
   links TEXT NOT NULL,
   PRIMARY KEY(unidade_id,google_subject)
@@ -773,4 +775,17 @@ BEGIN
   SELECT l.connection_id,l.agendamento_id FROM google_calendar_links l
   JOIN google_calendar_connections c ON c.id=l.connection_id
   WHERE c.unidade_id=NEW.id AND c.status!='disconnecting';
+END;
+
+CREATE TABLE IF NOT EXISTS google_calendar_saved_calendars (
+  unidade_id INTEGER NOT NULL REFERENCES unidades(id),
+  google_subject TEXT NOT NULL,
+  calendar_id TEXT NOT NULL,
+  links TEXT NOT NULL,
+  PRIMARY KEY(unidade_id,google_subject,calendar_id)
+);
+CREATE TRIGGER IF NOT EXISTS google_calendar_switch_pending BEFORE UPDATE OF calendar_id ON google_calendar_connections
+WHEN NEW.calendar_id!=OLD.calendar_id AND EXISTS(SELECT 1 FROM google_calendar_outbox WHERE connection_id=OLD.id)
+BEGIN
+  SELECT RAISE(ABORT, 'calendar_sync_pending');
 END;

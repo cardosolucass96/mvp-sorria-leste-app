@@ -467,3 +467,58 @@ test('unit address changes enqueue only its existing mirrored appointments', () 
   db.sqlite.exec("UPDATE unidades SET endereco='Endereço atualizado' WHERE id=1");
   expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(1);
 });
+
+test('calendar list follows pagination and includes only writable calendars', async () => {
+  const { calendarChoices } = await import('@/modules/google-calendar/server/calendars');
+  fetchMock.mockResolvedValueOnce(response({ access_token: 'access' }))
+    .mockResolvedValueOnce(response({ items: [{ id: 'email', summary: 'Principal', primary: true, accessRole: 'owner' }, { id: 'readonly', accessRole: 'reader' }], nextPageToken: 'second' }))
+    .mockResolvedValueOnce(response({ items: [{ id: 'alanna', summary: 'Agenda Alanna', accessRole: 'writer' }] }));
+  expect((await calendarChoices(config, connection())).items).toEqual([{ id: 'primary', name: 'Principal' }, { id: 'alanna', name: 'Agenda Alanna' }]);
+  expect(fetchMock.mock.calls[2][0]).toContain('pageToken=second');
+});
+test('switch calendar preserves events, resets cursors and restores links when switching back', async () => {
+  const { selectCalendar } = await import('@/modules/google-calendar/server/calendars');
+  createAppointment(); mirror();
+  db.sqlite.exec("UPDATE google_calendar_connections SET sync_token='old',sync_page_token='page'");
+  fetchMock.mockImplementation(async (url: string) => {
+    if (url.includes('oauth2.googleapis.com')) return response({ access_token: 'access' });
+    if (url.includes('calendarList')) return response({ items: [{ id: 'calendar@example.test', summary: 'Anterior', accessRole: 'writer' }, { id: 'alanna', summary: 'Alanna', accessRole: 'owner' }] });
+    return response(null, 204);
+  });
+  await selectCalendar(getDb(), config, 1, 'alanna');
+  expect(connection()).toMatchObject({ calendar_id: 'alanna', calendar_name: 'Alanna', sync_token: null, sync_page_token: null, sync_requested: 1 });
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_links').n).toBe(0);
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_channels').n).toBe(0);
+  expect(row('SELECT COUNT(*) AS n FROM agendamentos').n).toBe(1);
+  expect(fetchMock.mock.calls.some(call => call[1]?.method === 'DELETE')).toBe(false);
+  await selectCalendar(getDb(), config, 1, 'calendar@example.test');
+  expect(row('SELECT event_id FROM google_calendar_links').event_id).toBe('remote');
+});
+test.each(['pending', 'concurrent', 'readonly'])('calendar selection rejects %s without losing existing links', async kind => {
+  const { selectCalendar } = await import('@/modules/google-calendar/server/calendars');
+  createAppointment(); mirror();
+  if (kind === 'pending') db.sqlite.exec("UPDATE agendamentos SET data_agendada='2030-01-11T12:00:00Z'");
+  fetchMock.mockImplementation(async (url: string) => {
+    if (url.includes('oauth2.googleapis.com')) return response({ access_token: 'access' });
+    if (url.includes('calendarList')) return response({ items: [{ id: 'other', summary: 'Other', accessRole: kind === 'readonly' ? 'reader' : 'owner' }] });
+    if (kind === 'concurrent') db.sqlite.exec("UPDATE agendamentos SET data_agendada='2030-01-11T12:00:00Z'");
+    return response(null, 204);
+  });
+  await expect(selectCalendar(getDb(), config, 1, 'other')).rejects.toThrow();
+  expect(connection().calendar_id).toBe('calendar@example.test');
+  expect(row('SELECT event_id FROM google_calendar_links').event_id).toBe('remote');
+});
+test('old OAuth permission gives actionable reconnect error', async () => {
+  const { calendarChoices } = await import('@/modules/google-calendar/server/calendars');
+  fetchMock.mockResolvedValueOnce(response({ access_token: 'access' })).mockResolvedValueOnce(response({}, 403));
+  await expect(calendarChoices(config, connection())).rejects.toThrow('Reconecte o Google');
+});
+
+test('calendar selection routes deny non-admin and do not access another unit connection', async () => {
+  const { GET, PATCH } = await import('@/app/api/integracoes/google/calendars/route');
+  expect((await callRoute(GET, '/api/integracoes/google/calendars', { headers: { 'X-Unidade-Id': '2' } })).status).toBe(409);
+  expect(fetchMock).not.toHaveBeenCalled();
+  jest.mocked(verifyToken).mockResolvedValue({ sub: 1, nome: 'Atendente', email: 'staff@example.test', role: 'atendente', roles: ['atendente'], iat: 0, exp: 4102444800, unidade_ids: [1], unidade_atual: 1 });
+  expect((await callRoute(GET, '/api/integracoes/google/calendars')).status).toBe(403);
+  expect((await callRoute(PATCH, '/api/integracoes/google/calendars', { method: 'PATCH', body: { calendar_id: 'other' } })).status).toBe(403);
+});

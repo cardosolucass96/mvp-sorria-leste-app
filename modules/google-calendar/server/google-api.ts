@@ -1,6 +1,7 @@
 import type { GoogleEvent } from '../contracts';
 export const EVENT_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
-export const SCOPES = `openid email ${EVENT_SCOPE}`;
+export const CALENDAR_LIST_SCOPE = 'https://www.googleapis.com/auth/calendar.calendarlist.readonly';
+export const SCOPES = `openid email ${EVENT_SCOPE} ${CALENDAR_LIST_SCOPE}`;
 export class GoogleFailure extends Error {
   constructor(public status: number, public reconnect = false) {
     super(reconnect ? 'Reconecte a conta Google.' : `Falha na comunicação com o Google (${status}).`);

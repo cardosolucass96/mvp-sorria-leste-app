@@ -55,9 +55,9 @@ async function recoverWrite(db: D1Database, connection: GoogleConnection, link: 
 async function archiveConnection(db: D1Database, connection: GoogleConnection, owner: string) {
   const links = await db.prepare('SELECT * FROM google_calendar_links WHERE connection_id=?').bind(connection.id).all<EventLink>();
   await db.batch([
-    db.prepare(`INSERT INTO google_calendar_archives(unidade_id,google_subject,connection_id,calendar_id,default_duration,links)
-      SELECT unidade_id,google_subject,id,calendar_id,default_duration,? FROM google_calendar_connections WHERE id=? AND lease_owner=?
-      ON CONFLICT(unidade_id,google_subject) DO UPDATE SET connection_id=excluded.connection_id,calendar_id=excluded.calendar_id,
+    db.prepare(`INSERT INTO google_calendar_archives(unidade_id,google_subject,connection_id,calendar_id,calendar_name,default_duration,links)
+      SELECT unidade_id,google_subject,id,calendar_id,calendar_name,default_duration,? FROM google_calendar_connections WHERE id=? AND lease_owner=?
+      ON CONFLICT(unidade_id,google_subject) DO UPDATE SET connection_id=excluded.connection_id,calendar_id=excluded.calendar_id,calendar_name=excluded.calendar_name,
       default_duration=excluded.default_duration,links=excluded.links`).bind(JSON.stringify(links.results), connection.id, owner),
     db.prepare('DELETE FROM google_calendar_connections WHERE id=? AND lease_owner=?').bind(connection.id, owner),
   ]);

@@ -17,6 +17,7 @@ export interface GoogleConnection {
   google_subject: string;
   email: string;
   calendar_id: string;
+  calendar_name?: string;
   refresh_token: string;
   status: 'connected' | 'error' | 'reconnect' | 'disconnecting';
   default_duration: number;
@@ -51,6 +52,8 @@ export interface EventLink {
   conflict: string | null;
 }
 export interface ConnectionStatus {
+  calendar_id?: string;
+  calendar_name?: string;
   connected: boolean;
   email?: string;
   status?: string;

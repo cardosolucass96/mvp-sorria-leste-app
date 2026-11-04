@@ -6,6 +6,7 @@ import { useGoogleCalendarData } from './GoogleCalendarProvider';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import { formatarDataAgendada } from '@/lib/utils/formatters';
 
 export default function GoogleCalendarPanel() {
@@ -18,8 +19,12 @@ export default function GoogleCalendarPanel() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [calendars, setCalendars] = useState<{ value: string; label: string }[]>([]);
+  const [calendar, setCalendar] = useState('');
+  const [needsAuthorization, setNeedsAuthorization] = useState(false);
   const [minutes, setMinutes] = useState('30');
-  useEffect(() => { setError(''); setMessage(''); }, [currentUnidade]);
+  useEffect(() => { setError(''); setMessage(''); setCalendars([]); setNeedsAuthorization(false); }, [currentUnidade]);
+  useEffect(() => { setCalendar(status?.calendar_id ?? 'primary'); }, [status?.calendar_id]);
   useEffect(() => { if (status?.default_duration) setMinutes(String(status.default_duration)); }, [status?.default_duration]);
   useEffect(() => {
     if (!allowed) return;
@@ -45,10 +50,11 @@ export default function GoogleCalendarPanel() {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="font-semibold">Google Agenda</h2>
         <p className="text-sm text-muted-foreground">{status?.connected ? `${status.email} · ${status.status === 'disconnecting' ? 'Desconectando' : status.status === 'reconnect' ? 'Reconexão necessária' : status.status === 'error' ? 'Nova tentativa pendente' : 'Atualização automática'}` : 'Sincronize a agenda desta unidade com o Google.'}</p>
+        {status?.connected && <p className="text-xs text-muted-foreground">Agenda: {status.calendar_name || 'Agenda principal'}</p>}
         {status?.last_sync_at && <p className="text-xs text-muted-foreground">Última sincronização: {formatarDataAgendada(status.last_sync_at)} · Pendentes: {status.pending ?? 0}</p>}
       </div>
       <div className="flex flex-wrap gap-2">
-        {admin && (!status?.connected || status?.status === 'reconnect') && <Button disabled={busy} variant="outline" onClick={() => void act(async () => {
+        {admin && (!status?.connected || status?.status === 'reconnect' || needsAuthorization) && <Button disabled={busy} variant="outline" onClick={() => void act(async () => {
           const data = await request('/authorize'); window.location.assign(data.url);
         })}>{status?.connected ? 'Reconectar Google' : 'Conectar Google'}</Button>}
         {(status?.status === 'error' || error || data.error || stale || eventError) && <Button disabled={busy} variant="secondary" onClick={() => void act(async () => {
@@ -63,6 +69,25 @@ export default function GoogleCalendarPanel() {
     {status?.last_error && <Alert type="warning">{status.last_error}</Alert>}
     {status?.connected && <>
       {admin && <details><summary className="cursor-pointer text-sm font-medium">Configurações da integração</summary><div className="mt-3 flex flex-wrap items-end gap-3">
+        <div className="w-full space-y-2">
+          <Button disabled={busy} variant="outline" onClick={() => void act(async () => {
+            const response = await unitFetch('/api/integracoes/google/calendars');
+            const result = await response.json();
+            if (!response.ok) { setNeedsAuthorization(response.status === 403); throw new Error(result.error || 'Não foi possível listar as agendas.'); }
+            setNeedsAuthorization(false);
+            setCalendars(result.items.map((item: { id: string; name: string }) => ({ value: item.id, label: item.name })));
+            if (!result.items.length) setMessage('Nenhuma agenda com permissão de edição disponível nesta conta.');
+          })}>Escolher agenda do Google</Button>
+          {calendars.length > 0 && <>
+            <Select label="Agenda para sincronizar" name="google_calendar" value={calendar} onChange={setCalendar} options={calendars} />
+            <p className="text-xs text-muted-foreground">A sincronização usará a agenda selecionada. Eventos da agenda anterior serão preservados e não serão movidos.</p>
+            <Button disabled={busy || !calendar || calendar === status.calendar_id} onClick={() => {
+              if (window.confirm('Usar esta agenda para sincronização? Os eventos da agenda anterior serão preservados, sem transferência automática.')) void act(async () => {
+                await request('/calendars', 'PATCH', { calendar_id: calendar }); setMessage('Agenda selecionada. A sincronização começará em instantes.');
+              });
+            }}>Salvar agenda</Button>
+          </>}
+        </div>
         <div className="w-52"><Input name="google_duration" label="Duração padrão (min)" type="number" min={5} max={480} value={minutes} onChange={setMinutes} /></div>
         <Button disabled={busy} variant="secondary" onClick={() => void act(async () => { await request('', 'PATCH', { default_duration: Number(minutes) }); setMessage('Duração padrão salva.'); })}>Salvar duração</Button>
         <Button disabled={busy} variant="outline" onClick={() => void act(async () => {

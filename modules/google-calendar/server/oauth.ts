@@ -43,7 +43,7 @@ export async function completeAuthorization(db: D1Database, config: GoogleConfig
   const other = await db.prepare('SELECT id FROM google_calendar_connections WHERE google_subject=? AND unidade_id!=?').bind(profile.sub, context.unidade_id).first();
   if (other) throw new CalendarRequestError('Esta agenda já está vinculada a outra unidade.', 409);
   const archive = !existing ? await db.prepare('SELECT * FROM google_calendar_archives WHERE unidade_id=? AND google_subject=?')
-    .bind(context.unidade_id, profile.sub).first<{ connection_id: string; calendar_id: string; default_duration: number; links: string }>() : null;
+    .bind(context.unidade_id, profile.sub).first<{ connection_id: string; calendar_id: string; calendar_name: string; default_duration: number; links: string }>() : null;
   const id = existing?.id ?? archive?.connection_id ?? crypto.randomUUID();
   const encrypted = await encrypt(tokens.refresh_token, config.encryptionKey, id);
   if (existing) {
@@ -51,8 +51,8 @@ export async function completeAuthorization(db: D1Database, config: GoogleConfig
       WHERE id=? AND lease_until<? AND status!='disconnecting' RETURNING id`).bind(encrypted, context.usuario_id, profile.email, id, Date.now()).first();
     if (!saved) throw new CalendarRequestError('Integração ocupada. Tente novamente.', 409);
   } else {
-    const statements = [db.prepare(`INSERT INTO google_calendar_connections(id,unidade_id,connected_by,google_subject,email,calendar_id,refresh_token,default_duration)
-      VALUES (?,?,?,?,?,?,?,?)`).bind(id, context.unidade_id, context.usuario_id, profile.sub, profile.email, archive?.calendar_id ?? 'primary', encrypted, archive?.default_duration ?? 30)];
+    const statements = [db.prepare(`INSERT INTO google_calendar_connections(id,unidade_id,connected_by,google_subject,email,calendar_id,refresh_token,default_duration,calendar_name)
+      VALUES (?,?,?,?,?,?,?,?,?)`).bind(id, context.unidade_id, context.usuario_id, profile.sub, profile.email, archive?.calendar_id ?? 'primary', encrypted, archive?.default_duration ?? 30, archive?.calendar_name ?? 'Agenda principal')];
     statements.push(db.prepare(`INSERT INTO google_calendar_links(connection_id,agendamento_id,event_id,etag,remote_snapshot,local_snapshot,conflict,pending_write)
       SELECT ?,json_extract(value,'$.agendamento_id'),json_extract(value,'$.event_id'),json_extract(value,'$.etag'),
         json_extract(value,'$.remote_snapshot'),json_extract(value,'$.local_snapshot'),json_extract(value,'$.conflict'),json_extract(value,'$.pending_write')
