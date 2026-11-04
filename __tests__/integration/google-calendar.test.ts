@@ -1,7 +1,7 @@
 import { webcrypto } from 'node:crypto';
 import { getDb } from '@/lib/db';
 import { createSqliteDb } from '../helpers/sqlite-db.cjs';
-import { __setMockDb, __resetMocks } from '../../__mocks__/opennextjs-cloudflare';
+import { __setMockDb, __resetMocks, __setMockEnv } from '../../__mocks__/opennextjs-cloudflare';
 import { applyRemote, processConnection, loadAppointment } from '@/modules/google-calendar/server/sync';
 import { encrypt, decrypt, digest } from '@/modules/google-calendar/server/crypto';
 import { localSnapshot, remoteSnapshot, toGoogle } from '@/modules/google-calendar/server/mapping';
@@ -40,6 +40,7 @@ function mirror(remote = event()) {
 const response = (body: unknown, status = 200) => new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 beforeEach(async () => {
   db = createSqliteDb(); __setMockDb(db.binding);
+  __setMockEnv({ GOOGLE_CALENDAR_ENABLED: 'true', GOOGLE_CLIENT_ID: config.clientId, GOOGLE_CLIENT_SECRET: config.clientSecret, GOOGLE_TOKEN_ENCRYPTION_KEY: config.encryptionKey, GOOGLE_APP_BASE_URL: config.baseUrl });
   db.sqlite.exec(`INSERT INTO unidades(id,nome) VALUES (1,'Um'),(2,'Dois');
     INSERT INTO usuarios(id,nome,email,role) VALUES (1,'Admin','admin@example.test','admin');
     INSERT INTO clientes(id,nome) VALUES (1,'Paciente');`);
@@ -470,12 +471,12 @@ test('unit name changes enqueue only its existing mirrored appointments', () => 
   expect(row('SELECT COUNT(*) AS n FROM google_user_calendar_outbox').n).toBe(1);
 });
 
-test('calendar list follows pagination and includes only writable calendars', async () => {
+test('calendar list follows pagination and distinguishes readable from writable calendars', async () => {
   const { calendarChoices } = await import('@/modules/google-calendar/server/calendars');
   fetchMock.mockResolvedValueOnce(response({ access_token: 'access' }))
     .mockResolvedValueOnce(response({ items: [{ id: 'email', summary: 'Principal', primary: true, accessRole: 'owner' }, { id: 'readonly', accessRole: 'reader' }], nextPageToken: 'second' }))
     .mockResolvedValueOnce(response({ items: [{ id: 'alanna', summary: 'Agenda Alanna', accessRole: 'writer' }] }));
-  expect((await calendarChoices(config, connection())).items).toEqual([{ id: 'primary', name: 'Principal' }, { id: 'alanna', name: 'Agenda Alanna' }]);
+  expect((await calendarChoices(config, connection())).items).toEqual([{ id: 'primary', name: 'Principal', writable: true }, { id: 'readonly', name: '(Sem título)', writable: false }, { id: 'alanna', name: 'Agenda Alanna', writable: true }]);
   expect(fetchMock.mock.calls[2][0]).toContain('pageToken=second');
 });
 test('switch calendar preserves events, resets cursors and restores links when switching back', async () => {
@@ -624,4 +625,51 @@ test('admin OAuth binds selected owner instead of the acting administrator', asy
   await completeAuthorization(getDb(), config, new URL(auth.url).searchParams.get('state')!, auth.browser, 'code');
   expect(row("SELECT usuario_id,connected_by FROM google_user_calendar_connections WHERE google_subject='alanna'"))
     .toMatchObject({ usuario_id: 2, connected_by: 1 });
+});
+
+test('view selection accepts reader calendars without changing destination or existing mirrors', async () => {
+  const { PATCH } = await import('@/app/api/integracoes/google/calendars/route');
+  createAppointment(); mirror();
+  fetchMock.mockResolvedValueOnce(response({ access_token: 'access' })).mockResolvedValueOnce(response({ items: [{ id: 'personal', accessRole: 'reader' }] }));
+  const result = await callRoute(PATCH, '/api/integracoes/google/calendars', { method: 'PATCH', body: { visible_calendar_ids: ['personal'] } });
+  expect(result.status).toBe(200);
+  expect(connection().calendar_id).toBe('calendar@example.test');
+  expect(JSON.parse(connection().visible_calendar_ids!)).toEqual(['personal']);
+  expect(row('SELECT event_id FROM google_user_calendar_links').event_id).toBe('remote');
+  expect(fetchMock.mock.calls.some(([, init]) => ['DELETE','PATCH'].includes(init?.method))).toBe(false);
+});
+
+test('visible calendars require read permission and reject unbounded selections', async () => {
+  const { PATCH } = await import('@/app/api/integracoes/google/calendars/route');
+  fetchMock.mockResolvedValueOnce(response({ access_token: 'access' })).mockResolvedValueOnce(response({ items: [] }));
+  expect((await callRoute(PATCH, '/api/integracoes/google/calendars', { method: 'PATCH', body: { visible_calendar_ids: ['not-authorized'] } })).status).toBe(400);
+  expect(connection().visible_calendar_ids).toBeNull();
+  expect((await callRoute(PATCH, '/api/integracoes/google/calendars', { method: 'PATCH', body: { visible_calendar_ids: Array(11).fill('x') } })).status).toBe(400);
+});
+
+test.each([false,true])('multiple visible calendars preserve identity and partial failures are explicit (%s)', async failDestination => {
+  db.sqlite.prepare('UPDATE google_user_calendar_connections SET visible_calendar_ids=?').run(JSON.stringify(['calendar@example.test', 'personal']));
+  fetchMock.mockImplementation(async (url: string) => {
+    if (url.includes('oauth2.googleapis.com')) return response({ access_token: 'access' });
+    if (url.includes('/calendars/personal/')) return response({ items: [event({ summary: 'Personal' })] });
+    return failDestination ? response({},503) : response({ items: [event({ summary: 'Clinic' })] });
+  });
+  const result = await callRoute<{ items: { event_id: string; summary: string; can_link: boolean }[]; stale: boolean }>(events,
+    '/api/integracoes/google/events?from=2030-01-01T00:00:00Z&to=2030-02-01T00:00:00Z');
+  expect(result.data.stale).toBe(failDestination);
+  expect(result.data.items).toHaveLength(failDestination ? 1 : 2);
+  const personal = result.data.items.find(e => e.summary === 'Personal')!;
+  expect(personal.can_link).toBe(false);
+  expect(personal.event_id).not.toBe('remote');
+  if (!failDestination) expect(result.data.items.find(e => e.summary === 'Clinic')?.can_link).toBe(true);
+});
+
+test('empty view selection makes no Google reads and leaves the publishing destination intact', async () => {
+  db.sqlite.exec("UPDATE google_user_calendar_connections SET visible_calendar_ids='[]'");
+  const result = await callRoute<{ items: unknown[] }>(events, '/api/integracoes/google/events?from=2030-01-01T00:00:00Z&to=2030-02-01T00:00:00Z');
+  expect(result.data.items).toEqual([]);
+  expect(fetchMock).not.toHaveBeenCalled();
+  createAppointment();
+  expect(row('SELECT COUNT(*) AS n FROM google_user_calendar_outbox').n).toBe(1);
+  expect(connection().calendar_id).toBe('calendar@example.test');
 });

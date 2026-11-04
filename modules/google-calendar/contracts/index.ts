@@ -11,6 +11,7 @@ export interface GoogleEvent {
   extendedProperties?: { private?: Record<string, string> };
 }
 export interface GoogleConnection {
+  visible_calendar_ids?: string | null;
   usuario_id: number;
   id: string;
   unidade_id: number;
@@ -70,6 +71,8 @@ export interface ConnectionStatus {
   conflicts?: { agendamento_id: number; conflict: string }[];
 }
 export interface ExternalEvent {
+  can_link?: boolean;
+  calendar_name?: string;
   event_id: string;
   summary: string;
   start_at: string | null;

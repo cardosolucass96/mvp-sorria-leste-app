@@ -9,10 +9,10 @@ type Calendar = { id: string; summary?: string; summaryOverride?: string; access
 export async function calendarChoices(config: GoogleConfig, connection: GoogleConnection) {
   const tokens = await tokenRequest(config, { grant_type: 'refresh_token', refresh_token: await decrypt(connection.refresh_token, config.encryptionKey, connection.id) });
   const api = new GoogleApi(tokens.access_token, connection.calendar_id);
-  const items: { id: string; name: string }[] = [];
+  const items: { id: string; name: string; writable: boolean }[] = [];
   let page: string | undefined;
   do {
-    const query = new URLSearchParams({ minAccessRole: 'writer', maxResults: '250' });
+    const query = new URLSearchParams({ minAccessRole: 'reader', maxResults: '250' });
     if (page) query.set('pageToken', page);
     let result: { items?: Calendar[]; nextPageToken?: string };
     try { result = await api.request('users/me/calendarList?' + query); }
@@ -21,8 +21,8 @@ export async function calendarChoices(config: GoogleConfig, connection: GoogleCo
       throw error;
     }
     for (const calendar of result.items ?? []) {
-      if (!calendar.deleted && ['writer', 'owner'].includes(calendar.accessRole)) {
-        items.push({ id: calendar.primary ? 'primary' : calendar.id, name: calendar.summaryOverride || calendar.summary || '(Sem título)' });
+      if (!calendar.deleted && ['reader', 'writer', 'owner'].includes(calendar.accessRole)) {
+        items.push({ id: calendar.primary ? 'primary' : calendar.id, name: calendar.summaryOverride || calendar.summary || '(Sem título)', writable: ['writer', 'owner'].includes(calendar.accessRole) });
       }
     }
     page = result.nextPageToken;
@@ -32,7 +32,7 @@ export async function calendarChoices(config: GoogleConfig, connection: GoogleCo
 export async function selectCalendar(db: D1Database, config: GoogleConfig, owner: number, calendarId: string) {
   return withConnectionLock(db, owner, async connection => {
     const { items, api } = await calendarChoices(config, connection);
-    const selected = items.find(item => item.id === calendarId);
+    const selected = items.find(item => item.id === calendarId && item.writable);
     if (!selected) throw new CalendarRequestError('Selecione uma agenda em que esta conta tenha permissão de edição.', 400);
     if (selected.id === connection.calendar_id) {
       await db.prepare('UPDATE google_user_calendar_connections SET calendar_name=? WHERE id=?').bind(selected.name, connection.id).run();
@@ -79,5 +79,16 @@ export async function selectCalendar(db: D1Database, config: GoogleConfig, owner
       if (error instanceof Error && error.message.includes('calendar_sync_pending')) throw new CalendarRequestError('Um agendamento foi alterado durante a troca. Aguarde a sincronização e tente novamente.', 409);
       throw error;
     }
+  });
+}
+
+export function visibleCalendarIds(connection: GoogleConnection): string[] {
+  return connection.visible_calendar_ids == null ? [connection.calendar_id] : JSON.parse(connection.visible_calendar_ids);
+}
+export async function selectVisibleCalendars(db: D1Database, config: GoogleConfig, owner: number, ids: string[]) {
+  return withConnectionLock(db, owner, async connection => {
+    const { items } = await calendarChoices(config, connection);
+    if (ids.some(id => !items.some(item => item.id === id))) throw new CalendarRequestError('Selecione apenas agendas com permissão de leitura.', 400);
+    await db.prepare('UPDATE google_user_calendar_connections SET visible_calendar_ids=? WHERE id=?').bind(JSON.stringify([...new Set(ids)]), connection.id).run();
   });
 }

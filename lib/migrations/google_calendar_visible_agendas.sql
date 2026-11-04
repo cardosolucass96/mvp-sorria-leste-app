@@ -1,0 +1,1 @@
+ALTER TABLE google_user_calendar_connections ADD COLUMN visible_calendar_ids TEXT;

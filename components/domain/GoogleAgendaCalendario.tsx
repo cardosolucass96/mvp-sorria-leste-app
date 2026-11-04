@@ -21,7 +21,7 @@ export default function GoogleAgendaCalendario<T extends CalendarAppointment>(pr
       <h3 className="font-semibold">Google Agenda · dia selecionado</h3>
       {selected.map(event => <div key={event.event_id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 py-2 last:border-0">
         <div><p className="text-sm font-medium">{event.summary}</p><p className="text-sm text-muted-foreground">{externalEventTime(event)}</p></div>
-        {!event.all_day && !event.recurring && <GoogleEventLink event={event} />}
+        {event.can_link !== false && !event.all_day && !event.recurring && <GoogleEventLink event={event} />}
       </div>)}
     </section>}
   </div>;

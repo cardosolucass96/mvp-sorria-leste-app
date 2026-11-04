@@ -72,7 +72,7 @@ export default function GoogleCalendarProvider({ children, calendarRange, events
           const body = await events.json();
           if (!active) return;
           latest = { ...latest, items: body.items ?? [], stale: Boolean(body.stale), warning: body.stale
-            ? 'Google Agenda: exibindo dados salvos; a atualização está indisponível.'
+            ? 'Não foi possível atualizar todas as agendas do Google. Alguns horários podem não estar disponíveis.'
             : body.truncated ? 'Há mais eventos disponíveis. Reduza o período para visualizar todos.' : '' };
         }
         if (!active) return;

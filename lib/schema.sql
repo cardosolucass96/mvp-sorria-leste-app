@@ -666,6 +666,7 @@ CREATE INDEX IF NOT EXISTS idx_procedimentos_categoria ON procedimentos(categori
 CREATE INDEX IF NOT EXISTS idx_atendimentos_categoria ON atendimentos(categoria_id);
 
 CREATE TABLE IF NOT EXISTS google_user_calendar_connections (
+  visible_calendar_ids TEXT,
   id TEXT PRIMARY KEY,
   unidade_id INTEGER NOT NULL REFERENCES unidades(id),
   usuario_id INTEGER NOT NULL UNIQUE REFERENCES usuarios(id),

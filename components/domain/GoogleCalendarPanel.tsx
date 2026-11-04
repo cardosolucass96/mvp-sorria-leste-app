@@ -19,11 +19,12 @@ export default function GoogleCalendarPanel() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const [calendars, setCalendars] = useState<{ value: string; label: string }[]>([]);
+  const [calendars, setCalendars] = useState<{ value: string; label: string; writable: boolean }[]>([]);
+  const [visibleCalendars, setVisibleCalendars] = useState<string[]>([]);
   const [calendar, setCalendar] = useState('');
   const [needsAuthorization, setNeedsAuthorization] = useState(false);
   const [minutes, setMinutes] = useState('30');
-  useEffect(() => { setError(''); setMessage(''); setCalendars([]); setNeedsAuthorization(false); }, [currentUnidade, ownerId]);
+  useEffect(() => { setError(''); setMessage(''); setCalendars([]); setVisibleCalendars([]); setNeedsAuthorization(false); }, [currentUnidade, ownerId]);
   useEffect(() => { setCalendar(status?.calendar_id ?? 'primary'); }, [status?.calendar_id]);
   useEffect(() => { if (status?.default_duration) setMinutes(String(status.default_duration)); }, [status?.default_duration]);
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function GoogleCalendarPanel() {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="font-semibold">Google Agenda{status?.owner_name ? ` · ${status.owner_name}` : ''}</h2>
         <p className="text-sm text-muted-foreground">{status?.connected ? `${status.email} · ${status.status === 'disconnecting' ? 'Desconectando' : status.status === 'reconnect' ? 'Reconexão necessária' : status.status === 'error' ? 'Nova tentativa pendente' : 'Atualização automática'}` : 'Conecte a agenda Google deste responsável.'}</p>
-        {status?.connected && <p className="text-xs text-muted-foreground">Agenda: {status.calendar_name || 'Agenda principal'}</p>}
+        {status?.connected && <p className="text-xs text-muted-foreground">Destino dos agendamentos: {status.calendar_name || 'Agenda principal'}</p>}
         {status?.last_sync_at && <p className="text-xs text-muted-foreground">Última sincronização: {formatarDataAgendada(status.last_sync_at)} · Pendentes: {status.pending ?? 0}</p>}
       </div>
       <div className="flex flex-wrap gap-2">
@@ -75,17 +76,31 @@ export default function GoogleCalendarPanel() {
             const result = await response.json();
             if (!response.ok) { setNeedsAuthorization(response.status === 403); throw new Error(result.error || 'Não foi possível listar as agendas.'); }
             setNeedsAuthorization(false);
-            setCalendars(result.items.map((item: { id: string; name: string }) => ({ value: item.id, label: item.name })));
-            if (!result.items.length) setMessage('Nenhuma agenda com permissão de edição disponível nesta conta.');
-          })}>Escolher agenda do Google</Button>
+            setCalendars(result.items.map((item: { id: string; name: string; writable: boolean }) => ({ value: item.id, label: item.name, writable: item.writable })));
+            setVisibleCalendars(result.visible_calendar_ids ?? [status.calendar_id ?? 'primary']);
+            if (!result.items.length) setMessage('Nenhuma agenda com permissão de leitura disponível nesta conta.');
+          })}>Escolher agendas do Google</Button>
           {calendars.length > 0 && <>
-            <Select label="Agenda para sincronizar" name="google_calendar" value={calendar} onChange={setCalendar} options={calendars} />
-            <p className="text-xs text-muted-foreground">A sincronização usará a agenda selecionada. Eventos da agenda anterior serão preservados e não serão movidos.</p>
+            <fieldset className="space-y-2 rounded-lg border border-border p-3">
+              <legend className="px-1 text-sm font-medium">Agendas para visualizar no app</legend>
+              <p className="text-xs text-muted-foreground">Marque até 10 agendas para ver os horários ocupados deste responsável.</p>
+              {calendars.map(item => <label key={item.value} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={visibleCalendars.includes(item.value)} disabled={busy}
+                  onChange={event => setVisibleCalendars(previous => event.target.checked ? [...previous, item.value] : previous.filter(id => id !== item.value))} />
+                {item.label}{!item.writable && <span className="text-xs text-muted-foreground">(somente leitura)</span>}
+              </label>)}
+              <Button disabled={busy || visibleCalendars.length > 10} variant="outline" onClick={() => void act(async () => {
+                await request('/calendars', 'PATCH', { visible_calendar_ids: visibleCalendars });
+                setMessage('Agendas de visualização salvas.');
+              })}>Salvar visualização</Button>
+            </fieldset>
+            <Select label="Agenda para receber os agendamentos" name="google_calendar" value={calendar} onChange={setCalendar} options={calendars.filter(item => item.writable)} />
+            <p className="text-xs text-muted-foreground">Novos agendamentos serão enviados somente para esta agenda. Eventos da agenda anterior serão preservados e não serão movidos.</p>
             <Button disabled={busy || !calendar || calendar === status.calendar_id} onClick={() => {
               if (window.confirm('Usar esta agenda para sincronização? Os eventos da agenda anterior serão preservados, sem transferência automática.')) void act(async () => {
                 await request('/calendars', 'PATCH', { calendar_id: calendar }); setMessage('Agenda selecionada. A sincronização começará em instantes.');
               });
-            }}>Salvar agenda</Button>
+            }}>Salvar destino</Button>
           </>}
         </div>
         <div className="w-52"><Input name="google_duration" label="Duração padrão (min)" type="number" min={5} max={480} value={minutes} onChange={setMinutes} /></div>
