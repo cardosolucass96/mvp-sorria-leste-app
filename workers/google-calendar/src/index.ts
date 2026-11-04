@@ -14,7 +14,8 @@ export default {
       (c.sync_requested=1 OR c.last_sync_at IS NULL OR c.last_sync_at<? OR c.status='disconnecting'
        OR EXISTS(SELECT 1 FROM google_user_calendar_outbox o LEFT JOIN google_user_calendar_links l
          ON l.connection_id=o.connection_id AND l.agendamento_id=o.agendamento_id
-         WHERE o.connection_id=c.id AND l.conflict IS NULL)) ORDER BY c.last_sync_at LIMIT 100`)
+         LEFT JOIN agendamentos a ON a.id=o.agendamento_id
+         WHERE o.connection_id=c.id AND (l.conflict IS NULL OR a.id IS NULL OR a.executor_id IS NOT c.usuario_id))) ORDER BY c.last_sync_at LIMIT 100`)
       .bind(Date.now(), new Date(Date.now() - 15 * 60000).toISOString()).all<{ id: string }>();
     for (const connection of due.results) await env.CALENDAR_QUEUE.send({ connectionId: connection.id });
   },
