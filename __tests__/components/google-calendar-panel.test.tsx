@@ -1,7 +1,9 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import GoogleCalendarPanel from '@/components/domain/GoogleCalendarPanel';
+import Panel from '@/components/domain/GoogleCalendarPanel';
+import GoogleCalendarProvider from '@/components/domain/GoogleCalendarProvider';
+function GoogleCalendarPanel() { return <GoogleCalendarProvider><Panel /></GoogleCalendarProvider>; }
 const fetchMock = jest.fn();
 let role = 'admin';
 jest.mock('@/lib/hooks/useUnitFetch', () => ({ useUnitFetch: () => fetchMock }));
@@ -49,9 +51,13 @@ test('loads events automatically and reloads when the period changes, without ma
   expect(screen.queryByRole('button', { name: 'Sincronizar agora' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Buscar eventos' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Tentar novamente' })).toBeNull();
-  fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-01-01' } });
-  await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url.includes('from=2026-01-01'))).toBe(true));
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Fortaleza' });
+  fireEvent.change(screen.getByLabelText('Até'), { target: { value: today } });
+  await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url.includes('to=' + today))).toBe(true));
   const before = fetchMock.mock.calls.filter(([url]) => url.includes('/events?')).length;
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 16000);
   fireEvent(window, new Event('focus'));
   await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url.includes('/events?')).length).toBeGreaterThan(before));
+  clock.mockRestore();
 });

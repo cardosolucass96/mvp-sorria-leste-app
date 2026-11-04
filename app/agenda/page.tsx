@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, UserCheck, UserX, MessageCircle, CalendarClock, X, Plus, FileText, List, CalendarDays, Pencil } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import GoogleAgendaCalendario from '@/components/domain/GoogleAgendaCalendario';
+import GoogleCalendarProvider from '@/components/domain/GoogleCalendarProvider';
+import { googleWindow } from '@/modules/google-calendar/calendar-display';
 import GoogleCalendarPanel from '@/components/domain/GoogleCalendarPanel';
 import LoadingState from '@/components/ui/LoadingState';
 import Spinner from '@/components/ui/Spinner';
@@ -1646,6 +1648,7 @@ export default function AgendaPage() {
   if (loading && !hasLoadedAgendamentos) return <LoadingState text="Carregando agenda..." />;
 
   return (
+    <GoogleCalendarProvider calendarRange={viewMode === 'calendario' ? googleWindow(focusedDate, calendarSubview) : undefined}>
     <div className="space-y-6">
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
@@ -2479,5 +2482,6 @@ export default function AgendaPage() {
         )}
       </Modal>
     </div>
+    </GoogleCalendarProvider>
   );
 }

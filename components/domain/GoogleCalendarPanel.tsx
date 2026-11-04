@@ -1,8 +1,9 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
-import type { ConnectionStatus, ExternalEvent } from '@/modules/google-calendar/contracts';
+import type { ExternalEvent } from '@/modules/google-calendar/contracts';
+import { useGoogleCalendarData } from './GoogleCalendarProvider';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import Input from '@/components/ui/Input';
@@ -14,40 +15,18 @@ export default function GoogleCalendarPanel() {
   const allowed = hasRole(['admin', 'atendente']) && viewMode !== 'dentista';
   const admin = hasRole('admin');
   const unitFetch = useUnitFetch();
-  const [status, setStatus] = useState<ConnectionStatus | null>(null);
-  const [events, setEvents] = useState<ExternalEvent[]>([]);
+  const { data, loading: loadingEvents, range, setRange, calendarMode, refresh } = useGoogleCalendarData();
+  const { status, items: events, stale, warning: eventError } = data;
+  const from = range.start; const to = range.end;
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [minutes, setMinutes] = useState('30');
   const [open, setOpen] = useState(false);
-  const [stale, setStale] = useState(false);
-  const [eventError, setEventError] = useState('');
-  const [loadingEvents, setLoadingEvents] = useState(false);
-  const eventGeneration = useRef(0);
-  const [from, setFrom] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Fortaleza' }));
-  const [to, setTo] = useState(() => new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Fortaleza' }));
   const [selected, setSelected] = useState('');
   const [appointment, setAppointment] = useState('');
   const [appointments, setAppointments] = useState<{ value: string; label: string }[]>([]);
-  const generation = useRef(0);
-  const refresh = useCallback(async () => {
-    const ticket = ++generation.current;
-    const response = await unitFetch('/api/integracoes/google');
-    const data = await response.json() as ConnectionStatus & { error?: string };
-    if (ticket !== generation.current) return;
-    if (!response.ok) throw new Error(data.error || 'Não foi possível consultar a conexão.');
-    setStatus(data);
-  }, [unitFetch]);
-  useEffect(() => {
-    generation.current++;
-    setStatus(null); setEvents([]); setSelected(''); setAppointment(''); setOpen(false); setError(''); setMessage('');
-    if (!allowed) return;
-    let active = true;
-    void refresh().catch(() => { if (active) setError('Google Agenda ainda não está disponível neste ambiente.'); });
-    const timer = setInterval(() => { if (!document.hidden) void refresh().catch(() => {}); }, 15000);
-    return () => { active = false; clearInterval(timer); };
-  }, [allowed, currentUnidade, refresh]);
+  useEffect(() => { setSelected(''); setAppointment(''); setError(''); setMessage(''); }, [currentUnidade, from, to]);
   useEffect(() => { if (status?.default_duration) setMinutes(String(status.default_duration)); }, [status?.default_duration]);
   useEffect(() => {
     if (!allowed) return;
@@ -68,31 +47,6 @@ export default function GoogleCalendarPanel() {
     catch (failure) { setError(failure instanceof Error ? failure.message : 'Falha na operação.'); }
     finally { setBusy(false); }
   }
-  const loadEvents = useCallback(async () => {
-    const ticket = ++eventGeneration.current;
-    if (!from || !to || from > to) { setEvents([]); setEventError('Selecione um período válido.'); return; }
-    setLoadingEvents(true);
-    try {
-      const response = await unitFetch(`/api/integracoes/google/events?${new URLSearchParams({ from: `${from}T00:00:00-03:00`, to: `${to}T23:59:59-03:00` })}`);
-      const data = await response.json();
-      if (ticket !== eventGeneration.current) return;
-      if (!response.ok) throw new Error('Não foi possível atualizar os eventos do Google.');
-      setEvents(data.items ?? []); setStale(Boolean(data.stale)); setEventError('');
-      if (data.truncated) setEventError('Há mais eventos disponíveis. Reduza o período para visualizar todos.');
-    } catch {
-      if (ticket === eventGeneration.current) setEventError('Não foi possível atualizar os eventos do Google.');
-    } finally { if (ticket === eventGeneration.current) setLoadingEvents(false); }
-  }, [from, to, unitFetch]);
-  useEffect(() => {
-    const requests = eventGeneration;
-    setEvents([]); setStale(false); setEventError(''); setSelected('');
-    if (!allowed || !status?.connected || status.status === 'disconnecting') return;
-    void loadEvents();
-    const visible = () => { if (!document.hidden) { void loadEvents(); void refresh().catch(() => {}); } };
-    const timer = setInterval(visible, 30000);
-    window.addEventListener('focus', visible);
-    return () => { requests.current++; clearInterval(timer); window.removeEventListener('focus', visible); };
-  }, [allowed, status?.connected, status?.status, loadEvents, refresh]);
   async function selectEvent(event: ExternalEvent) {
     setSelected(event.event_id); setAppointment('');
     const response = await unitFetch('/api/agendamentos?status=agendado&data_inicio=' + from + '&data_fim=' + to);
@@ -111,14 +65,13 @@ export default function GoogleCalendarPanel() {
         {admin && (!status?.connected || status?.status === 'reconnect') && <Button disabled={busy} variant="outline" onClick={() => void act(async () => {
           const data = await request('/authorize'); window.location.assign(data.url);
         })}>{status?.connected ? 'Reconectar Google' : 'Conectar Google'}</Button>}
-        {(status?.status === 'error' || error || stale || eventError) && <Button disabled={busy} variant="secondary" onClick={() => void act(async () => {
+        {(status?.status === 'error' || error || data.error || stale || eventError) && <Button disabled={busy} variant="secondary" onClick={() => void act(async () => {
           if (status?.status === 'error') await request('/sync');
-          if (status?.connected) await loadEvents();
           setMessage('Atualização solicitada.');
         })}>Tentar novamente</Button>}
       </div>
     </div>
-    {error && <Alert type="error">{error}</Alert>}
+    {(error || data.error) && <Alert type="error">{error || data.error}</Alert>}
     {message && <p role="status" className="text-sm">{message}</p>}
     {status?.last_error && <Alert type="warning">{status.last_error}</Alert>}
     {status?.connected && <>
@@ -146,11 +99,11 @@ export default function GoogleCalendarPanel() {
         <summary className="cursor-pointer text-sm font-medium">Eventos externos do Google</summary>
         <p className="my-2 text-sm text-muted-foreground">Eventos sem paciente vinculado. Ocorrências recorrentes são apenas para consulta.</p>
         {stale && <Alert type="warning">Google indisponível. Exibindo a última cópia disponível; recorrências mostram apenas o início da série.</Alert>}
-        <div className="flex flex-wrap items-end gap-3">
-          <Input label="De" name="google_from" type="date" value={from} onChange={setFrom} />
-          <Input label="Até" name="google_to" type="date" value={to} onChange={setTo} />
+        {calendarMode ? <p className="text-sm text-muted-foreground">Mesmo período exibido no calendário.</p> : <div className="flex flex-wrap items-end gap-3">
+          <Input label="De" name="google_from" type="date" value={from} onChange={start => setRange({ ...range, start })} />
+          <Input label="Até" name="google_to" type="date" value={to} onChange={end => setRange({ ...range, end })} />
 
-        </div>
+        </div>}
         {eventError && <Alert type="warning">{eventError}</Alert>}
         {loadingEvents && <p className="text-sm text-muted-foreground">Atualizando eventos…</p>}
         <ul className="mt-3 space-y-3">{events.map(event => <li key={event.event_id} className="rounded border border-border p-3">
@@ -160,7 +113,7 @@ export default function GoogleCalendarPanel() {
             <Select label="Agendamento desta unidade" name="google_link_appointment" value={appointment} onChange={setAppointment} options={appointments} />
             <p className="text-sm text-muted-foreground">O evento do Google passará a usar o horário e a identificação do agendamento selecionado.</p>
             <Button disabled={!appointment || busy} onClick={() => void act(async () => {
-              await request('/link', 'POST', { event_id: selected, agendamento_id: Number(appointment) }); setSelected(''); await loadEvents();
+              await request('/link', 'POST', { event_id: selected, agendamento_id: Number(appointment) }); setSelected('');
             })}>Confirmar vínculo</Button>
           </div>}
         </li>)}</ul>

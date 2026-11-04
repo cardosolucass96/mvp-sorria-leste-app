@@ -1,12 +1,18 @@
 import React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import GoogleAgendaCalendario from '@/components/domain/GoogleAgendaCalendario';
-import { externalEventDays } from '@/modules/google-calendar/calendar-display';
+import Calendar from '@/components/domain/GoogleAgendaCalendario';
+import GoogleCalendarProvider from '@/components/domain/GoogleCalendarProvider';
+import { externalEventDays, googleWindow } from '@/modules/google-calendar/calendar-display';
 import type { ExternalEvent } from '@/modules/google-calendar/contracts';
 const fetchMock = jest.fn();
+const unitFetch = (url: string) => url === '/api/integracoes/google'
+  ? Promise.resolve({ ok: true, json: async () => ({ connected: true, status: 'connected' }) }) : fetchMock(url);
+function GoogleAgendaCalendario(p: typeof props & { view: 'mes' | 'semana' }) {
+  return <GoogleCalendarProvider calendarRange={googleWindow(p.focusedDate, p.view)}><Calendar {...p} /></GoogleCalendarProvider>;
+}
 let unit = 1; let role = 'admin';
-jest.mock('@/lib/hooks/useUnitFetch', () => ({ useUnitFetch: () => fetchMock }));
+jest.mock('@/lib/hooks/useUnitFetch', () => ({ useUnitFetch: () => unitFetch }));
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ currentUnidade: unit, viewMode: 'admin',
   hasRole: (roles: string[]) => roles.includes(role),
 }) }));
@@ -29,6 +35,7 @@ test('unit switch clears old events immediately and ignores delayed response', a
   let finish!: (value: unknown) => void;
   fetchMock.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
   const { rerender } = render(<GoogleAgendaCalendario {...props} view="semana" />);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   unit = 2; fetchMock.mockResolvedValue(reply([]));
   rerender(<GoogleAgendaCalendario {...props} view="semana" />);
   await act(async () => finish(reply([event])));
