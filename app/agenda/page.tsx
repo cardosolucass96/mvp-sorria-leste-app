@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, UserCheck, UserX, MessageCircle, CalendarClock, X, Plus, FileText, List, CalendarDays, Pencil } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import GoogleAgendaCalendario from '@/components/domain/GoogleAgendaCalendario';
+import DateTimePicker from '@/components/ui/DateTimePicker';
 import GoogleCalendarProvider from '@/components/domain/GoogleCalendarProvider';
 import { googleWindow } from '@/modules/google-calendar/calendar-display';
 import GoogleCalendarPanel from '@/components/domain/GoogleCalendarPanel';
@@ -1962,14 +1963,9 @@ export default function AgendaPage() {
               ))}
           </ul>
           <div className="mb-5">
-            <label className="block text-sm font-medium text-foreground mb-1">Nova data</label>
-            <input
-              type="datetime-local"
-              min={getDateTimeLocalMinValue()}
-              value={reagendarDialog.novaData}
-              onChange={e => setReagendarDialog(prev => ({ ...prev, novaData: e.target.value }))}
-              className="field-control w-full px-3 py-2 text-sm"
-            />
+            <DateTimePicker label="Nova data e hora" name="reagendar_data"
+              min={getDateTimeLocalMinValue()} value={reagendarDialog.novaData}
+              onChange={value => setReagendarDialog(prev => ({ ...prev, novaData: value }))} />
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setReagendarDialog({ isOpen: false, grupo: null, novaData: '' })}>
@@ -2016,10 +2012,9 @@ export default function AgendaPage() {
               ))}
           </ul>
           <div className="mb-5">
-            <Input
+            <DateTimePicker
               label="Nova data e hora (opcional)"
               name="editar_grupo_data_agendada"
-              type="datetime-local"
               value={reagendarDiretoDialog.novaData}
               onChange={(value) => setReagendarDiretoDialog(prev => ({ ...prev, novaData: value, error: '' }))}
               hint="Deixe em branco para manter os horários atuais."
@@ -2110,17 +2105,16 @@ export default function AgendaPage() {
           ) : null}
 
           <div className="mt-4">
-            <Input
+            <DateTimePicker
               label="Data e hora (opcional)"
               name="editar_agendamento_data_agendada"
-              type="datetime-local"
               value={editarAgendamentoDialog.data}
               onChange={(value) => setEditarAgendamentoDialog((prev) => ({ ...prev, data: value, error: '' }))}
               hint="Deixe em branco para deixar o agendamento sem data."
             />
           </div>
 
-          <div className="mt-4"><Input label="Duração (minutos)" name="editar_duracao" type="number" min={5} max={480} value={editarDuracao} onChange={setEditarDuracao} hint="Em branco: duração padrão da unidade (30 min se não configurada)." /></div>
+          <div className="mt-4"><Input label="Duração (minutos)" name="editar_duracao" type="number" min={5} max={480} value={editarDuracao} onChange={setEditarDuracao} hint="Em branco: duração padrão do responsável (30 min se não configurada)." /></div>
 
           <div className="mt-4">
             <Textarea
@@ -2451,16 +2445,15 @@ export default function AgendaPage() {
               </p>
             )}
 
-            <Input
+            <DateTimePicker
               label="Data e hora (opcional)"
               name="data_agendada"
-              type="datetime-local"
               value={novoData}
               onChange={setNovoData}
               min={getDateTimeLocalMinValue()}
             />
 
-            <Input label="Duração (minutos)" name="duracao_minutos" type="number" min={5} max={480} value={novoDuracao} onChange={setNovoDuracao} hint="Em branco: duração padrão da unidade (30 min se não configurada)." />
+            <Input label="Duração (minutos)" name="duracao_minutos" type="number" min={5} max={480} value={novoDuracao} onChange={setNovoDuracao} hint="Em branco: duração padrão do responsável (30 min se não configurada)." />
 
             <Textarea
               label="Observações (opcional)"

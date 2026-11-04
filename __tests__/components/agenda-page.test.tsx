@@ -178,6 +178,8 @@ function getUnitFetchCallsMatching(
 }
 
 beforeEach(() => {
+    jest.useFakeTimers({ doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'performance', 'nextTick', 'requestAnimationFrame', 'cancelAnimationFrame', 'setImmediate', 'clearImmediate'] });
+    jest.setSystemTime(new Date('2026-07-15T12:00:00Z'));
   jest.clearAllMocks();
   localStorage.clear();
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
@@ -515,7 +517,10 @@ describe('AgendaPage', () => {
     expect(await screen.findByText('Editar Agendamento')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Executor (opcional)'), { target: { value: '12' } });
-    fireEvent.change(screen.getByLabelText('Data e hora (opcional)'), { target: { value: '2026-07-16T10:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Data', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /16 de julho de 2026/ }));
+    fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '10' } });
+    fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText('Observações (opcional)'), { target: { value: 'Levar exames' } });
     fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
 
@@ -566,7 +571,10 @@ describe('AgendaPage', () => {
 
     expect(await screen.findByText('Editar grupo de agendamentos')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Nova data e hora (opcional)'), { target: { value: '2026-07-18T11:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Data', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /18 de julho de 2026/ }));
+    fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '11' } });
+    fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '00' } });
     fireEvent.change(screen.getByLabelText('Executor para todas (opcional)'), { target: { value: '12' } });
     fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
 
@@ -627,8 +635,10 @@ describe('AgendaPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Faltou/Reagendar' }));
 
-    const dataInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement;
-    fireEvent.change(dataInput, { target: { value: '2026-07-19T09:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Data', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /19 de julho de 2026/ }));
+    fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '09' } });
+    fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar Reagendamento' }));
 
     await waitFor(() => {
@@ -694,8 +704,10 @@ describe('AgendaPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Faltou/Reagendar' }));
 
-    const dataInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement;
-    fireEvent.change(dataInput, { target: { value: '2026-07-20T15:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Data', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /20 de julho de 2026/ }));
+    fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '15' } });
+    fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '30' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar Reagendamento' }));
 
     await waitFor(() => {
@@ -750,8 +762,10 @@ describe('AgendaPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Faltou/Reagendar' }));
 
-    const dataInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement;
-    fireEvent.change(dataInput, { target: { value: '2026-07-21T08:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Data', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /21 de julho de 2026/ }));
+    fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '08' } });
+    fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar Reagendamento' }));
 
     await waitFor(() => {
@@ -1184,3 +1198,5 @@ describe('AgendaPage', () => {
     expect(mockReplace).toHaveBeenCalledWith('/agenda');
   });
 });
+
+afterEach(() => jest.useRealTimers());
