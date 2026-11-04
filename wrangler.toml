@@ -34,7 +34,7 @@ port = 8788
 # Variáveis de ambiente
 [vars]
 ENVIRONMENT = "production"
-GOOGLE_CALENDAR_ENABLED = "false"
+GOOGLE_CALENDAR_ENABLED = "true"
 GOOGLE_APP_BASE_URL = "https://app.sorrialeste.com.br"
 
 # Observabilidade
