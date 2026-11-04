@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 
@@ -517,10 +517,11 @@ describe('AgendaPage', () => {
     expect(await screen.findByText('Editar Agendamento')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Executor (opcional)'), { target: { value: '12' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Início (opcional)' })).getByRole('button', { name: 'Data' }));
     fireEvent.click(screen.getByRole('button', { name: /16 de julho de 2026/ }));
-    fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '10' } });
-    fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '30' } });
+    fireEvent.change(within(screen.getByRole('group', { name: 'Início (opcional)' })).getByLabelText('Hora'), { target: { value: '10' } });
+    fireEvent.change(within(screen.getByRole('group', { name: 'Início (opcional)' })).getByLabelText('Minutos'), { target: { value: '30' } });
+    fireEvent.change(within(screen.getByRole('group', { name: 'Fim (opcional)' })).getByLabelText('Minutos'), { target: { value: '15' } });
     fireEvent.change(screen.getByLabelText('Observações (opcional)'), { target: { value: 'Levar exames' } });
     fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
 
@@ -535,6 +536,7 @@ describe('AgendaPage', () => {
     expect(requestBody).toEqual({
       executor_id: 12,
       data_agendada: '2026-07-16T10:30',
+      duracao_minutos: 45,
       observacoes: 'Levar exames',
     });
   });
@@ -571,10 +573,16 @@ describe('AgendaPage', () => {
 
     expect(await screen.findByText('Editar grupo de agendamentos')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Início (opcional)' })).getByRole('button', { name: 'Data' }));
     fireEvent.click(screen.getByRole('button', { name: /18 de julho de 2026/ }));
-    fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '11' } });
-    fireEvent.change(screen.getByLabelText('Minutos'), { target: { value: '00' } });
+    fireEvent.change(within(screen.getByRole('group', { name: 'Início (opcional)' })).getByLabelText('Hora'), { target: { value: '11' } });
+    fireEvent.change(within(screen.getByRole('group', { name: 'Início (opcional)' })).getByLabelText('Minutos'), { target: { value: '00' } });
+    fireEvent.change(within(screen.getByRole('group', { name: 'Fim (opcional)' })).getByLabelText('Hora'), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+    expect(await screen.findByText('Escolha um fim após o início, com duração entre 5 minutos e 8 horas.')).toBeInTheDocument();
+    expect(getUnitFetchCallsMatching((url, init) => url.startsWith('/api/agendamentos/') && init?.method === 'PUT')).toHaveLength(0);
+    fireEvent.change(within(screen.getByRole('group', { name: 'Fim (opcional)' })).getByLabelText('Hora'), { target: { value: '12' } });
+    fireEvent.change(within(screen.getByRole('group', { name: 'Fim (opcional)' })).getByLabelText('Minutos'), { target: { value: '15' } });
     fireEvent.change(screen.getByLabelText('Executor para todas (opcional)'), { target: { value: '12' } });
     fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
 
@@ -597,6 +605,7 @@ describe('AgendaPage', () => {
     for (const [, init] of putCalls) {
       expect(JSON.parse(String((init as RequestInit).body))).toEqual({
         data_agendada: '2026-07-18T11:00',
+        duracao_minutos: 75,
         executor_id: 12,
       });
     }

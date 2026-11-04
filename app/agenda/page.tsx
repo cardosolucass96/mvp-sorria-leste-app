@@ -192,6 +192,18 @@ async function assertAgendaResponseOk(response: Response, fallbackMessage: strin
   throw new Error(message);
 }
 
+function fimDoHorario(inicio: string, minutos: number) {
+  if (!inicio) return '';
+  const time = Date.parse(`${inicio.slice(0, 16)}:00Z`);
+  return Number.isFinite(time) ? new Date(time + minutos * 60000).toISOString().slice(0, 16) : '';
+}
+function minutosDoHorario(inicio: string, fim: string) {
+  return (Date.parse(`${fim.slice(0, 16)}:00Z`) - Date.parse(`${inicio.slice(0, 16)}:00Z`)) / 60000;
+}
+function horarioValido(minutos: number) {
+  return Number.isInteger(minutos) && minutos >= 5 && minutos <= 480;
+}
+
 function montarPayloadReagendamento(agendamento: Agendamento, novaData: string): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     cliente_id: agendamento.cliente_id,
@@ -410,9 +422,10 @@ export default function AgendaPage() {
     isOpen: boolean;
     grupo: GrupoCliente | null;
     novaData: string;
+    fim: string;
     executorId: string;
     error: string;
-  }>({ isOpen: false, grupo: null, novaData: '', executorId: '', error: '' });
+  }>({ isOpen: false, grupo: null, novaData: '', fim: '', executorId: '', error: '' });
 
   // Dialog de cancelar
   const [cancelarDialog, setCancelarDialog] = useState<{
@@ -463,7 +476,7 @@ export default function AgendaPage() {
   const [novoExecId, setNovoExecId] = useState('');
   const [novoData, setNovoData] = useState('');
   const [novoDuracao, setNovoDuracao] = useState('');
-  const [editarDuracao, setEditarDuracao] = useState('');
+  const [editarFim, setEditarFim] = useState('');
   const [novoObs, setNovoObs] = useState('');
   const [novoSalvando, setNovoSalvando] = useState(false);
   const [novoError, setNovoError] = useState('');
@@ -807,7 +820,7 @@ export default function AgendaPage() {
   const abrirEditarAgendamento = useCallback(async (agendamento: Agendamento) => {
     if (!canManageAgenda || !isAgendamentoAtivo(agendamento.status)) return;
     await carregarProfissionaisAgenda();
-    setEditarDuracao(agendamento.duracao_minutos ? String(agendamento.duracao_minutos) : '');
+    setEditarFim(fimDoHorario(toDateTimeLocal(agendamento.data_agendada), agendamento.duracao_minutos ?? 30));
     setEditarAgendamentoDialog({
       isOpen: true,
       agendamento,
@@ -871,6 +884,7 @@ export default function AgendaPage() {
       isOpen: true,
       grupo,
       novaData: '',
+      fim: '',
       executorId: '',
       error: '',
     });
@@ -938,7 +952,18 @@ export default function AgendaPage() {
     if (!agendamento) return;
 
     const body: Record<string, unknown> = {};
-    if (editarDuracao !== (agendamento.duracao_minutos ? String(agendamento.duracao_minutos) : '')) body.duracao_minutos = editarDuracao ? Number(editarDuracao) : null;
+    if (data) {
+      const minutos = minutosDoHorario(data, editarFim);
+      if (!horarioValido(minutos)) {
+        setEditarAgendamentoDialog(prev => ({ ...prev, error: 'Escolha um fim após o início, com duração entre 5 minutos e 8 horas.' }));
+        return;
+      }
+      if (data !== toDateTimeLocal(agendamento.data_agendada) || editarFim !== fimDoHorario(toDateTimeLocal(agendamento.data_agendada), agendamento.duracao_minutos ?? 30)) body.duracao_minutos = minutos;
+    }
+    if (!data && editarFim) {
+      setEditarAgendamentoDialog(prev => ({ ...prev, error: 'Informe também a data e o horário de início.' }));
+      return;
+    }
     const executorAtual = agendamento.executor_id ? String(agendamento.executor_id) : '';
     const dataAtual = toDateTimeLocal(agendamento.data_agendada);
     const observacoesAtuais = agendamento.observacoes ?? '';
@@ -1283,12 +1308,21 @@ export default function AgendaPage() {
   // ─── Reagendar direto (sem faltou) ───────────────────────────
 
   const handleEditarGrupo = async () => {
-    const { grupo, novaData, executorId } = reagendarDiretoDialog;
+    const { grupo, novaData, fim, executorId } = reagendarDiretoDialog;
     if (!grupo) return;
 
     const bodyBase: Record<string, unknown> = {};
     if (novaData) {
+      const minutos = minutosDoHorario(novaData, fim);
+      if (!horarioValido(minutos)) {
+        setReagendarDiretoDialog(prev => ({ ...prev, error: 'Escolha um fim após o início, com duração entre 5 minutos e 8 horas.' }));
+        return;
+      }
       bodyBase.data_agendada = novaData;
+      bodyBase.duracao_minutos = minutos;
+    } else if (fim) {
+      setReagendarDiretoDialog(prev => ({ ...prev, error: 'Informe também a data e o horário de início.' }));
+      return;
     }
     if (executorId) {
       bodyBase.executor_id = executorId === GROUP_EXECUTOR_CLEAR_VALUE ? null : parseInt(executorId, 10);
@@ -1322,7 +1356,7 @@ export default function AgendaPage() {
         })
       );
       toast.success('Grupo atualizado com sucesso');
-      setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '', executorId: '', error: '' });
+      setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '', fim: '', executorId: '', error: '' });
       await carregarAgendamentos();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao atualizar grupo';
@@ -1987,7 +2021,7 @@ export default function AgendaPage() {
       {reagendarDiretoDialog.isOpen && reagendarDiretoDialog.grupo && (
         <Modal
           isOpen
-          onClose={() => setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '', executorId: '', error: '' })}
+          onClose={() => setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '', fim: '', executorId: '', error: '' })}
           title="Editar grupo de agendamentos"
         >
           {reagendarDiretoDialog.error && (
@@ -1999,7 +2033,7 @@ export default function AgendaPage() {
             Atualizar as sessões ativas de <strong>{reagendarDiretoDialog.grupo.cliente_nome}</strong>.
           </p>
           <p className="mb-4 text-sm text-muted-foreground">
-            Você pode alterar a data/hora, o executor, ou os dois campos ao mesmo tempo.
+            Você pode alterar o início e o fim, o executor, ou os dois ao mesmo tempo.
           </p>
           <ul className="mb-4 space-y-1">
             {reagendarDiretoDialog.grupo.agendamentos
@@ -2013,12 +2047,17 @@ export default function AgendaPage() {
           </ul>
           <div className="mb-5">
             <DateTimePicker
-              label="Nova data e hora (opcional)"
+              label="Início (opcional)"
               name="editar_grupo_data_agendada"
               value={reagendarDiretoDialog.novaData}
-              onChange={(value) => setReagendarDiretoDialog(prev => ({ ...prev, novaData: value, error: '' }))}
+              onChange={(value) => setReagendarDiretoDialog(prev => ({ ...prev, novaData: value, fim: fimDoHorario(value, horarioValido(minutosDoHorario(prev.novaData, prev.fim)) ? minutosDoHorario(prev.novaData, prev.fim) : 30), error: '' }))}
               hint="Deixe em branco para manter os horários atuais."
             />
+          </div>
+          <div className="mb-5">
+            <DateTimePicker label="Fim (opcional)" name="editar_grupo_fim" value={reagendarDiretoDialog.fim}
+              onChange={value => setReagendarDiretoDialog(prev => ({ ...prev, fim: value, error: '' }))}
+              hint="O mesmo início e fim serão aplicados a cada sessão ativa do grupo." />
           </div>
           <div className="mb-5">
             <Select
@@ -2040,7 +2079,7 @@ export default function AgendaPage() {
           <div className="flex justify-end gap-2">
             <Button
               variant="ghost"
-              onClick={() => setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '', executorId: '', error: '' })}
+              onClick={() => setReagendarDiretoDialog({ isOpen: false, grupo: null, novaData: '', fim: '', executorId: '', error: '' })}
             >
               Voltar
             </Button>
@@ -2106,15 +2145,21 @@ export default function AgendaPage() {
 
           <div className="mt-4">
             <DateTimePicker
-              label="Data e hora (opcional)"
+              label="Início (opcional)"
               name="editar_agendamento_data_agendada"
               value={editarAgendamentoDialog.data}
-              onChange={(value) => setEditarAgendamentoDialog((prev) => ({ ...prev, data: value, error: '' }))}
+              onChange={(value) => {
+                const minutos = minutosDoHorario(editarAgendamentoDialog.data, editarFim);
+                setEditarFim(fimDoHorario(value, horarioValido(minutos) ? minutos : 30));
+                setEditarAgendamentoDialog(prev => ({ ...prev, data: value, error: '' }));
+              }}
               hint="Deixe em branco para deixar o agendamento sem data."
             />
           </div>
 
-          <div className="mt-4"><Input label="Duração (minutos)" name="editar_duracao" type="number" min={5} max={480} value={editarDuracao} onChange={setEditarDuracao} hint="Em branco: duração padrão do responsável (30 min se não configurada)." /></div>
+          <div className="mt-4"><DateTimePicker label="Fim (opcional)" name="editar_agendamento_fim" value={editarFim}
+            onChange={value => { setEditarFim(value); setEditarAgendamentoDialog(prev => ({ ...prev, error: '' })); }}
+            hint="A duração será calculada a partir do início e do fim." /></div>
 
           <div className="mt-4">
             <Textarea
