@@ -42,6 +42,7 @@ export interface EventLink {
   agendamento_id: number;
   event_id: string;
   etag: string | null;
+  pending_write?: string | null;
   remote_snapshot: string | null;
   local_snapshot: string | null;
   conflict: string | null;

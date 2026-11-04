@@ -74,6 +74,8 @@ jest.mock('@/components/ui/Toast', () => ({
   }),
 }));
 
+jest.mock('@/components/domain/AgendaCalendario', () => ({ __esModule: true, default: jest.requireMock('@/components/domain').AgendaCalendario }));
+
 jest.mock('@/lib/utils/usePageTitle', () => jest.fn());
 
 jest.mock('@/components/domain', () => ({

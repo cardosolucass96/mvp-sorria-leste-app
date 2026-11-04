@@ -718,6 +718,7 @@ CREATE TABLE IF NOT EXISTS google_calendar_links (
   agendamento_id INTEGER NOT NULL,
   event_id TEXT NOT NULL,
   etag TEXT,
+  pending_write TEXT,
   remote_snapshot TEXT,
   local_snapshot TEXT,
   conflict TEXT,
@@ -754,3 +755,13 @@ BEGIN
   INSERT INTO google_calendar_outbox(connection_id,agendamento_id)
   SELECT id,OLD.id FROM google_calendar_connections WHERE unidade_id=OLD.unidade_id AND status!='disconnecting';
 END;
+
+CREATE TABLE IF NOT EXISTS google_calendar_archives (
+  unidade_id INTEGER NOT NULL REFERENCES unidades(id),
+  google_subject TEXT NOT NULL,
+  connection_id TEXT NOT NULL,
+  calendar_id TEXT NOT NULL,
+  default_duration INTEGER NOT NULL,
+  links TEXT NOT NULL,
+  PRIMARY KEY(unidade_id,google_subject)
+);

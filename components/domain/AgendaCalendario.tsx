@@ -23,6 +23,8 @@ import {
   endOfAgendaWeek,
 } from '@/lib/utils/agendaCalendar';
 import ViewModeToggle from './ViewModeToggle';
+import type { ExternalEvent } from '@/modules/google-calendar/contracts';
+import { externalEventDays } from '@/modules/google-calendar/calendar-display';
 
 interface AgendamentoMinimal {
   id: number;
@@ -41,6 +43,7 @@ export interface AgendaCalendarioProps<T extends AgendamentoMinimal> {
   selectedDay: Date | null;
   onSelectDay: (date: Date | null) => void;
   loading?: boolean;
+  externalEvents?: ExternalEvent[];
 }
 
 interface AgendaEventGroup<T extends AgendamentoMinimal> {
@@ -65,6 +68,7 @@ const WEEK_END_HOUR = 20;
 const LEGEND_STATUSES = ['agendado', 'faltou', 'realizado', 'cancelado'] as const;
 
 const STATUS_EVENT_STYLES: Record<string, string> = {
+  google: 'border-primary-200 bg-primary-50 text-primary-900 dark:border-primary-500/65 dark:bg-primary-500/18 dark:text-primary-50',
   faltou: 'border-warning-200 bg-warning-50 text-warning-900 dark:border-warning-500/65 dark:bg-warning-500/18 dark:text-warning-50',
   pendente: 'border-muted bg-muted/65 text-muted-foreground dark:border-muted dark:bg-muted/55',
   agendado: 'border-info-200 bg-info-50 text-info-900 dark:border-info-500/65 dark:bg-info-500/18 dark:text-info-50',
@@ -139,6 +143,7 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
   selectedDay,
   onSelectDay,
   loading = false,
+  externalEvents,
 }: AgendaCalendarioProps<T>) {
   const selectedDayKey = selectedDay ? formatAgendaDateKey(selectedDay) : null;
 
@@ -187,12 +192,21 @@ export default function AgendaCalendario<T extends AgendamentoMinimal>({
       }
     }
 
+    for (const event of externalEvents ?? []) {
+      for (const day of externalEventDays(event, focusedDate, view)) {
+        const key = `google:${event.event_id}:${day.dateKey}`;
+        map.set(key, { key, date: day.date, dateKey: day.dateKey, hourNumber: day.hour,
+          sortMinutes: day.minutes, timeLabel: day.time, hasExplicitTime: !event.all_day,
+          clienteId: 0, clienteNome: event.summary, firstName: `Google · ${event.summary}`,
+          statusDom: 'google', total: 1, items: [] });
+      }
+    }
     return Array.from(map.values()).sort((left, right) => (
       left.date.getTime() - right.date.getTime()
       || left.sortMinutes - right.sortMinutes
       || left.clienteNome.localeCompare(right.clienteNome)
     ));
-  }, [agendamentos]);
+  }, [agendamentos, externalEvents, focusedDate, view]);
 
   const monthEventsByDay = useMemo(() => {
     const map = new Map<string, AgendaEventGroup<T>[]>();

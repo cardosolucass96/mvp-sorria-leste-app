@@ -52,7 +52,7 @@ export async function resolveConflict(db: D1Database, config: GoogleConfig, unit
     if (choice === 'local') {
       const id = event.status === 'cancelled' ? randomToken() : link.event_id;
       await db.batch([
-        db.prepare('UPDATE google_calendar_links SET conflict=NULL,event_id=?,etag=?,remote_snapshot=? WHERE connection_id=? AND agendamento_id=?')
+        db.prepare('UPDATE google_calendar_links SET pending_write=NULL,conflict=NULL,event_id=?,etag=?,remote_snapshot=? WHERE connection_id=? AND agendamento_id=?')
           .bind(id, id === link.event_id ? event.etag ?? null : null, id === link.event_id ? remoteSnapshot(event) : null, connection.id, appointmentId),
         db.prepare('INSERT INTO google_calendar_outbox(connection_id,agendamento_id) VALUES (?,?)').bind(connection.id, appointmentId),
       ]);
@@ -63,7 +63,7 @@ export async function resolveConflict(db: D1Database, config: GoogleConfig, unit
       await db.batch([
         db.prepare('DELETE FROM google_calendar_outbox WHERE connection_id=? AND agendamento_id=? AND id<=?').bind(connection.id, appointmentId, revision?.id ?? 0),
         // Force comparison even if the remote event reverted to the previous baseline.
-        db.prepare("UPDATE google_calendar_links SET conflict=NULL,remote_snapshot='resolve' WHERE connection_id=? AND agendamento_id=?").bind(connection.id, appointmentId),
+        db.prepare("UPDATE google_calendar_links SET pending_write=NULL,conflict=NULL,remote_snapshot='resolve' WHERE connection_id=? AND agendamento_id=?").bind(connection.id, appointmentId),
       ]);
       await applyRemote(db, connection, event);
     }

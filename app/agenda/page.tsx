@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, UserCheck, UserX, MessageCircle, CalendarClock, X, Plus, FileText, List, CalendarDays, Pencil } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import GoogleAgendaCalendario from '@/components/domain/GoogleAgendaCalendario';
 import GoogleCalendarPanel from '@/components/domain/GoogleCalendarPanel';
 import LoadingState from '@/components/ui/LoadingState';
 import Spinner from '@/components/ui/Spinner';
@@ -17,7 +18,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import Modal from '@/components/ui/Modal';
 import Textarea from '@/components/ui/Textarea';
 import { Skeleton } from '@/components/ui/_shadcn/skeleton';
-import { StatusBadge, ProntuarioDrawer, AgendaCalendario, ViewModeToggle } from '@/components/domain';
+import { StatusBadge, ProntuarioDrawer, ViewModeToggle } from '@/components/domain';
 import { useToast } from '@/components/ui/Toast';
 import {
   formatarData,
@@ -1766,7 +1767,7 @@ export default function AgendaPage() {
 
       {viewMode === 'calendario' ? (
         <div className="grid gap-6 md:grid-cols-[1fr_minmax(0,420px)]">
-          <AgendaCalendario
+          <GoogleAgendaCalendario
             agendamentos={agendamentos}
             view={calendarSubview}
             onViewChange={setCalendarSubview}

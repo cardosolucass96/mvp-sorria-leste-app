@@ -21,11 +21,53 @@ export async function cacheEvent(db: D1Database, connection: string, event: Goog
     event.end?.dateTime ?? event.end?.date ?? null, event.start?.date ? 1 : 0,
     event.recurrence?.length || event.recurringEventId ? 1 : 0, event.status ?? 'confirmed', event.etag ?? null, JSON.stringify(safe)).run();
 }
+interface PendingWrite { deleted?: boolean; token: string; snapshot: string; local: string; revision: number; duration: number; }
+async function acknowledgeWrite(db: D1Database, connection: GoogleConnection, link: EventLink, event: GoogleEvent, write: PendingWrite) {
+  await db.batch([
+    db.prepare('INSERT INTO google_calendar_suppressions(agendamento_id) VALUES (?)').bind(link.agendamento_id),
+    db.prepare(`UPDATE agendamentos SET duracao_minutos=? WHERE id=? AND unidade_id=? AND duracao_minutos IS NULL
+      AND NOT EXISTS(SELECT 1 FROM google_calendar_outbox WHERE connection_id=? AND agendamento_id=? AND id>?)`)
+      .bind(write.duration, link.agendamento_id, connection.unidade_id, connection.id, link.agendamento_id, write.revision),
+    db.prepare(`UPDATE google_calendar_links SET etag=?,remote_snapshot=?,local_snapshot=?,pending_write=NULL,conflict=NULL
+      WHERE connection_id=? AND agendamento_id=?`)
+      .bind(event.etag ?? null, remoteSnapshot(event), write.local, connection.id, link.agendamento_id),
+    db.prepare('DELETE FROM google_calendar_outbox WHERE connection_id=? AND agendamento_id=? AND id<=?')
+      .bind(connection.id, link.agendamento_id, write.revision),
+    db.prepare('DELETE FROM google_calendar_suppressions WHERE agendamento_id=?').bind(link.agendamento_id),
+  ]);
+}
+async function recoverWrite(db: D1Database, connection: GoogleConnection, link: EventLink, event: GoogleEvent) {
+  if (!link.pending_write) return false;
+  const write = JSON.parse(link.pending_write) as PendingWrite;
+  if (write.deleted && event.status === 'cancelled') {
+    await db.batch([
+      db.prepare('DELETE FROM google_calendar_links WHERE connection_id=? AND agendamento_id=?').bind(connection.id, link.agendamento_id),
+      db.prepare('DELETE FROM google_calendar_events WHERE connection_id=? AND event_id=?').bind(connection.id, link.event_id),
+      db.prepare('DELETE FROM google_calendar_outbox WHERE connection_id=? AND agendamento_id=? AND id<=?')
+        .bind(connection.id, link.agendamento_id, write.revision),
+    ]);
+    return true;
+  }
+  if (event.extendedProperties?.private?.sorriaWrite !== write.token || remoteSnapshot(event) !== write.snapshot) return false;
+  await acknowledgeWrite(db, connection, link, event, write);
+  return true;
+}
+async function archiveConnection(db: D1Database, connection: GoogleConnection, owner: string) {
+  const links = await db.prepare('SELECT * FROM google_calendar_links WHERE connection_id=?').bind(connection.id).all<EventLink>();
+  await db.batch([
+    db.prepare(`INSERT INTO google_calendar_archives(unidade_id,google_subject,connection_id,calendar_id,default_duration,links)
+      SELECT unidade_id,google_subject,id,calendar_id,default_duration,? FROM google_calendar_connections WHERE id=? AND lease_owner=?
+      ON CONFLICT(unidade_id,google_subject) DO UPDATE SET connection_id=excluded.connection_id,calendar_id=excluded.calendar_id,
+      default_duration=excluded.default_duration,links=excluded.links`).bind(JSON.stringify(links.results), connection.id, owner),
+    db.prepare('DELETE FROM google_calendar_connections WHERE id=? AND lease_owner=?').bind(connection.id, owner),
+  ]);
+}
 export async function applyRemote(db: D1Database, connection: GoogleConnection, event: GoogleEvent) {
   await cacheEvent(db, connection.id, event);
   const link = await db.prepare('SELECT * FROM google_calendar_links WHERE connection_id=? AND event_id=?')
     .bind(connection.id, event.id).first<EventLink>();
   if (!link) return;
+  if (await recoverWrite(db, connection, link, event)) return;
   const snapshot = remoteSnapshot(event);
   if (link.remote_snapshot === snapshot) {
     await db.prepare('UPDATE google_calendar_links SET etag=? WHERE connection_id=? AND event_id=?')
@@ -134,6 +176,10 @@ async function push(db: D1Database, connection: GoogleConnection, api: GoogleApi
         let remote: GoogleEvent | null = null;
         try { remote = await api.get(link.event_id); }
         catch (error) { if (!(error instanceof GoogleFailure && [404, 410].includes(error.status))) throw error; }
+        if (await recoverWrite(db, connection, link, remote ?? { id: link.event_id, status: 'cancelled' })) {
+          // Preserve later local edits; the next pass sends their own revision.
+          continue;
+        }
         if (remote && link.remote_snapshot && remoteSnapshot(remote) !== link.remote_snapshot) {
           await applyRemote(db, connection, remote);
           continue;
@@ -152,22 +198,21 @@ async function push(db: D1Database, connection: GoogleConnection, api: GoogleApi
             throw new Error('Identificador do evento já pertence a outro compromisso.');
           }
           if (remote && !remote.etag) throw new Error('Evento Google sem versão para atualização segura.');
+          const resolved = { ...appointment, duracao_minutos: appointment.duracao_minutos ?? connection.default_duration };
+          const write: PendingWrite = { token: randomToken(), snapshot: remoteSnapshot(body), local: localSnapshot(resolved),
+            revision: job.revision, duration: resolved.duracao_minutos };
+          body.extendedProperties!.private!.sorriaWrite = write.token;
+          await db.prepare('UPDATE google_calendar_links SET pending_write=? WHERE connection_id=? AND agendamento_id=?')
+            .bind(JSON.stringify(write), connection.id, appointment.id).run();
           const written = remote ? await api.patch(link.event_id, body, remote.etag!) : await api.insert(body);
           await cacheEvent(db, connection.id, written);
-          const resolved = { ...appointment, duracao_minutos: appointment.duracao_minutos ?? connection.default_duration };
-          await db.batch([
-            db.prepare('INSERT INTO google_calendar_suppressions(agendamento_id) VALUES (?)').bind(appointment.id),
-            // Freeze the default actually sent, but never overwrite a concurrent local edit.
-            db.prepare(`UPDATE agendamentos SET duracao_minutos=? WHERE id=? AND unidade_id=? AND duracao_minutos IS NULL
-              AND NOT EXISTS(SELECT 1 FROM google_calendar_outbox WHERE connection_id=? AND agendamento_id=? AND id>?)`)
-              .bind(resolved.duracao_minutos, appointment.id, connection.unidade_id, connection.id, appointment.id, job.revision),
-            db.prepare(`UPDATE google_calendar_links SET etag=?,remote_snapshot=?,local_snapshot=?,conflict=NULL
-              WHERE connection_id=? AND agendamento_id=?`).bind(written.etag ?? null, remoteSnapshot(written), localSnapshot(resolved), connection.id, appointment.id),
-            db.prepare('DELETE FROM google_calendar_suppressions WHERE agendamento_id=?').bind(appointment.id),
-          ]);
+          await acknowledgeWrite(db, connection, link, written, write);
         } else {
           if (remote && remote.status !== 'cancelled') {
             if (!remote.etag) throw new Error('Evento Google sem versão para exclusão segura.');
+            const write: PendingWrite = { deleted: true, token: randomToken(), revision: job.revision, snapshot: '', local: '', duration: 0 };
+            await db.prepare('UPDATE google_calendar_links SET pending_write=? WHERE connection_id=? AND agendamento_id=?')
+              .bind(JSON.stringify(write), connection.id, job.agendamento_id).run();
             await api.delete(link.event_id, remote.etag);
           }
           await db.batch([
@@ -230,7 +275,7 @@ export async function processConnection(db: D1Database, config: GoogleConfig, id
           catch (error) { if (!(error instanceof GoogleFailure && [404, 410].includes(error.status))) throw error; }
         }
       }
-      await db.prepare('DELETE FROM google_calendar_connections WHERE id=? AND lease_owner=?').bind(id, owner).run();
+      await archiveConnection(db, connection, owner);
       return;
     }
     // Clear request before I/O; a webhook arriving during sync sets it again and is retained.
@@ -244,7 +289,7 @@ export async function processConnection(db: D1Database, config: GoogleConfig, id
     const reconnect = error instanceof GoogleFailure && error.reconnect;
     if (connection.status === 'disconnecting' && reconnect) {
       // Revoked credentials cannot stop channels; deletion prevents further processing locally.
-      await db.prepare('DELETE FROM google_calendar_connections WHERE id=? AND lease_owner=?').bind(id, owner).run();
+      await archiveConnection(db, connection, owner);
       return;
     }
     const message = reconnect ? 'Reconecte a conta Google.' : 'Falha ao sincronizar. Uma nova tentativa será feita automaticamente.';

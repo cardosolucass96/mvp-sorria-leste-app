@@ -4,7 +4,7 @@ import { createSqliteDb } from '../helpers/sqlite-db.cjs';
 import { __setMockDb, __resetMocks } from '../../__mocks__/opennextjs-cloudflare';
 import { applyRemote, processConnection } from '@/modules/google-calendar/server/sync';
 import { encrypt, decrypt, digest } from '@/modules/google-calendar/server/crypto';
-import { remoteSnapshot, toGoogle } from '@/modules/google-calendar/server/mapping';
+import { localSnapshot, remoteSnapshot, toGoogle } from '@/modules/google-calendar/server/mapping';
 import { authorize, completeAuthorization } from '@/modules/google-calendar/server/oauth';
 import { resolveConflict, linkExternal } from '@/modules/google-calendar/server/actions';
 import type { GoogleConnection, GoogleEvent, Appointment } from '@/modules/google-calendar/contracts';
@@ -343,4 +343,109 @@ test('Google updates made while outbound request is pending are protected with I
   });
   await expect(processConnection(getDb(), config, 'conn')).rejects.toThrow('mudou');
   expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(1);
+});
+
+test.each([false, true])('lost update response recovers and preserves newer local edits (%s)', async (laterEdit) => {
+  createAppointment(); mirror();
+  db.sqlite.exec("UPDATE agendamentos SET data_agendada='2030-01-12T12:00:00Z' WHERE id=1");
+  let remote = event(); let patched = false;
+  fetchMock.mockImplementation(async (url: string, init: RequestInit = {}) => {
+    if (url.includes('oauth2.googleapis.com')) return response({ access_token: 'access' });
+    if (url.includes('?maxResults')) return response({ items: [remote], nextSyncToken: 'cursor' });
+    if (init.method === 'PATCH') {
+      remote = { ...remote, ...JSON.parse(init.body as string), etag: 'v2' };
+      if (!patched) { patched = true; throw new Error('response lost after update committed'); }
+      return response(remote);
+    }
+    return response(remote);
+  });
+  await expect(processConnection(getDb(), config, 'conn')).rejects.toThrow();
+  if (laterEdit) db.sqlite.exec("UPDATE agendamentos SET data_agendada='2030-01-15T12:00:00Z' WHERE id=1");
+  await processConnection(getDb(), config, 'conn');
+  expect(remote.start?.dateTime).toBe(laterEdit ? '2030-01-15T12:00:00.000Z' : '2030-01-12T12:00:00.000Z');
+  expect(row('SELECT conflict FROM google_calendar_links').conflict).toBeNull();
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(0);
+});
+
+test.each([false, true])('disconnect/reconnect reuses mirrors and sends offline edits (%s)', async (offlineEdit) => {
+  createAppointment(); mirror();
+  db.sqlite.prepare('UPDATE google_calendar_links SET local_snapshot=?').run(localSnapshot(appointment()));
+  const oldEvent = event({ extendedProperties: { private: { sorriaConnection: 'conn', sorriaAppointment: '1' } } });
+  db.sqlite.exec("UPDATE google_calendar_connections SET status='disconnecting'");
+  fetchMock.mockResolvedValueOnce(response({ access_token: 'access' })).mockResolvedValueOnce(response(null, 204));
+  await processConnection(getDb(), config, 'conn');
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_connections').n).toBe(0);
+  expect(JSON.stringify(row('SELECT * FROM google_calendar_archives'))).not.toContain('refresh_token');
+  if (offlineEdit) db.sqlite.exec("UPDATE agendamentos SET data_agendada='2030-01-15T12:00:00Z' WHERE id=1");
+  const auth = await authorize(getDb(), config, 1, 1);
+  fetchMock.mockResolvedValueOnce(response({ access_token: 'access', refresh_token: 'refresh', scope: 'openid email https://www.googleapis.com/auth/calendar.events' }))
+    .mockResolvedValueOnce(response({ sub: 'subject', email: 'calendar@example.test', email_verified: true }));
+  await completeAuthorization(getDb(), config, new URL(auth.url).searchParams.get('state')!, auth.browser, 'code');
+  const fresh = row('SELECT id FROM google_calendar_connections').id;
+  db.sqlite.prepare('INSERT INTO google_calendar_channels(id,connection_id,token_hash,resource_id,expires_at) VALUES (?,?,?,?,?)')
+    .run('new-channel', fresh, await digest('token'), 'resource', Date.now() + 7*86400000);
+  await callRoute(backfill, '/api/integracoes/google/backfill', { method: 'POST', body: { confirm: true } });
+  let inserts = 0; let patches = 0;
+  fetchMock.mockImplementation(async (url: string, init: RequestInit = {}) => {
+    if (url.includes('oauth2.googleapis.com')) return response({ access_token: 'access' });
+    if (url.includes('?maxResults')) return response({ items: [oldEvent], nextSyncToken: 'cursor' });
+    if (init.method === 'PATCH') { patches++; return response({ ...oldEvent, ...JSON.parse(init.body as string), etag: 'v2' }); }
+    if (url.endsWith('/remote')) return response(oldEvent);
+    if (init.method === 'POST') { inserts++; return response({ ...JSON.parse(init.body as string), etag: 'new' }); }
+    return response({}, 404);
+  });
+  await processConnection(getDb(), config, fresh);
+  expect(inserts).toBe(0);
+  expect(patches).toBe(offlineEdit ? 1 : 0);
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(0);
+});
+
+test('lost cancellation response recovers without false conflict or reopening the appointment', async () => {
+  createAppointment(); mirror();
+  db.sqlite.exec("UPDATE agendamentos SET status='cancelado' WHERE id=1");
+  let remote = event();
+  fetchMock.mockImplementation(async (url: string, init: RequestInit = {}) => {
+    if (url.includes('oauth2.googleapis.com')) return response({ access_token: 'access' });
+    if (url.includes('?maxResults')) return response({ items: [remote], nextSyncToken: 'cursor' });
+    if (init.method === 'DELETE') { remote = event({ status: 'cancelled' }); throw new Error('response lost'); }
+    return response(remote);
+  });
+  await expect(processConnection(getDb(), config, 'conn')).rejects.toThrow();
+  await processConnection(getDb(), config, 'conn');
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_links').n).toBe(0);
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(0);
+  expect(appointment().status).toBe('cancelado');
+});
+
+test('a genuine Google edit after an uncertain write still requires conflict resolution', async () => {
+  createAppointment(); mirror();
+  db.sqlite.exec("UPDATE agendamentos SET data_agendada='2030-01-12T12:00:00Z' WHERE id=1");
+  let remote = event();
+  fetchMock.mockImplementation(async (url: string, init: RequestInit = {}) => {
+    if (url.includes('oauth2.googleapis.com')) return response({ access_token: 'access' });
+    if (url.includes('?maxResults')) return response({ items: [remote], nextSyncToken: 'cursor' });
+    if (init.method === 'PATCH') {
+      remote = { ...remote, ...JSON.parse(init.body as string), start: { dateTime: '2030-01-15T12:00:00Z' }, end: { dateTime: '2030-01-15T12:30:00Z' } };
+      throw new Error('response lost then edited externally');
+    }
+    return response(remote);
+  });
+  await expect(processConnection(getDb(), config, 'conn')).rejects.toThrow();
+  await processConnection(getDb(), config, 'conn');
+  expect(row('SELECT conflict FROM google_calendar_links').conflict).toContain('dois sistemas');
+  expect(appointment().data_agendada).toBe('2030-01-12T12:00:00Z');
+});
+
+test.each([{ unit: 1, subject: 'another-account' }, { unit: 2, subject: 'subject' }])('archived mirrors are isolated by Google account and unit (%j)', async ({ unit, subject }) => {
+  createAppointment(); mirror();
+  db.sqlite.exec("UPDATE google_calendar_connections SET status='disconnecting'");
+  fetchMock.mockResolvedValueOnce(response({ access_token: 'access' })).mockResolvedValueOnce(response(null, 204));
+  await processConnection(getDb(), config, 'conn');
+  const auth = await authorize(getDb(), config, unit, 1);
+  fetchMock.mockResolvedValueOnce(response({ access_token: 'access', refresh_token: 'new-refresh', scope: 'openid email https://www.googleapis.com/auth/calendar.events' }))
+    .mockResolvedValueOnce(response({ sub: subject, email: 'verified@example.test', email_verified: true }));
+  await completeAuthorization(getDb(), config, new URL(auth.url).searchParams.get('state')!, auth.browser, 'code');
+  expect(row('SELECT id FROM google_calendar_connections').id).not.toBe('conn');
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_links').n).toBe(0);
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_archives').n).toBe(1);
 });
