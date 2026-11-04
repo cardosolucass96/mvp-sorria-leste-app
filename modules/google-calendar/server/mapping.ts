@@ -25,8 +25,12 @@ export function shouldPublish(event: Appointment | null): event is Appointment {
 export function toGoogle(event: Appointment, connection: GoogleConnection, eventId: string, baseUrl: string): GoogleEvent & { description: string } {
   const start = new Date(event.data_agendada!).toISOString();
   const minutes = event.duracao_minutos ?? connection.default_duration;
+  const unit = event.unidade_nome?.trim() || `Unidade ${event.unidade_id}`;
+  const address = event.unidade_endereco?.trim();
   return {
-    id: eventId, summary: `Sorria Leste • ${event.cliente_nome}`, status: 'confirmed',
+    id: eventId, summary: `Sorria Leste • ${unit} • ${event.cliente_nome}`,
+    location: address ? `Sorria Leste • ${unit} — ${address}` : `Sorria Leste • ${unit}`,
+    status: 'confirmed',
     description: `Agendamento #${event.id}\n${baseUrl}/agenda`,
     start: { dateTime: start, timeZone: 'America/Fortaleza' },
     end: { dateTime: new Date(Date.parse(start) + minutes * 60000).toISOString(), timeZone: 'America/Fortaleza' },

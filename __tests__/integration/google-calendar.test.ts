@@ -2,7 +2,7 @@ import { webcrypto } from 'node:crypto';
 import { getDb } from '@/lib/db';
 import { createSqliteDb } from '../helpers/sqlite-db.cjs';
 import { __setMockDb, __resetMocks } from '../../__mocks__/opennextjs-cloudflare';
-import { applyRemote, processConnection } from '@/modules/google-calendar/server/sync';
+import { applyRemote, processConnection, loadAppointment } from '@/modules/google-calendar/server/sync';
 import { encrypt, decrypt, digest } from '@/modules/google-calendar/server/crypto';
 import { localSnapshot, remoteSnapshot, toGoogle } from '@/modules/google-calendar/server/mapping';
 import { authorize, completeAuthorization } from '@/modules/google-calendar/server/oauth';
@@ -448,4 +448,22 @@ test.each([{ unit: 1, subject: 'another-account' }, { unit: 2, subject: 'subject
   expect(row('SELECT id FROM google_calendar_connections').id).not.toBe('conn');
   expect(row('SELECT COUNT(*) AS n FROM google_calendar_links').n).toBe(0);
   expect(row('SELECT COUNT(*) AS n FROM google_calendar_archives').n).toBe(1);
+});
+
+test('Google title and location use the appointment unit, with no patient address', async () => {
+  createAppointment();
+  db.sqlite.exec("UPDATE unidades SET nome='Barra do Ceará',endereco='Av. Pres. Castelo Branco, 5185 - Lj 05' WHERE id=1");
+  const loaded = await loadAppointment(getDb(), 1, 1);
+  const payload = toGoogle(loaded!, connection(), 'remote', config.baseUrl);
+  expect(payload.summary).toBe('Sorria Leste • Barra do Ceará • Paciente');
+  expect(payload.location).toBe('Sorria Leste • Barra do Ceará — Av. Pres. Castelo Branco, 5185 - Lj 05');
+  expect(await loadAppointment(getDb(), 1, 2)).toBeNull();
+  expect(toGoogle({ ...loaded!, unidade_endereco: null }, connection(), 'remote', config.baseUrl).location).toBe('Sorria Leste • Barra do Ceará');
+});
+test('unit address changes enqueue only its existing mirrored appointments', () => {
+  createAppointment(); mirror();
+  db.sqlite.exec("UPDATE unidades SET endereco='Outro endereço' WHERE id=2");
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(0);
+  db.sqlite.exec("UPDATE unidades SET endereco='Endereço atualizado' WHERE id=1");
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(1);
 });

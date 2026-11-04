@@ -2,6 +2,7 @@ export interface GoogleEvent {
   id: string;
   etag?: string;
   summary?: string;
+  location?: string;
   status?: string;
   start?: { dateTime?: string; date?: string; timeZone?: string };
   end?: { dateTime?: string; date?: string; timeZone?: string };
@@ -32,6 +33,8 @@ export interface Appointment {
   unidade_id: number;
   cliente_id: number;
   cliente_nome: string;
+  unidade_nome?: string;
+  unidade_endereco?: string | null;
   executor_id: number | null;
   data_agendada: string | null;
   duracao_minutos: number | null;
