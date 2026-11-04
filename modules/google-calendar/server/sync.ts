@@ -4,8 +4,8 @@ import { decrypt, digest, randomToken } from './crypto';
 import { assertEnabled, GoogleApi, GoogleFailure, tokenRequest, type GoogleConfig } from './google-api';
 import { localSnapshot, remoteInterval, remoteSnapshot, shouldPublish, toGoogle } from './mapping';
 
-export const APPOINTMENT_SQL = `SELECT a.*,c.nome AS cliente_nome,u.nome AS unidade_nome,u.endereco AS unidade_endereco FROM agendamentos a
-  JOIN clientes c ON c.id=a.cliente_id JOIN unidades u ON u.id=a.unidade_id WHERE a.id=? AND a.unidade_id=?`;
+export const APPOINTMENT_SQL = `SELECT a.*,c.nome AS cliente_nome,u.nome AS unidade_nome,p.nome AS procedimento_nome FROM agendamentos a
+  JOIN clientes c ON c.id=a.cliente_id JOIN unidades u ON u.id=a.unidade_id LEFT JOIN procedimentos p ON p.id=a.procedimento_id WHERE a.id=? AND a.unidade_id=?`;
 export async function loadAppointment(db: D1Database, id: number, unit: number) {
   return db.prepare(APPOINTMENT_SQL).bind(id, unit).first<Appointment>();
 }

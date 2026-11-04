@@ -61,7 +61,7 @@ export async function completeAuthorization(db: D1Database, config: GoogleConfig
       SELECT l.connection_id,l.agendamento_id FROM google_calendar_links l
       LEFT JOIN agendamentos a ON a.id=l.agendamento_id AND a.unidade_id=?
       WHERE l.connection_id=? AND (l.pending_write IS NOT NULL OR l.remote_snapshot IS NULL OR a.id IS NULL
-        OR json_array(a.data_agendada,a.duracao_minutos,a.status,a.cliente_id,a.executor_id,a.unidade_id)!=l.local_snapshot)`)
+        OR json_array(a.data_agendada,a.duracao_minutos,a.status,a.cliente_id,a.executor_id,a.unidade_id,a.procedimento_id,a.observacoes)!=l.local_snapshot)`)
       .bind(context.unidade_id, id));
     statements.push(db.prepare('DELETE FROM google_calendar_archives WHERE unidade_id=? AND google_subject=?').bind(context.unidade_id, profile.sub));
     await db.batch(statements);

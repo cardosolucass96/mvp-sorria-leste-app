@@ -35,7 +35,9 @@ export interface Appointment {
   cliente_id: number;
   cliente_nome: string;
   unidade_nome?: string;
-  unidade_endereco?: string | null;
+  procedimento_id?: number | null;
+  procedimento_nome?: string | null;
+  observacoes?: string | null;
   executor_id: number | null;
   data_agendada: string | null;
   duracao_minutos: number | null;

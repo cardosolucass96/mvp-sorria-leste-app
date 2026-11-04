@@ -76,8 +76,9 @@ test('encryption is bound to connection and rejects tampering', async () => {
 });
 
 test('Google reschedule updates appointment without echo or clinical/financial changes', async () => {
-  createAppointment(); mirror();
+  createAppointment();
   db.sqlite.exec("UPDATE agendamentos SET observacoes='Privado',valor_pago=80 WHERE id=1");
+  mirror();
   await applyRemote(getDb(), connection(), event({ etag: 'v2', start: { dateTime: '2030-01-10T15:00:00Z' }, end: { dateTime: '2030-01-10T15:45:00Z' } }));
   expect(row('SELECT data_agendada,duracao_minutos,observacoes,valor_pago FROM agendamentos')).toMatchObject({ data_agendada: '2030-01-10T15:00:00.000Z', duracao_minutos: 45, observacoes: 'Privado', valor_pago: 80 });
   expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(0);
@@ -227,7 +228,7 @@ test('backfill is explicit and idempotent', async () => {
   expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(1);
 });
 
-test('outbound payload omits clinical and financial data', () => {
+test('empty appointment description omits unrelated data', () => {
   createAppointment();
   const payload = toGoogle(appointment(), connection(), 'id', config.baseUrl);
   expect(Object.keys(payload)).not.toContain('attendees');
@@ -450,21 +451,21 @@ test.each([{ unit: 1, subject: 'another-account' }, { unit: 2, subject: 'subject
   expect(row('SELECT COUNT(*) AS n FROM google_calendar_archives').n).toBe(1);
 });
 
-test('Google title and location use the appointment unit, with no patient address', async () => {
+test('Google title identifies the unit while location is explicitly cleared', async () => {
   createAppointment();
   db.sqlite.exec("UPDATE unidades SET nome='Barra do Ceará',endereco='Av. Pres. Castelo Branco, 5185 - Lj 05' WHERE id=1");
   const loaded = await loadAppointment(getDb(), 1, 1);
   const payload = toGoogle(loaded!, connection(), 'remote', config.baseUrl);
   expect(payload.summary).toBe('Sorria Leste • Barra do Ceará • Paciente');
-  expect(payload.location).toBe('Sorria Leste • Barra do Ceará — Av. Pres. Castelo Branco, 5185 - Lj 05');
+  expect(payload.location).toBe('');
   expect(await loadAppointment(getDb(), 1, 2)).toBeNull();
-  expect(toGoogle({ ...loaded!, unidade_endereco: null }, connection(), 'remote', config.baseUrl).location).toBe('Sorria Leste • Barra do Ceará');
+
 });
-test('unit address changes enqueue only its existing mirrored appointments', () => {
+test('unit name changes enqueue only its existing mirrored appointments', () => {
   createAppointment(); mirror();
-  db.sqlite.exec("UPDATE unidades SET endereco='Outro endereço' WHERE id=2");
+  db.sqlite.exec("UPDATE unidades SET nome='Outra unidade' WHERE id=2");
   expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(0);
-  db.sqlite.exec("UPDATE unidades SET endereco='Endereço atualizado' WHERE id=1");
+  db.sqlite.exec("UPDATE unidades SET nome='Nome atualizado' WHERE id=1");
   expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(1);
 });
 
@@ -521,4 +522,20 @@ test('calendar selection routes deny non-admin and do not access another unit co
   jest.mocked(verifyToken).mockResolvedValue({ sub: 1, nome: 'Atendente', email: 'staff@example.test', role: 'atendente', roles: ['atendente'], iat: 0, exp: 4102444800, unidade_ids: [1], unidade_atual: 1 });
   expect((await callRoute(GET, '/api/integracoes/google/calendars')).status).toBe(403);
   expect((await callRoute(PATCH, '/api/integracoes/google/calendars', { method: 'PATCH', body: { calendar_id: 'other' } })).status).toBe(403);
+});
+
+test('procedure and appointment notes appear in Google description and enqueue updates', async () => {
+  createAppointment(); mirror();
+  db.sqlite.exec("INSERT INTO procedimentos(id,nome,valor) VALUES (99,'Limpeza',100)");
+  db.sqlite.exec("UPDATE agendamentos SET procedimento_id=99,observacoes='Chegar 10 minutos antes <teste>',valor_pago=80 WHERE id=1");
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(1);
+  const payload = toGoogle((await loadAppointment(getDb(), 1, 1))!, connection(), 'remote', config.baseUrl);
+  expect(payload.location).toBe('');
+  expect(payload.description).toContain('Procedimentos:\nLimpeza');
+  expect(payload.description).toContain('Observações:\nChegar 10 minutos antes &lt;teste&gt;');
+  expect(payload.description).not.toContain('80');
+  db.sqlite.exec("UPDATE procedimentos SET nome='Limpeza completa' WHERE id=99");
+  expect(row('SELECT COUNT(*) AS n FROM google_calendar_outbox').n).toBe(2);
+  db.sqlite.exec('UPDATE agendamentos SET procedimento_id=NULL,observacoes=NULL WHERE id=1');
+  expect(toGoogle((await loadAppointment(getDb(), 1, 1))!, connection(), 'remote', config.baseUrl).description).toBe('Agendamento #1\nhttps://example.test/agenda');
 });
