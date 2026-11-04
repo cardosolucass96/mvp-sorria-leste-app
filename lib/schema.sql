@@ -665,9 +665,10 @@ CREATE INDEX IF NOT EXISTS idx_usuario_roles_role ON usuario_roles(role);
 CREATE INDEX IF NOT EXISTS idx_procedimentos_categoria ON procedimentos(categoria_id);
 CREATE INDEX IF NOT EXISTS idx_atendimentos_categoria ON atendimentos(categoria_id);
 
-CREATE TABLE IF NOT EXISTS google_calendar_connections (
+CREATE TABLE IF NOT EXISTS google_user_calendar_connections (
   id TEXT PRIMARY KEY,
-  unidade_id INTEGER NOT NULL UNIQUE REFERENCES unidades(id),
+  unidade_id INTEGER NOT NULL REFERENCES unidades(id),
+  usuario_id INTEGER NOT NULL UNIQUE REFERENCES usuarios(id),
   connected_by INTEGER NOT NULL REFERENCES usuarios(id),
   google_subject TEXT NOT NULL,
   email TEXT NOT NULL,
@@ -686,23 +687,24 @@ CREATE TABLE IF NOT EXISTS google_calendar_connections (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   UNIQUE(google_subject,calendar_id)
 );
-CREATE TABLE IF NOT EXISTS google_calendar_oauth_states (
+CREATE TABLE IF NOT EXISTS google_user_calendar_oauth_states (
   state_hash TEXT PRIMARY KEY,
   browser_hash TEXT NOT NULL,
   unidade_id INTEGER NOT NULL REFERENCES unidades(id),
   usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+  owner_id INTEGER NOT NULL REFERENCES usuarios(id),
   expires_at INTEGER NOT NULL
 );
-CREATE TABLE IF NOT EXISTS google_calendar_channels (
+CREATE TABLE IF NOT EXISTS google_user_calendar_channels (
   id TEXT PRIMARY KEY,
-  connection_id TEXT NOT NULL REFERENCES google_calendar_connections(id) ON DELETE CASCADE,
+  connection_id TEXT NOT NULL REFERENCES google_user_calendar_connections(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL,
   resource_id TEXT,
   expires_at INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS google_channels_connection ON google_calendar_channels(connection_id);
-CREATE TABLE IF NOT EXISTS google_calendar_events (
-  connection_id TEXT NOT NULL REFERENCES google_calendar_connections(id) ON DELETE CASCADE,
+CREATE INDEX IF NOT EXISTS google_user_channels_connection ON google_user_calendar_channels(connection_id);
+CREATE TABLE IF NOT EXISTS google_user_calendar_events (
+  connection_id TEXT NOT NULL REFERENCES google_user_calendar_connections(id) ON DELETE CASCADE,
   event_id TEXT NOT NULL,
   summary TEXT NOT NULL DEFAULT '',
   start_at TEXT,
@@ -714,8 +716,8 @@ CREATE TABLE IF NOT EXISTS google_calendar_events (
   payload TEXT NOT NULL,
   PRIMARY KEY(connection_id,event_id)
 );
-CREATE TABLE IF NOT EXISTS google_calendar_links (
-  connection_id TEXT NOT NULL REFERENCES google_calendar_connections(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS google_user_calendar_links (
+  connection_id TEXT NOT NULL REFERENCES google_user_calendar_connections(id) ON DELETE CASCADE,
   agendamento_id INTEGER NOT NULL,
   event_id TEXT NOT NULL,
   etag TEXT,
@@ -724,79 +726,80 @@ CREATE TABLE IF NOT EXISTS google_calendar_links (
   local_snapshot TEXT,
   conflict TEXT,
   PRIMARY KEY(connection_id,agendamento_id),
+  UNIQUE(agendamento_id),
   UNIQUE(connection_id,event_id)
 );
-CREATE TABLE IF NOT EXISTS google_calendar_outbox (
+CREATE TABLE IF NOT EXISTS google_user_calendar_outbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  connection_id TEXT NOT NULL REFERENCES google_calendar_connections(id) ON DELETE CASCADE,
+  connection_id TEXT NOT NULL REFERENCES google_user_calendar_connections(id) ON DELETE CASCADE,
   agendamento_id INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
-CREATE INDEX IF NOT EXISTS google_outbox_pending ON google_calendar_outbox(connection_id,agendamento_id,id);
-CREATE TABLE IF NOT EXISTS google_calendar_suppressions (
+CREATE INDEX IF NOT EXISTS google_user_outbox_pending ON google_user_calendar_outbox(connection_id,agendamento_id,id);
+CREATE TABLE IF NOT EXISTS google_user_calendar_suppressions (
   agendamento_id INTEGER PRIMARY KEY
 );
-CREATE TRIGGER IF NOT EXISTS google_calendar_agendamento_insert AFTER INSERT ON agendamentos
-WHEN NOT EXISTS(SELECT 1 FROM google_calendar_suppressions WHERE agendamento_id=NEW.id)
+CREATE TRIGGER IF NOT EXISTS google_user_calendar_agendamento_insert AFTER INSERT ON agendamentos
+WHEN NOT EXISTS(SELECT 1 FROM google_user_calendar_suppressions WHERE agendamento_id=NEW.id)
 BEGIN
-  INSERT INTO google_calendar_outbox(connection_id,agendamento_id)
-  SELECT id,NEW.id FROM google_calendar_connections WHERE unidade_id=NEW.unidade_id AND status!='disconnecting';
+  INSERT INTO google_user_calendar_outbox(connection_id,agendamento_id)
+  SELECT id,NEW.id FROM google_user_calendar_connections WHERE usuario_id=NEW.executor_id AND status!='disconnecting';
 END;
-CREATE TRIGGER IF NOT EXISTS google_calendar_agendamento_update AFTER UPDATE OF data_agendada,status,executor_id,cliente_id,duracao_minutos,unidade_id,procedimento_id,observacoes ON agendamentos
+CREATE TRIGGER IF NOT EXISTS google_user_calendar_agendamento_update AFTER UPDATE OF data_agendada,status,executor_id,cliente_id,duracao_minutos,unidade_id,procedimento_id,observacoes ON agendamentos
 WHEN (NEW.data_agendada IS NOT OLD.data_agendada OR NEW.status IS NOT OLD.status
   OR NEW.executor_id IS NOT OLD.executor_id OR NEW.cliente_id IS NOT OLD.cliente_id
   OR NEW.duracao_minutos IS NOT OLD.duracao_minutos OR NEW.unidade_id IS NOT OLD.unidade_id
   OR NEW.procedimento_id IS NOT OLD.procedimento_id OR NEW.observacoes IS NOT OLD.observacoes)
-  AND NOT EXISTS(SELECT 1 FROM google_calendar_suppressions WHERE agendamento_id=NEW.id)
+  AND NOT EXISTS(SELECT 1 FROM google_user_calendar_suppressions WHERE agendamento_id=NEW.id)
 BEGIN
-  INSERT INTO google_calendar_outbox(connection_id,agendamento_id)
-  SELECT id,NEW.id FROM google_calendar_connections WHERE unidade_id IN (OLD.unidade_id,NEW.unidade_id) AND status!='disconnecting';
+  INSERT INTO google_user_calendar_outbox(connection_id,agendamento_id)
+  SELECT id,NEW.id FROM google_user_calendar_connections WHERE (usuario_id IN (OLD.executor_id,NEW.executor_id) OR id IN (SELECT connection_id FROM google_user_calendar_links WHERE agendamento_id=NEW.id)) AND status!='disconnecting';
 END;
-CREATE TRIGGER IF NOT EXISTS google_calendar_agendamento_delete AFTER DELETE ON agendamentos
+CREATE TRIGGER IF NOT EXISTS google_user_calendar_agendamento_delete AFTER DELETE ON agendamentos
 BEGIN
-  INSERT INTO google_calendar_outbox(connection_id,agendamento_id)
-  SELECT id,OLD.id FROM google_calendar_connections WHERE unidade_id=OLD.unidade_id AND status!='disconnecting';
+  INSERT INTO google_user_calendar_outbox(connection_id,agendamento_id)
+  SELECT id,OLD.id FROM google_user_calendar_connections WHERE (usuario_id=OLD.executor_id OR id IN (SELECT connection_id FROM google_user_calendar_links WHERE agendamento_id=OLD.id)) AND status!='disconnecting';
 END;
 
-CREATE TABLE IF NOT EXISTS google_calendar_archives (
-  unidade_id INTEGER NOT NULL REFERENCES unidades(id),
+CREATE TABLE IF NOT EXISTS google_user_calendar_archives (
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
   google_subject TEXT NOT NULL,
   connection_id TEXT NOT NULL,
   calendar_id TEXT NOT NULL,
   calendar_name TEXT NOT NULL DEFAULT 'Agenda principal',
   default_duration INTEGER NOT NULL,
   links TEXT NOT NULL,
-  PRIMARY KEY(unidade_id,google_subject)
+  PRIMARY KEY(usuario_id,google_subject)
 );
 
-CREATE TRIGGER IF NOT EXISTS google_calendar_unidade_update AFTER UPDATE OF nome ON unidades
+CREATE TRIGGER IF NOT EXISTS google_user_calendar_unidade_update AFTER UPDATE OF nome ON unidades
 WHEN NEW.nome IS NOT OLD.nome
 BEGIN
-  INSERT INTO google_calendar_outbox(connection_id,agendamento_id)
-  SELECT l.connection_id,l.agendamento_id FROM google_calendar_links l
-  JOIN google_calendar_connections c ON c.id=l.connection_id
-  WHERE c.unidade_id=NEW.id AND c.status!='disconnecting';
+  INSERT INTO google_user_calendar_outbox(connection_id,agendamento_id)
+  SELECT l.connection_id,l.agendamento_id FROM google_user_calendar_links l
+  JOIN google_user_calendar_connections c ON c.id=l.connection_id
+  JOIN agendamentos a ON a.id=l.agendamento_id WHERE a.unidade_id=NEW.id AND c.status!='disconnecting';
 END;
 
-CREATE TABLE IF NOT EXISTS google_calendar_saved_calendars (
-  unidade_id INTEGER NOT NULL REFERENCES unidades(id),
+CREATE TABLE IF NOT EXISTS google_user_calendar_saved_calendars (
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
   google_subject TEXT NOT NULL,
   calendar_id TEXT NOT NULL,
   links TEXT NOT NULL,
-  PRIMARY KEY(unidade_id,google_subject,calendar_id)
+  PRIMARY KEY(usuario_id,google_subject,calendar_id)
 );
-CREATE TRIGGER IF NOT EXISTS google_calendar_switch_pending BEFORE UPDATE OF calendar_id ON google_calendar_connections
-WHEN NEW.calendar_id!=OLD.calendar_id AND EXISTS(SELECT 1 FROM google_calendar_outbox WHERE connection_id=OLD.id)
+CREATE TRIGGER IF NOT EXISTS google_user_calendar_switch_pending BEFORE UPDATE OF calendar_id ON google_user_calendar_connections
+WHEN NEW.calendar_id!=OLD.calendar_id AND EXISTS(SELECT 1 FROM google_user_calendar_outbox WHERE connection_id=OLD.id)
 BEGIN
   SELECT RAISE(ABORT, 'calendar_sync_pending');
 END;
 
-CREATE TRIGGER IF NOT EXISTS google_calendar_procedimento_update AFTER UPDATE OF nome ON procedimentos
+CREATE TRIGGER IF NOT EXISTS google_user_calendar_procedimento_update AFTER UPDATE OF nome ON procedimentos
 WHEN NEW.nome IS NOT OLD.nome
 BEGIN
-  INSERT INTO google_calendar_outbox(connection_id,agendamento_id)
-  SELECT l.connection_id,l.agendamento_id FROM google_calendar_links l
-  JOIN google_calendar_connections c ON c.id=l.connection_id
-  JOIN agendamentos a ON a.id=l.agendamento_id AND a.unidade_id=c.unidade_id
+  INSERT INTO google_user_calendar_outbox(connection_id,agendamento_id)
+  SELECT l.connection_id,l.agendamento_id FROM google_user_calendar_links l
+  JOIN google_user_calendar_connections c ON c.id=l.connection_id
+  JOIN agendamentos a ON a.id=l.agendamento_id AND a.executor_id=c.usuario_id
   WHERE a.procedimento_id=NEW.id AND c.status!='disconnecting';
 END;

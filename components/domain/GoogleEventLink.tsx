@@ -9,7 +9,7 @@ import { formatarDataAgendada } from '@/lib/utils/formatters';
 
 export default function GoogleEventLink({ event }: { event: ExternalEvent }) {
   const unitFetch = useUnitFetch();
-  const { range, refresh } = useGoogleCalendarData();
+  const { range, refresh, ownerId, apiPath } = useGoogleCalendarData();
   const [options, setOptions] = useState<{ value: string; label: string }[]>([]);
   const [appointment, setAppointment] = useState('');
   const [error, setError] = useState('');
@@ -17,7 +17,7 @@ export default function GoogleEventLink({ event }: { event: ExternalEvent }) {
   async function load() {
     setBusy(true); setError('');
     try {
-      const response = await unitFetch(`/api/agendamentos?${new URLSearchParams({ status: 'agendado', data_inicio: range.start, data_fim: range.end })}`);
+      const response = await unitFetch(`/api/agendamentos?${new URLSearchParams({ status: 'agendado', executor_id: String(ownerId), data_inicio: range.start, data_fim: range.end })}`);
       if (!response.ok) throw new Error();
       const rows = await response.json() as { id: number; cliente_nome: string; data_agendada: string }[];
       setOptions(rows.map(row => ({ value: String(row.id), label: `#${row.id} · ${row.cliente_nome} · ${formatarDataAgendada(row.data_agendada)}` })));
@@ -27,7 +27,7 @@ export default function GoogleEventLink({ event }: { event: ExternalEvent }) {
   async function link() {
     setBusy(true); setError('');
     try {
-      const response = await unitFetch('/api/integracoes/google/link', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const response = await unitFetch(apiPath('/link'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event_id: event.event_id, agendamento_id: Number(appointment) }) });
       const body = await response.json();
       if (!response.ok) { setError(body.error || 'Não foi possível vincular.'); return; }

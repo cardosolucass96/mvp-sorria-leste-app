@@ -29,23 +29,23 @@ export async function calendarChoices(config: GoogleConfig, connection: GoogleCo
   } while (page);
   return { items, api };
 }
-export async function selectCalendar(db: D1Database, config: GoogleConfig, unit: number, calendarId: string) {
-  return withConnectionLock(db, unit, async connection => {
+export async function selectCalendar(db: D1Database, config: GoogleConfig, owner: number, calendarId: string) {
+  return withConnectionLock(db, owner, async connection => {
     const { items, api } = await calendarChoices(config, connection);
     const selected = items.find(item => item.id === calendarId);
     if (!selected) throw new CalendarRequestError('Selecione uma agenda em que esta conta tenha permissão de edição.', 400);
     if (selected.id === connection.calendar_id) {
-      await db.prepare('UPDATE google_calendar_connections SET calendar_name=? WHERE id=?').bind(selected.name, connection.id).run();
+      await db.prepare('UPDATE google_user_calendar_connections SET calendar_name=? WHERE id=?').bind(selected.name, connection.id).run();
       return;
     }
-    const pending = await db.prepare('SELECT 1 FROM google_calendar_outbox WHERE connection_id=? LIMIT 1').bind(connection.id).first();
+    const pending = await db.prepare('SELECT 1 FROM google_user_calendar_outbox WHERE connection_id=? LIMIT 1').bind(connection.id).first();
     if (pending) throw new CalendarRequestError('Conclua as sincronizações pendentes e resolva os conflitos antes de trocar a agenda.', 409);
-    const links = await db.prepare('SELECT * FROM google_calendar_links WHERE connection_id=?').bind(connection.id).all<EventLink>();
-    const saved = await db.prepare('SELECT links FROM google_calendar_saved_calendars WHERE unidade_id=? AND google_subject=? AND calendar_id=?')
-      .bind(unit, connection.google_subject, selected.id).first<{ links: string }>();
-    const channels = await db.prepare('SELECT id,resource_id FROM google_calendar_channels WHERE connection_id=?').bind(connection.id).all<{ id: string; resource_id: string | null }>();
+    const links = await db.prepare('SELECT * FROM google_user_calendar_links WHERE connection_id=?').bind(connection.id).all<EventLink>();
+    const saved = await db.prepare('SELECT links FROM google_user_calendar_saved_calendars WHERE usuario_id=? AND google_subject=? AND calendar_id=?')
+      .bind(owner, connection.google_subject, selected.id).first<{ links: string }>();
+    const channels = await db.prepare('SELECT id,resource_id FROM google_user_calendar_channels WHERE connection_id=?').bind(connection.id).all<{ id: string; resource_id: string | null }>();
     // If a later step fails, maintenance must renew any channel already stopped.
-    await db.prepare('UPDATE google_calendar_channels SET expires_at=0 WHERE connection_id=?').bind(connection.id).run();
+    await db.prepare('UPDATE google_user_calendar_channels SET expires_at=0 WHERE connection_id=?').bind(connection.id).run();
     for (const channel of channels.results) {
       if (!channel.resource_id) continue;
       try { await api.stop(channel.id, channel.resource_id); }
@@ -54,26 +54,26 @@ export async function selectCalendar(db: D1Database, config: GoogleConfig, unit:
     try {
       await db.batch([
         // The trigger rejects concurrent appointment writes, rolling back the entire switch.
-        db.prepare(`UPDATE google_calendar_connections SET calendar_id=?,calendar_name=?,sync_token=NULL,sync_page_token=NULL,
+        db.prepare(`UPDATE google_user_calendar_connections SET calendar_id=?,calendar_name=?,sync_token=NULL,sync_page_token=NULL,
           last_sync_at=NULL,last_error=NULL,sync_requested=1,status='connected' WHERE id=?`)
           .bind(selected.id, selected.name, connection.id),
-        db.prepare(`INSERT INTO google_calendar_saved_calendars(unidade_id,google_subject,calendar_id,links) VALUES (?,?,?,?)
-          ON CONFLICT(unidade_id,google_subject,calendar_id) DO UPDATE SET links=excluded.links`)
-          .bind(unit, connection.google_subject, connection.calendar_id, JSON.stringify(links.results)),
-        db.prepare('DELETE FROM google_calendar_links WHERE connection_id=?').bind(connection.id),
-        db.prepare('DELETE FROM google_calendar_events WHERE connection_id=?').bind(connection.id),
-        db.prepare('DELETE FROM google_calendar_channels WHERE connection_id=?').bind(connection.id),
-        db.prepare(`INSERT INTO google_calendar_links(connection_id,agendamento_id,event_id,etag,remote_snapshot,local_snapshot,conflict,pending_write)
+        db.prepare(`INSERT INTO google_user_calendar_saved_calendars(usuario_id,google_subject,calendar_id,links) VALUES (?,?,?,?)
+          ON CONFLICT(usuario_id,google_subject,calendar_id) DO UPDATE SET links=excluded.links`)
+          .bind(owner, connection.google_subject, connection.calendar_id, JSON.stringify(links.results)),
+        db.prepare('DELETE FROM google_user_calendar_links WHERE connection_id=?').bind(connection.id),
+        db.prepare('DELETE FROM google_user_calendar_events WHERE connection_id=?').bind(connection.id),
+        db.prepare('DELETE FROM google_user_calendar_channels WHERE connection_id=?').bind(connection.id),
+        db.prepare(`INSERT INTO google_user_calendar_links(connection_id,agendamento_id,event_id,etag,remote_snapshot,local_snapshot,conflict,pending_write)
           SELECT ?,json_extract(value,'$.agendamento_id'),json_extract(value,'$.event_id'),json_extract(value,'$.etag'),
             json_extract(value,'$.remote_snapshot'),json_extract(value,'$.local_snapshot'),json_extract(value,'$.conflict'),json_extract(value,'$.pending_write')
           FROM json_each(?)`).bind(connection.id, saved?.links ?? '[]'),
-        db.prepare(`INSERT INTO google_calendar_outbox(connection_id,agendamento_id)
-          SELECT l.connection_id,l.agendamento_id FROM google_calendar_links l LEFT JOIN agendamentos a ON a.id=l.agendamento_id AND a.unidade_id=?
+        db.prepare(`INSERT INTO google_user_calendar_outbox(connection_id,agendamento_id)
+          SELECT l.connection_id,l.agendamento_id FROM google_user_calendar_links l LEFT JOIN agendamentos a ON a.id=l.agendamento_id AND a.executor_id=?
           WHERE l.connection_id=? AND (l.pending_write IS NOT NULL OR l.remote_snapshot IS NULL OR a.id IS NULL OR
             json_array(a.data_agendada,a.duracao_minutos,a.status,a.cliente_id,a.executor_id,a.unidade_id,a.procedimento_id,a.observacoes)!=l.local_snapshot)`)
-          .bind(unit, connection.id),
-        db.prepare('DELETE FROM google_calendar_saved_calendars WHERE unidade_id=? AND google_subject=? AND calendar_id=?')
-          .bind(unit, connection.google_subject, selected.id),
+          .bind(owner, connection.id),
+        db.prepare('DELETE FROM google_user_calendar_saved_calendars WHERE usuario_id=? AND google_subject=? AND calendar_id=?')
+          .bind(owner, connection.google_subject, selected.id),
       ]);
     } catch (error) {
       if (error instanceof Error && error.message.includes('calendar_sync_pending')) throw new CalendarRequestError('Um agendamento foi alterado durante a troca. Aguarde a sincronização e tente novamente.', 409);

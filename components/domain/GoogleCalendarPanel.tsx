@@ -10,12 +10,12 @@ import Select from '@/components/ui/Select';
 import { formatarDataAgendada } from '@/lib/utils/formatters';
 
 export default function GoogleCalendarPanel() {
-  const { hasRole, currentUnidade, viewMode } = useAuth();
-  const allowed = hasRole(['admin', 'atendente']) && viewMode !== 'dentista';
-  const admin = hasRole('admin');
+  const { currentUnidade, user } = useAuth();
+  const allowed = Boolean(user);
   const unitFetch = useUnitFetch();
-  const { data, refresh } = useGoogleCalendarData();
+  const { data, refresh, apiPath, ownerId } = useGoogleCalendarData();
   const { status, stale, warning: eventError } = data;
+  const admin = Boolean(status?.can_manage);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -23,7 +23,7 @@ export default function GoogleCalendarPanel() {
   const [calendar, setCalendar] = useState('');
   const [needsAuthorization, setNeedsAuthorization] = useState(false);
   const [minutes, setMinutes] = useState('30');
-  useEffect(() => { setError(''); setMessage(''); setCalendars([]); setNeedsAuthorization(false); }, [currentUnidade]);
+  useEffect(() => { setError(''); setMessage(''); setCalendars([]); setNeedsAuthorization(false); }, [currentUnidade, ownerId]);
   useEffect(() => { setCalendar(status?.calendar_id ?? 'primary'); }, [status?.calendar_id]);
   useEffect(() => { if (status?.default_duration) setMinutes(String(status.default_duration)); }, [status?.default_duration]);
   useEffect(() => {
@@ -33,7 +33,7 @@ export default function GoogleCalendarPanel() {
     if (result === 'error') setError('Não foi possível conectar. Verifique a autorização e tente novamente.');
   }, [allowed]);
   async function request(path: string, method = 'POST', body?: unknown) {
-    const response = await unitFetch(`/api/integracoes/google${path}`, { method,
+    const response = await unitFetch(apiPath(path), { method,
       headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Não foi possível concluir a operação.');
@@ -48,8 +48,8 @@ export default function GoogleCalendarPanel() {
   if (!allowed) return null;
   return <section className="card space-y-3" aria-label="Integração Google Agenda">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h2 className="font-semibold">Google Agenda</h2>
-        <p className="text-sm text-muted-foreground">{status?.connected ? `${status.email} · ${status.status === 'disconnecting' ? 'Desconectando' : status.status === 'reconnect' ? 'Reconexão necessária' : status.status === 'error' ? 'Nova tentativa pendente' : 'Atualização automática'}` : 'Sincronize a agenda desta unidade com o Google.'}</p>
+      <div><h2 className="font-semibold">Google Agenda{status?.owner_name ? ` · ${status.owner_name}` : ''}</h2>
+        <p className="text-sm text-muted-foreground">{status?.connected ? `${status.email} · ${status.status === 'disconnecting' ? 'Desconectando' : status.status === 'reconnect' ? 'Reconexão necessária' : status.status === 'error' ? 'Nova tentativa pendente' : 'Atualização automática'}` : 'Conecte a agenda Google deste responsável.'}</p>
         {status?.connected && <p className="text-xs text-muted-foreground">Agenda: {status.calendar_name || 'Agenda principal'}</p>}
         {status?.last_sync_at && <p className="text-xs text-muted-foreground">Última sincronização: {formatarDataAgendada(status.last_sync_at)} · Pendentes: {status.pending ?? 0}</p>}
       </div>
@@ -71,7 +71,7 @@ export default function GoogleCalendarPanel() {
       {admin && <details><summary className="cursor-pointer text-sm font-medium">Configurações da integração</summary><div className="mt-3 flex flex-wrap items-end gap-3">
         <div className="w-full space-y-2">
           <Button disabled={busy} variant="outline" onClick={() => void act(async () => {
-            const response = await unitFetch('/api/integracoes/google/calendars');
+            const response = await unitFetch(apiPath('/calendars'));
             const result = await response.json();
             if (!response.ok) { setNeedsAuthorization(response.status === 403); throw new Error(result.error || 'Não foi possível listar as agendas.'); }
             setNeedsAuthorization(false);
@@ -98,7 +98,7 @@ export default function GoogleCalendarPanel() {
           }
         })}>Importar agendamentos existentes</Button>
         <Button disabled={busy || status.status === 'disconnecting'} variant="ghost" onClick={() => {
-          if (window.confirm('Desconectar esta unidade? Os compromissos já criados no Google serão preservados.')) void act(async () => { await request('', 'DELETE'); });
+          if (window.confirm('Desconectar a agenda deste responsável? Os compromissos já criados no Google serão preservados.')) void act(async () => { await request('', 'DELETE'); });
         }}>Desconectar</Button>
       </div></details>}
       {(status.conflicts ?? []).map(conflict => <div key={conflict.agendamento_id} className="rounded border border-warning-500 p-3 space-y-2">

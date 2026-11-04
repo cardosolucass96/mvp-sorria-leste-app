@@ -9,7 +9,7 @@ type Range = { start: string; end: string };
 type Data = { status: ConnectionStatus | null; items: ExternalEvent[]; warning: string; stale: boolean; error: string };
 const empty: Data = { status: null, items: [], warning: '', stale: false, error: '' };
 const Context = createContext<{
-  data: Data; loading: boolean; range: Range; calendarMode: boolean;
+  ownerId: number; apiPath: (path?: string) => string; data: Data; loading: boolean; range: Range; calendarMode: boolean;
   setRange: (range: Range) => void; refresh: () => Promise<void>;
 } | null>(null);
 
@@ -19,13 +19,15 @@ export function useGoogleCalendarData() {
   return context;
 }
 
-export default function GoogleCalendarProvider({ children, calendarRange, eventsEnabled = true }: { children: ReactNode; calendarRange?: Range; eventsEnabled?: boolean }) {
-  const { currentUnidade, user, hasRole, viewMode } = useAuth();
-  const allowed = hasRole(['admin', 'atendente']) && viewMode !== 'dentista';
+export default function GoogleCalendarProvider({ children, calendarRange, eventsEnabled = true, responsibleId }: { children: ReactNode; calendarRange?: Range; eventsEnabled?: boolean; responsibleId?: number | null }) {
+  const { currentUnidade, user, viewMode } = useAuth();
+  const allowed = Boolean(user);
+  const ownerId = responsibleId ?? user?.id ?? 0;
+  const apiPath = useCallback((path = '') => `/api/integracoes/google${path}${path.includes('?') ? '&' : '?'}usuario_id=${ownerId}`, [ownerId]);
   const unitFetch = useUnitFetch();
   const [listRange, setRange] = useState<Range>(() => ({ start: formatAgendaDateKey(new Date()), end: formatAgendaDateKey(new Date(Date.now() + 30 * 86400000)) }));
   const range = calendarRange ?? listRange;
-  const scope = `${user?.id ?? ''}:${currentUnidade}:${allowed}:${viewMode}`;
+  const scope = `${user?.id ?? ''}:${currentUnidade}:${ownerId}:${allowed}:${viewMode}`;
   const key = `${scope}:${eventsEnabled}:${range.start}:${range.end}`;
   const [result, setResult] = useState<{ key: string; data: Data; loading: boolean }>({ key: '', data: empty, loading: false });
   const control = useRef<(force?: boolean) => Promise<void>>(async () => {});
@@ -47,7 +49,7 @@ export default function GoogleCalendarProvider({ children, calendarRange, events
       lastAttempt = Date.now();
       setResult({ key, data: latest, loading: true });
       try {
-        const response = await unitFetch('/api/integracoes/google');
+        const response = await unitFetch(apiPath());
         if (!response.ok) {
           if ([401, 403].includes(response.status)) latest = empty;
           throw new Error('connection');
@@ -62,7 +64,7 @@ export default function GoogleCalendarProvider({ children, calendarRange, events
         } else if (!valid) {
           latest = { ...latest, items: [], warning: 'Selecione um período válido de até 93 dias.', stale: false };
         } else {
-          const events = await unitFetch(`/api/integracoes/google/events?${new URLSearchParams({ from: `${range.start}T00:00:00-03:00`, to: `${range.end}T23:59:59.999-03:00` })}`);
+          const events = await unitFetch(apiPath(`/events?${new URLSearchParams({ from: `${range.start}T00:00:00-03:00`, to: `${range.end}T23:59:59.999-03:00` })}`));
           if (!events.ok) {
             if ([401, 403].includes(events.status)) latest = { ...latest, items: [] };
             throw new Error('events');
@@ -107,8 +109,8 @@ export default function GoogleCalendarProvider({ children, calendarRange, events
     window.addEventListener('focus', visible);
     document.addEventListener('visibilitychange', visible);
     return () => { active = false; clearInterval(timer); window.removeEventListener('focus', visible); document.removeEventListener('visibilitychange', visible); };
-  }, [allowed, scope, key, range.start, range.end, unitFetch, eventsEnabled]);
+  }, [allowed, scope, key, range.start, range.end, unitFetch, eventsEnabled, apiPath]);
 
-  return <Context.Provider value={{ data: allowed && result.key === key ? result.data : empty,
+  return <Context.Provider value={{ ownerId, apiPath, data: allowed && result.key === key ? result.data : empty,
     loading: allowed && (result.key !== key || result.loading), range, setRange, calendarMode: Boolean(calendarRange), refresh }}>{children}</Context.Provider>;
 }

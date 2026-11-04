@@ -8,8 +8,8 @@ export async function POST(request: NextRequest) {
   if (!channel || !token || !resource || token.length > 256 || channel.length > 256) return new Response(null, { status: 204 });
   try {
     // Hash lookup authenticates the random channel secret without comparing raw secrets.
-    await getDb().prepare(`UPDATE google_calendar_connections SET sync_requested=1 WHERE id IN
-      (SELECT connection_id FROM google_calendar_channels WHERE id=? AND token_hash=? AND expires_at>?
+    await getDb().prepare(`UPDATE google_user_calendar_connections SET sync_requested=1 WHERE id IN
+      (SELECT connection_id FROM google_user_calendar_channels WHERE id=? AND token_hash=? AND expires_at>?
         AND (resource_id IS NULL OR resource_id=?)) AND status!='disconnecting'`)
       .bind(channel, await digest(token), Date.now(), resource).run();
     return new Response(null, { status: 204 });

@@ -10,9 +10,9 @@ export default {
   async scheduled(_event, env) {
     if (String(env.GOOGLE_CALENDAR_ENABLED) !== 'true') return;
     // Durable outbox is the source of truth; a failed queue send is retried on the next tick.
-    const due = await env.DB.prepare(`SELECT c.id FROM google_calendar_connections c WHERE c.status!='reconnect' AND c.lease_until<? AND
+    const due = await env.DB.prepare(`SELECT c.id FROM google_user_calendar_connections c WHERE c.status!='reconnect' AND c.lease_until<? AND
       (c.sync_requested=1 OR c.last_sync_at IS NULL OR c.last_sync_at<? OR c.status='disconnecting'
-       OR EXISTS(SELECT 1 FROM google_calendar_outbox o LEFT JOIN google_calendar_links l
+       OR EXISTS(SELECT 1 FROM google_user_calendar_outbox o LEFT JOIN google_user_calendar_links l
          ON l.connection_id=o.connection_id AND l.agendamento_id=o.agendamento_id
          WHERE o.connection_id=c.id AND l.conflict IS NULL)) ORDER BY c.last_sync_at LIMIT 100`)
       .bind(Date.now(), new Date(Date.now() - 15 * 60000).toISOString()).all<{ id: string }>();
@@ -27,7 +27,7 @@ export default {
         await processConnection(env.DB, configuration(env), body.connectionId);
         message.ack();
       } catch {
-        console.error(JSON.stringify({ event: 'google_calendar_sync_failed', connectionId: body.connectionId }));
+        console.error(JSON.stringify({ event: 'google_user_calendar_sync_failed', connectionId: body.connectionId }));
         message.retry({ delaySeconds: 60 });
       }
     }

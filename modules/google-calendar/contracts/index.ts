@@ -11,6 +11,7 @@ export interface GoogleEvent {
   extendedProperties?: { private?: Record<string, string> };
 }
 export interface GoogleConnection {
+  usuario_id: number;
   id: string;
   unidade_id: number;
   connected_by: number;
@@ -54,6 +55,9 @@ export interface EventLink {
   conflict: string | null;
 }
 export interface ConnectionStatus {
+  owner_id?: number;
+  owner_name?: string;
+  can_manage?: boolean;
   calendar_id?: string;
   calendar_name?: string;
   connected: boolean;

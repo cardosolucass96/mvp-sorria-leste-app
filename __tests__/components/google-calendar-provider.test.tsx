@@ -65,3 +65,16 @@ test('concurrent refreshes do not overlap and a mutation during a request causes
   await act(async () => { complete(reply({ items })); });
   expect(count()).toBe(2); expect(screen.getByTestId('calendar')).toHaveTextContent('0');
 });
+
+test('responsible switch clears previous personal events and scopes every request', async () => {
+  const content = (owner: number) => <Provider responsibleId={owner} calendarRange={range}><Consumer name="calendar" /></Provider>;
+  const { rerender } = render(content(1)); await flush();
+  expect(screen.getByTestId('calendar')).toHaveTextContent('1');
+  fetchMock.mockImplementation(async (url: string) => reply(url.includes('/events?') ? { items: [] } : { connected: true, status: 'connected' }));
+  rerender(content(2)); expect(screen.getByTestId('calendar')).toHaveTextContent('0'); await flush();
+  expect(fetchMock.mock.calls.slice(-2).every(([url]) => url.includes('usuario_id=2'))).toBe(true);
+});
+test('all responsibles mode does not request personal Google events', async () => {
+  render(<Provider eventsEnabled={false}><Consumer name="calendar" /></Provider>); await flush();
+  expect(count()).toBe(0);
+});

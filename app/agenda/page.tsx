@@ -322,6 +322,10 @@ export default function AgendaPage() {
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('pendente,agendado,faltou,realizado');
   const [filtroDentista, setFiltroDentista] = useState('');
+  useEffect(() => {
+    const owner = new URLSearchParams(window.location.search).get('responsavel');
+    if (owner && /^\d+$/.test(owner)) setFiltroDentista(owner);
+  }, []);
   const [dataInicio, setDataInicio] = useState(() => getClinicDateKey());
   const [dataFim, setDataFim] = useState(() => getClinicDateKey());
   const [filtroRapido, setFiltroRapido] = useState<string | null>('hoje');
@@ -1648,7 +1652,7 @@ export default function AgendaPage() {
   if (loading && !hasLoadedAgendamentos) return <LoadingState text="Carregando agenda..." />;
 
   return (
-    <GoogleCalendarProvider eventsEnabled={viewMode === 'calendario'} calendarRange={viewMode === 'calendario' ? googleWindow(focusedDate, calendarSubview) : undefined}>
+    <GoogleCalendarProvider responsibleId={isDentista ? user?.id : Number(filtroDentista) || null} eventsEnabled={viewMode === 'calendario' && (isDentista || Boolean(filtroDentista))} calendarRange={viewMode === 'calendario' ? googleWindow(focusedDate, calendarSubview) : undefined}>
     <div className="space-y-6">
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
@@ -1676,7 +1680,9 @@ export default function AgendaPage() {
         }
       />
 
-      <GoogleCalendarPanel key={currentUnidade} />
+      <GoogleCalendarPanel key={`${currentUnidade}:${isDentista ? user?.id : filtroDentista}`} />
+
+      {viewMode === 'calendario' && !isDentista && !filtroDentista && <p className="text-sm text-muted-foreground">Selecione um dentista para visualizar também os horários ocupados na agenda Google dele.</p>}
 
       {/* Filtros */}
       <div className="card">
