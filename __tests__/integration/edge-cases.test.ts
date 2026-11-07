@@ -377,7 +377,7 @@ describe('Integração — Edge Cases e Fluxos de Erro', () => {
         status: 'em_execucao',
       });
       mockQueryResponse('from procedimentos where id', PROCEDIMENTO);
-      mockQueryResponse('select id, role from usuarios where id', { id: 1, role: 'admin' });
+      mockQueryResponse('select id, role from usuarios where id', { id: 1, role: 'executor' });
       setLastInsertId(3);
       mockQueryResponse('where i.id = ?', {
         id: 3,
