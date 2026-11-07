@@ -271,7 +271,6 @@ export const GET = withUnitRole(['admin', 'atendente', 'avaliador'], async (requ
             AND COALESCE(i.adicionado_em_execucao, 0) = 0${filtroItem.sql}
           GROUP BY pr.id, pr.nome
           ORDER BY total DESC, count DESC, pr.nome ASC
-          LIMIT 10
         `,
         [unidadeId, ...filtroItem.params]
       ),
@@ -333,7 +332,6 @@ export const GET = withUnitRole(['admin', 'atendente', 'avaliador'], async (requ
             AND c.tipo = 'venda'${filtroComissao.sql}
           GROUP BY u.id, u.nome
           ORDER BY total DESC, u.nome ASC
-          LIMIT 5
         `,
         [unidadeId, ...filtroComissao.params]
       ),
@@ -351,7 +349,6 @@ export const GET = withUnitRole(['admin', 'atendente', 'avaliador'], async (requ
             AND c.tipo = 'execucao'${filtroComissao.sql}
           GROUP BY u.id, u.nome
           ORDER BY total DESC, u.nome ASC
-          LIMIT 5
         `,
         [unidadeId, ...filtroComissao.params]
       ),

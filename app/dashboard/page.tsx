@@ -391,15 +391,15 @@ export default function DashboardAdminPage() {
               </div>
             </Card>
 
-            {/* Top Procedimentos */}
+            {/* Procedimentos */}
             <Card>
               <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <Stethoscope className="w-4 h-4 text-primary-500" />
-                Top 10 Procedimentos Orçados
+                Procedimentos Orçados
               </h3>
               <div className="space-y-2">
                 {data.topProcedimentos.length > 0 ? (
-                  data.topProcedimentos.slice(0, 10).map((proc, idx) => (
+                  data.topProcedimentos.map((proc, idx) => (
                     <div key={proc.nome} className="flex items-center gap-3">
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                         {idx + 1}
@@ -423,7 +423,7 @@ export default function DashboardAdminPage() {
             <Card>
               <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <Award className="w-4 h-4 text-primary-500" />
-                Top Vendedores
+                Vendedores
               </h3>
               <div className="space-y-3">
                 {data.topVendedores.length > 0 ? (
@@ -447,7 +447,7 @@ export default function DashboardAdminPage() {
             <Card>
               <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <Star className="w-4 h-4 text-primary-500" />
-                Top Executores
+                Executores
               </h3>
               <div className="space-y-3">
                 {data.topExecutores.length > 0 ? (
