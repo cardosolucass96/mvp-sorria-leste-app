@@ -68,6 +68,7 @@ interface ItemAtendimento {
   etapa_label: string | null;
   executor_id: number | null;
   executor_nome: string | null;
+  executor_habilitado?: number;
   criado_por_id: number | null;
   criado_por_nome: string | null;
   valor: number;
@@ -1530,6 +1531,7 @@ export default function AtendimentoDetalhePage({
     if (item.status === 'concluido') return 'Concluído';
     if (Number(item.possui_agendamento_ativo ?? 0) === 1) return 'Agendado para outra sessão';
     if (!item.executor_id) return 'Defina um executor';
+    if (item.executor_habilitado === 0) return 'Selecione um dentista como executor';
     if (item.status === 'pendente') return 'Aguardando pagamento';
     if (!['pago', 'executando'].includes(item.status)) return 'Indisponível nesta etapa';
     return null;
@@ -2125,6 +2127,7 @@ export default function AtendimentoDetalhePage({
                                 title="Clique para trocar executor"
                               >
                                 {item.executor_nome || <span className="text-muted italic">Sem executor</span>}
+                                {item.executor_id && item.executor_habilitado === 0 && <span className="block text-warning-700 text-xs">Perfil sem permissão clínica — trocar executor</span>}
                               </button>
                             )
                           ) : (
@@ -2213,6 +2216,7 @@ export default function AtendimentoDetalhePage({
                                 title="Clique para trocar executor de todo o grupo"
                               >
                                 {primeiro.executor_nome || <span className="text-muted italic">Sem executor</span>}
+                                {primeiro.executor_id && primeiro.executor_habilitado === 0 && <span className="block text-warning-700 text-xs">Perfil sem permissão clínica — trocar executor</span>}
                               </button>
                             )
                           ) : (

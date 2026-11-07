@@ -1,3 +1,4 @@
+import { validarExecutorClinico } from '@/app/api/atendimentos/_helpers';
 import { itemTemCoberturaRastreada } from '@/modules/financeiro/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
@@ -108,76 +109,13 @@ async function validarExecutorSelecionado(
   executorId: number,
   categoriaId: number | null
 ): Promise<ValidarExecutorResult> {
-  const executor = await queryOne<{ id: number; role: string }>(
-    'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
-    [executorId]
-  );
-
-  if (!executor) {
-    return {
-      kind: 'error',
-      response: NextResponse.json(
-        { error: 'Executor não encontrado' },
-        { status: 404 }
-      ),
-    };
-  }
-
-  let roles = [executor.role];
-  try {
-    const rolesRows = await query<{ role: string }>(
-      'SELECT role FROM usuario_roles WHERE usuario_id = ?',
-      [executorId]
-    );
-    if (rolesRows.length > 0) {
-      roles = rolesRows.map((row) => row.role);
-    }
-  } catch {
-    // Tabela usuario_roles ainda não existe — usar role primária.
-  }
-
-  if (roles.includes('admin')) {
-    return { kind: 'ok' };
-  }
-
-  const rolesEfetivas = roles.filter((role) => role !== 'admin');
-
-  if (categoriaId) {
-    try {
-      const categoriaRoles = await query<{ role: string }>(
-        'SELECT role FROM categoria_roles WHERE categoria_id = ?',
-        [categoriaId]
-      );
-      if (categoriaRoles.length > 0) {
-        const allowedRoles = categoriaRoles
-          .map((row) => row.role)
-          .filter((role) => role !== 'admin');
-        if (rolesEfetivas.some((role) => allowedRoles.includes(role))) {
-          return { kind: 'ok' };
-        }
-
-        return {
-          kind: 'error',
-          response: NextResponse.json(
-            { error: 'Executor não tem permissão para esta categoria' },
-            { status: 400 }
-          ),
-        };
-      }
-    } catch {
-      // Tabela categoria_roles ainda não existe — cai no fallback legado abaixo.
-    }
-  }
-
-  if (rolesEfetivas.includes('executor') || rolesEfetivas.includes('ortodontista')) {
-    return { kind: 'ok' };
-  }
-
+  const resultado = await validarExecutorClinico(executorId, categoriaId);
+  if (resultado === 'ok') return { kind: 'ok' };
   return {
     kind: 'error',
     response: NextResponse.json(
-      { error: 'Usuário selecionado não é executor' },
-      { status: 400 }
+      { error: resultado === 'not_found' ? 'Executor não encontrado' : 'Selecione um executor ou ortodontista ativo com acesso à categoria' },
+      { status: resultado === 'not_found' ? 404 : 400 }
     ),
   };
 }

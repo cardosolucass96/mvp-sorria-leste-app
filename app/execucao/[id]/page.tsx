@@ -56,6 +56,8 @@ interface ItemAtendimento {
   cliente_id: number;
   etapas: Etapa[];
   etapa_label: string | null;
+  executor_habilitado?: number;
+  possui_agendamento_vencido?: number;
   tem_etapas: number;
   possui_agendamento_ativo: number;
   itens_elegiveis_evolucao?: ItemElegivelEvolucao[];
@@ -89,6 +91,7 @@ interface Anexo {
 
 interface Prontuario {
   id: number;
+  legacy_prontuario_id?: number | null;
   descricao: string;
   observacoes: string | null;
   usuario_nome: string;
@@ -105,7 +108,7 @@ const MIN_CHARS = 10;
 export default function ExecucaoProcedimentoPage() {
   usePageTitle('Execução de Procedimento');
   const params = useParams();
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
   const router = useRouter();
   const unitFetch = useUnitFetch();
   const { toast } = useToast();
@@ -140,6 +143,10 @@ export default function ExecucaoProcedimentoPage() {
   const [observacoesProntuario, setObservacoesProntuario] = useState('');
   const [salvandoProntuario, setSalvandoProntuario] = useState(false);
   const [erroProntuario, setErroProntuario] = useState('');
+  const [carregandoProntuario, setCarregandoProntuario] = useState(true);
+  const [falhaProntuario, setFalhaProntuario] = useState(false);
+  const [alterandoItem, setAlterandoItem] = useState(false);
+  const operacaoItem = useRef(false);
   const [evolucaoModalOpen, setEvolucaoModalOpen] = useState(false);
 
   // Etapas — estado de cada uma (aberta/formulário)
@@ -158,7 +165,6 @@ export default function ExecucaoProcedimentoPage() {
       carregarItem();
       carregarProcedimentos();
       carregarAnexos();
-      carregarProntuario();
     }
     // A carga desta tela deve reagir apenas à troca do item na URL.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -170,6 +176,11 @@ export default function ExecucaoProcedimentoPage() {
       if (!res.ok) throw new Error('Item não encontrado');
       const data = await res.json();
       setItem(data);
+      if (data.executor_id === user?.id || hasRole(['admin', 'atendente'])) {
+        await carregarProntuario();
+      } else {
+        setCarregandoProntuario(false);
+      }
       // Pré-preenche textos de prontuário de etapas já salvas
       if (data.etapas) {
         const desc: Record<number, string> = {};
@@ -199,35 +210,57 @@ export default function ExecucaoProcedimentoPage() {
   }
 
   async function carregarProntuario() {
-    const res = await unitFetch(`/api/execucao/item/${params.id}/prontuario`);
-    const data = await res.json();
-    if (data.prontuario) {
-      setProntuario(data.prontuario);
-      setDescricaoProntuario(data.prontuario.descricao);
-      setObservacoesProntuario(data.prontuario.observacoes || '');
+    setCarregandoProntuario(true);
+    setFalhaProntuario(false);
+    setError('');
+    try {
+      const res = await unitFetch(`/api/execucao/item/${params.id}/prontuario`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Não foi possível carregar o prontuário.');
+      setProntuario(data.prontuario ?? null);
+      setDescricaoProntuario(data.prontuario?.descricao ?? '');
+      setObservacoesProntuario(data.prontuario?.observacoes ?? '');
+    } catch (error) {
+      setFalhaProntuario(true);
+      setError(error instanceof Error ? error.message : 'Não foi possível carregar o prontuário.');
+    } finally {
+      setCarregandoProntuario(false);
     }
   }
 
-  // ─── Ações do item ─────────────────────────────────────────────────────────
+  async function atualizarItem(body: Record<string, unknown>) {
+    if (!item || operacaoItem.current) return;
+    operacaoItem.current = true;
+    setAlterandoItem(true);
+    setError('');
+    try {
+      const res = await unitFetch(`/api/atendimentos/${item.atendimento_id}/itens/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Não foi possível atualizar o procedimento.');
+      if (data.atendimento_finalizado || data.atendimento_voltou_para_pagamento) {
+        toast.success('Procedimento concluído.');
+        router.push('/execucao');
+      } else {
+        await carregarItem();
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Não foi possível atualizar o procedimento. Tente novamente.');
+    } finally {
+      operacaoItem.current = false;
+      setAlterandoItem(false);
+    }
+  }
 
   async function pegarProcedimento() {
-    if (!item) return;
-    const res = await unitFetch(`/api/atendimentos/${item.atendimento_id}/itens/${item.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ executor_id: user?.id }),
-    });
-    if (res.ok) carregarItem();
+    await atualizarItem({ executor_id: user?.id });
   }
 
   async function iniciarExecucao() {
-    if (!item) return;
-    const res = await unitFetch(`/api/atendimentos/${item.atendimento_id}/itens/${item.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'executando' }),
-    });
-    if (res.ok) carregarItem();
+    await atualizarItem({ status: 'executando' });
   }
 
   function abrirModalEvolucao() {
@@ -253,20 +286,7 @@ export default function ExecucaoProcedimentoPage() {
       type: 'warning',
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-        const res = await unitFetch(`/api/atendimentos/${item.atendimento_id}/itens/${item.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'concluido' }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.atendimento_finalizado || data.atendimento_voltou_para_pagamento) {
-            toast.success('Procedimento concluído.');
-            router.push('/execucao');
-          } else {
-            carregarItem();
-          }
-        }
+        await atualizarItem({ status: 'concluido' });
       },
     });
   }
@@ -288,6 +308,8 @@ export default function ExecucaoProcedimentoPage() {
       if (res.ok) {
         const data = await res.json();
         setProntuario(data.prontuario);
+        setDescricaoProntuario(data.prontuario.descricao);
+        setObservacoesProntuario(data.prontuario.observacoes || '');
         toast.success('Prontuário salvo.');
       } else {
         const data = await res.json();
@@ -418,6 +440,11 @@ export default function ExecucaoProcedimentoPage() {
   );
 
   const isMeu = item.executor_id === user?.id;
+  const podeExecutar = hasRole(['executor', 'ortodontista']);
+  const prontuarioIndividual = item.tem_etapas === 1 || prontuario?.legacy_prontuario_id != null;
+  const bloqueioProntuario = carregandoProntuario || falhaProntuario;
+  const prontuarioAlterado = prontuario && (descricaoProntuario !== prontuario.descricao || observacoesProntuario !== (prontuario.observacoes || ''));
+  const conclusaoBloqueada = !prontuario || bloqueioProntuario || alterandoItem || salvandoProntuario || Boolean(prontuarioAlterado);
   const isDisponivel = item.executor_id === null;
   const temEtapas = item.etapas.length > 0;
   const isMultiSessao = item.tem_etapas === 1; // canal, implante — sessões via procedimento_etapas_modelo
@@ -559,6 +586,15 @@ export default function ExecucaoProcedimentoPage() {
 
       {error && <Alert type="error" dismissible onDismiss={() => setError('')}>{error}</Alert>}
 
+      {falhaProntuario && <Button variant="secondary" onClick={carregarProntuario} disabled={carregandoProntuario}>Tentar carregar prontuário novamente</Button>}
+      {item.executor_habilitado === 0 && item.executor_id !== null && (
+        <Alert type="warning" title="Executor precisa ser revisado">
+          O responsável atribuído não possui um perfil clínico ativo. A recepção precisa selecionar o dentista responsável no atendimento.
+          {hasRole(['admin', 'atendente']) && (
+            <Button variant="secondary" onClick={() => router.push(`/atendimentos/${item.atendimento_id}`)}>Revisar executor no atendimento</Button>
+          )}
+        </Alert>
+      )}
       {/* ── Card principal ── */}
       <Card>
         <div className="flex justify-between items-start mb-4">
@@ -596,43 +632,54 @@ export default function ExecucaoProcedimentoPage() {
             <FileText className="w-4 h-4 mr-1.5 inline-block" />
             Ver prontuário do paciente
           </Button>
+          {Number(item.possui_agendamento_ativo) === 1 && item.status === 'pago' && (
+            <Alert type="warning" title="Agendamento precisa ser revisado">
+              {item.possui_agendamento_vencido === 1
+                ? 'Este procedimento tem um agendamento de data passada ainda aberto.'
+                : 'Este procedimento está reservado em um agendamento ativo.'}
+              {' '}Peça à recepção para revisar a presença ou cancelar/remarcar o agendamento antes de iniciar.
+            </Alert>
+          )}
           {/* Sessão atual para procedimentos multi-sessão */}
           {isMultiSessao && item.etapa_label && (
             <div className="p-3 bg-primary-50 border border-primary-200 rounded-lg text-sm text-primary-800 dark:bg-primary-900/22 dark:border-primary-900/40 dark:text-primary-100">
               <strong>Sessão sendo executada:</strong> {item.etapa_label}
             </div>
           )}
-          {isDisponivel && item.status === 'pago' && (
-            <Button onClick={pegarProcedimento} variant="secondary" className="w-full text-lg py-3">
+          {isDisponivel && podeExecutar && item.status === 'pago' && (
+            <Button onClick={pegarProcedimento} disabled={alterandoItem || Number(item.possui_agendamento_ativo) === 1} variant="secondary" className="w-full text-lg py-3">
               Pegar Este Procedimento
             </Button>
           )}
-          {isMeu && item.status === 'pago' && (
-            <Button onClick={iniciarExecucao} className="w-full text-lg py-3">
+          {isMeu && podeExecutar && item.executor_habilitado !== 0 && item.status === 'pago' && (
+            <Button onClick={iniciarExecucao} disabled={alterandoItem || bloqueioProntuario || Number(item.possui_agendamento_ativo) === 1} className="w-full text-lg py-3">
               Iniciar Execução
             </Button>
           )}
           {/* Concluir manual só para itens SEM etapas por dente */}
-          {isMeu && item.status === 'executando' && !temEtapas && (
+          {isMeu && podeExecutar && item.status === 'executando' && !temEtapas && (
             Number(item.possui_agendamento_ativo) === 1 ? (
               <Alert type="warning" title="Agendado para outra sessão">
-                Cancele ou realize o agendamento ativo antes de concluir este procedimento.
+                {item.possui_agendamento_vencido === 1
+                  ? 'Existe um agendamento de data passada ainda aberto. Peça à recepção para revisar a presença ou cancelar/remarcar antes de concluir.'
+                  : 'Cancele ou realize o agendamento ativo antes de concluir este procedimento.'}
               </Alert>
             ) : (
               <div className="flex flex-col gap-2">
-                {isMultiSessao ? (
+                {isMultiSessao || prontuario ? (
                   <>
                     {!prontuario && (
                       <Alert type="warning" title="Prontuário pendente">
                         Preencha o prontuário abaixo antes de concluir.
                       </Alert>
                     )}
-                    <Button onClick={marcarComoConcluidoIndividual} disabled={!prontuario} className="w-full text-lg py-3">
-                      {prontuario ? `Concluir Sessão (${item.etapa_label ?? 'sessão'})` : 'Preencha o Prontuário para Concluir'}
+                    {prontuarioAlterado && <Alert type="warning">Salve as alterações do prontuário antes de concluir.</Alert>}
+                    <Button onClick={marcarComoConcluidoIndividual} disabled={conclusaoBloqueada} className="w-full text-lg py-3">
+                      {prontuario ? (isMultiSessao ? `Concluir Sessão (${item.etapa_label ?? 'sessão'})` : 'Concluir Procedimento') : 'Preencha o Prontuário para Concluir'}
                     </Button>
                   </>
                 ) : (
-                  <Button onClick={abrirModalEvolucao} className="w-full text-lg py-3">
+                  <Button onClick={abrirModalEvolucao} disabled={bloqueioProntuario || alterandoItem} className="w-full text-lg py-3">
                     Criar Evolução e Concluir
                   </Button>
                 )}
@@ -710,7 +757,7 @@ export default function ExecucaoProcedimentoPage() {
         </Card>
       )}
 
-      {!temEtapas && isMultiSessao && ((isMeu && item.status === 'executando') || prontuario) && (
+      {!temEtapas && prontuarioIndividual && ((isMeu && item.status === 'executando') || prontuario) && (
         <Card className={!prontuario && item.status === 'executando' ? 'ring-2 ring-error-400' : ''}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold">
@@ -721,7 +768,7 @@ export default function ExecucaoProcedimentoPage() {
             )}
           </div>
 
-          {isMeu && item.status === 'executando' ? (
+          {isMeu && podeExecutar && item.status === 'executando' && (!prontuario || prontuario.legacy_prontuario_id != null) ? (
             <div className="space-y-4">
               {erroProntuario && (
                 <div className="p-3 bg-error-50 border border-error-200 rounded-lg text-sm text-error-700 dark:bg-error-900/22 dark:border-error-900/35 dark:text-error-100">{erroProntuario}</div>
@@ -753,7 +800,7 @@ export default function ExecucaoProcedimentoPage() {
               </div>
               <Button
                 onClick={salvarProntuario}
-                disabled={salvandoProntuario || descricaoProntuario.trim().length < MIN_CHARS}
+                disabled={salvandoProntuario || alterandoItem || descricaoProntuario.trim().length < MIN_CHARS}
                 loading={salvandoProntuario}
                 className="w-full"
               >
@@ -786,7 +833,7 @@ export default function ExecucaoProcedimentoPage() {
       )}
 
       {/* ── Evolução do item concluído ── */}
-      {!temEtapas && !isMultiSessao && prontuario && (item.status === 'concluido' || !isMeu) && (
+      {!temEtapas && !prontuarioIndividual && prontuario && (
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold">Evolução Clínica</h2>

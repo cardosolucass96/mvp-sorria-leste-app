@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute, query } from '@/lib/db';
 import { gerarComissoesExecucaoItem } from '@/lib/helpers/gerarComissoes';
 import { withUnit, UnitAuthenticatedContext, userHasAnyRole } from '@/lib/auth/middleware';
-import { validarUsuarioPorRoles } from '@/app/api/atendimentos/_helpers';
+import { validarUsuarioPorRoles, validarExecutorClinico } from '@/app/api/atendimentos/_helpers';
 import { nowUtcIso } from '@/lib/time';
 import { garantirProntuarioEvolucoesSchema } from '@/lib/helpers/garantirProntuarioEvolucoesSchema';
 import { ajustarEtapasAoValorDoItem } from '@/lib/helpers/pagamentoFlow';
@@ -125,6 +125,14 @@ export const PUT = withUnit(async (
           );
         }
 
+        const agendamentoAtivo = await queryOne<{ id: number }>(
+          `SELECT id FROM agendamentos WHERE item_atendimento_origem_id = ?
+           AND unidade_id = ? AND status IN ('pendente', 'agendado') LIMIT 1`,
+          [item.id, context.unidadeId]
+        );
+        if (agendamentoAtivo) {
+          return NextResponse.json({ error: 'Revise o agendamento ativo antes de concluir o procedimento' }, { status: 400 });
+        }
         await garantirProntuarioEvolucoesSchema();
         const evolucao = await queryOne<{ id: number }>(
           'SELECT id FROM prontuario_evolucao_itens WHERE item_atendimento_id = ?',
@@ -147,23 +155,6 @@ export const PUT = withUnit(async (
       );
     }
 
-    // Validação: executor precisa ter role compatível com a categoria do atendimento
-    if (executor_id && atendimento.categoria_id) {
-      const compatRow = await queryOne<{ n: number }>(
-        `SELECT COUNT(*) as n
-           FROM usuario_roles ur
-           JOIN categoria_roles cr ON cr.role = ur.role
-          WHERE ur.usuario_id = ? AND cr.categoria_id = ?`,
-        [executor_id, atendimento.categoria_id]
-      );
-      if (!compatRow || compatRow.n === 0) {
-        return NextResponse.json(
-          { error: 'Executor não tem permissão para esta categoria' },
-          { status: 400 }
-        );
-      }
-    }
-
     // Validação: edição de valor só em avaliacao ou aguardando_pagamento
     // Garante também valor >= 0 e valor >= valor_pago (sem criar excesso não tratado).
     const valorRecebido = valor_final !== undefined ? valor_final : valor;
@@ -178,6 +169,16 @@ export const PUT = withUnit(async (
         { error: 'Acesso não autorizado para este perfil' },
         { status: 403 }
       );
+    }
+
+    if (executor_id) {
+      const executorValido = await validarExecutorClinico(Number(executor_id), atendimento.categoria_id);
+      if (executorValido !== 'ok') {
+        return NextResponse.json(
+          { error: 'Selecione um executor ou ortodontista ativo com acesso à categoria' },
+          { status: 400 }
+        );
+      }
     }
 
     if (valorRecebido !== undefined) {

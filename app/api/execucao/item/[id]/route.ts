@@ -1,3 +1,4 @@
+import { POSSUI_AGENDAMENTO_VENCIDO_SQL } from '@/lib/helpers/pendenciasExecucao';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext, getUserRoles } from '@/lib/auth/middleware';
@@ -55,6 +56,9 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         p.por_dente,
         i.executor_id,
         e.nome as executor_nome,
+        CASE WHEN e.ativo = 1 AND (e.role IN ('executor', 'ortodontista') OR EXISTS (
+          SELECT 1 FROM usuario_roles ur WHERE ur.usuario_id = e.id AND ur.role IN ('executor', 'ortodontista')
+        )) THEN 1 ELSE 0 END as executor_habilitado,
         i.criado_por_id,
         cp.nome as criado_por_nome,
         c.nome as cliente_nome,
@@ -72,6 +76,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         i.etapa_modelo_id,
         i.etapa_label,
         p.tem_etapas,
+        ${POSSUI_AGENDAMENTO_VENCIDO_SQL} as possui_agendamento_vencido,
         CASE WHEN EXISTS (
           SELECT 1
           FROM agendamentos ag

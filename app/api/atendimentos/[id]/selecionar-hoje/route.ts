@@ -1,3 +1,4 @@
+import { validarExecutorClinico } from '@/app/api/atendimentos/_helpers';
 import { atendimentoTemCreditoRastreado } from '@/modules/financeiro/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { batch, query, queryOne } from '@/lib/db';
@@ -55,59 +56,6 @@ interface CountResult {
 function inferirStatusAgendamento(destino: DestinoStatus, dataAgendada?: string | null) {
   if (destino === 'agendar' && dataAgendada) return 'agendado';
   return 'pendente';
-}
-
-async function carregarRolesUsuarioAtivo(usuarioId: number): Promise<string[] | null> {
-  const usuario = await queryOne<{ id: number; role: string }>(
-    'SELECT id, role FROM usuarios WHERE id = ? AND ativo = 1',
-    [usuarioId]
-  );
-
-  if (!usuario) return null;
-
-  let roles = [usuario.role];
-  try {
-    const rolesRows = await query<{ role: string }>(
-      'SELECT role FROM usuario_roles WHERE usuario_id = ?',
-      [usuarioId]
-    );
-    if (rolesRows.length > 0) {
-      roles = Array.from(new Set([usuario.role, ...rolesRows.map((row) => row.role)]));
-    }
-  } catch {
-    // Bancos legados podem ainda não ter `usuario_roles`.
-  }
-
-  return roles;
-}
-
-async function validarExecutorSelecionado(
-  executorId: number,
-  categoriaId: number | null
-): Promise<'not_found' | 'ok' | 'invalid'> {
-  const roles = await carregarRolesUsuarioAtivo(executorId);
-  if (!roles) return 'not_found';
-  if (roles.includes('admin')) return 'ok';
-
-  if (categoriaId) {
-    try {
-      const categoriaRoles = await query<{ role: string }>(
-        'SELECT role FROM categoria_roles WHERE categoria_id = ?',
-        [categoriaId]
-      );
-      const allowedRoles = categoriaRoles
-        .map((row) => row.role)
-        .filter((role) => role !== 'admin');
-
-      if (allowedRoles.length > 0) {
-        return roles.some((role) => allowedRoles.includes(role)) ? 'ok' : 'invalid';
-      }
-    } catch {
-      // Bancos legados podem ainda não ter `categoria_roles`.
-    }
-  }
-
-  return roles.some((role) => ['executor', 'ortodontista'].includes(role)) ? 'ok' : 'invalid';
 }
 
 async function itemTemDependenciasQueBloqueiamExclusao(itemId: number): Promise<boolean> {
@@ -216,7 +164,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     )];
 
     for (const executorId of executorIds) {
-      const validacaoExecutor = await validarExecutorSelecionado(executorId, atendimento.categoria_id);
+      const validacaoExecutor = await validarExecutorClinico(executorId, atendimento.categoria_id);
       if (validacaoExecutor === 'not_found') {
         return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
       }

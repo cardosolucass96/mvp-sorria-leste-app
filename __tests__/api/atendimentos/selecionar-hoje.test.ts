@@ -76,7 +76,7 @@ describe('POST /api/atendimentos/[id]/selecionar-hoje', () => {
     expect(updateExecutorQuery?.params).toEqual([7, 1]);
   });
 
-  it('permite definir admin como executor para o item que segue para hoje', async () => {
+  it('rejeita admin sem perfil clínico como executor', async () => {
     mockQueryResponse('select id, cliente_id, unidade_id, categoria_id, status from atendimentos', ATENDIMENTO_AGUARDANDO_PGTO);
     mockQueryResponse('select id, role from usuarios where id', { id: 1, role: 'admin' });
     mockQueryResponse('select * from itens_atendimento where atendimento_id', [
@@ -103,13 +103,12 @@ describe('POST /api/atendimentos/[id]/selecionar-hoje', () => {
       ctx
     );
 
-    expect(status).toBe(200);
+    expect(status).toBe(400);
 
     const queries = getExecutedQueries();
     const updateExecutorQuery = queries.find((query) => query.sql.includes('UPDATE itens_atendimento SET executor_id = ? WHERE id = ?'));
 
-    expect(updateExecutorQuery).toBeDefined();
-    expect(updateExecutorQuery?.params).toEqual([1, 1]);
+    expect(updateExecutorQuery).toBeUndefined();
   });
 
   it('mantem executor nulo ao gerar agendamento futuro sem executor', async () => {

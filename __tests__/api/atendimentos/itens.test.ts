@@ -195,6 +195,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from procedimentos where id', PROC_CANAL);
     mockQueryResponse('select id, role from usuarios where id', { id: 1, role: 'admin' });
+    mockQueryResponse('select role from usuario_roles where usuario_id', [{ role: 'executor' }]);
     mockQueryResponse('from itens_atendimento i', novoItem);
 
     const ctx = createRouteContext({ id: '4' });
@@ -531,7 +532,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     }, ctx);
 
     expect(status).toBe(400);
-    expect(data.error).toBe('Usuário selecionado não é executor');
+    expect(data.error).toContain('executor ou ortodontista');
   });
 
   it('aceita usuário com role efetiva de executor mesmo que a role primária seja outra', async () => {
@@ -551,7 +552,7 @@ describe('POST /api/atendimentos/[id]/itens', () => {
     expect(status).toBe(201);
   });
 
-  it('aceita admin como executor', async () => {
+  it('rejeita admin sem perfil clínico como executor', async () => {
     setLastInsertId(17);
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_AVALIACAO);
     mockQueryResponse('select * from procedimentos where id', PROC_LIMPEZA);
@@ -564,7 +565,8 @@ describe('POST /api/atendimentos/[id]/itens', () => {
       body: { procedimento_id: 1, executor_id: 1 },
     }, ctx);
 
-    expect(status).toBe(201);
+    expect(status).toBe(400);
+    expect(getExecutedQueries().some(q => q.sql.includes('INSERT INTO itens_atendimento'))).toBe(false);
   });
 });
 
@@ -903,6 +905,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('atualiza executor_id em triagem para atendente', async () => {
+    mockQueryResponse('select id, role from usuarios where id', { id: 4, role: 'executor' });
     mockVerifyToken.mockResolvedValueOnce(makeAuthPayload('atendente'));
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_TRIAGEM);
     mockQueryResponse('select * from itens_atendimento where id', { ...ITEM_LIMPEZA_PENDENTE, atendimento_id: 1 });
@@ -918,6 +921,7 @@ describe('PUT /api/atendimentos/[id]/itens/[itemId]', () => {
   });
 
   it('atualiza executor_id', async () => {
+    mockQueryResponse('select id, role from usuarios where id', { id: 4, role: 'executor' });
     mockQueryResponse('from atendimentos where id', ATENDIMENTO_EM_EXECUCAO);
     mockQueryResponse('select * from itens_atendimento where id', ITEM_RESTAURACAO_PAGO);
     mockQueryResponse('from itens_atendimento i', { ...ITEM_RESTAURACAO_PAGO, procedimento_nome: 'Restauração', executor_nome: 'Novo' });

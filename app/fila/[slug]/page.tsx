@@ -52,6 +52,7 @@ interface FilaData {
   categoria: { id: number; nome: string; slug: string; cor: string; icone: string };
   meusProcedimentos: Procedimento[];
   disponiveis: Procedimento[];
+  pendenciasAgendamento?: Procedimento[];
 }
 
 type Visualizacao = 'procedimento' | 'paciente';
@@ -109,7 +110,7 @@ export default function FilaPage() {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         setPegando(atendimento_id);
         try {
-          await Promise.all(
+          const respostas = await Promise.all(
             disponiveis.map(proc =>
               unitFetch(`/api/atendimentos/${proc.atendimento_id}/itens/${proc.id}`, {
                 method: 'PUT',
@@ -118,6 +119,11 @@ export default function FilaPage() {
               })
             )
           );
+          const recusada = respostas.find(resposta => !resposta.ok);
+          if (recusada) {
+            const data = await recusada.json();
+            setError(data.error || 'Alguns procedimentos não puderam ser assumidos. Confira a fila atualizada.');
+          }
           await carregarProcedimentos();
         } catch {
           setError('Erro ao assumir procedimentos');
@@ -199,6 +205,22 @@ export default function FilaPage() {
           </div>
         }
       />
+
+      {(fila.pendenciasAgendamento?.length ?? 0) > 0 && (
+        <Card className="mb-6">
+          <h2 className="text-lg font-bold">Agendamentos de datas passadas ainda abertos</h2>
+          <p className="text-sm text-muted-foreground mb-3">A recepção precisa revisar a presença ou cancelar/remarcar o agendamento antes de liberar estes procedimentos.</p>
+          <ul className="space-y-2">
+            {fila.pendenciasAgendamento!.map(proc => (
+              <li key={proc.id}>
+                <Button variant="ghost" onClick={() => router.push(detalheHref(proc.id))}>
+                  {proc.cliente_nome} — {proc.procedimento_nome} · Atendimento #{proc.atendimento_id}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {totalProcedimentos === 0 ? (
         <EmptyState

@@ -1,9 +1,11 @@
+import { POSSUI_AGENDAMENTO_VENCIDO_SQL } from '@/lib/helpers/pendenciasExecucao';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { isRestrictedDentistPatientView } from '@/lib/auth/patientPrivacy';
 
 interface ProcedimentoExecucao {
+  possui_agendamento_vencido?: number;
   id: number;
   atendimento_id: number;
   procedimento_id: number;
@@ -47,6 +49,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     const procedimentos = await query<ProcedimentoExecucao>(
       `SELECT
         i.id,
+        ${POSSUI_AGENDAMENTO_VENCIDO_SQL} as possui_agendamento_vencido,
         i.atendimento_id,
         i.procedimento_id,
         p.nome as procedimento_nome,
@@ -73,13 +76,13 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       AND a.unidade_id = ?
       AND i.status IN ('pago', 'executando')
       AND (i.executor_id = ? OR i.executor_id IS NULL)
-      AND NOT EXISTS (
+      AND (NOT EXISTS (
         SELECT 1
         FROM agendamentos ag
         WHERE ag.item_atendimento_origem_id = i.id
           AND ag.unidade_id = a.unidade_id
           AND ag.status IN ('pendente', 'agendado')
-      )
+      ) OR ${POSSUI_AGENDAMENTO_VENCIDO_SQL})
       ORDER BY
         CASE WHEN i.executor_id = ? THEN 0 ELSE 1 END,
         i.created_at DESC`,
@@ -87,10 +90,12 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
     );
 
     // Separa em "meus" e "disponíveis"
-    const meusProcedimentos = procedimentos.filter(p => p.executor_id === parseInt(executorId));
-    const disponiveis = procedimentos.filter(p => p.executor_id === null);
+    const pendenciasAgendamento = procedimentos.filter(p => Number(p.possui_agendamento_vencido) === 1);
+    const meusProcedimentos = procedimentos.filter(p => Number(p.possui_agendamento_vencido) !== 1 && p.executor_id === parseInt(executorId));
+    const disponiveis = procedimentos.filter(p => Number(p.possui_agendamento_vencido) !== 1 && p.executor_id === null);
 
     return NextResponse.json({
+      pendenciasAgendamento,
       meusProcedimentos,
       disponiveis
     });

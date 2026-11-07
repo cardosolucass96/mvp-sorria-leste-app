@@ -63,3 +63,16 @@ export async function validarUsuarioPorRoles(
 
   return roles.some((role) => rolesFallback.includes(role)) ? 'ok' : 'invalid';
 }
+
+export async function validarExecutorClinico(usuarioId: number, categoriaId: number | null): Promise<UsuarioRoleValidationResult> {
+  const roles = await carregarRolesUsuarioAtivo(usuarioId);
+  if (!roles) return 'not_found';
+  if (!roles.some(role => ['executor', 'ortodontista'].includes(role))) return 'invalid';
+  if (categoriaId) {
+    const categoriaRoles = await query<{ role: string }>(
+      'SELECT role FROM categoria_roles WHERE categoria_id = ?', [categoriaId]
+    );
+    if (categoriaRoles.length > 0 && !categoriaRoles.some(({ role }) => roles.includes(role))) return 'invalid';
+  }
+  return 'ok';
+}

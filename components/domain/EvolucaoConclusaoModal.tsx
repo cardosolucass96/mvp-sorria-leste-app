@@ -161,6 +161,7 @@ export default function EvolucaoConclusaoModal({
           </>
         )}
       >
+        {elegiveis.length === 0 && <Alert type="warning" title="Nenhum procedimento disponível">Este procedimento já possui prontuário ou uma pendência que impede a conclusão. Feche esta janela e atualize o procedimento para revisar.</Alert>}
         <div className="flex flex-col gap-4">
           {registroAssistido && (
             <Alert type="info" title="Registro assistido pela recepção">

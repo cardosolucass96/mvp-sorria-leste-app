@@ -65,6 +65,7 @@ export const GET = withUnit(async (_request: NextRequest, context: UnitAuthentic
     const prontuario = await queryOne<Prontuario>(
       `SELECT
         pe.id,
+        pe.legacy_prontuario_id,
         pei.item_atendimento_id,
         pe.usuario_id,
         pe.descricao,
@@ -93,7 +94,7 @@ export const GET = withUnit(async (_request: NextRequest, context: UnitAuthentic
       [itemId]
     );
 
-    return NextResponse.json({ prontuario: legado ?? null });
+    return NextResponse.json({ prontuario: legado ? { ...legado, legacy_prontuario_id: legado.id } : null });
   } catch (error) {
     console.error('Erro ao buscar prontuário:', error);
     return NextResponse.json(
@@ -236,7 +237,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
 
     return NextResponse.json({
       success: true,
-      prontuario,
+      prontuario: prontuario ? { ...prontuario, legacy_prontuario_id: prontuario.id } : null,
       message: existente ? 'Prontuário atualizado' : 'Prontuário criado'
     });
   } catch (error) {

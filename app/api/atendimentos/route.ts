@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { query, queryOne, execute } from '@/lib/db';
 import { withUnit, UnitAuthenticatedContext } from '@/lib/auth/middleware';
-import { validarUsuarioPorRoles } from './_helpers';
+import { validarUsuarioPorRoles, validarExecutorClinico } from './_helpers';
 import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
 import { getClinicDayUtcRange, getClinicTrailingDaysUtcRange } from '@/lib/time';
 import type { AtendimentoStatus } from '@/lib/types';
@@ -378,11 +378,7 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       // que uma seleção inválida deixe itens parcialmente gravados.
       for (const solicitado of procedimentosSolicitados) {
         if (solicitado.executor_id) {
-          const executorValido = await validarUsuarioPorRoles(
-            solicitado.executor_id,
-            ['executor', 'ortodontista'],
-            categoriaIdFinal,
-          );
+          const executorValido = await validarExecutorClinico(solicitado.executor_id, categoriaIdFinal);
 
           if (executorValido === 'not_found') {
             return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });

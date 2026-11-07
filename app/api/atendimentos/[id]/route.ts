@@ -200,6 +200,9 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         p.por_dente,
         p.tem_etapas,
         u.nome as executor_nome,
+        CASE WHEN u.ativo = 1 AND (u.role IN ('executor', 'ortodontista') OR EXISTS (
+          SELECT 1 FROM usuario_roles ur WHERE ur.usuario_id = u.id AND ur.role IN ('executor', 'ortodontista')
+        )) THEN 1 ELSE 0 END as executor_habilitado,
         c.nome as criado_por_nome,
         CASE WHEN EXISTS (
           SELECT 1
