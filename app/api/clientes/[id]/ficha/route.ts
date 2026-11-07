@@ -50,9 +50,13 @@ export const GET = withAuth(async (_request, context) => {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
     }
 
-    // Atendimentos (com totais calculados e nome da unidade)
-    const atendimentos = await query(
-      `SELECT a.*,
+    const [
+      atendimentos, procedimentos, procedimentosAgendados, pagamentos, pagamentosAlocacoes,
+      [hCriados, hLiberados, hFinalizados, hPagamentos, hProcedimentos, hMovimentacoes],
+      prontuarioRows,
+    ] = await Promise.all([
+      query(
+        `SELECT a.*,
               u.nome as avaliador_nome,
               un.nome as unidade_nome,
               un.razao_social as unidade_razao_social,
@@ -71,12 +75,10 @@ export const GET = withAuth(async (_request, context) => {
        WHERE a.cliente_id = ?
        GROUP BY a.id
        ORDER BY a.created_at DESC`,
-      [clienteId]
-    );
-
-    // Procedimentos (itens de todos os atendimentos)
-    const procedimentos = await query(
-      `SELECT i.id, i.atendimento_id, COALESCE(i.valor_final, i.valor) as valor, i.valor_final, i.valor_pago, i.adicionado_em_execucao, i.status,
+        [clienteId]
+      ),
+      query(
+        `SELECT i.id, i.atendimento_id, COALESCE(i.valor_final, i.valor) as valor, i.valor_final, i.valor_pago, i.adicionado_em_execucao, i.status,
               i.dentes, i.dente_unico, i.group_id, i.quantidade, i.observacoes, i.created_at, i.concluido_at,
               p.nome as procedimento_nome,
               i.etapa_label,
@@ -89,12 +91,10 @@ export const GET = withAuth(async (_request, context) => {
        LEFT JOIN usuarios c ON i.criado_por_id = c.id
        WHERE a.cliente_id = ?
        ORDER BY i.created_at DESC`,
-      [clienteId]
-    );
-
-    // Orçamentos transferidos para a agenda, sem um item ainda presente na ficha.
-    const procedimentosAgendados = await query(
-      `SELECT ag.id AS agendamento_id, ag.atendimento_origem_id AS atendimento_id,
+        [clienteId]
+      ),
+      query(
+        `SELECT ag.id AS agendamento_id, ag.atendimento_origem_id AS atendimento_id,
               p.nome AS procedimento_nome, em.nome AS etapa_label, u.nome AS executor_nome,
               ag.valor, COALESCE(ag.valor_pago, 0) AS valor_pago,
               ag.status, ag.data_agendada, ag.created_at
@@ -112,12 +112,10 @@ export const GET = withAuth(async (_request, context) => {
              AND (i.id = ag.item_atendimento_origem_id OR i.origem_agendamento_id = ag.id)
          )
        ORDER BY ag.created_at DESC, ag.id DESC`,
-      [clienteId]
-    );
-
-    // Pagamentos (de todos os atendimentos, excluindo cancelados)
-    const pagamentos = await query(
-      `SELECT pg.id, pg.atendimento_id, pg.valor, pg.metodo, pg.observacoes,
+        [clienteId]
+      ),
+      query(
+        `SELECT pg.id, pg.atendimento_id, pg.valor, pg.metodo, pg.observacoes,
               pg.cancelado, pg.motivo_cancelamento, pg.created_at,
               pg.forma_pagamento_id,
               pg.forma_pagamento_grupo_snapshot,
@@ -142,11 +140,10 @@ export const GET = withAuth(async (_request, context) => {
        LEFT JOIN usuarios u ON pg.recebido_por_id = u.id
        WHERE a.cliente_id = ?
        ORDER BY pg.created_at DESC`,
-      [clienteId]
-    );
-
-    const pagamentosAlocacoes = await query(
-      `SELECT
+        [clienteId]
+      ),
+      query(
+        `SELECT
          pa.id,
          pa.pagamento_id,
          pg.pagamento_grupo_id,
@@ -171,92 +168,80 @@ export const GET = withAuth(async (_request, context) => {
        LEFT JOIN procedimento_etapas_modelo etapa ON etapa.id = COALESCE(pa.etapa_modelo_id, ag.etapa_modelo_id, i.etapa_modelo_id)
        WHERE a.cliente_id = ?
        ORDER BY pa.created_at ASC, pa.id ASC`,
-      [clienteId]
-    );
-
-    // Histórico — executado em queries separadas para evitar limite de compound SELECT do D1
-    const [hCriados, hLiberados, hFinalizados, hPagamentos, hProcedimentos, hMovimentacoes] = await Promise.all([
-      query(
-        `SELECT 'atendimento_criado' as tipo, a.created_at as data,
-                'Atendimento #' || a.id || ' criado (status: ' || a.status || ')' as descricao,
-                a.id as ref_id
-         FROM atendimentos a WHERE a.cliente_id = ?`,
         [clienteId]
       ),
-      query(
-        `SELECT 'liberado' as tipo, a.liberado_em as data,
-                'Atendimento #' || a.id || ' liberado para execução' ||
-                CASE WHEN u.nome IS NOT NULL THEN ' por ' || u.nome ELSE '' END as descricao,
-                a.id as ref_id
-         FROM atendimentos a
-         LEFT JOIN usuarios u ON a.liberado_por_id = u.id
-         WHERE a.cliente_id = ? AND a.liberado_em IS NOT NULL`,
-        [clienteId]
-      ),
-      query(
-        `SELECT 'finalizado' as tipo, a.finalizado_at as data,
-                'Atendimento #' || a.id || ' finalizado' as descricao,
-                a.id as ref_id
-         FROM atendimentos a
-         WHERE a.cliente_id = ? AND a.finalizado_at IS NOT NULL`,
-        [clienteId]
-      ),
-      query(
-        `SELECT 'pagamento' as tipo, pg.created_at as data,
-                'Pagamento de R$ ' || printf('%.2f', pg.valor) ||
-                ' registrado no atendimento #' || a.id ||
-                CASE WHEN pg.cancelado = 1 THEN ' (cancelado)' ELSE '' END as descricao,
-                pg.atendimento_id as ref_id
-         FROM pagamentos pg
-         INNER JOIN atendimentos a ON pg.atendimento_id = a.id
-         WHERE a.cliente_id = ?`,
-        [clienteId]
-      ),
-      query(
-        `SELECT 'procedimento' as tipo, i.created_at as data,
-                'Procedimento "' || p.nome || '"' ||
-                CASE
-                  WHEN COALESCE(
-                    i.dente_unico,
-                    CASE WHEN json_valid(i.dentes) THEN json_extract(i.dentes, '$[0].dente') END
-                  ) IS NOT NULL
-                  THEN ' • Dente ' || COALESCE(
-                    i.dente_unico,
-                    CASE WHEN json_valid(i.dentes) THEN json_extract(i.dentes, '$[0].dente') END
-                  )
-                  ELSE ''
-                END ||
-                ' adicionado ao atendimento #' || a.id as descricao,
-                a.id as ref_id
-         FROM itens_atendimento i
-         INNER JOIN atendimentos a ON i.atendimento_id = a.id
-         INNER JOIN procedimentos p ON i.procedimento_id = p.id
-         WHERE a.cliente_id = ?`,
-        [clienteId]
-      ),
-      query(
-        `SELECT ms.tipo as tipo, ms.created_at as data,
-                ms.observacoes as descricao,
-                COALESCE(ms.item_atendimento_id, 0) as ref_id,
-                ms.valor, ms.saldo_anterior, ms.saldo_novo
-         FROM movimentacoes_saldo ms
-         WHERE ms.cliente_id = ?
-         ORDER BY ms.created_at DESC`,
-        [clienteId]
-      ),
-    ]);
-    const historico = [
-      ...hCriados, ...hLiberados, ...hFinalizados,
-      ...hPagamentos, ...hProcedimentos, ...hMovimentacoes,
-    ].sort((a, b) => {
-      const da = (a as { data: string }).data;
-      const db2 = (b as { data: string }).data;
-      return da > db2 ? -1 : da < db2 ? 1 : 0;
-    });
-
-    // Prontuários/evoluções — uma evolução pode documentar vários procedimentos.
-    const prontuarioRows = await query<ProntuarioEvolucaoRow>(
-      `SELECT
+      Promise.all([
+        query(
+          `SELECT 'atendimento_criado' as tipo, a.created_at as data,
+                  'Atendimento #' || a.id || ' criado (status: ' || a.status || ')' as descricao,
+                  a.id as ref_id
+           FROM atendimentos a WHERE a.cliente_id = ?`,
+          [clienteId]
+        ),
+        query(
+          `SELECT 'liberado' as tipo, a.liberado_em as data,
+                  'Atendimento #' || a.id || ' liberado para execução' ||
+                  CASE WHEN u.nome IS NOT NULL THEN ' por ' || u.nome ELSE '' END as descricao,
+                  a.id as ref_id
+           FROM atendimentos a
+           LEFT JOIN usuarios u ON a.liberado_por_id = u.id
+           WHERE a.cliente_id = ? AND a.liberado_em IS NOT NULL`,
+          [clienteId]
+        ),
+        query(
+          `SELECT 'finalizado' as tipo, a.finalizado_at as data,
+                  'Atendimento #' || a.id || ' finalizado' as descricao,
+                  a.id as ref_id
+           FROM atendimentos a
+           WHERE a.cliente_id = ? AND a.finalizado_at IS NOT NULL`,
+          [clienteId]
+        ),
+        query(
+          `SELECT 'pagamento' as tipo, pg.created_at as data,
+                  'Pagamento de R$ ' || printf('%.2f', pg.valor) ||
+                  ' registrado no atendimento #' || a.id ||
+                  CASE WHEN pg.cancelado = 1 THEN ' (cancelado)' ELSE '' END as descricao,
+                  pg.atendimento_id as ref_id
+           FROM pagamentos pg
+           INNER JOIN atendimentos a ON pg.atendimento_id = a.id
+           WHERE a.cliente_id = ?`,
+          [clienteId]
+        ),
+        query(
+          `SELECT 'procedimento' as tipo, i.created_at as data,
+                  'Procedimento "' || p.nome || '"' ||
+                  CASE
+                    WHEN COALESCE(
+                      i.dente_unico,
+                      CASE WHEN json_valid(i.dentes) THEN json_extract(i.dentes, '$[0].dente') END
+                    ) IS NOT NULL
+                    THEN ' • Dente ' || COALESCE(
+                      i.dente_unico,
+                      CASE WHEN json_valid(i.dentes) THEN json_extract(i.dentes, '$[0].dente') END
+                    )
+                    ELSE ''
+                  END ||
+                  ' adicionado ao atendimento #' || a.id as descricao,
+                  a.id as ref_id
+           FROM itens_atendimento i
+           INNER JOIN atendimentos a ON i.atendimento_id = a.id
+           INNER JOIN procedimentos p ON i.procedimento_id = p.id
+           WHERE a.cliente_id = ?`,
+          [clienteId]
+        ),
+        query(
+          `SELECT ms.tipo as tipo, ms.created_at as data,
+                  ms.observacoes as descricao,
+                  COALESCE(ms.item_atendimento_id, 0) as ref_id,
+                  ms.valor, ms.saldo_anterior, ms.saldo_novo
+           FROM movimentacoes_saldo ms
+           WHERE ms.cliente_id = ?
+           ORDER BY ms.created_at DESC`,
+          [clienteId]
+        ),
+      ]),
+      query<ProntuarioEvolucaoRow>(
+        `SELECT
          pe.id as evolucao_id,
          pe.atendimento_id,
          pe.legacy_prontuario_id as prontuario_id,
@@ -283,8 +268,18 @@ export const GET = withAuth(async (_request, context) => {
        LEFT JOIN usuarios pu ON pe.usuario_id = pu.id
        WHERE a.cliente_id = ?
        ORDER BY pe.created_at DESC, i.concluido_at DESC, i.id ASC`,
-      [clienteId]
-    );
+        [clienteId]
+      ),
+    ]);
+
+    const historico = [
+      ...hCriados, ...hLiberados, ...hFinalizados,
+      ...hPagamentos, ...hProcedimentos, ...hMovimentacoes,
+    ].sort((a, b) => {
+      const da = (a as { data: string }).data;
+      const db2 = (b as { data: string }).data;
+      return da > db2 ? -1 : da < db2 ? 1 : 0;
+    });
 
     const prontuariosMap = new Map<number, ProntuarioEvolucaoRow & { itens: Array<{
       item_id: number;

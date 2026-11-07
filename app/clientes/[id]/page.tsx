@@ -642,8 +642,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     if (!res.ok) return;
     const data = await res.json() as FichaData;
     setFicha(data);
-    await carregarAnexos(data.prontuarios);
-  }, [id, carregarAnexos]);
+  }, [id]);
 
   const abrirEditorProntuario = async (item: ItemProcedimento) => {
     setProntuarioLoadingItemId(item.id);
@@ -731,6 +730,12 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   useEffect(() => {
     const load = async () => {
       try {
+        const complementares = Promise.allSettled([
+          loadVinculos(),
+          carregarSaldo(),
+          carregarAgendamentos(),
+          carregarFollowups(),
+        ]);
         const [resCliente, resFicha] = await Promise.all([
           fetch(`/api/clientes/${id}`),
           fetch(`/api/clientes/${id}/ficha`),
@@ -740,16 +745,11 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
         if (resFicha.ok) {
           const fichaData = await resFicha.json() as FichaData;
           setFicha(fichaData);
-          await carregarAnexos(fichaData.prontuarios);
         }
-        await Promise.all([
-          carregarTermosCliente(),
-          carregarTermosDigitais(),
-          loadVinculos(),
-          carregarSaldo(),
-          carregarAgendamentos(),
-          carregarFollowups(),
-        ]);
+        const resultados = await complementares;
+        if (resultados.some(resultado => resultado.status === 'rejected')) {
+          setError('Não foi possível carregar todos os dados complementares do cliente.');
+        }
       } catch {
         setError('Erro ao carregar cliente');
       } finally {
@@ -757,7 +757,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       }
     };
     load();
-  }, [id, push, loadVinculos, carregarSaldo, carregarAgendamentos, carregarFollowups, carregarAnexos, carregarTermosCliente, carregarTermosDigitais]);
+  }, [id, push, loadVinculos, carregarSaldo, carregarAgendamentos, carregarFollowups]);
 
   useEffect(() => {
     if (!vinculoBusca.trim()) { setVinculoBuscaResultados([]); return; }
@@ -812,9 +812,10 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   }, [transferBusca, id]);
 
   useEffect(() => {
-    if (abaAtiva !== 'anexos') return;
+    if (abaAtiva !== 'anexos' || !ficha) return;
+    void carregarAnexos(ficha.prontuarios);
     void carregarTermosDigitais();
-  }, [abaAtiva, carregarTermosDigitais]);
+  }, [abaAtiva, ficha, carregarAnexos, carregarTermosDigitais]);
 
   useEffect(() => {
     const termoSelecionadoAtual = termos.find((termo) => termo.slug === termoSelecionado);
@@ -1912,7 +1913,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
     { key: 'pagamentos', label: 'Pagamentos', count: ficha?.pagamentos.filter(p => !p.cancelado).length },
     { key: 'agendamentos', label: 'Agendamentos', count: agendamentos.length },
     { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
-    { key: 'anexos', label: 'Anexos', count: anexosCliente.length + anexosProntuario.length + termosDigitais.length },
+    { key: 'anexos', label: 'Anexos' },
     { key: 'historico', label: 'Histórico', count: ficha?.historico.length },
     { key: 'vinculados', label: 'Vinculados', count: vinculos.length },
   ];

@@ -305,6 +305,37 @@ describe('ClienteDetalhePage', () => {
     jest.restoreAllMocks();
   });
 
+  it('abre a ficha sem consultar anexos e termos, carregando-os ao abrir Anexos', async () => {
+    render(<ClienteDetalhePage params={Promise.resolve({ id: '10' })} />);
+    await screen.findByRole('heading', { name: 'Maria Teste' });
+
+    const chamadas = () => (global.fetch as jest.Mock).mock.calls.map(([url]) => String(url));
+    expect(chamadas().some(url => /\/(anexos|termos|termos-digitais)$/.test(url))).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Anexos' }));
+    await waitFor(() => {
+      expect(chamadas()).toContain('/api/clientes/10/anexos');
+      expect(chamadas()).toContain('/api/clientes/10/termos-digitais');
+    });
+  });
+
+  it('inicia agenda, saldo e vínculos enquanto a ficha ainda está carregando', async () => {
+    const fetchOriginal = (global.fetch as jest.Mock).getMockImplementation()!;
+    let liberarFicha!: (resposta: Response) => void;
+    (global.fetch as jest.Mock).mockImplementation((input: RequestInfo | URL) => {
+      if (String(input).endsWith('/ficha')) return new Promise<Response>(resolve => { liberarFicha = resolve; });
+      return fetchOriginal(input);
+    });
+    render(<ClienteDetalhePage params={Promise.resolve({ id: '10' })} />);
+    await waitFor(() => {
+      expect(mockUnitFetch).toHaveBeenCalledWith(expect.stringContaining('/api/agendamentos?'));
+      expect(global.fetch).toHaveBeenCalledWith('/api/clientes/10/saldo');
+      expect(global.fetch).toHaveBeenCalledWith('/api/clientes/10/vinculos');
+    });
+    liberarFicha({ ok: true, json: async () => ({ atendimentos: [], procedimentos: [], pagamentos: [], historico: [], prontuarios: [], movimentacoes: [] }) } as Response);
+    await screen.findByRole('heading', { name: 'Maria Teste' });
+  });
+
   it('exibe todos os followups na aba Dados, abaixo do saldo, sem uma aba própria', async () => {
     followupsMock = [
       {
@@ -387,7 +418,7 @@ describe('ClienteDetalhePage', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Gerar termo' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Digital no Autentique' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Digital no Autentique' }));
 
     fireEvent.change(screen.getByRole('combobox'), {
       target: { value: 'termo-consentimento' },
@@ -443,7 +474,7 @@ describe('ClienteDetalhePage', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Gerar termo' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Digital no Autentique' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Digital no Autentique' }));
     fireEvent.change(screen.getByRole('combobox'), {
       target: { value: 'referencia-implante' },
     });
