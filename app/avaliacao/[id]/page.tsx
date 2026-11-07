@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, useRef, use } from 'react';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -122,6 +122,8 @@ export default function AvaliacaoDetalhePage({
   const [loadingEtapas, setLoadingEtapas] = useState(false);
   const [adicionando, setAdicionando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
+  const operacaoEmAndamento = useRef(false);
+  const formularioBloqueado = adicionando || finalizando;
   const [editingValorId, setEditingValorId] = useState<number | null>(null);
   const [editingValorValue, setEditingValorValue] = useState('');
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -328,9 +330,18 @@ export default function AvaliacaoDetalhePage({
     }
   };
 
+  const limparSelecaoProcedimento = () => {
+    setProcedimentoId('');
+    setExecutorId('');
+    setValorCustom('');
+    setDentesFaces([]);
+    setObservacoes('');
+    setEtapasModelo([]);
+  };
+
   const handleAdicionarProcedimento = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!procedimentoId) return;
+    if (!procedimentoId || operacaoEmAndamento.current) return;
 
     const proc = procedimentos.find(p => p.id === parseInt(procedimentoId));
 
@@ -343,6 +354,7 @@ export default function AvaliacaoDetalhePage({
       return;
     }
 
+    operacaoEmAndamento.current = true;
     setAdicionando(true);
     setError('');
 
@@ -377,17 +389,13 @@ export default function AvaliacaoDetalhePage({
         throw new Error(data.error || 'Erro ao adicionar');
       }
 
-      setProcedimentoId('');
-      setExecutorId('');
-      setValorCustom('');
-      setDentesFaces([]);
-      setObservacoes('');
-      setEtapasModelo([]);
+      limparSelecaoProcedimento();
       await carregarDados();
       toast.success('Procedimento adicionado!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao adicionar');
     } finally {
+      operacaoEmAndamento.current = false;
       setAdicionando(false);
     }
   };
@@ -478,11 +486,14 @@ export default function AvaliacaoDetalhePage({
   };
 
   const handleFinalizarAvaliacao = async () => {
+    if (operacaoEmAndamento.current || procedimentoId) return;
+
     if (!atendimento || atendimento.itens.length === 0) {
       setError('Adicione pelo menos um procedimento');
       return;
     }
 
+    operacaoEmAndamento.current = true;
     setFinalizando(true);
     setError('');
 
@@ -501,7 +512,7 @@ export default function AvaliacaoDetalhePage({
       router.push('/avaliacao');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao finalizar');
-    } finally {
+      operacaoEmAndamento.current = false;
       setFinalizando(false);
     }
   };
@@ -558,7 +569,9 @@ export default function AvaliacaoDetalhePage({
             label="Procedimento *"
             name="procedimento"
             value={procedimentoId}
+            disabled={formularioBloqueado}
             onChange={async (value) => {
+              if (operacaoEmAndamento.current) return;
               setProcedimentoId(value);
               setValorCustom('');
               setDentesFaces([]);
@@ -624,7 +637,7 @@ export default function AvaliacaoDetalhePage({
               <SeletorDentes
                 valor={dentesFaces}
                 onChange={setDentesFaces}
-                disabled={adicionando}
+                disabled={formularioBloqueado}
                 mostrarFaces={procedimentoSelecionado?.tem_face === 1}
                 expandidoInicial
               />
@@ -640,6 +653,7 @@ export default function AvaliacaoDetalhePage({
             label="Executor"
             name="executor"
             value={executorId}
+            disabled={formularioBloqueado}
             onChange={(value) => setExecutorId(value)}
             options={executores.map((exec) => ({ value: String(exec.id), label: exec.nome }))}
             placeholder="Definir depois"
@@ -651,6 +665,7 @@ export default function AvaliacaoDetalhePage({
               name="valor"
               type="number"
               value={valorCustom}
+              disabled={formularioBloqueado}
               onChange={(value) => setValorCustom(value)}
               placeholder={procedimentoSelecionado
                 ? `Padrão: ${procedimentoSelecionado.valor}`
@@ -688,20 +703,31 @@ export default function AvaliacaoDetalhePage({
               rows={2}
               placeholder="Observações ou laudo do procedimento..."
               className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent resize-none"
-              disabled={adicionando}
+              disabled={formularioBloqueado}
             />
           </div>
 
           <Button
             type="submit"
             variant="secondary"
-            disabled={!procedimentoId || adicionando || loadingEtapas}
+            disabled={!procedimentoId || formularioBloqueado || loadingEtapas}
             loading={adicionando}
             className="w-full"
           >
             <Plus className="w-4 h-4 mr-1.5 inline-block" />
             Adicionar
           </Button>
+          {procedimentoId && (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={formularioBloqueado}
+              onClick={limparSelecaoProcedimento}
+              className="w-full"
+            >
+              Limpar seleção
+            </Button>
+          )}
         </form>
 
       </Card>
@@ -899,10 +925,16 @@ export default function AvaliacaoDetalhePage({
 
       {/* ── Finalizar Avaliação ── */}
       {atendimento.itens.length > 0 && (
-        <div className="mt-4 md:mt-6">
+        <div className="mt-4 md:mt-6 space-y-3">
+          {procedimentoId && !adicionando && (
+            <Alert type="warning">
+              Há um procedimento selecionado que ainda não foi adicionado. Clique em Adicionar
+              ou Limpar seleção antes de finalizar a avaliação.
+            </Alert>
+          )}
           <Button
             onClick={handleFinalizarAvaliacao}
-            disabled={finalizando}
+            disabled={formularioBloqueado || !!procedimentoId}
             loading={finalizando}
             className="w-full text-lg py-3 shadow-lg"
           >
