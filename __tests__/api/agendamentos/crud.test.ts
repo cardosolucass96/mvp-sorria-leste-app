@@ -41,6 +41,10 @@ jest.mock('@/lib/auth/jwt', () => ({
 }));
 
 // Importa os handlers das rotas
+jest.mock('@/lib/helpers/categoriaAtendimentoAgenda', () => ({
+  resolverCategoriaAtendimentoAgenda: jest.fn().mockResolvedValue(1),
+}));
+
 import { GET as listAgendamentos, POST as createAgendamento } from '@/app/api/agendamentos/route';
 import { GET as getAgendamento, PUT as updateAgendamento } from '@/app/api/agendamentos/[id]/route';
 import { POST as chegouAgendamento } from '@/app/api/agendamentos/[id]/chegou/route';

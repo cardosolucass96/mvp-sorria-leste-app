@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createSqliteDb } from '../helpers/sqlite-db.cjs';
 import { __setMockDb, __resetMocks } from '../../__mocks__/opennextjs-cloudflare';
 import { callRoute, createRouteContext } from '../helpers/api-test-helper';
@@ -15,6 +16,8 @@ beforeEach(() => {
   db.sqlite.exec(`
     INSERT INTO unidades(id,nome) VALUES (1,'Teste');
     INSERT INTO usuarios(id,nome,email,role) VALUES (1,'Operador','operador@example.test','admin');
+    INSERT INTO categorias(id,nome,slug) VALUES (1,'Execução','geral'),(2,'Ortodontia','orto');
+    INSERT INTO categoria_roles(categoria_id,role) VALUES (1,'executor'),(1,'admin'),(2,'ortodontista');
     INSERT INTO clientes(id,nome) VALUES (1,'Paciente');
     INSERT INTO procedimentos(id,nome,valor) VALUES (1,'Simples',100),(2,'Etapas',200);
     INSERT INTO procedimento_etapas_modelo(id,procedimento_id,nome,valor,ordem) VALUES (1,2,'Etapa 1',100,1),(2,2,'Etapa 2',100,2);
@@ -109,4 +112,78 @@ test('falha na chegada vinculada preserva o encerramento e os destinos anteriore
   const before = snapshot();
   expect((await registrarChegada()).status).toBe(500);
   expect(snapshot()).toEqual(before);
+});
+
+
+test.each(['avaliacao', 'procedimento'] as const)('chegada de %s preenche a fila geral', async tipo => {
+  agendar(tipo);
+  const result = await registrarChegada();
+  expect(result.status).toBe(201);
+  expect(db.sqlite.prepare('SELECT categoria_id FROM atendimentos WHERE id=?').get(result.data.id).categoria_id).toBe(1);
+});
+
+test('sessão ortodôntica entra na fila de ortodontia', async () => {
+  agendar('procedimento');
+  db.sqlite.exec('UPDATE procedimentos SET categoria_id=2 WHERE id=1');
+  const result = await registrarChegada();
+  expect(result.status).toBe(201);
+  expect(db.sqlite.prepare('SELECT categoria_id FROM atendimentos WHERE id=?').get(result.data.id).categoria_id).toBe(2);
+});
+
+test.each([null, 2])('chegada vinculada recupera fila ausente e preserva fila existente (%s)', async categoriaId => {
+  agendar('procedimento', true);
+  db.sqlite.prepare('UPDATE atendimentos SET categoria_id=? WHERE id=1').run(categoriaId);
+  const result = await registrarChegada();
+  expect(result.status).toBe(201);
+  expect(result.data.id).toBe(1);
+  expect(db.sqlite.prepare('SELECT categoria_id FROM atendimentos WHERE id=1').get().categoria_id).toBe(categoriaId ?? 1);
+});
+
+test('recusa grupo com filas diferentes sem criar atendimento ou marcar presença', async () => {
+  agendar('procedimento');
+  db.sqlite.exec(`
+    UPDATE procedimentos SET categoria_id=1 WHERE id=1;
+    UPDATE procedimentos SET categoria_id=2 WHERE id=2;
+    INSERT INTO agendamentos(id,cliente_id,unidade_id,tipo,status,procedimento_id,valor)
+      VALUES (2,1,1,'procedimento','pendente',2,200);
+  `);
+  const before=snapshot();
+  const result=await callRoute(chegou,'/api/agendamentos/1/chegou',{method:'POST',body:{agendamento_ids:[1,2]}},createRouteContext({id:'1'}));
+  expect(result.status).toBe(409);
+  expect(snapshot()).toEqual(before);
+});
+
+test('fila inativa impede chegada sem deixar atendimento sem categoria', async () => {
+  agendar('avaliacao');
+  db.sqlite.exec('UPDATE categorias SET ativo=0 WHERE id=1');
+  const before=snapshot();
+  expect((await registrarChegada()).status).toBe(409);
+  expect(snapshot()).toEqual(before);
+});
+
+test('backfill recupera histórico, respeita unidade, preserva fila existente e é idempotente', () => {
+  agendar('procedimento');
+  db.sqlite.exec(`
+    INSERT INTO unidades(id,nome) VALUES (2,'Outra unidade');
+    UPDATE procedimentos SET categoria_id=2 WHERE id=1;
+    UPDATE atendimentos SET agendamento_id=1,status='encerrado' WHERE id=1;
+    INSERT INTO agendamentos(id,cliente_id,unidade_id,tipo,status) VALUES
+      (2,1,1,'avaliacao','realizado'),(3,1,1,'avaliacao','realizado'),(4,1,1,'procedimento','realizado');
+    INSERT INTO atendimentos(id,cliente_id,unidade_id,status,categoria_id,agendamento_id) VALUES
+      (2,1,1,'avaliacao',NULL,2),(3,1,1,'em_execucao',1,3),(4,1,2,'avaliacao',NULL,1),
+      (5,1,1,'avaliacao',NULL,NULL),(6,1,1,'em_execucao',NULL,4);
+    UPDATE procedimentos SET categoria_id=1 WHERE id=2;
+    INSERT INTO itens_atendimento(atendimento_id,procedimento_id,criado_por_id,valor)
+      VALUES (6,1,1,100),(6,2,1,200);
+  `);
+  const migracao=readFileSync('lib/migrations/backfill_categorias_atendimentos_agenda.sql','utf8');
+  db.sqlite.exec(migracao);
+  const categorias=db.sqlite.prepare('SELECT id,categoria_id FROM atendimentos ORDER BY id').all();
+  expect(categorias).toEqual([
+    {id:1,categoria_id:2},{id:2,categoria_id:1},{id:3,categoria_id:1},
+    {id:4,categoria_id:null},{id:5,categoria_id:null},{id:6,categoria_id:null},
+  ]);
+  expect(db.sqlite.prepare('SELECT status FROM atendimentos WHERE id=1').get().status).toBe('encerrado');
+  db.sqlite.exec(migracao);
+  expect(db.sqlite.prepare('SELECT id,categoria_id FROM atendimentos ORDER BY id').all()).toEqual(categorias);
 });

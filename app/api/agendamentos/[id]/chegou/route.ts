@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { query, queryOne, batch } from '@/lib/db';
 import { withUnitRole, UnitAuthenticatedContext } from '@/lib/auth/middleware';
 import { Agendamento } from '@/lib/types';
+import { resolverCategoriaAtendimentoAgenda } from '@/lib/helpers/categoriaAtendimentoAgenda';
 import { resolveAvaliadorPadraoDaUnidade } from '@/lib/helpers/atendimentoDefaults';
 import { getClinicDayUtcRange } from '@/lib/time';
 import { obterValorEfetivoAgendamento, roundMoney } from '@/lib/helpers/pagamentoFlow';
@@ -19,6 +20,7 @@ interface AtendimentoExistente {
 interface ItemOrigemVinculado {
   id: number;
   atendimento_id: number;
+  atendimento_categoria_id: number | null;
   procedimento_id: number;
   executor_id: number | null;
   criado_por_id: number;
@@ -208,6 +210,7 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
            i.criado_por_id,
            i.status,
            a.cliente_id,
+           a.categoria_id AS atendimento_categoria_id,
            i.dentes,
            i.dente_unico,
            p.por_dente as procedimento_por_dente,
@@ -316,15 +319,30 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
         );
       }
 
+      const categoriaAtualId = itensOrigem[0].atendimento_categoria_id ?? null;
+      const procedimentosOrigem = await query<{ procedimento_id: number }>(
+        `SELECT i.procedimento_id FROM itens_atendimento i
+         INNER JOIN atendimentos a ON a.id = i.atendimento_id
+         WHERE a.id = ? AND a.unidade_id = ?`,
+        [atendimentoOrigemId, unidadeId]
+      );
+      const categoriaId = await resolverCategoriaAtendimentoAgenda(
+        procedimentosOrigem.map(item => item.procedimento_id), categoriaAtualId
+      );
+      if (categoriaId === null) {
+        return NextResponse.json({ error: 'Não foi possível definir uma única fila ativa para o atendimento. Revise a categoria dos procedimentos.' }, { status: 409 });
+      }
+
       adicionar(
         `UPDATE atendimentos
          SET status = 'aguardando_pagamento',
+             categoria_id = COALESCE(categoria_id, ?),
              finalizado_at = NULL,
              motivo_saida = NULL,
              liberado_por_id = NULL,
              liberado_em = NULL
          WHERE id = ? AND unidade_id = ?`,
-        [atendimentoOrigemId, unidadeId]
+        [categoriaId, atendimentoOrigemId, unidadeId]
       );
       novoAtendimentoId = atendimentoOrigemId;
 
@@ -397,6 +415,11 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
         );
       }
 
+      const categoriaId = await resolverCategoriaAtendimentoAgenda([]);
+      if (categoriaId === null) {
+        return NextResponse.json({ error: 'A fila Execução precisa estar ativa para registrar a chegada.' }, { status: 409 });
+      }
+
       // Avaliação: se tem avaliador atribuído, já entra direto em 'avaliacao'
       const avaliadorAgendadoId = agendamentosHoje.find(ag => ag.executor_id)?.executor_id || null;
       const avaliadorId = avaliadorAgendadoId
@@ -404,9 +427,9 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
       const statusInicial = avaliadorId ? 'avaliacao' : 'triagem';
 
       indiceNovoAtendimento = adicionar(
-        `INSERT INTO atendimentos (cliente_id, avaliador_id, status, tipo, agendamento_id, observacoes, unidade_id)
-         VALUES (?, ?, ?, 'normal', ?, ?, ?)`,
-        [agendamento.cliente_id, avaliadorId, statusInicial, agendamentoId, `Avaliação agendada (#${agendamentoId})`, unidadeId]
+        `INSERT INTO atendimentos (cliente_id, avaliador_id, status, tipo, agendamento_id, observacoes, unidade_id, categoria_id)
+         VALUES (?, ?, ?, 'normal', ?, ?, ?, ?)`,
+        [agendamento.cliente_id, avaliadorId, statusInicial, agendamentoId, `Avaliação agendada (#${agendamentoId})`, unidadeId, categoriaId]
       );
 
       // Marca todos os agendamentos de avaliação como realizados
@@ -436,15 +459,22 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
         );
       }
 
+      const categoriaId = await resolverCategoriaAtendimentoAgenda(
+        agendamentosProcedimento.map(ag => ag.procedimento_id!)
+      );
+      if (categoriaId === null) {
+        return NextResponse.json({ error: 'Os procedimentos precisam pertencer a uma única fila ativa. Revise as categorias ou registre chegadas separadas por fila.' }, { status: 409 });
+      }
+
       // Sessão: cria atendimento tipo sessão aguardando pagamento (fluxo original)
       const observacoes = agendamentosProcedimento.length > 1
         ? `Sessão com ${agendamentosProcedimento.length} procedimentos (agendamentos: ${agendamentosProcedimento.map(a => `#${a.id}`).join(', ')})`
         : `Sessão originada do agendamento #${agendamentoId}`;
 
       indiceNovoAtendimento = adicionar(
-        `INSERT INTO atendimentos (cliente_id, status, tipo, agendamento_id, observacoes, unidade_id)
-         VALUES (?, 'aguardando_pagamento', 'sessao', ?, ?, ?)`,
-        [agendamento.cliente_id, agendamentoId, observacoes, unidadeId]
+        `INSERT INTO atendimentos (cliente_id, status, tipo, agendamento_id, observacoes, unidade_id, categoria_id)
+         VALUES (?, 'aguardando_pagamento', 'sessao', ?, ?, ?, ?)`,
+        [agendamento.cliente_id, agendamentoId, observacoes, unidadeId, categoriaId]
       );
 
       // Criar itens para cada agendamento de procedimento
