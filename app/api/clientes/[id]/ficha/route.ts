@@ -92,6 +92,29 @@ export const GET = withAuth(async (_request, context) => {
       [clienteId]
     );
 
+    // Orçamentos transferidos para a agenda, sem um item ainda presente na ficha.
+    const procedimentosAgendados = await query(
+      `SELECT ag.id AS agendamento_id, ag.atendimento_origem_id AS atendimento_id,
+              p.nome AS procedimento_nome, em.nome AS etapa_label, u.nome AS executor_nome,
+              ag.valor, COALESCE(ag.valor_pago, 0) AS valor_pago,
+              ag.status, ag.data_agendada, ag.created_at
+       FROM agendamentos ag
+       INNER JOIN atendimentos a ON a.id = ag.atendimento_origem_id
+         AND a.cliente_id = ag.cliente_id AND a.unidade_id = ag.unidade_id
+       INNER JOIN procedimentos p ON p.id = ag.procedimento_id
+       LEFT JOIN procedimento_etapas_modelo em ON em.id = ag.etapa_modelo_id
+       LEFT JOIN usuarios u ON u.id = ag.executor_id
+       WHERE ag.cliente_id = ? AND ag.tipo = 'procedimento'
+         AND NOT EXISTS (
+           SELECT 1 FROM itens_atendimento i
+           INNER JOIN atendimentos origem ON origem.id = i.atendimento_id
+           WHERE origem.cliente_id = ag.cliente_id AND origem.unidade_id = ag.unidade_id
+             AND (i.id = ag.item_atendimento_origem_id OR i.origem_agendamento_id = ag.id)
+         )
+       ORDER BY ag.created_at DESC, ag.id DESC`,
+      [clienteId]
+    );
+
     // Pagamentos (de todos os atendimentos, excluindo cancelados)
     const pagamentos = await query(
       `SELECT pg.id, pg.atendimento_id, pg.valor, pg.metodo, pg.observacoes,
@@ -325,6 +348,7 @@ export const GET = withAuth(async (_request, context) => {
     return NextResponse.json({
       atendimentos,
       procedimentos,
+      procedimentos_agendados: procedimentosAgendados,
       pagamentos: restrictedDentistView ? [] : pagamentos,
       pagamentos_alocacoes: restrictedDentistView ? [] : pagamentosAlocacoes,
       historico: historicoFiltrado,

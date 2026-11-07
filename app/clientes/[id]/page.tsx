@@ -1,5 +1,6 @@
 'use client';
 
+import ProcedimentosOrcadosAgenda, { type ProcedimentoOrcadoAgenda } from '@/components/domain/ProcedimentosOrcadosAgenda';
 import { useState, useEffect, use, useCallback, useRef } from 'react';
 import { criarChavesOperacao } from '@/modules/financeiro/public';
 import { useRouter } from 'next/navigation';
@@ -256,6 +257,7 @@ type ModoGeracaoTermo = 'impressao' | 'digital';
 interface FichaData {
   atendimentos: Atendimento[];
   procedimentos: ItemProcedimento[];
+  procedimentos_agendados?: ProcedimentoOrcadoAgenda[];
   pagamentos: Pagamento[];
   pagamentos_alocacoes: PagamentoAlocacao[];
   historico: EventoHistorico[];
@@ -1906,7 +1908,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const abas = [
     { key: 'dados', label: 'Dados' },
     { key: 'atendimentos', label: 'Atendimentos', count: ficha?.atendimentos.length },
-    { key: 'procedimentos', label: 'Procedimentos', count: ficha?.procedimentos.length },
+    { key: 'procedimentos', label: 'Procedimentos', count: (ficha?.procedimentos.length ?? 0) + (ficha?.procedimentos_agendados?.length ?? 0) },
     { key: 'pagamentos', label: 'Pagamentos', count: ficha?.pagamentos.filter(p => !p.cancelado).length },
     { key: 'agendamentos', label: 'Agendamentos', count: agendamentos.length },
     { key: 'prontuario', label: 'Prontuário', count: ficha?.prontuarios.length },
@@ -2190,16 +2192,17 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                 <Activity className="w-5 h-5" /> Procedimentos
               </h2>
               <p className="text-sm text-muted mt-1">
-                Agora a leitura fica por grupo clínico dentro do atendimento, com os itens por dente/sessão abertos só quando necessário.
+                Procedimentos orçados, agendados e realizados, inclusive os que ainda não foram pagos.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-muted">
               <span>{procedimentosAgrupados.length} grupo(s)</span>
-              <span>{ficha?.procedimentos.length ?? 0} item(ns)</span>
+              <span>{(ficha?.procedimentos.length ?? 0) + (ficha?.procedimentos_agendados?.length ?? 0)} item(ns)</span>
             </div>
           </div>
+          <ProcedimentosOrcadosAgenda itens={ficha?.procedimentos_agendados ?? []} />
           {!ficha?.procedimentos.length ? (
-            <p className="text-center py-8 text-muted">Nenhum procedimento registrado</p>
+            !ficha?.procedimentos_agendados?.length && <p className="text-center py-8 text-muted">Nenhum procedimento registrado</p>
           ) : (
             <div className="space-y-4">
               {procedimentosAgrupados.map((grupo) => {
