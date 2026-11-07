@@ -68,6 +68,34 @@ Ele continua não clínico e não permite escrita fora da V1:
 - `perfil_cliente_financeiro`: saldo atual, saldo calculado, pendências, atendimentos financeiros, pagamentos recentes e movimentações.
 - `resumo_financeiro_unidade`: consolidado financeiro por unidade/período com totais, taxas, cancelamentos, recebimentos por método e por recebedor.
 
+## Exploração SQL somente leitura
+
+A versão 0.4.0 acrescenta `explorar_banco`, `descrever_tabela`, `explicar_consulta` e `consultar_sql`.
+O cliente pode descobrir campos e relacionamentos, montar SELECTs com JOIN/agregações/CTEs e navegar por páginas de resultados. As ferramentas prontas continuam disponíveis.
+
+- Comece por `explorar_banco`; `descrever_tabela` retorna tipos reais somente das colunas autorizadas.
+- O SQL enxerga projeções autorizadas, não as tabelas brutas. O servidor aplica unidades e mascara contatos antes de filtros, aliases, agregações ou subconsultas.
+- Campos e tabelas financeiras aparecem somente com `sorria.finance.read`. Cobranças são filtradas na fonte quando esse escopo não existe.
+- Prontuários, dentes, observações clínicas, anexos, senhas, tokens e tabelas internas não estão no catálogo.
+- Um parser SQLite aceita uma única consulta SELECT; rejeita escrita, referências `main`/`temp`, CTE recursiva, funções não autorizadas e JOIN sem igualdade entre as origens. Identificadores são serializados entre crases para evitar o fallback de aspas duplas do SQLite.
+- `parametros` recebe valores para os marcadores `?`. `unidadeId` é opcional: sem ele, usam-se as unidades autorizadas da conexão.
+- Retorno de até 200 linhas e 64 KB, com `mais_resultados` e `proximo_offset`; offset máximo de 10.000. Use ORDER BY estável.
+- Esses limites não substituem filtros: agregações podem ler mais linhas do que retornam. Consulte o plano e restrinja unidade/período em análises grandes.
+- O acesso exploratório não grava dados de negócio; cada chamada ainda registra metadados de auditoria, sem SQL nem parâmetros.
+- Conexões sem `sorria.write` não anunciam nem aceitam as ferramentas de escrita. O SDR continua disponível para quem tem esse escopo autorizado.
+
+Exemplo de chamada a `consultar_sql`:
+
+```json
+{
+  "sql": "SELECT a.id, COUNT(i.id) AS total FROM atendimentos a JOIN itens_atendimento i ON i.atendimento_id = a.id WHERE a.status = ? GROUP BY a.id ORDER BY a.id",
+  "parametros": ["em_execucao"],
+  "unidadeId": 3,
+  "limite": 100,
+  "offset": 0
+}
+```
+
 ## Exemplos de prompts
 
 ```text

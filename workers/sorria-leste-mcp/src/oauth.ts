@@ -1,6 +1,6 @@
 import { getOAuthApi, OAuthProvider, type AuthRequest, type ClientInfo, type OAuthProviderOptions } from '@cloudflare/workers-oauth-provider';
 import { createMcpHandler } from 'agents/mcp';
-import { createServer } from './mcp';
+import { createServer, MCP_VERSION } from './mcp';
 import { canAuthorizeScopes, grantedScopes, safeEqual, verifyPassword } from './security';
 import type { AppUser, Env, WorkerExecutionContext } from './types';
 
@@ -92,7 +92,7 @@ const defaultHandler = {
     const oauth = getOAuthApi(options, env);
 
     if (url.pathname === '/healthz') {
-      return Response.json({ status: 'ok', service: 'sorria-leste-mcp' }, { headers: { 'Cache-Control': 'no-store' } });
+      return Response.json({ status: 'ok', service: 'sorria-leste-mcp', version: MCP_VERSION }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
     if (url.pathname !== '/oauth/authorize') {

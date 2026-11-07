@@ -35,8 +35,11 @@ import {
   searchClients,
   unitFinancialSummary,
 } from './repository';
-import { hasFinancialScope, omitFinancialFields } from './security';
+import { ExplorationError, exploreDatabase, describeDataset, queryDataset } from './exploration';
+import { hasFinancialScope, hasWriteScope, parseOAuthProps, omitFinancialFields } from './security';
 import type { Env, Identity } from './types';
+
+export const MCP_VERSION = '0.4.0';
 
 const PAGE = z.coerce.number().int().min(1).max(50).default(25);
 const OFFSET = z.coerce.number().int().min(0).max(10_000).default(0);
@@ -76,9 +79,9 @@ function ensureDateRange(from: string, to: string): void {
   if (to < from) throw new Error('Período inválido.');
 }
 
-function result(payload: unknown, redactFinancial = true): ToolResult {
+function result(payload: unknown, redactFinancial = true, compact = false): ToolResult {
   const serialized = redactFinancial ? omitFinancialFields(payload) : payload;
-  return { content: [{ type: 'text', text: JSON.stringify(serialized, null, 2) }] };
+  return { content: [{ type: 'text', text: JSON.stringify(serialized, null, compact ? undefined : 2) }] };
 }
 
 function failure(message = 'Não foi possível executar esta consulta. Verifique o escopo, a unidade e os filtros informados.'): ToolResult {
@@ -108,9 +111,9 @@ async function runDiscoveryTool<T>(
     await audit(env, identity, tool, auditUnitId, true);
     return result(payload);
   } catch (error) {
-    console.error(`Falha na ferramenta MCP ${tool}`, error);
+    if (!(error instanceof ExplorationError)) console.error(`Falha na ferramenta MCP ${tool}`, error);
     await audit(env, identity, tool, auditUnitId, false);
-    return failure();
+    return failure(error instanceof ExplorationError ? error.message : undefined);
   }
 }
 
@@ -120,7 +123,7 @@ async function runReadTool<T>(
   tool: string,
   unidadeId: number | null,
   action: (identity: Identity, setAuditUnit: (id: number | null) => void) => Promise<T>,
-  options: { redactFinancial?: boolean; requiresFinancialScope?: boolean } = {},
+  options: { redactFinancial?: boolean; requiresFinancialScope?: boolean; compact?: boolean } = {},
 ): Promise<ToolResult> {
   let identity: Identity | null = null;
   let auditUnitId = unidadeId;
@@ -136,11 +139,11 @@ async function runReadTool<T>(
     }
     const payload = await action(identity, setAuditUnit);
     await audit(env, identity, tool, auditUnitId, true);
-    return result(payload, options.redactFinancial ?? true);
+    return result(payload, options.redactFinancial ?? true, options.compact ?? false);
   } catch (error) {
-    console.error(`Falha na ferramenta MCP ${tool}`, error);
+    if (!(error instanceof ExplorationError)) console.error(`Falha na ferramenta MCP ${tool}`, error);
     await audit(env, identity, tool, auditUnitId, false);
-    return failure();
+    return failure(error instanceof ExplorationError ? error.message : undefined);
   }
 }
 
@@ -175,11 +178,12 @@ export function createServer(env: Env, props: unknown): McpServer {
   const server = new McpServer(
     {
       name: 'sorria-leste',
-      version: '0.3.0',
+      version: MCP_VERSION,
     },
     {
       instructions: [
         'Servidor MCP operacional da Sorria Leste.',
+        'Para investigar livremente: explorar_banco → descrever_tabela → explicar_consulta → consultar_sql. Use apenas tabelas/colunas anunciadas; a camada SQL já filtra unidades e mascara contatos. SQL de escrita e conteúdo clínico não são permitidos.',
         'Use filtros específicos e informe a unidade quando solicitado.',
         'Ferramentas financeiras exigem o escopo separado sorria.finance.read.',
         'O escopo sorria.write libera apenas cadastro de cliente e agendamento de avaliação.',
@@ -201,38 +205,41 @@ export function createServer(env: Env, props: unknown): McpServer {
     runDiscoveryTool(env, props, 'buscar_clientes', null, () => searchClients(env, busca, limite, offset)),
   );
 
-  server.tool('criar_cliente', 'Cria um cliente/lead com dados cadastrais mínimos. Requer sorria.write.', {
-    nome: z.string().trim().min(1).max(120),
-    origem: ORIGEM_CLIENTE,
-    telefone: OPTIONAL_SHORT_TEXT,
-    email: OPTIONAL_EMAIL,
-    cpf: OPTIONAL_SHORT_TEXT,
-    dataNascimento: DATE.optional(),
-    endereco: OPTIONAL_TEXT,
-    sexo: SEXO_CLIENTE.optional(),
-    planoOdontologico: PLANO_ODONTOLOGICO.optional(),
-    observacoes: OPTIONAL_TEXT,
-  }, async (input) =>
-    runWriteTool(env, props, 'criar_cliente', null, () => createClient(env, input)),
-  );
+  if (hasWriteScope(parseOAuthProps(props)?.scope ?? [])) {
+    server.tool('criar_cliente', 'Cria um cliente/lead com dados cadastrais mínimos. Requer sorria.write.', {
+      nome: z.string().trim().min(1).max(120),
+      origem: ORIGEM_CLIENTE,
+      telefone: OPTIONAL_SHORT_TEXT,
+      email: OPTIONAL_EMAIL,
+      cpf: OPTIONAL_SHORT_TEXT,
+      dataNascimento: DATE.optional(),
+      endereco: OPTIONAL_TEXT,
+      sexo: SEXO_CLIENTE.optional(),
+      planoOdontologico: PLANO_ODONTOLOGICO.optional(),
+      observacoes: OPTIONAL_TEXT,
+    }, async (input) =>
+      runWriteTool(env, props, 'criar_cliente', null, () => createClient(env, input)),
+    );
 
-  server.tool('criar_agendamento_avaliacao', 'Cria apenas agendamento de avaliação para um cliente. Requer sorria.write.', {
-    unidadeId: UNIT,
-    clienteId: CLIENT,
-    dataAgendada: CLINIC_DATETIME.optional(),
-    executorId: USER.optional(),
-    observacoes: OPTIONAL_TEXT,
-  }, async ({ unidadeId, clienteId, dataAgendada, executorId, observacoes }) =>
-    runWriteTool(env, props, 'criar_agendamento_avaliacao', unidadeId, (identity) =>
-      createEvaluationAppointment(env, {
-        unidadeId,
-        clienteId,
-        dataAgendada,
-        executorId,
-        criadoPorId: identity.id,
-        observacoes,
-      })),
-  );
+    server.tool('criar_agendamento_avaliacao', 'Cria apenas agendamento de avaliação para um cliente. Requer sorria.write.', {
+      unidadeId: UNIT,
+      clienteId: CLIENT,
+      dataAgendada: CLINIC_DATETIME.optional(),
+      executorId: USER.optional(),
+      observacoes: OPTIONAL_TEXT,
+    }, async ({ unidadeId, clienteId, dataAgendada, executorId, observacoes }) =>
+      runWriteTool(env, props, 'criar_agendamento_avaliacao', unidadeId, (identity) =>
+        createEvaluationAppointment(env, {
+          unidadeId,
+          clienteId,
+          dataAgendada,
+          executorId,
+          criadoPorId: identity.id,
+          observacoes,
+        })),
+    );
+
+  }
 
   server.tool('obter_cliente_resumo', 'Retorna cadastro minimizado e histórico operacional básico; não inclui prontuários, notas ou anexos.', {
     clienteId: CLIENT,
@@ -515,6 +522,35 @@ export function createServer(env: Env, props: unknown): McpServer {
       return unitFinancialSummary(env, unidadeId, dataInicio, dataFim);
     }, { redactFinancial: false, requiresFinancialScope: true }),
   );
+
+  const annotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  server.registerTool('explorar_banco', {
+    description: 'Descobre o catálogo SQL permitido, campos, relacionamentos, unidades e limites da conexão. Comece por aqui para investigar dados.',
+    inputSchema: {}, annotations,
+  }, async () => runReadTool(env, props, 'explorar_banco', null, async identity => exploreDatabase(identity), { redactFinancial: false, compact: true }));
+
+  server.registerTool('descrever_tabela', {
+    description: 'Descreve os campos autorizados de uma tabela, tipos atuais do banco e relacionamentos; não revela colunas privadas.',
+    inputSchema: { tabela: z.string().min(1).max(80) }, annotations,
+  }, async ({ tabela }) => runReadTool(env, props, 'descrever_tabela', null, identity => describeDataset(env, identity, tabela), { redactFinancial: false, compact: true }));
+
+  const querySchema = {
+    sql: z.string().min(1).max(8000),
+    parametros: z.array(z.union([z.string().max(2000), z.number().finite(), z.null()])).max(50).default([]),
+    unidadeId: UNIT.optional(),
+    limite: z.number().int().min(1).max(200).default(100),
+    offset: z.number().int().min(0).max(10000).default(0),
+  };
+  for (const explain of [true, false]) {
+    const name = explain ? 'explicar_consulta' : 'consultar_sql';
+    server.registerTool(name, {
+      description: explain
+        ? 'EXPLAIN QUERY PLAN de um SELECT validado, sem executar a leitura de dados. Avalie o plano antes de consultas grandes.'
+        : 'Executa um único SELECT SQLite no catálogo protegido. Permite JOIN com ON/USING, agregações e CTEs não recursivas. Parâmetros ?, unidade automática, contatos mascarados e financeiro conforme escopo. Use ORDER BY ao paginar.',
+      inputSchema: querySchema, annotations,
+    }, async input => runReadTool(env, props, name, input.unidadeId ?? null,
+      identity => queryDataset(env, identity, input, explain), { redactFinancial: false, compact: true }));
+  }
 
   return server;
 }

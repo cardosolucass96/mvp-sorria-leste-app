@@ -1,6 +1,6 @@
 {
   "name": "sorria-leste-mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,6 +16,7 @@
     "@cloudflare/workers-oauth-provider": "^0.8.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "agents": "^0.17.3",
+    "node-sql-parser": "^5.4.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
