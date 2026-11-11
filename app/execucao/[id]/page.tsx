@@ -14,6 +14,7 @@ import { Alert, LoadingState, Modal, PageHeader, Card, Button, EmptyState, Confi
 import { useToast } from '@/components/ui/Toast';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { opcoesProcedimentos, type ProcedimentoCatalogo } from '@/lib/procedimentos/catalogo';
 import { getFaceDisplay } from '@/lib/utils/denteFaces';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -73,9 +74,7 @@ interface ItemElegivelEvolucao {
   possui_agendamento_ativo: number;
 }
 
-interface Procedimento {
-  id: number;
-  nome: string;
+interface Procedimento extends ProcedimentoCatalogo {
 }
 
 interface Anexo {
@@ -943,10 +942,7 @@ export default function ExecucaoProcedimentoPage() {
           name="novo_procedimento_id"
           value={novoProcId}
           onChange={setNovoProcId}
-          options={procedimentos.map((procedimento) => ({
-            value: String(procedimento.id),
-            label: procedimento.nome,
-          }))}
+          options={opcoesProcedimentos(procedimentos)}
           placeholder="Selecione..."
           searchPlaceholder="Buscar procedimento..."
           emptyMessage="Nenhum procedimento encontrado"

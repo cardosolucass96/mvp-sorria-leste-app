@@ -12,6 +12,7 @@ import { Alert, LoadingState, PageHeader, Card, Button, Select, Input, EmptyStat
 import { useToast } from '@/components/ui/Toast';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { opcoesProcedimentos, type ProcedimentoCatalogo } from '@/lib/procedimentos/catalogo';
 
 interface EtapaModelo {
   id: number;
@@ -23,9 +24,7 @@ interface EtapaModelo {
   ordem: number;
 }
 
-interface Procedimento {
-  id: number;
-  nome: string;
+interface Procedimento extends ProcedimentoCatalogo {
   valor: number;
   por_dente: number;
   tem_etapas: number;
@@ -586,10 +585,7 @@ export default function AvaliacaoDetalhePage({
                 }
               }
             }}
-            options={procedimentos.map((proc) => ({
-              value: String(proc.id),
-              label: `${proc.nome} — ${formatarMoeda(proc.valor)}${proc.por_dente ? ' (por dente)' : ''}${proc.tem_etapas ? ' · multi-sessão' : ''}`,
-            }))}
+            options={opcoesProcedimentos(procedimentos, (proc) => `${proc.nome} — ${formatarMoeda(proc.valor)}${proc.por_dente ? ' (por dente)' : ''}${proc.tem_etapas ? ' · multi-sessão' : ''}`)}
             placeholder="Selecione..."
             searchPlaceholder="Buscar procedimento..."
             emptyMessage="Nenhum procedimento encontrado"

@@ -1,5 +1,6 @@
 import { addDaysToClinicDateKey, getClinicDateKey } from '@/lib/time';
 import { obterFechamentoCaixaResponse } from '@/lib/helpers/fechamentoCaixa';
+import { listarVendasPorCategoria } from './vendas-por-categoria';
 import type { FechamentoCaixaResponse, FechamentoCaixaVisao } from '@/lib/fechamento-caixa/types';
 import type {
   FinanceiroDiaResumo,
@@ -27,6 +28,7 @@ export interface ObterFinanceiroParams {
   dataInicio?: string | null;
   dataFim?: string | null;
   hoje?: string;
+  incluirCategorias?: boolean;
 }
 
 function roundMoney(value: number): number {
@@ -221,7 +223,12 @@ export function normalizarParametrosFinanceiro(params: ObterFinanceiroParams): {
 
 export async function obterFinanceiroResponse(params: ObterFinanceiroParams): Promise<FinanceiroResponse> {
   const normalized = normalizarParametrosFinanceiro(params);
-  const diaResponse = await obterFechamentoCaixaResponse(params.unidadeId, normalized.data);
+  const [diaResponse, vendasPorCategoria] = await Promise.all([
+    obterFechamentoCaixaResponse(params.unidadeId, normalized.data),
+    params.incluirCategorias
+      ? listarVendasPorCategoria(params.unidadeId, normalized.dataInicio, normalized.dataFim)
+      : undefined,
+  ]);
   const periodoDates = normalized.datasPeriodo.filter((date) => date !== normalized.data);
   const periodoResponsesCarregadas = await Promise.all(periodoDates.map(async (date) => ({
     date,
@@ -252,6 +259,7 @@ export async function obterFinanceiroResponse(params: ObterFinanceiroParams): Pr
     dias,
     receitas_periodo: receitasPeriodo,
     resumo_periodo: resumoPeriodo,
+    ...(vendasPorCategoria ? { vendas_por_categoria: vendasPorCategoria } : {}),
     graficos: {
       faturamento_por_dia: dias.map((dia) => ({
         data_referencia: dia.data_referencia,

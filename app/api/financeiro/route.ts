@@ -13,6 +13,7 @@ export const GET = withUnitRole(['admin'], async (
       data: searchParams.get('data'),
       dataInicio: searchParams.get('data_inicio'),
       dataFim: searchParams.get('data_fim'),
+      incluirCategorias: searchParams.get('incluir_categorias') === '1',
     });
 
     return NextResponse.json(response);

@@ -63,6 +63,12 @@ export interface FinanceiroGraficos {
   }>;
 }
 
+export interface VendaCategoriaResumo {
+  categoria_catalogo: string | null;
+  quantidade: number;
+  valor_vendido: number;
+}
+
 export interface FinanceiroResponse {
   dia: {
     meta: FechamentoCaixaMeta;
@@ -78,4 +84,5 @@ export interface FinanceiroResponse {
   receitas_periodo: FinanceiroReceitaPeriodo[];
   resumo_periodo: Omit<FinanceiroDiaResumo, 'data_referencia' | 'status' | 'fechado_por_nome' | 'fechado_em'>;
   graficos: FinanceiroGraficos;
+  vendas_por_categoria?: VendaCategoriaResumo[];
 }

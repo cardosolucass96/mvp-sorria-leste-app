@@ -22,14 +22,13 @@ import usePageTitle from '@/lib/utils/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { opcoesProcedimentos, type ProcedimentoCatalogo } from '@/lib/procedimentos/catalogo';
 import { finalizarJanelaDeImpressao } from '@/lib/utils/print';
 import { getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 import { PRINT_STYLE_TOKENS_BASE } from '@/lib/printStyles';
 import { isAcrescimoEmExecucaoACobrar } from '@/lib/utils/itemStatus';
 
-interface Procedimento {
-  id: number;
-  nome: string;
+interface Procedimento extends ProcedimentoCatalogo {
   valor: number;
   por_dente: number;
   tem_face: number;
@@ -2340,10 +2339,7 @@ export default function AtendimentoDetalhePage({
                 setValorCustom('');
                 setDentesFaces([]);
               }}
-              options={procedimentos.map((p) => ({
-                value: String(p.id),
-                label: `${p.nome} — ${formatarMoeda(p.valor)}${p.por_dente ? ' (por dente)' : ''}`,
-              }))}
+              options={opcoesProcedimentos(procedimentos, (p) => `${p.nome} — ${formatarMoeda(p.valor)}${p.por_dente ? ' (por dente)' : ''}`)}
               placeholder="Selecione..."
               searchPlaceholder="Buscar procedimento..."
               emptyMessage="Nenhum procedimento encontrado"
@@ -2474,7 +2470,7 @@ export default function AtendimentoDetalhePage({
               name="agProcedimento"
               value={agProcId}
               onChange={setAgProcId}
-              options={procedimentos.map(p => ({ value: String(p.id), label: p.nome }))}
+              options={opcoesProcedimentos(procedimentos)}
               placeholder="Selecione..."
               searchPlaceholder="Buscar procedimento..."
               emptyMessage="Nenhum procedimento encontrado"

@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS procedimentos (
   tem_etapas INTEGER NOT NULL DEFAULT 0, -- 1 se o procedimento tem etapas/sessões distintas
   tem_face INTEGER NOT NULL DEFAULT 0, -- 1 se a seleção de faces do dente é obrigatória (apenas para por_dente)
   categoria_id INTEGER REFERENCES categorias(id),
+  categoria_catalogo TEXT,
   ativo INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );

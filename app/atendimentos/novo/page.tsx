@@ -12,6 +12,7 @@ import { formatarDataAgendada } from '@/lib/utils/formatters';
 import { apiFetch } from '@/lib/utils/apiFetch';
 import type { CategoriaComRoles } from '@/lib/types';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { opcoesProcedimentos, type ProcedimentoCatalogo } from '@/lib/procedimentos/catalogo';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 import { getClinicCalendarDayDifferenceFromStoredUtcInstant } from '@/lib/time';
 
@@ -43,9 +44,7 @@ interface Usuario {
   ativo?: number;
 }
 
-interface ProcedimentoLite {
-  id: number;
-  nome: string;
+interface ProcedimentoLite extends ProcedimentoCatalogo {
   valor: number;
   categoria_id: number | null;
   ativo: number;
@@ -620,10 +619,7 @@ function NovoAtendimentoForm() {
                           dentes: [],
                         });
                       }}
-                      options={procedimentosCategoria.map(p => ({
-                        value: String(p.id),
-                        label: `${p.nome}${categorias.find(c => c.id === p.categoria_id)?.nome ? ` — ${categorias.find(c => c.id === p.categoria_id)?.nome}` : ''}`,
-                      }))}
+                      options={opcoesProcedimentos(procedimentosCategoria, (p) => `${p.nome}${categorias.find(c => c.id === p.categoria_id)?.nome ? ` — ${categorias.find(c => c.id === p.categoria_id)?.nome}` : ''}`)}
                       placeholder="-- Selecionar --"
                       searchPlaceholder="Buscar procedimento..."
                       emptyMessage="Nenhum procedimento encontrado"
