@@ -44,6 +44,7 @@ jest.mock('@/lib/utils/apiFetch', () => ({
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     currentUnidade: 1,
+    hasRole: () => true,
   }),
 }));
 
@@ -60,6 +61,7 @@ jest.mock('@/components/ui/LoadingState', () => ({
 }));
 
 jest.mock('@/components/ui', () => ({
+  useToast: () => ({ toast: { success: jest.fn() } }),
   Badge: ({ children }: { children: React.ReactNode }) => React.createElement('span', null, children),
   Button: ({
     children,
