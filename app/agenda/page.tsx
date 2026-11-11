@@ -36,6 +36,7 @@ import { apiFetch } from '@/lib/utils/apiFetch';
 import { useUnitFetch } from '@/lib/hooks/useUnitFetch';
 import { useAuth } from '@/contexts/AuthContext';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { opcoesProcedimentos, type ProcedimentoCatalogo } from '@/lib/procedimentos/catalogo';
 import SeletorDentes, { type DenteFaceInput } from '@/components/SeletorDentes';
 import { isProfissionalAgenda } from '@/lib/utils/usuariosProfissionais';
 import {
@@ -105,9 +106,7 @@ interface ClienteBusca {
   cpf: string | null;
 }
 
-interface Procedimento {
-  id: number;
-  nome: string;
+interface Procedimento extends ProcedimentoCatalogo {
   valor: number;
 }
 
@@ -2458,10 +2457,7 @@ export default function AgendaPage() {
                   name="procedimento_id"
                   value={novoProcId}
                   onChange={handleSelecionarProcedimentoCatalogo}
-                  options={novoProcedimentos.map((procedimento) => ({
-                    value: String(procedimento.id),
-                    label: procedimento.nome,
-                  }))}
+                  options={opcoesProcedimentos(novoProcedimentos)}
                   placeholder="Selecione..."
                   searchPlaceholder="Buscar procedimento..."
                   emptyMessage="Nenhum procedimento encontrado"

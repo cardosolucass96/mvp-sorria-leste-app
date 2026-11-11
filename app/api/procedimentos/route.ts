@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute, batch } from '@/lib/db';
 import { garantirSchemaProcedimentosComissaoAcrescimo } from '@/lib/helpers/garantirComissaoSchema';
+import { CATEGORIA_NAO_CLASSIFICADA, isCategoriaCatalogo } from '@/lib/procedimentos/catalogo';
 
 interface Procedimento {
   id: number;
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const busca = searchParams.get('busca') || '';
     const incluirInativos = searchParams.get('inativos') === 'true';
+    const categoria = searchParams.get('categoria_catalogo');
 
     let sql = 'SELECT * FROM procedimentos';
     const params: (string | number)[] = [];
@@ -45,6 +47,15 @@ export async function GET(request: NextRequest) {
 
     if (!incluirInativos) {
       conditions.push('ativo = 1');
+    }
+
+    if (categoria === CATEGORIA_NAO_CLASSIFICADA.value) {
+      conditions.push('categoria_catalogo IS NULL');
+    } else if (categoria && isCategoriaCatalogo(categoria)) {
+      conditions.push('categoria_catalogo = ?');
+      params.push(categoria);
+    } else if (categoria) {
+      return NextResponse.json({ error: 'Categoria de procedimento inválida' }, { status: 400 });
     }
 
     if (conditions.length > 0) {
@@ -68,7 +79,11 @@ export async function POST(request: NextRequest) {
     await garantirSchemaProcedimentosComissaoAcrescimo();
 
     const body = await request.json();
-    const { nome, valor, comissao_venda, comissao_acrescimo, comissao_execucao, por_dente, tem_face, tem_etapas, etapas, categoria_id } = body;
+    const { nome, valor, comissao_venda, comissao_acrescimo, comissao_execucao, por_dente, tem_face, tem_etapas, etapas, categoria_id, categoria_catalogo } = body;
+
+    if (categoria_catalogo != null && !isCategoriaCatalogo(categoria_catalogo)) {
+      return NextResponse.json({ error: 'Categoria de procedimento inválida' }, { status: 400 });
+    }
 
     if (!nome || nome.trim() === '') {
       return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
@@ -94,8 +109,8 @@ export async function POST(request: NextRequest) {
     const temFaceFlag = porDenteFlag ? (tem_face ? 1 : 0) : 0;
 
     const result = await execute(
-      `INSERT INTO procedimentos (nome, valor, comissao_venda, comissao_acrescimo, comissao_execucao, por_dente, tem_face, tem_etapas, categoria_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO procedimentos (nome, valor, comissao_venda, comissao_acrescimo, comissao_execucao, por_dente, tem_face, tem_etapas, categoria_id, categoria_catalogo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         nome.trim(),
         valor,
@@ -106,6 +121,7 @@ export async function POST(request: NextRequest) {
         temFaceFlag,
         tem_etapas ? 1 : 0,
         categoria_id ?? null,
+        categoria_catalogo ?? null,
       ]
     );
 

@@ -5,10 +5,12 @@ import { Check, ChevronDown, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SelectOption } from './Select';
 
+type SearchableOption = SelectOption & { group?: string };
+
 interface SearchableSelectProps {
   label: string;
   name: string;
-  options: SelectOption[];
+  options: SearchableOption[];
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -51,17 +53,21 @@ export default function SearchableSelect({
     [options, value]
   );
 
-  const filteredOptions = useMemo(() => {
-    if (!search.trim()) return options;
-    const termo = normalizarTexto(search);
-    return options.filter((option) => normalizarTexto(option.label).includes(termo));
+  const optionGroups = useMemo(() => {
+    const termo = normalizarTexto(search.trim());
+    const groups = new Map<string, SearchableOption[]>();
+    for (const option of options) {
+      if (termo && !normalizarTexto(option.label).includes(termo)) continue;
+      const name = option.group ?? '';
+      const group = groups.get(name);
+      if (group) group.push(option);
+      else groups.set(name, [option]);
+    }
+    return [...groups.entries()];
   }, [options, search]);
 
   useEffect(() => {
-    if (!open) {
-      setSearch('');
-      return;
-    }
+    if (!open) return;
 
     const handleMouseDown = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
@@ -101,7 +107,6 @@ export default function SearchableSelect({
           disabled={disabled}
           aria-expanded={open}
           aria-haspopup="listbox"
-          aria-invalid={!!error}
           aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
           className={cn(
             'flex w-full items-center justify-between rounded-lg border bg-background px-3 py-2 text-left text-sm transition-colors duration-200',
@@ -113,6 +118,7 @@ export default function SearchableSelect({
           )}
           onClick={() => {
             if (!disabled) {
+              if (!open) setSearch('');
               setOpen((current) => !current);
             }
           }}
@@ -148,29 +154,38 @@ export default function SearchableSelect({
             </div>
 
             <div className="max-h-64 overflow-y-auto p-1" role="listbox">
-              {filteredOptions.length > 0 ? (
-                filteredOptions.map((option) => {
-                  const selected = option.value === value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors',
-                        selected
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-foreground hover:bg-accent hover:text-accent-foreground'
-                      )}
-                      onClick={() => {
-                        onChange(option.value);
-                        setOpen(false);
-                      }}
-                    >
-                      <span className="flex-1">{option.label}</span>
-                      {selected && <Check className="h-4 w-4 shrink-0" />}
-                    </button>
-                  );
-                })
+              {optionGroups.length > 0 ? (
+                optionGroups.map(([group, items]) => (
+                  <div key={group} role={group ? 'group' : 'presentation'} aria-label={group || undefined}>
+                    {group && (
+                      <div className="px-3 pb-1 pt-2 text-xs font-semibold text-muted-foreground">
+                        {group}
+                      </div>
+                    )}
+                    {items.map((option) => {
+                      const selected = option.value === value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                            selected
+                              ? 'bg-primary/10 text-primary'
+                              : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+                          )}
+                          onClick={() => {
+                            onChange(option.value);
+                            setOpen(false);
+                          }}
+                        >
+                          <span className="flex-1">{option.label}</span>
+                          {selected && <Check className="h-4 w-4 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))
               ) : (
                 <div className="px-3 py-4 text-sm text-muted-foreground">{emptyMessage}</div>
               )}

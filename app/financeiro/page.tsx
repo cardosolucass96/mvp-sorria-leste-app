@@ -34,7 +34,9 @@ import type {
   FinanceiroMetodoResumo,
   FinanceiroReceitaPeriodo,
   FinanceiroResponse,
+  VendaCategoriaResumo,
 } from '@/lib/financeiro/types';
+import { CATEGORIA_NAO_CLASSIFICADA, nomeCategoriaCatalogo, OPCOES_CATEGORIA_CATALOGO } from '@/lib/procedimentos/catalogo';
 import { getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 import {
   formatarCPF,
@@ -51,6 +53,7 @@ import {
   Input,
   LoadingState,
   PageHeader,
+  Select,
   StatCard,
   Table,
   type TableColumn,
@@ -72,6 +75,12 @@ const METODO_LABELS: Record<string, string> = {
   crediario: 'Crediário',
   afins_sorria: 'Afins Sorria',
 };
+
+const VENDAS_CATEGORIA_COLUNAS: TableColumn<VendaCategoriaResumo>[] = [
+  { key: 'categoria_catalogo', label: 'Categoria', render: (item) => nomeCategoriaCatalogo(item.categoria_catalogo) },
+  { key: 'quantidade', label: 'Itens vendidos', align: 'right' },
+  { key: 'valor_vendido', label: 'Valor vendido', align: 'right', render: (item) => formatarMoeda(item.valor_vendido) },
+];
 
 interface TooltipPayloadItem {
   name?: string | number;
@@ -162,6 +171,7 @@ export default function FinanceiroPage() {
   const canAccess = hasRole('admin');
   const [dataInicio, setDataInicio] = useState(() => getDefaultStart());
   const [dataFim, setDataFim] = useState(() => todayIso());
+  const [categoriaVendas, setCategoriaVendas] = useState('');
   const [data, setData] = useState<FinanceiroResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -174,6 +184,7 @@ export default function FinanceiroPage() {
       const params = new URLSearchParams({
         data_inicio: dataInicio,
         data_fim: dataFim,
+        incluir_categorias: '1',
       });
       const response = await unitFetch(`/api/financeiro?${params.toString()}`);
       const json = await response.json() as FinanceiroResponse | { error: string };
@@ -217,6 +228,9 @@ export default function FinanceiroPage() {
   };
 
   const periodoResumo = data?.resumo_periodo;
+  const vendasCategorias = (data?.vendas_por_categoria ?? []).filter((item) =>
+    !categoriaVendas || (item.categoria_catalogo ?? CATEGORIA_NAO_CLASSIFICADA.value) === categoriaVendas
+  );
   const faturamentoChartData = useMemo(() => (
     data?.graficos.faturamento_por_dia.map((item) => ({
       ...item,
@@ -535,6 +549,33 @@ export default function FinanceiroPage() {
               </div>
             </Card>
           </div>
+
+          <Card>
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold">Vendas por categoria de procedimento</h2>
+                <p className="text-sm text-muted-foreground">
+                  Valor contratado dos itens cujo primeiro pagamento válido ocorreu no período.
+                </p>
+              </div>
+              <Select
+                label="Categoria"
+                name="categoria_vendas"
+                value={categoriaVendas}
+                onChange={setCategoriaVendas}
+                options={OPCOES_CATEGORIA_CATALOGO}
+                placeholder="Todas as categorias"
+                className="max-w-64"
+              />
+            </div>
+            <Table
+              columns={VENDAS_CATEGORIA_COLUNAS}
+              data={vendasCategorias}
+              keyExtractor={(item) => item.categoria_catalogo ?? CATEGORIA_NAO_CLASSIFICADA.value}
+              emptyMessage="Nenhuma venda nas categorias selecionadas para este período."
+              caption="Vendas por categoria de procedimento"
+            />
+          </Card>
 
           <Card>
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

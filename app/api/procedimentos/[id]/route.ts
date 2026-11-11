@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query, execute, batch } from '@/lib/db';
 import { garantirSchemaProcedimentosComissaoAcrescimo } from '@/lib/helpers/garantirComissaoSchema';
+import { isCategoriaCatalogo } from '@/lib/procedimentos/catalogo';
 
 interface Procedimento {
   id: number;
@@ -69,7 +70,7 @@ export async function PUT(
     const { id } = await params;
     const procId = parseInt(id);
     const body = await request.json();
-    const { nome, valor, comissao_venda, comissao_acrescimo, comissao_execucao, ativo, por_dente, tem_face, tem_etapas, etapas, categoria_id } = body;
+    const { nome, valor, comissao_venda, comissao_acrescimo, comissao_execucao, ativo, por_dente, tem_face, tem_etapas, etapas, categoria_id, categoria_catalogo } = body;
 
     const existe = await queryOne<Procedimento>(
       'SELECT * FROM procedimentos WHERE id = ?',
@@ -78,6 +79,10 @@ export async function PUT(
 
     if (!existe) {
       return NextResponse.json({ error: 'Procedimento não encontrado' }, { status: 404 });
+    }
+
+    if (categoria_catalogo != null && !isCategoriaCatalogo(categoria_catalogo)) {
+      return NextResponse.json({ error: 'Categoria de procedimento inválida' }, { status: 400 });
     }
 
     if (nome !== undefined && nome.trim() === '') {
@@ -102,7 +107,7 @@ export async function PUT(
       : porDenteFinal && existe.tem_face === 1;
 
     const updates: string[] = [];
-    const updateParams: (string | number)[] = [];
+    const updateParams: (string | number | null)[] = [];
 
     if (nome !== undefined) { updates.push('nome = ?'); updateParams.push(nome.trim()); }
     if (valor !== undefined) { updates.push('valor = ?'); updateParams.push(valor); }
@@ -118,7 +123,11 @@ export async function PUT(
     if (tem_etapas !== undefined) { updates.push('tem_etapas = ?'); updateParams.push(tem_etapas ? 1 : 0); }
     if (categoria_id !== undefined) {
       updates.push('categoria_id = ?');
-      updateParams.push(categoria_id === null ? null as unknown as number : categoria_id);
+      updateParams.push(categoria_id);
+    }
+    if (categoria_catalogo !== undefined) {
+      updates.push('categoria_catalogo = ?');
+      updateParams.push(categoria_catalogo);
     }
 
     if (updates.length === 0 && etapas === undefined) {

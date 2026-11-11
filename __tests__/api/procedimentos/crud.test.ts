@@ -52,7 +52,7 @@ describe('GET /api/procedimentos', () => {
 
     // Verifica que filtrou por ativo = 1
     const queries = getExecutedQueries();
-    expect(queries[0].sql).toContain('ativo = 1');
+    expect(queries.find(({ sql }) => sql.startsWith('SELECT * FROM procedimentos'))?.sql).toContain('ativo = 1');
   });
 
   it('inclui inativos quando ?inativos=true', async () => {
@@ -96,6 +96,20 @@ describe('GET /api/procedimentos', () => {
     const queries = getExecutedQueries();
     expect(queries[0].sql).toContain('nome LIKE ?');
     expect(queries[0].params).toContain('%Limpeza%');
+  });
+
+  it('combina a categoria de catálogo com o filtro de ativos', async () => {
+    mockQueryResponse('categoria_catalogo = ?', [PROC_LIMPEZA]);
+
+    const { status, data } = await callRoute(listProcedimentos, '/api/procedimentos', {
+      searchParams: { categoria_catalogo: 'prevencao-periodontia' },
+    });
+
+    expect(status).toBe(200);
+    expect(data).toEqual([PROC_LIMPEZA]);
+    const consulta = getExecutedQueries().find(({ sql }) => sql.includes('categoria_catalogo = ?'));
+    expect(consulta?.sql).toContain('ativo = 1');
+    expect(consulta?.params).toEqual(['prevencao-periodontia']);
   });
 
   it('busca + filtro de ativos combinados', async () => {

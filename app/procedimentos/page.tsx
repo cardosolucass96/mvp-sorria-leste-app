@@ -8,6 +8,7 @@ import type { TableColumn } from '@/components/ui/Table';
 import { formatarMoeda } from '@/lib/utils/formatters';
 import usePageTitle from '@/lib/utils/usePageTitle';
 import type { CategoriaComRoles } from '@/lib/types';
+import { CATEGORIAS_CATALOGO, nomeCategoriaCatalogo, OPCOES_CATEGORIA_CATALOGO } from '@/lib/procedimentos/catalogo';
 
 interface EtapaModelo {
   id?: number;
@@ -29,6 +30,7 @@ interface Procedimento {
   tem_face: number;
   tem_etapas: number;
   categoria_id: number | null;
+  categoria_catalogo?: string | null;
   ativo: number;
   created_at: string;
 }
@@ -43,6 +45,7 @@ interface FormData {
   tem_face: boolean;
   tem_etapas: boolean;
   categoria_id: string;
+  categoria_catalogo: string;
   etapas: EtapaModelo[];
 }
 
@@ -58,6 +61,7 @@ const initialFormData: FormData = {
   tem_face: false,
   tem_etapas: false,
   categoria_id: '',
+  categoria_catalogo: '',
   etapas: [],
 };
 
@@ -69,6 +73,7 @@ export default function ProcedimentosPage() {
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [mostrarInativos, setMostrarInativos] = useState(false);
+  const [categoriaFiltro, setCategoriaFiltro] = useState('');
 
   const podeVerComissoes = user?.role === 'admin' || user?.role === 'atendente';
 
@@ -96,8 +101,10 @@ export default function ProcedimentosPage() {
       const params = new URLSearchParams();
       if (busca) params.append('busca', busca);
       if (mostrarInativos) params.append('inativos', 'true');
+      if (categoriaFiltro) params.append('categoria_catalogo', categoriaFiltro);
 
       const res = await fetch(`/api/procedimentos?${params}`);
+      if (!res.ok) throw new Error('Erro ao carregar procedimentos');
       const data = await res.json();
       setProcedimentos(data);
     } catch (error) {
@@ -106,7 +113,7 @@ export default function ProcedimentosPage() {
     } finally {
       setLoading(false);
     }
-  }, [busca, mostrarInativos]);
+  }, [busca, categoriaFiltro, mostrarInativos]);
 
   useEffect(() => {
     carregarProcedimentos();
@@ -150,6 +157,7 @@ export default function ProcedimentosPage() {
         tem_face: proc.tem_face === 1,
         tem_etapas: proc.tem_etapas === 1,
         categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
+        categoria_catalogo: proc.categoria_catalogo ?? '',
         etapas: (data.etapas ?? []).map((e: { nome: string; valor: number | null; comissao_venda: number; comissao_acrescimo: number; comissao_execucao: number }) => ({
           nome: e.nome,
           valor: e.valor != null ? String(e.valor) : '',
@@ -169,6 +177,7 @@ export default function ProcedimentosPage() {
         tem_face: proc.tem_face === 1,
         tem_etapas: proc.tem_etapas === 1,
         categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
+        categoria_catalogo: proc.categoria_catalogo ?? '',
         etapas: [],
       });
     }
@@ -193,6 +202,7 @@ export default function ProcedimentosPage() {
         tem_face: proc.tem_face === 1,
         tem_etapas: proc.tem_etapas === 1,
         categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
+        categoria_catalogo: proc.categoria_catalogo ?? '',
         etapas: (data.etapas ?? []).map((e: { nome: string; valor: number | null; comissao_venda: number; comissao_acrescimo: number; comissao_execucao: number }) => ({
           nome: e.nome,
           valor: e.valor != null ? String(e.valor) : '',
@@ -212,6 +222,7 @@ export default function ProcedimentosPage() {
         tem_face: proc.tem_face === 1,
         tem_etapas: proc.tem_etapas === 1,
         categoria_id: proc.categoria_id != null ? String(proc.categoria_id) : '',
+        categoria_catalogo: proc.categoria_catalogo ?? '',
         etapas: [],
       });
     }
@@ -268,6 +279,7 @@ export default function ProcedimentosPage() {
         tem_face: formData.por_dente && formData.tem_face,
         tem_etapas: formData.tem_etapas,
         categoria_id: formData.categoria_id ? parseInt(formData.categoria_id) : null,
+        categoria_catalogo: formData.categoria_catalogo || null,
         etapas: formData.tem_etapas
           ? formData.etapas.map((e, idx) => ({
               nome: e.nome.trim(),
@@ -356,6 +368,15 @@ export default function ProcedimentosPage() {
               placeholder="Nome do procedimento..."
             />
           </div>
+          <Select
+            label="Categoria"
+            name="categoria_filtro"
+            value={categoriaFiltro}
+            onChange={setCategoriaFiltro}
+            options={OPCOES_CATEGORIA_CATALOGO}
+            placeholder="Todas as categorias"
+            className="min-w-[200px] flex-1"
+          />
           <Checkbox label="Mostrar inativos" checked={mostrarInativos} onChange={setMostrarInativos} />
           <Button type="submit" variant="secondary">Buscar</Button>
         </form>
@@ -376,6 +397,11 @@ export default function ProcedimentosPage() {
                 )}
               </div>
             ),
+          },
+          {
+            key: 'categoria_catalogo',
+            label: 'Categoria',
+            render: (proc) => nomeCategoriaCatalogo(proc.categoria_catalogo),
           },
           {
             key: 'valor',
@@ -505,9 +531,19 @@ export default function ProcedimentosPage() {
             hint={formData.tem_etapas ? 'Valor total do procedimento completo (soma de todas as sessões)' : undefined}
           />
 
+          <Select
+            label="Categoria do procedimento"
+            name="categoria_catalogo"
+            value={formData.categoria_catalogo}
+            onChange={(categoria_catalogo) => setFormData((prev) => ({ ...prev, categoria_catalogo }))}
+            options={CATEGORIAS_CATALOGO}
+            placeholder="A classificar"
+            disabled={saving}
+          />
+
           {categorias.length > 0 && (
             <Select
-              label="Fila"
+              label="Fila de atendimento"
               name="categoria_id"
               value={formData.categoria_id}
               onChange={(v) => setFormData({ ...formData, categoria_id: v })}
