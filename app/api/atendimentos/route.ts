@@ -378,7 +378,10 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       // que uma seleção inválida deixe itens parcialmente gravados.
       for (const solicitado of procedimentosSolicitados) {
         if (solicitado.executor_id) {
-          const executorValido = await validarExecutorClinico(solicitado.executor_id, categoriaIdFinal);
+          const categoriaProcedimento = await queryOne<{ categoria_id: number | null }>(
+            'SELECT categoria_id FROM procedimentos WHERE id = ?', [solicitado.procedimento_id]
+          );
+          const executorValido = await validarExecutorClinico(solicitado.executor_id, categoriaProcedimento?.categoria_id ?? categoriaIdFinal);
 
           if (executorValido === 'not_found') {
             return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });

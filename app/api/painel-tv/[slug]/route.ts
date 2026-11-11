@@ -66,7 +66,7 @@ export const GET = withUnit(async (
       LEFT JOIN usuarios u ON u.id = i.executor_id
       WHERE a.status = 'em_execucao'
         AND a.unidade_id = ?
-        AND a.categoria_id = ?
+        AND COALESCE(p.categoria_id, a.categoria_id) = ?
         AND i.status IN ('pago', 'executando')
         AND NOT EXISTS (
           SELECT 1

@@ -4,6 +4,11 @@ import { __setMockDb, __resetMocks } from '../../__mocks__/opennextjs-cloudflare
 import { callRoute, createRouteContext } from '../helpers/api-test-helper';
 import { POST as selecionar } from '@/app/api/atendimentos/[id]/selecionar-hoje/route';
 import { POST as chegou } from '@/app/api/agendamentos/[id]/chegou/route';
+import { POST as adicionarItem } from '@/app/api/atendimentos/[id]/itens/route';
+import { POST as criarAtendimento } from '@/app/api/atendimentos/route';
+import { PUT as atualizarItem } from '@/app/api/atendimentos/[id]/itens/[itemId]/route';
+import { GET as fila } from '@/app/api/fila/[slug]/route';
+import { GET as painel } from '@/app/api/painel-tv/[slug]/route';
 
 jest.mock('@/lib/auth/jwt', () => ({
   extractToken: jest.fn().mockReturnValue('test'),
@@ -139,7 +144,7 @@ test.each([null, 2])('chegada vinculada recupera fila ausente e preserva fila ex
   expect(db.sqlite.prepare('SELECT categoria_id FROM atendimentos WHERE id=1').get().categoria_id).toBe(categoriaId ?? 1);
 });
 
-test('recusa grupo com filas diferentes sem criar atendimento ou marcar presença', async () => {
+test('aceita chegada de procedimentos de categorias diferentes no mesmo atendimento', async () => {
   agendar('procedimento');
   db.sqlite.exec(`
     UPDATE procedimentos SET categoria_id=1 WHERE id=1;
@@ -147,10 +152,73 @@ test('recusa grupo com filas diferentes sem criar atendimento ou marcar presenç
     INSERT INTO agendamentos(id,cliente_id,unidade_id,tipo,status,procedimento_id,valor)
       VALUES (2,1,1,'procedimento','pendente',2,200);
   `);
-  const before=snapshot();
-  const result=await callRoute(chegou,'/api/agendamentos/1/chegou',{method:'POST',body:{agendamento_ids:[1,2]}},createRouteContext({id:'1'}));
-  expect(result.status).toBe(409);
-  expect(snapshot()).toEqual(before);
+  const result=await callRoute<{ id: number }>(chegou,'/api/agendamentos/1/chegou',{method:'POST',body:{agendamento_ids:[1,2]}},createRouteContext({id:'1'}));
+  expect(result.status).toBe(201);
+  expect(db.sqlite.prepare('SELECT procedimento_id FROM itens_atendimento WHERE atendimento_id = ? ORDER BY procedimento_id').all(result.data.id)).toEqual([{ procedimento_id: 1 }, { procedimento_id: 2 }]);
+});
+
+test('adiciona categorias diferentes e encaminha cada procedimento à sua fila e painel', async () => {
+  db.sqlite.exec(`
+    UPDATE procedimentos SET categoria_id=1 WHERE id=1;
+    UPDATE procedimentos SET categoria_id=2, tem_etapas=0 WHERE id=2;
+    UPDATE atendimentos SET status='avaliacao', categoria_id=1 WHERE id=1;
+    INSERT INTO categoria_roles(categoria_id,role) VALUES (2,'admin');
+  `);
+  const added = await callRoute(adicionarItem, '/api/atendimentos/1/itens', {
+    method: 'POST', body: { procedimento_id: 2 },
+  }, createRouteContext({ id: '1' }));
+  expect(added.status).toBe(201);
+  db.sqlite.exec("UPDATE atendimentos SET status='em_execucao' WHERE id=1; UPDATE itens_atendimento SET status='pago' WHERE atendimento_id=1");
+
+  for (const [slug, expected] of [['geral', 1], ['orto', 2]] as const) {
+    const queue = await callRoute<{ disponiveis: { procedimento_id: number }[] }>(fila, `/api/fila/${slug}`, { searchParams: { executor_id: '1' } }, createRouteContext({ slug }));
+    expect(queue.status).toBe(200);
+    expect(queue.data.disponiveis.map(item => item.procedimento_id)).toEqual([expected]);
+    const screen = await callRoute<{ pacientes: { procedimentos: string[] }[] }>(painel, `/api/painel-tv/${slug}`, {}, createRouteContext({ slug }));
+    expect(screen.status).toBe(200);
+    expect(screen.data.pacientes[0].procedimentos).toEqual([expected === 1 ? 'Simples' : 'Etapas']);
+  }
+});
+
+test('valida a categoria do procedimento ao designar profissional e ao definir o destino', async () => {
+  db.sqlite.exec(`
+    UPDATE procedimentos SET categoria_id=2 WHERE id=1;
+    UPDATE atendimentos SET categoria_id=1 WHERE id=1;
+    INSERT INTO usuarios(id,nome,email,role) VALUES
+      (2,'Executor','executor@example.test','executor'),(3,'Orto','orto@example.test','executor');
+    INSERT INTO usuario_roles(usuario_id,role) VALUES (2,'executor'),(3,'ortodontista');
+  `);
+  const ctx = createRouteContext({ id: '1', itemId: '1' });
+  const wrong = await callRoute(atualizarItem, '/api/atendimentos/1/itens/1', { method: 'PUT', body: { executor_id: 2 } }, ctx);
+  expect(wrong.status).toBe(400);
+  const correct = await callRoute(atualizarItem, '/api/atendimentos/1/itens/1', { method: 'PUT', body: { executor_id: 3 } }, ctx);
+  expect(correct.status).toBe(200);
+  expect(db.sqlite.prepare('SELECT executor_id FROM itens_atendimento WHERE id=1').get().executor_id).toBe(3);
+
+  const destination = (executor_id: number) => callRoute(selecionar, '/api/atendimentos/1/selecionar-hoje', {
+    method: 'POST', body: { destinos: [{ item_id: 1, destino_status: 'fazer_hoje', executor_id }] },
+  }, createRouteContext({ id: '1' }));
+  expect((await destination(2)).status).toBe(400);
+  expect((await destination(3)).status).toBe(200);
+});
+
+test('abertura direta aceita profissionais de categorias diferentes no mesmo atendimento', async () => {
+  db.sqlite.exec(`
+    UPDATE atendimentos SET status='encerrado' WHERE id=1;
+    UPDATE procedimentos SET categoria_id=1 WHERE id=1;
+    UPDATE procedimentos SET categoria_id=2 WHERE id=2;
+    INSERT INTO usuarios(id,nome,email,role) VALUES
+      (2,'Executor','executor@example.test','executor'),(3,'Orto','orto@example.test','executor');
+    INSERT INTO usuario_roles(usuario_id,role) VALUES (2,'executor'),(3,'ortodontista');
+  `);
+  const result = await callRoute<{ id: number }>(criarAtendimento, '/api/atendimentos', {
+    method: 'POST', body: { cliente_id: 1, tipo_orto: true, procedimentos: [
+      { procedimento_id: 1, executor_id: 2 }, { procedimento_id: 2, executor_id: 3 },
+    ] },
+  });
+  expect(result.status).toBe(201);
+  expect(db.sqlite.prepare('SELECT procedimento_id, executor_id FROM itens_atendimento WHERE atendimento_id=? ORDER BY procedimento_id').all(result.data.id))
+    .toEqual([{ procedimento_id: 1, executor_id: 2 }, { procedimento_id: 2, executor_id: 3 }]);
 });
 
 test('fila inativa impede chegada sem deixar atendimento sem categoria', async () => {

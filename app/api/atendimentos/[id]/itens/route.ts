@@ -238,15 +238,7 @@ export const POST = withUnit(async (
       );
     }
 
-    // Validação / herança de categoria
-    if (atendimento.categoria_id && procedimento.categoria_id &&
-        atendimento.categoria_id !== procedimento.categoria_id) {
-      return NextResponse.json(
-        { error: 'Procedimento não pertence à categoria deste atendimento' },
-        { status: 400 }
-      );
-    }
-    // Se atendimento ainda não tem categoria, herda do procedimento (primeiro item)
+    // A categoria do atendimento continua indicando sua entrada; cada item usa a do procedimento.
     if (!atendimento.categoria_id && procedimento.categoria_id) {
       await execute(
         'UPDATE atendimentos SET categoria_id = ? WHERE id = ? AND categoria_id IS NULL',
@@ -264,7 +256,7 @@ export const POST = withUnit(async (
 
     // Verifica executor se fornecido; em execução, o executor é sempre quem criou o acréscimo.
     if (executorFinal) {
-      const validacaoExecutor = await validarExecutorSelecionado(executorFinal, atendimento.categoria_id);
+      const validacaoExecutor = await validarExecutorSelecionado(executorFinal, procedimento.categoria_id ?? atendimento.categoria_id);
       if (validacaoExecutor.kind === 'error') return validacaoExecutor.response;
     }
     

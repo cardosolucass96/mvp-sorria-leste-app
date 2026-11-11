@@ -330,7 +330,7 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
         procedimentosOrigem.map(item => item.procedimento_id), categoriaAtualId
       );
       if (categoriaId === null) {
-        return NextResponse.json({ error: 'Não foi possível definir uma única fila ativa para o atendimento. Revise a categoria dos procedimentos.' }, { status: 409 });
+        return NextResponse.json({ error: 'Não foi possível definir uma categoria ativa para o atendimento. Revise a categoria dos procedimentos.' }, { status: 409 });
       }
 
       adicionar(
@@ -463,7 +463,7 @@ export const POST = withUnitRole(['admin', 'atendente'], async (
         agendamentosProcedimento.map(ag => ag.procedimento_id!)
       );
       if (categoriaId === null) {
-        return NextResponse.json({ error: 'Os procedimentos precisam pertencer a uma única fila ativa. Revise as categorias ou registre chegadas separadas por fila.' }, { status: 409 });
+        return NextResponse.json({ error: 'Revise as categorias dos procedimentos: todas precisam estar ativas.' }, { status: 409 });
       }
 
       // Sessão: cria atendimento tipo sessão aguardando pagamento (fluxo original)

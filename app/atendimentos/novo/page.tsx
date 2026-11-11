@@ -39,6 +39,7 @@ interface Usuario {
   id: number;
   nome: string;
   role: string;
+  roles?: string[];
   ativo?: number;
 }
 
@@ -189,7 +190,7 @@ function NovoAtendimentoForm() {
     carregarDados();
   }, [currentUnidade, buscarClientes, mostrarError]);
 
-  // Quando a categoria mudar e for pula_avaliacao, carrega procedimentos da categoria e executores compatíveis
+  // Na entrada direta, cada procedimento pode ter sua própria categoria.
   useEffect(() => {
     if (!categoriaId || !pulaAvaliacao) {
       setProcedimentosCategoria([]);
@@ -200,10 +201,10 @@ function NovoAtendimentoForm() {
     (async () => {
       const [resProcs, resExecs] = await Promise.all([
         fetch('/api/procedimentos'),
-        fetch(`/api/usuarios?categoria_id=${categoriaId}`),
+        fetch('/api/usuarios?roles=executor,ortodontista'),
       ]);
       const procsData: ProcedimentoLite[] = await resProcs.json();
-      setProcedimentosCategoria(procsData.filter(p => p.categoria_id === parseInt(categoriaId)));
+      setProcedimentosCategoria(procsData);
       if (resExecs.ok) {
         const execsData: Usuario[] = await resExecs.json();
         setExecutoresCategoria(
@@ -583,6 +584,11 @@ function NovoAtendimentoForm() {
             <div className="space-y-4">
               {procedimentosSelecionados.map((item, index) => {
                 const procedimento = procedimentosCategoria.find((proc) => String(proc.id) === item.procedimentoId) || null;
+                const categoriaProcedimento = categorias.find(c => c.id === (procedimento?.categoria_id ?? Number(categoriaId)));
+                const executoresCompativeis = executoresCategoria.filter(usuario => {
+                  const roles = [usuario.role, ...(usuario.roles ?? [])];
+                  return !categoriaProcedimento?.roles.length || categoriaProcedimento.roles.some(role => roles.includes(role));
+                });
 
                 return (
                   <div key={index} className="rounded-lg border border-border p-4 space-y-3">
@@ -616,7 +622,7 @@ function NovoAtendimentoForm() {
                       }}
                       options={procedimentosCategoria.map(p => ({
                         value: String(p.id),
-                        label: p.nome,
+                        label: `${p.nome}${categorias.find(c => c.id === p.categoria_id)?.nome ? ` — ${categorias.find(c => c.id === p.categoria_id)?.nome}` : ''}`,
                       }))}
                       placeholder="-- Selecionar --"
                       searchPlaceholder="Buscar procedimento..."
@@ -649,7 +655,7 @@ function NovoAtendimentoForm() {
                       name={`executor_id_${index}`}
                       value={item.executorId}
                       onChange={(value) => atualizarProcedimentoSelecionado(index, { executorId: value })}
-                      options={executoresCategoria.map(u => ({ value: String(u.id), label: u.nome }))}
+                      options={executoresCompativeis.map(u => ({ value: String(u.id), label: u.nome }))}
                       placeholder="-- Deixar disponível para qualquer executor --"
                     />
                   </div>
