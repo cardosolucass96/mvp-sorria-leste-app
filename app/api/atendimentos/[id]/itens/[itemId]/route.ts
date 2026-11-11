@@ -172,7 +172,10 @@ export const PUT = withUnit(async (
     }
 
     if (executor_id) {
-      const executorValido = await validarExecutorClinico(Number(executor_id), atendimento.categoria_id);
+      const procedimento = await queryOne<{ categoria_id: number | null }>(
+        'SELECT categoria_id FROM procedimentos WHERE id = ?', [item.procedimento_id]
+      );
+      const executorValido = await validarExecutorClinico(Number(executor_id), procedimento?.categoria_id ?? atendimento.categoria_id);
       if (executorValido !== 'ok') {
         return NextResponse.json(
           { error: 'Selecione um executor ou ortodontista ativo com acesso à categoria' },

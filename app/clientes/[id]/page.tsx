@@ -1,6 +1,7 @@
 'use client';
 
 import ProcedimentosOrcadosAgenda, { type ProcedimentoOrcadoAgenda } from '@/components/domain/ProcedimentosOrcadosAgenda';
+import CancelarPagamentoDialog, { type PagamentoParaCancelar } from '@/components/domain/CancelarPagamentoDialog';
 import { useState, useEffect, use, useCallback, useRef } from 'react';
 import { criarChavesOperacao } from '@/modules/financeiro/public';
 import { useRouter } from 'next/navigation';
@@ -134,6 +135,7 @@ interface ProntuarioRegistro {
 interface Pagamento {
   id: number;
   atendimento_id: number;
+  pagamento_grupo_id: number | null;
   valor: number;
   metodo: string;
   forma_pagamento_id: number | null;
@@ -333,7 +335,7 @@ interface AnexoClienteItem {
 export default function ClienteDetalhePage({ params }: { params: Promise<{ id: string }> }) {
   usePageTitle('Ficha do Cliente');
   const { id } = use(params);
-  const { user } = useAuth();
+  const { user, currentUnidade, hasRole } = useAuth();
   const unitFetch = useUnitFetch();
   const [chavesFinanceiras] = useState(criarChavesOperacao);
   const [cliente, setCliente] = useState<Cliente | null>(null);
@@ -356,6 +358,7 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
   const [prontuarioSaving, setProntuarioSaving] = useState(false);
   const [prontuarioError, setProntuarioError] = useState('');
   const [modalPagamento, setModalPagamento] = useState<Pagamento | null>(null);
+  const [pagamentoParaCancelar, setPagamentoParaCancelar] = useState<PagamentoParaCancelar | null>(null);
   const [vinculos, setVinculos] = useState<VinculoCliente[]>([]);
   const [agendamentos, setAgendamentos] = useState<AgendamentoCompleto[]>([]);
   const [followups, setFollowups] = useState<FollowupTarefaCompleta[]>([]);
@@ -454,10 +457,10 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
 
   const carregarSaldo = useCallback(async () => {
     const res = await fetch(`/api/clientes/${id}/saldo`);
-    if (res.ok) {
-      const data = await res.json();
-      setSaldo({ saldo: data.saldo ?? 0, saldo_calculado: data.saldo_calculado ?? 0 });
-    }
+    if (!res.ok) return false;
+    const data = await res.json();
+    setSaldo({ saldo: data.saldo ?? 0, saldo_calculado: data.saldo_calculado ?? 0 });
+    return true;
   }, [id]);
 
   const carregarTermosCliente = useCallback(async () => {
@@ -639,10 +642,40 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
 
   const carregarFicha = useCallback(async () => {
     const res = await fetch(`/api/clientes/${id}/ficha`);
-    if (!res.ok) return;
+    if (!res.ok) return false;
     const data = await res.json() as FichaData;
     setFicha(data);
+    return true;
   }, [id]);
+
+  const abrirCancelamentoPagamento = (pagamento: Pagamento) => {
+    const formas = pagamento.pagamento_grupo_id
+      ? ficha?.pagamentos.filter((forma) => forma.pagamento_grupo_id === pagamento.pagamento_grupo_id
+        && forma.atendimento_id === pagamento.atendimento_id) ?? [pagamento]
+      : [pagamento];
+
+    setPagamentoParaCancelar({
+      atendimentoId: pagamento.atendimento_id,
+      pagamentoId: pagamento.id,
+      valorTotal: formas.reduce((total, forma) => total + forma.valor, 0),
+      quantidadeFormas: formas.length,
+    });
+  };
+
+  const atualizarFichaAposCancelamento = async () => {
+    setPagamentoParaCancelar(null);
+    setError('');
+    try {
+      const [fichaAtualizada, saldoAtualizado] = await Promise.all([carregarFicha(), carregarSaldo()]);
+      if (fichaAtualizada && saldoAtualizado) {
+        setSuccess('Pagamento cancelado.');
+        return;
+      }
+    } catch {
+      // O cancelamento já foi confirmado, mesmo que a atualização da tela falhe.
+    }
+    setError('Pagamento cancelado. Recarregue a página para atualizar os valores.');
+  };
 
   const abrirEditorProntuario = async (item: ItemProcedimento) => {
     setProntuarioLoadingItemId(item.id);
@@ -2452,7 +2485,14 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
                       </td>
                       <td className="px-4 py-3 text-sm">{p.recebido_por_nome || '-'}</td>
                       <td className="px-4 py-3 text-right">
-                        <button onClick={() => setModalPagamento(p)} className="text-sm text-info-600 hover:text-info-800">Ver →</button>
+                        <div className="flex flex-wrap justify-end gap-x-3 gap-y-2">
+                          <button onClick={() => setModalPagamento(p)} className="text-sm text-info-600 hover:text-info-800">Ver →</button>
+                          {!p.cancelado && p.unidade_id === currentUnidade && hasRole(['admin', 'atendente']) && (
+                            <Button size="sm" variant="outline" onClick={() => abrirCancelamentoPagamento(p)}>
+                              Cancelar pagamento
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -3203,6 +3243,12 @@ export default function ClienteDetalhePage({ params }: { params: Promise<{ id: s
       )}
 
       {/* MODAL: Pagamento */}
+      <CancelarPagamentoDialog
+        pagamento={pagamentoParaCancelar}
+        onClose={() => setPagamentoParaCancelar(null)}
+        onCancelado={() => void atualizarFichaAposCancelamento()}
+      />
+
       {modalPagamento && (
         <Modal
           isOpen={!!modalPagamento}

@@ -157,22 +157,6 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
       return NextResponse.json({ error: 'Atendimento não está em aguardando_pagamento' }, { status: 400 });
     }
 
-    const executorIds = [...new Set(
-      destinosNormalizados
-        .map((destino) => destino.executor_id)
-        .filter((executorId): executorId is number => typeof executorId === 'number' && Number.isFinite(executorId))
-    )];
-
-    for (const executorId of executorIds) {
-      const validacaoExecutor = await validarExecutorClinico(executorId, atendimento.categoria_id);
-      if (validacaoExecutor === 'not_found') {
-        return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
-      }
-      if (validacaoExecutor === 'invalid') {
-        return NextResponse.json({ error: 'Executor não tem permissão para esta categoria' }, { status: 400 });
-      }
-    }
-
     const historicoRastreado = await atendimentoTemCreditoRastreado(atendimentoId);
     if (historicoRastreado && acaoFinal === 'liberar_execucao') {
       const sessoes = await queryOne<{ id: number }>(`SELECT i.id FROM itens_atendimento i
@@ -205,6 +189,20 @@ export const POST = withUnit(async (request: NextRequest, context: UnitAuthentic
     );
     if (destinosNormalizados.some(destino => !itens.some(item => item.id === destino.item_id))) {
       return NextResponse.json({ error: 'Procedimento não pertence a este atendimento' }, { status: 400 });
+    }
+    for (const destino of destinosNormalizados) {
+      if (typeof destino.executor_id !== 'number' || !Number.isFinite(destino.executor_id)) continue;
+      const item = itens.find(item => item.id === destino.item_id)!;
+      const procedimento = await queryOne<{ categoria_id: number | null }>(
+        'SELECT categoria_id FROM procedimentos WHERE id = ?', [item.procedimento_id]
+      );
+      const validacaoExecutor = await validarExecutorClinico(destino.executor_id, procedimento?.categoria_id ?? atendimento.categoria_id);
+      if (validacaoExecutor === 'not_found') {
+        return NextResponse.json({ error: 'Executor não encontrado' }, { status: 404 });
+      }
+      if (validacaoExecutor === 'invalid') {
+        return NextResponse.json({ error: 'Executor não tem permissão para a categoria do procedimento' }, { status: 400 });
+      }
     }
     const destinosPorItem = new Map<number, DestinoInput[]>();
     for (const destino of destinosNormalizados) {

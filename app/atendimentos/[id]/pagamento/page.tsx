@@ -14,6 +14,7 @@ import { roundMoney, criarChavesOperacao } from '@/modules/financeiro/public';
 import { buildFormaPagamentoSelectOptions, getFormaPagamentoSnapshotLabel } from '@/lib/utils/formasPagamento';
 import type { FormaPagamentoComTaxa, Usuario } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
+import CancelarPagamentoDialog, { type PagamentoParaCancelar } from '@/components/domain/CancelarPagamentoDialog';
 import Alert from '@/components/ui/Alert';
 import LoadingState from '@/components/ui/LoadingState';
 import {
@@ -30,6 +31,7 @@ import {
   Input,
   Select,
   Textarea,
+  useToast,
 } from '@/components/ui';
 
 type DestinoStatus = 'fazer_hoje' | 'agendar' | 'pago_sem_data' | 'nao_pago_sem_data';
@@ -278,7 +280,8 @@ export default function PagamentoPage({
   const router = useRouter();
   const unitFetch = useUnitFetch();
   const [chavesFinanceiras] = useState(criarChavesOperacao);
-  const { currentUnidade } = useAuth();
+  const { currentUnidade, hasRole } = useAuth();
+  const { toast } = useToast();
 
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
   const [pagamentos, setPagamentos] = useState<PagamentoGrupo[]>([]);
@@ -288,8 +291,7 @@ export default function PagamentoPage({
   const [error, setError] = useState('');
   const [registrando, setRegistrando] = useState(false);
   const [salvandoDestinos, setSalvandoDestinos] = useState(false);
-  const [cancelandoId, setCancelandoId] = useState<number | null>(null);
-  const [motivoCancelamento, setMotivoCancelamento] = useState('');
+  const [pagamentoParaCancelar, setPagamentoParaCancelar] = useState<PagamentoParaCancelar | null>(null);
   const [formaPagamentoId, setFormaPagamentoId] = useState('');
   const [observacoesPagamento, setObservacoesPagamento] = useState('');
   const [multiplasFormas, setMultiplasFormas] = useState(false);
@@ -886,29 +888,6 @@ export default function PagamentoPage({
       setError(err instanceof Error ? err.message : 'Erro ao salvar destinos');
     } finally {
       setSalvandoDestinos(false);
-    }
-  };
-
-  const handleCancelarPagamento = async (pagamentoId: number) => {
-    if (!motivoCancelamento.trim()) return;
-    try {
-      const requestBody = JSON.stringify({ motivo: motivoCancelamento });
-      const chave = chavesFinanceiras.obter(`cancelamento:${id}:${pagamentoId}`, requestBody);
-      const res = await unitFetch(`/api/atendimentos/${id}/pagamentos/${pagamentoId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chave },
-        body: requestBody,
-      });
-      if (!res.ok) {
-        const data = await res.json() as ApiErrorResponse;
-        throw new Error(data.error || 'Erro ao cancelar pagamento');
-      }
-      chavesFinanceiras.concluir(`cancelamento:${id}:${pagamentoId}`, requestBody);
-      setCancelandoId(null);
-      setMotivoCancelamento('');
-      await carregarDados();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao cancelar pagamento');
     }
   };
 
@@ -1627,7 +1606,7 @@ export default function PagamentoPage({
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Histórico</p>
             <CardTitle>Pagamentos registrados</CardTitle>
             <CardDescription>
-              Revise as cobranças já feitas e, se necessário, cancele o grupo inteiro.
+              Confira os lançamentos deste atendimento.
             </CardDescription>
           </div>
         </CardHeader>
@@ -1679,29 +1658,15 @@ export default function PagamentoPage({
               )}
 
               {pagamento.observacoes && <p className="text-sm text-muted-foreground">{pagamento.observacoes}</p>}
-              {!pagamento.cancelado && (
-                cancelandoId === pagamento.pagamento_representante_id ? (
-                  <div className="space-y-2">
-                    <Input
-                      label="Motivo do cancelamento do grupo"
-                      name={`motivo-cancelamento-${pagamento.pagamento_representante_id}`}
-                      value={motivoCancelamento}
-                      onChange={setMotivoCancelamento}
-                    />
-                    <div className="flex gap-2">
-                      <Button variant="danger" onClick={() => void handleCancelarPagamento(pagamento.pagamento_representante_id)}>
-                        Confirmar cancelamento
-                      </Button>
-                      <Button variant="secondary" onClick={() => { setCancelandoId(null); setMotivoCancelamento(''); }}>
-                        Fechar
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <Button variant="secondary" onClick={() => setCancelandoId(pagamento.pagamento_representante_id)}>
-                    Cancelar cobrança
-                  </Button>
-                )
+              {!pagamento.cancelado && hasRole(['admin', 'atendente']) && (
+                <Button variant="secondary" onClick={() => setPagamentoParaCancelar({
+                  atendimentoId: Number(id),
+                  pagamentoId: pagamento.pagamento_representante_id,
+                  valorTotal: pagamento.valor_total,
+                  quantidadeFormas: pagamento.formas.length,
+                })}>
+                  Cancelar pagamento
+                </Button>
               )}
               {Boolean(pagamento.cancelado) && pagamento.motivo_cancelamento && (
                 <p className="text-sm text-muted-foreground">Motivo: {pagamento.motivo_cancelamento}</p>
@@ -1710,6 +1675,16 @@ export default function PagamentoPage({
           ))}
         </CardContent>
       </Card>
+      <CancelarPagamentoDialog
+        pagamento={pagamentoParaCancelar}
+        onClose={() => setPagamentoParaCancelar(null)}
+        onCancelado={() => {
+          setPagamentoParaCancelar(null);
+          setError('');
+          toast.success('Pagamento cancelado.');
+          void carregarDados();
+        }}
+      />
     </div>
   );
 }

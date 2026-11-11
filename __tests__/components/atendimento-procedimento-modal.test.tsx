@@ -331,7 +331,7 @@ beforeEach(() => {
       ]);
     }
 
-    if (url === '/api/usuarios?categoria_id=1') {
+    if (url === '/api/usuarios?roles=executor,ortodontista') {
       return mockJsonResponse([
         { id: 8, nome: 'Dr. Executor', role: 'executor', roles: ['executor'] },
       ]);
@@ -417,7 +417,7 @@ describe('AtendimentoDetalhePage modal de procedimento', () => {
       const url = String(input);
 
       if (url === '/api/procedimentos') return mockJsonResponse([procedimento]);
-      if (url === '/api/usuarios?categoria_id=1') {
+      if (url === '/api/usuarios?roles=executor,ortodontista') {
         return mockJsonResponse([
           { id: 8, nome: 'Dr. Executor', role: 'executor', roles: ['executor'] },
         ]);
@@ -485,7 +485,7 @@ describe('AtendimentoDetalhePage modal de procedimento', () => {
         ]);
       }
 
-      if (url === '/api/usuarios?categoria_id=1') {
+      if (url === '/api/usuarios?roles=executor,ortodontista') {
         return mockJsonResponse([
           { id: 8, nome: 'Dr. Executor', role: 'executor', roles: ['executor'] },
         ]);
@@ -659,7 +659,7 @@ describe('AtendimentoDetalhePage modal de procedimento', () => {
         ]);
       }
 
-      if (url === '/api/usuarios?categoria_id=1') {
+      if (url === '/api/usuarios?roles=executor,ortodontista') {
         return mockJsonResponse([
           { id: 8, nome: 'Dr. Executor', role: 'executor', roles: ['executor'] },
         ]);

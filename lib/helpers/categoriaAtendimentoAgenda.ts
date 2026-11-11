@@ -22,7 +22,7 @@ export async function resolverCategoriaAtendimentoAgenda(
 
   const categoriasIds = new Set(procedimentos.map(procedimento => procedimento.categoria_id ?? geralId));
   if (categoriasIds.size === 0 && geralId !== undefined) categoriasIds.add(geralId);
-  if (categoriasIds.size !== 1) return null;
-  const categoriaId = [...categoriasIds][0];
-  return categorias.find(categoria => categoria.id === categoriaId)?.id ?? null;
+  if ([...categoriasIds].some(id => id === undefined || !categorias.some(categoria => categoria.id === id))) return null;
+  // A categoria de entrada não limita as filas dos procedimentos da sessão.
+  return [...categoriasIds][0] ?? null;
 }

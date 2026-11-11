@@ -109,7 +109,7 @@ beforeEach(() => {
       { id: 1, nome: 'Limpeza Completa', valor: 100, por_dente: 0, tem_etapas: 0, tem_face: 0 },
       { id: 73, nome: 'Montagem de aparelho', valor: 200, por_dente: 0, tem_etapas: 0, tem_face: 0 },
     ]);
-    if (url === '/api/usuarios') return resposta([{ id: 4, nome: 'Executor de teste', role: 'executor' }]);
+    if (url === '/api/usuarios?roles=executor,ortodontista') return resposta([{ id: 4, nome: 'Executor de teste', role: 'executor' }]);
     if (url === '/api/clientes/7/anexos') return resposta([]);
     throw new Error(`Requisição inesperada: ${url}`);
   }) as jest.Mock;

@@ -63,7 +63,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
         cp.nome as criado_por_nome,
         c.nome as cliente_nome,
         c.id as cliente_id,
-        a.categoria_id,
+        COALESCE(p.categoria_id, a.categoria_id) as categoria_id,
         COALESCE(i.valor_final, i.valor) as valor,
         i.valor_final,
         i.valor_pago,

@@ -307,11 +307,7 @@ export default function AvaliacaoDetalhePage({
       const procData = await resProc.json();
       setProcedimentos(procData);
 
-      // Busca executores filtrados pela categoria do atendimento (se houver)
-      const usuariosUrl = atendData.categoria_id
-        ? `/api/usuarios?categoria_id=${atendData.categoria_id}`
-        : '/api/usuarios';
-      const resUsers = await fetch(usuariosUrl);
+      const resUsers = await fetch('/api/usuarios?roles=executor,ortodontista');
       const usersData = await resUsers.json();
       setExecutores(
         usersData.filter((u: Usuario & { roles?: string[] }) => {
@@ -573,6 +569,7 @@ export default function AvaliacaoDetalhePage({
             onChange={async (value) => {
               if (operacaoEmAndamento.current) return;
               setProcedimentoId(value);
+              setExecutorId('');
               setValorCustom('');
               setDentesFaces([]);
               setEtapasModelo([]);

@@ -324,11 +324,9 @@ export default function AtendimentoDetalhePage({
   const carregarExecutores = async () => {
     if (executores.length > 0) return;
     try {
-      const catId = atendimento?.categoria_id;
-      const url = catId ? `/api/usuarios?categoria_id=${catId}` : '/api/usuarios';
-      const res = await fetch(url);
+      const res = await fetch('/api/usuarios?roles=executor,ortodontista');
       const data: Usuario[] = await res.json();
-      setExecutores((catId ? data : data).filter((u: Usuario & { roles?: string[] }) => {
+      setExecutores(data.filter((u: Usuario & { roles?: string[] }) => {
         const roles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
         return roles.includes('executor') || roles.includes('ortodontista');
       }));
@@ -721,15 +719,13 @@ export default function AtendimentoDetalhePage({
     if (procedimentos.length > 0) return;
     setLoadingDadosProc(true);
     try {
-      const catId = atendimento?.categoria_id;
-      const usuariosUrl = catId ? `/api/usuarios?categoria_id=${catId}` : '/api/usuarios';
       const [resProc, resUsers] = await Promise.all([
         fetch('/api/procedimentos'),
-        fetch(usuariosUrl),
+        fetch('/api/usuarios?roles=executor,ortodontista'),
       ]);
       setProcedimentos(await resProc.json());
       const usersData: Usuario[] = await resUsers.json();
-      setExecutores((catId ? usersData : usersData).filter((u: Usuario & { roles?: string[] }) => {
+      setExecutores(usersData.filter((u: Usuario & { roles?: string[] }) => {
         const roles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
         return roles.includes('executor') || roles.includes('ortodontista');
       }));
@@ -927,15 +923,13 @@ export default function AtendimentoDetalhePage({
     if (procedimentos.length === 0) {
       setLoadingDadosProc(true);
       try {
-        const catId = atendimento?.categoria_id;
-        const usuariosUrl = catId ? `/api/usuarios?categoria_id=${catId}` : '/api/usuarios';
         const [resProc, resUsers] = await Promise.all([
           fetch('/api/procedimentos'),
-          fetch(usuariosUrl),
+          fetch('/api/usuarios?roles=executor,ortodontista'),
         ]);
         setProcedimentos(await resProc.json());
         const usersData: Usuario[] = await resUsers.json();
-        setExecutores((catId ? usersData : usersData).filter((u: Usuario & { roles?: string[] }) => {
+        setExecutores(usersData.filter((u: Usuario & { roles?: string[] }) => {
           const roles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
           return roles.includes('executor') || roles.includes('ortodontista');
         }));
@@ -2342,6 +2336,7 @@ export default function AtendimentoDetalhePage({
               value={procId}
               onChange={(value) => {
                 setProcId(value);
+                setExecId('');
                 setValorCustom('');
                 setDentesFaces([]);
               }}

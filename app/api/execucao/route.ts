@@ -76,6 +76,15 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       AND a.unidade_id = ?
       AND i.status IN ('pago', 'executando')
       AND (i.executor_id = ? OR i.executor_id IS NULL)
+      AND (COALESCE(p.categoria_id, a.categoria_id) IS NULL OR EXISTS (
+        SELECT 1 FROM categoria_roles cr
+        INNER JOIN usuarios profissional ON profissional.id = ? AND profissional.ativo = 1
+        WHERE cr.categoria_id = COALESCE(p.categoria_id, a.categoria_id)
+          AND (cr.role = profissional.role OR EXISTS (
+            SELECT 1 FROM usuario_roles ur
+            WHERE ur.usuario_id = profissional.id AND ur.role = cr.role
+          ))
+      ))
       AND (NOT EXISTS (
         SELECT 1
         FROM agendamentos ag
@@ -86,7 +95,7 @@ export const GET = withUnit(async (request: NextRequest, context: UnitAuthentica
       ORDER BY
         CASE WHEN i.executor_id = ? THEN 0 ELSE 1 END,
         i.created_at DESC`,
-      [context.unidadeId, parseInt(executorId), parseInt(executorId)]
+      [context.unidadeId, parseInt(executorId), parseInt(executorId), parseInt(executorId)]
     );
 
     // Separa em "meus" e "disponíveis"
