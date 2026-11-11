@@ -115,7 +115,7 @@ export const GET = withAuth(async (_request, context) => {
         [clienteId]
       ),
       query(
-        `SELECT pg.id, pg.atendimento_id, pg.valor, pg.metodo, pg.observacoes,
+        `SELECT pg.id, pg.atendimento_id, pg.pagamento_grupo_id, pg.valor, pg.metodo, pg.observacoes,
               pg.cancelado, pg.motivo_cancelamento, pg.created_at,
               pg.forma_pagamento_id,
               pg.forma_pagamento_grupo_snapshot,
