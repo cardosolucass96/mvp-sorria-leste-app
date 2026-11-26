@@ -894,6 +894,59 @@ describe('AgendaPage', () => {
     });
   });
 
+  test('cria avaliação calculando a duração pelo início e fim escolhidos', async () => {
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (String(input).startsWith('/api/clientes?busca=')) {
+        return mockJsonResponse({ clientes: [{ id: 101, nome: 'Maria Silva' }] });
+      }
+      return mockJsonResponse([]);
+    });
+    mockUnitFetch.mockImplementation((url: string, init?: RequestInit) =>
+      url === '/api/agendamentos' && init?.method === 'POST'
+        ? mockJsonResponse({ id: 50 }, { status: 201 })
+        : mockJsonResponse({ items: [], total: 0, page: 1, pages: 1 })
+    );
+    const criacoes = () => getUnitFetchCallsMatching(
+      (url, init) => url === '/api/agendamentos' && init?.method === 'POST'
+    );
+
+    render(<AgendaPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Novo Agendamento/i }));
+    fireEvent.change(await screen.findByPlaceholderText('Digite o nome do cliente...'), {
+      target: { value: 'Ma' },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /Maria Silva/i }));
+
+    const inicio = within(screen.getByRole('group', { name: 'Início (opcional)' }));
+    fireEvent.click(inicio.getByRole('button', { name: 'Data' }));
+    fireEvent.click(inicio.getByRole('button', { name: /16 de julho de 2026/ }));
+    fireEvent.change(inicio.getByLabelText('Hora'), { target: { value: '10' } });
+
+    const fim = within(screen.getByRole('group', { name: 'Fim (opcional)' }));
+    fireEvent.click(fim.getByRole('button', { name: 'Data' }));
+    fireEvent.click(fim.getByRole('button', { name: /16 de julho de 2026/ }));
+    fireEvent.change(fim.getByLabelText('Hora'), { target: { value: '20' } });
+
+    const criar = screen.getByRole('button', { name: 'Criar Agendamento' });
+    fireEvent.click(criar);
+    expect(screen.getByText('Escolha um fim após o início, com duração entre 5 minutos e 8 horas.')).toBeInTheDocument();
+    expect(criacoes()).toHaveLength(0);
+
+    fireEvent.change(fim.getByLabelText('Hora'), { target: { value: '13' } });
+    fireEvent.change(fim.getByLabelText('Minutos'), { target: { value: '00' } });
+    fireEvent.click(criar);
+
+    await waitFor(() => expect(criacoes()).toHaveLength(1));
+    expect(JSON.parse(String((criacoes()[0][1] as RequestInit).body))).toMatchObject({
+      cliente_id: 101,
+      tipo: 'avaliacao',
+      data_agendada: '2026-07-16T10:00',
+      duracao_minutos: 180,
+    });
+  });
+
   test('rola e foca o alerta quando o novo agendamento retorna erro', async () => {
     const fetchMock = global.fetch as jest.Mock;
     fetchMock.mockImplementation((input: RequestInfo | URL) => {

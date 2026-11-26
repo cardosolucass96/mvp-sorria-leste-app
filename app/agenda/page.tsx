@@ -474,7 +474,7 @@ export default function AgendaPage() {
   const [novoEtapaLabel, setNovoEtapaLabel] = useState('');
   const [novoExecId, setNovoExecId] = useState('');
   const [novoData, setNovoData] = useState('');
-  const [novoDuracao, setNovoDuracao] = useState('');
+  const [novoFim, setNovoFim] = useState('');
   const [editarFim, setEditarFim] = useState('');
   const [novoObs, setNovoObs] = useState('');
   const [novoSalvando, setNovoSalvando] = useState(false);
@@ -665,7 +665,7 @@ export default function AgendaPage() {
     setNovoEtapaLabel(options.etapaLabel ?? '');
     setNovoExecId('');
     setNovoData('');
-    setNovoDuracao('');
+    setNovoFim('');
     setNovoObs('');
     // Carrega procedimentos e profissionais da agenda
     if (novoProcedimentos.length === 0) {
@@ -889,6 +889,14 @@ export default function AgendaPage() {
     });
   };
 
+  const handleNovoInicioChange = (value: string) => {
+    const minutos = minutosDoHorario(novoData, novoFim);
+    setNovoData(value);
+    if (!value) setNovoFim('');
+    else if (horarioValido(minutos)) setNovoFim(fimDoHorario(value, minutos));
+    setNovoError('');
+  };
+
   const handleCriarAgendamento = async () => {
     if (!canManageAgenda) {
       mostrarNovoError('Seu perfil pode apenas visualizar a própria agenda');
@@ -902,6 +910,15 @@ export default function AgendaPage() {
       mostrarNovoError('Selecione um procedimento');
       return;
     }
+    if (novoFim && !novoData) {
+      mostrarNovoError('Informe também a data e o horário de início.');
+      return;
+    }
+    const minutos = novoFim ? minutosDoHorario(novoData, novoFim) : null;
+    if (minutos !== null && !horarioValido(minutos)) {
+      mostrarNovoError('Escolha um fim após o início, com duração entre 5 minutos e 8 horas.');
+      return;
+    }
     setNovoSalvando(true);
     setNovoError('');
     try {
@@ -910,7 +927,7 @@ export default function AgendaPage() {
         data_agendada: novoData || null,
         observacoes: novoObs || null,
       };
-      if (novoDuracao) body.duracao_minutos = Number(novoDuracao);
+      if (minutos !== null) body.duracao_minutos = minutos;
       if (novoTipo === 'avaliacao') {
         body.tipo = 'avaliacao';
       } else {
@@ -2487,14 +2504,22 @@ export default function AgendaPage() {
             )}
 
             <DateTimePicker
-              label="Data e hora (opcional)"
+              label="Início (opcional)"
               name="data_agendada"
               value={novoData}
-              onChange={setNovoData}
+              onChange={handleNovoInicioChange}
               min={getDateTimeLocalMinValue()}
+              hint="Deixe em branco para criar um agendamento sem data."
             />
 
-            <Input label="Duração (minutos)" name="duracao_minutos" type="number" min={5} max={480} value={novoDuracao} onChange={setNovoDuracao} hint="Em branco: duração padrão do responsável (30 min se não configurada)." />
+            <DateTimePicker
+              label="Fim (opcional)"
+              name="fim_agendamento"
+              value={novoFim}
+              onChange={(value) => { setNovoFim(value); setNovoError(''); }}
+              min={novoData ? fimDoHorario(novoData, 5) : getDateTimeLocalMinValue()}
+              hint="Se ficar em branco, será usada a duração padrão do responsável (30 min se não configurada)."
+            />
 
             <Textarea
               label="Observações (opcional)"
